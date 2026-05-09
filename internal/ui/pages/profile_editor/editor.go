@@ -43,30 +43,24 @@ type internalDiscardYesMsg struct{}
 // affirmative discard fires EditorCancelledMsg. Both messages bubble
 // out via the returned tea.Cmd.
 type Editor struct {
-	schema    domain.FlagSchema
-	validator validator.Validator
+	schema          domain.FlagSchema
+	validator       validator.Validator
+	backendOptions  []huh.Option[string]
 
-	// active mirrors form != nil while editing (separate so close() is
-	// idempotent and Active() reads cheaply).
 	active bool
 
-	// form is heap-allocated by huh; draft is heap-allocated by Open so
-	// huh's &draft.Field bindings survive the bubbletea value-copy idiom.
 	form  *huh.Form
 	draft *Draft
 
-	// openSnapshot captures *draft at Open time for the dirty-check on esc.
 	openSnapshot Draft
 
 	subTab subTab
 
-	// Advanced sub-tab state.
 	advanced       table.Model
 	advancedAll    []table.Row
 	advancedFilter string
 	filterMode     bool
 
-	// Discard-unsaved-changes overlay (closes the editor on yes).
 	discardConfirm components.Confirm
 }
 
@@ -89,6 +83,12 @@ func (e Editor) Active() bool {
 	return e.active || e.discardConfirm.Active()
 }
 
+// SetBackendOptions injects the list of available backends for the select field.
+func (e Editor) SetBackendOptions(opts []huh.Option[string]) Editor {
+	e.backendOptions = opts
+	return e
+}
+
 // Open starts editing the given draft. Resets sub-tab to Essentials and
 // clears any advanced-filter state from a previous session. Returns the
 // form's Init Cmd so huh's focus/styling handshake fires.
@@ -96,7 +96,7 @@ func (e Editor) Open(d Draft) (Editor, tea.Cmd) {
 	dp := d
 	e.draft = &dp
 	e.openSnapshot = dp
-	e.form = buildForm(e.draft, e.schema)
+	e.form = buildForm(e.draft, e.schema, e.backendOptions)
 	e.active = true
 	e.subTab = subTabEssentials
 	e.advancedFilter = ""
@@ -120,7 +120,7 @@ func (e Editor) SetModelPath(path string) (Editor, tea.Cmd) {
 		return e, nil
 	}
 	e.draft.Model = path
-	e.form = buildForm(e.draft, e.schema)
+	e.form = buildForm(e.draft, e.schema, e.backendOptions)
 	return e, e.form.Init()
 }
 

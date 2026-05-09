@@ -34,7 +34,7 @@ func (m *fsManager) Reconcile() error {
 	for _, ri := range loaded {
 		binary := ri.BinaryPath
 		if binary == "" {
-			binary = m.binary
+			binary = m.defaultBinary
 		}
 		if !pidAliveAndNameMatches(ri.PID, filepath.Base(binary)) {
 			continue

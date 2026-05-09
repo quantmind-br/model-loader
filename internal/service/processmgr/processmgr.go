@@ -1,4 +1,4 @@
-// Package processmgr launches and tracks llama-server processes.
+// Package processmgr launches and tracks LLM server processes.
 package processmgr
 
 import (

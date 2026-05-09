@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/processmgr"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/validator"
@@ -64,6 +65,16 @@ func (f *fakeManager) WaitHealthy(_, _ int, _ time.Duration) error { return nil 
 func (f *fakeManager) TailLogs(_ int) (io.ReadCloser, error)       { return nil, processmgr.ErrUnknownPID }
 func (f *fakeManager) Close() error                                { return nil }
 
+type mockResolver struct{}
+
+func (m *mockResolver) Resolve(p domain.Profile) (backendcatalog.ResolvedBackend, error) {
+	return backendcatalog.ResolvedBackend{
+		Backend:        domain.Backend{ID: "default", Name: "default", Executable: "llama-server"},
+		ExecutablePath: "llama-server",
+		Schema:         domain.BackendValidationSchema{Flags: map[string]domain.FlagSpec{}},
+	}, nil
+}
+
 func TestLauncherPage_EnterLaunchesSelected(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := profilestore.NewFSStore(dir)
@@ -73,7 +84,7 @@ func TestLauncherPage_EnterLaunchesSelected(t *testing.T) {
 	})
 
 	mgr := &fakeManager{}
-	page := NewLauncherPage(store, mgr, nil)
+	page := NewLauncherPage(store, mgr, nil).SetBackendResolver(&mockResolver{})
 
 	model, _ := page.Update(LauncherProfilesLoadedMsg{Profiles: []domain.Profile{{
 		ID: "alpha", Name: "Alpha", Model: "/m.gguf",

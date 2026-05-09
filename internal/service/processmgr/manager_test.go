@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -34,8 +33,9 @@ func fakeBinary(t *testing.T) string {
 func newTestManager(t *testing.T) (*fsManager, string) {
 	t.Helper()
 	dir := t.TempDir()
+	fb := fakeBinary(t)
 	mgr := New(Config{
-		Binary:       fakeBinary(t),
+		Resolver:     func(_ domain.Profile) (string, error) { return fb, nil },
 		LogDir:       filepath.Join(dir, "logs"),
 		RegistryPath: filepath.Join(dir, "instances.json"),
 	})
@@ -82,19 +82,17 @@ func TestManager_LaunchBackground_WaitsHealthyAndPersists(t *testing.T) {
 
 func TestManager_LaunchBackground_ProfileOverrideUsesEffectiveBinary(t *testing.T) {
 	dir := t.TempDir()
-	defaultBinary := filepath.Join(dir, "missing-default")
 	overrideBinary := fakeBinary(t)
 	mgr := New(Config{
-		Binary:       defaultBinary,
+		Resolver:     func(_ domain.Profile) (string, error) { return overrideBinary, nil },
 		LogDir:       filepath.Join(dir, "logs"),
 		RegistryPath: filepath.Join(dir, "instances.json"),
 	})
 	port := freePort(t)
 	p := domain.Profile{
-		ID:     "override",
-		Model:  "/dev/null",
-		Args:   map[string]any{"port": float64(port)},
-		Launch: domain.LaunchConfig{LlamaServerBinaryPath: overrideBinary},
+		ID:    "override",
+		Model: "/dev/null",
+		Args:  map[string]any{"port": float64(port)},
 	}
 	inst, err := mgr.Launch(p, LaunchBackground)
 	if err != nil {
@@ -111,6 +109,7 @@ func TestManager_LaunchBackground_ProfileOverrideUsesEffectiveBinary(t *testing.
 }
 
 func TestManager_LaunchBackground_NoOverrideUsesDefaultBinary(t *testing.T) {
+	fb := fakeBinary(t)
 	mgr, _ := newTestManager(t)
 	port := freePort(t)
 	p := domain.Profile{
@@ -124,26 +123,29 @@ func TestManager_LaunchBackground_NoOverrideUsesDefaultBinary(t *testing.T) {
 	}
 	defer mgr.Kill(inst.PID)
 
-	if inst.BinaryPath != mgr.binary {
-		t.Fatalf("BinaryPath = %q, want %q", inst.BinaryPath, mgr.binary)
+	if inst.BinaryPath != fb {
+		t.Fatalf("BinaryPath = %q, want %q", inst.BinaryPath, fb)
 	}
 }
 
 func TestManager_LaunchBackground_InvalidEffectiveBinary(t *testing.T) {
-	mgr, _ := newTestManager(t)
-	port := freePort(t)
 	badBinary := filepath.Join(t.TempDir(), "does-not-exist")
+	mgr := New(Config{
+		Resolver:     func(_ domain.Profile) (string, error) { return badBinary, nil },
+		LogDir:       filepath.Join(t.TempDir(), "logs"),
+		RegistryPath: filepath.Join(t.TempDir(), "instances.json"),
+	})
+	port := freePort(t)
 	p := domain.Profile{
-		ID:     "invalid-binary",
-		Model:  "/dev/null",
-		Args:   map[string]any{"port": float64(port)},
-		Launch: domain.LaunchConfig{LlamaServerBinaryPath: badBinary},
+		ID:    "invalid-binary",
+		Model: "/dev/null",
+		Args:  map[string]any{"port": float64(port)},
 	}
 	_, err := mgr.Launch(p, LaunchBackground)
 	if err == nil {
 		t.Fatal("expected invalid binary error, got nil")
 	}
-	want := "invalid llama-server binary " + strconv.Quote(badBinary)
+	want := "start process"
 	if !strings.Contains(err.Error(), want) {
 		t.Fatalf("err = %v, want prefix containing %q", err, want)
 	}
@@ -215,7 +217,7 @@ func TestManager_Launch_NotifiesLastUsedSink(t *testing.T) {
 	dir := t.TempDir()
 	spy := &sinkSpy{}
 	mgr := New(Config{
-		Binary:       fakeBinary(t),
+		Resolver:     func(_ domain.Profile) (string, error) { return fakeBinary(t), nil },
 		LogDir:       filepath.Join(dir, "logs"),
 		RegistryPath: filepath.Join(dir, "instances.json"),
 		LastUsedSink: spy,
@@ -275,11 +277,18 @@ func TestTailLogs_UnknownPID(t *testing.T) {
 	}
 }
 
-func TestManager_New_BinaryNotInPATH(t *testing.T) {
-	cfg := Config{Binary: "this-bin-does-not-exist-xyz", LogDir: t.TempDir(), RegistryPath: filepath.Join(t.TempDir(), "i.json")}
-	_, err := NewWithCheck(cfg)
+func TestManager_ResolverError(t *testing.T) {
+	cfg := Config{
+		Resolver:     func(_ domain.Profile) (string, error) { return "", ErrBinaryNotFound },
+		LogDir:       t.TempDir(),
+		RegistryPath: filepath.Join(t.TempDir(), "i.json"),
+	}
+	mgr := New(cfg)
+	port := freePort(t)
+	p := domain.Profile{ID: "fail", Model: "/dev/null", Args: map[string]any{"port": float64(port)}}
+	_, err := mgr.Launch(p, LaunchBackground)
 	if err == nil {
-		t.Fatal("expected error for missing binary, got nil")
+		t.Fatal("expected error for resolver failure, got nil")
 	}
 	if !errors.Is(err, ErrBinaryNotFound) {
 		t.Fatalf("err = %v, want ErrBinaryNotFound", err)

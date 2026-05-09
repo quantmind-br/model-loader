@@ -143,7 +143,7 @@ func TestProfilesPage_PickerWritesDraftModel(t *testing.T) {
 	}
 }
 
-func TestProfilesPage_EditHydratesBinaryPath(t *testing.T) {
+func TestProfilesPage_EditHydratesBackendID(t *testing.T) {
 	store := newFakeStoreWithDiagnostics([]domain.Profile{
 		{
 			ID:    "demo",
@@ -151,7 +151,7 @@ func TestProfilesPage_EditHydratesBinaryPath(t *testing.T) {
 			Model: "/m.gguf",
 			Args:  map[string]any{"ngl": float64(99), "ctx-size": float64(8192), "port": float64(4321)},
 			Launch: domain.LaunchConfig{
-				LlamaServerBinaryPath: "/custom/llama-server",
+				BackendID: "llama-cpp-custom",
 			},
 		},
 	}, nil)
@@ -165,8 +165,8 @@ func TestProfilesPage_EditHydratesBinaryPath(t *testing.T) {
 	if !page.editor.Active() {
 		t.Fatal("startEditSelected should activate editor")
 	}
-	if got := page.editor.CurrentDraft().LlamaServerBinaryPath; got != "/custom/llama-server" {
-		t.Fatalf("draft.LlamaServerBinaryPath = %q, want /custom/llama-server", got)
+	if got := page.editor.CurrentDraft().BackendID; got != "llama-cpp-custom" {
+		t.Fatalf("draft.BackendID = %q, want llama-cpp-custom", got)
 	}
 }
 

@@ -1,20 +1,19 @@
-// Command llama-cpp-loader launches the TUI for managing llama.cpp profiles.
+// Command llama-cpp-loader launches the TUI for managing LLM server profiles.
 package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/quantmind-br/llama-cpp-loader/internal/config"
 	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamabin"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamahelp"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendschema"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/migration"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/modelscanner"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/monitor"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/processmgr"
@@ -37,51 +36,41 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Resolve and validate the global binary (config > PATH default).
-	globalBinary := cfg.Paths.LlamaServerBinaryPath
-	if globalBinary == "" {
-		globalBinary = llamabin.DefaultName
-	}
-	if _, err := llamabin.Resolve(globalBinary); err != nil {
-		fmt.Fprintf(os.Stderr, "config error: invalid llama-server binary %q: %v\n", globalBinary, err)
-		os.Exit(1)
+	catalogStore := backendcatalog.NewFSStore(cfg.Paths.BackendsDir)
+	schemaStore := backendcatalog.NewFSSchemaStore(cfg.Paths.BackendsDir)
+
+	schemaManager := backendschema.NewManager(catalogStore, schemaStore)
+	schemaManager.Register(domain.BackendKindLlamaServer, backendschema.NewLlamaServerGenerator(schemaStore))
+
+	migrator := migration.NewService(cfg, store, catalogStore, schemaStore, schemaManager)
+	if _, err := migrator.Run(context.Background()); err != nil {
+		fmt.Fprintf(os.Stderr, "migration: %v\n", err)
 	}
 
-	schemaCache := llamahelp.NewSchemaCache(5 * time.Second)
-	schema, schemaWarn := loadSchema(globalBinary, schemaCache)
-	scanner := modelscanner.New()
+	resolver := backendcatalog.NewResolver(catalogStore, schemaStore)
 
-	mgr, err := processmgr.NewWithCheck(processmgr.Config{
-		Binary:       globalBinary,
+	defaultSchema := loadDefaultSchema(resolver)
+
+	mgr := processmgr.New(processmgr.Config{
+		Resolver:     buildResolver(resolver),
 		LogDir:       cfg.Paths.LogDir,
 		RegistryPath: filepath.Join(cfg.Paths.StateDir, "instances.json"),
 		LastUsedSink: store,
 	})
-	if err != nil {
-		if errors.Is(err, processmgr.ErrBinaryNotFound) {
-			root := ui.NewRoot(ui.TabProfiles).WithBootBlocker(
-				"llama-server not found in PATH",
-				"Install llama.cpp first:\n  Arch: pacman -S llama.cpp-cuda\n  Other distros: build from https://github.com/ggml-org/llama.cpp",
-			)
-			if _, runErr := tea.NewProgram(root, tea.WithAltScreen()).Run(); runErr != nil {
-				fmt.Fprintf(os.Stderr, "tui error: %v\n", runErr)
-			}
-			os.Exit(1)
-		}
-		fmt.Fprintf(os.Stderr, "process manager: %v\n", err)
-		os.Exit(1)
-	}
 	defer mgr.Close()
 	if err := mgr.Reconcile(); err != nil {
 		fmt.Fprintf(os.Stderr, "instance recovery: %v\n", err)
 	}
 
+	scanner := modelscanner.New()
 	val := validator.New()
 
-	profilesPage := pages.NewProfilesPage(store, schema).
-		WithModelScanner(scanner, cfg.Models.SearchPaths)
+	profilesPage := pages.NewProfilesPage(store, defaultSchema).
+		WithModelScanner(scanner, cfg.Models.SearchPaths).
+		WithBackendCatalog(catalogStore, schemaStore)
 	modelsPage := pages.NewModelsPage(scanner, cfg.Models.SearchPaths).WithProfileStore(store)
-	launcherPage := pages.NewLauncherPage(store, mgr, val).SetSchema(schema).SetBinaryResolver(globalBinary, schemaCache)
+	launcherPage := pages.NewLauncherPage(store, mgr, val).
+		SetBackendResolver(resolver)
 
 	mon := monitor.New(monitor.Config{NvidiaSMIPath: "nvidia-smi"})
 	monitorPage := pages.NewMonitorPage(mgr, mon, store)
@@ -91,19 +80,14 @@ func main() {
 		WithModelsPage(modelsPage).
 		WithLauncherPage(launcherPage).
 		WithMonitorPage(monitorPage)
-	if schemaWarn != "" {
-		root = root.WithStatusWarn(schemaWarn)
-	}
 
-	// Background llama-server processes intentionally survive TUI exit;
-	// processmgr.Reconcile restores them at next boot from instances.json.
 	prog := tea.NewProgram(root, tea.WithAltScreen())
 	if _, err := prog.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "tui error: %v\n", err)
 		os.Exit(1)
 	}
 	if running := mgr.List(); len(running) > 0 {
-		fmt.Fprintf(os.Stderr, "%d background llama-server instance(s) still running:\n", len(running))
+		fmt.Fprintf(os.Stderr, "%d background instance(s) still running:\n", len(running))
 		for _, ri := range running {
 			fmt.Fprintf(os.Stderr, "  PID %d (port %d)\n", ri.PID, ri.Port)
 		}
@@ -111,17 +95,22 @@ func main() {
 	}
 }
 
-// loadSchema attempts to parse the binary's --help via the schema cache.
-// On failure (binary absent, timeout, parse error) it returns the embedded
-// fallback and a warning string suitable for the status bar.
-func loadSchema(binary string, cache *llamahelp.SchemaCache) (domain.FlagSchema, string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	schema, err := cache.Get(ctx, binary)
+func loadDefaultSchema(resolver backendcatalog.Resolver) domain.FlagSchema {
+	catalog, err := resolver.Resolve(domain.Profile{})
 	if err != nil {
-		return llamahelp.EmbeddedSchema(), fmt.Sprintf("schema fallback: %v", err)
+		return domain.BackendValidationSchema{}.ToFlagSchema()
 	}
-	return schema, ""
+	return catalog.Schema.ToFlagSchema()
+}
+
+func buildResolver(resolver backendcatalog.Resolver) func(domain.Profile) (string, error) {
+	return func(p domain.Profile) (string, error) {
+		rb, err := resolver.Resolve(p)
+		if err != nil {
+			return "", err
+		}
+		return rb.ExecutablePath, nil
+	}
 }
 
 func parseTab(name string) ui.Tab {

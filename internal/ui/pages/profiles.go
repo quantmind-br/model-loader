@@ -8,9 +8,11 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
 	"github.com/quantmind-br/llama-cpp-loader/internal/ui/components"
 	"github.com/quantmind-br/llama-cpp-loader/internal/ui/pages/profile_editor"
@@ -33,8 +35,10 @@ type modelPickerOverlay struct {
 // discard-confirm) lives in a profile_editor.Editor sub-model. The page
 // keeps only master-list, delete-confirm, picker overlay, status flash.
 type ProfilesPage struct {
-	store  profilestore.Store
-	schema domain.FlagSchema
+	store       profilestore.Store
+	schema      domain.FlagSchema
+	catalogStore backendcatalog.Store
+	schemaStore  backendcatalog.SchemaStore
 
 	list     list.Model
 	listKeys profilesKeyMap
@@ -44,11 +48,9 @@ type ProfilesPage struct {
 	editor        profile_editor.Editor
 	deleteConfirm components.Confirm
 
-	// Status feedback.
 	flash   string
 	flashAt time.Time
 
-	// Picker overlay (slice 3).
 	picker modelPickerOverlay
 }
 
@@ -73,6 +75,13 @@ func NewProfilesPage(store profilestore.Store, schema domain.FlagSchema) Profile
 func (p ProfilesPage) WithModelScanner(scanner components.ModelScanner, paths []string) ProfilesPage {
 	p.picker.scanner = scanner
 	p.picker.scanPaths = paths
+	return p
+}
+
+// WithBackendCatalog injects the backend catalog so the editor can list backends.
+func (p ProfilesPage) WithBackendCatalog(catalogStore backendcatalog.Store, schemaStore backendcatalog.SchemaStore) ProfilesPage {
+	p.catalogStore = catalogStore
+	p.schemaStore = schemaStore
 	return p
 }
 
@@ -164,8 +173,9 @@ func (p ProfilesPage) handlePickerScan(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (p ProfilesPage) handleUseInNewProfile(msg UseInNewProfileMsg) (tea.Model, tea.Cmd) {
-	d := newDraftDefaults()
+	d := p.newDraftDefaults()
 	d.Model = msg.Path
+	p.editor = p.editor.SetBackendOptions(p.backendOptions())
 	var openCmd tea.Cmd
 	p.editor, openCmd = p.editor.Open(d)
 	p, fc := p.withFlash("new profile prefilled with picked model")
@@ -292,12 +302,17 @@ func (p ProfilesPage) detailView() string {
 		return ""
 	}
 	pr := sel.p
+	backend := pr.Launch.BackendID
+	if backend == "" {
+		backend = "(default)"
+	}
 	return fmt.Sprintf(
-		"%s\n%s\n\nID:    %s\nModel: %s\nArgs:  ngl=%v ctx=%v port=%v flash-attn=%v",
+		"%s\n%s\n\nID:      %s\nModel:   %s\nBackend: %s\nArgs:    ngl=%v ctx=%v port=%v flash-attn=%v",
 		theme.Title.Render(pr.Name),
 		theme.Subtitle.Render(pr.Description),
 		pr.ID,
 		pr.Model,
+		backend,
 		pr.Args["ngl"], pr.Args["ctx-size"], pr.Args["port"], pr.Args["flash-attn"],
 	)
 }
@@ -406,25 +421,46 @@ func (p ProfilesPage) performDelete(id string) (tea.Model, tea.Cmd) {
 
 // newDraftDefaults builds a fresh Draft pre-seeded with sensible defaults
 // for new profiles. Shared by [n] (start new) and "use in new profile".
-func newDraftDefaults() profile_editor.Draft {
-	return profile_editor.Draft{
-		Name:                  "New Profile",
-		LlamaServerBinaryPath: "",
-		NGL:                   "99",
-		CtxSize:               "8192",
-		BatchSize:             "2048",
-		UBatchSize:            "512",
-		Port:                  "4321",
-		FlashAttn:             "auto",
-		CacheTypeK:            "q8_0",
-		CacheTypeV:            "q8_0",
-		IsNew:                 true,
+func (p ProfilesPage) newDraftDefaults() profile_editor.Draft {
+	d := profile_editor.Draft{
+		Name:        "New Profile",
+		NGL:         "99",
+		CtxSize:     "8192",
+		BatchSize:   "2048",
+		UBatchSize:  "512",
+		Port:        "4321",
+		FlashAttn:   "auto",
+		CacheTypeK:  "q8_0",
+		CacheTypeV:  "q8_0",
+		IsNew:       true,
 	}
+	if p.catalogStore != nil {
+		if catalog, err := p.catalogStore.Load(); err == nil && catalog.DefaultBackendID != "" {
+			d.BackendID = catalog.DefaultBackendID
+		}
+	}
+	return d
+}
+
+func (p ProfilesPage) backendOptions() []huh.Option[string] {
+	if p.catalogStore == nil {
+		return nil
+	}
+	catalog, err := p.catalogStore.Load()
+	if err != nil {
+		return nil
+	}
+	opts := make([]huh.Option[string], 0, len(catalog.Backends))
+	for _, b := range catalog.Backends {
+		opts = append(opts, huh.NewOption(b.Name, b.ID))
+	}
+	return opts
 }
 
 func (p ProfilesPage) startNew() (tea.Model, tea.Cmd) {
+	p.editor = p.editor.SetBackendOptions(p.backendOptions())
 	var cmd tea.Cmd
-	p.editor, cmd = p.editor.Open(newDraftDefaults())
+	p.editor, cmd = p.editor.Open(p.newDraftDefaults())
 	return p, cmd
 }
 
@@ -439,20 +475,21 @@ func (p ProfilesPage) startEditSelected() (tea.Model, tea.Cmd) {
 	}
 	pr := sel.p
 	d := profile_editor.Draft{
-		ID:                    pr.ID,
-		Name:                  pr.Name,
-		Description:           pr.Description,
-		Model:                 pr.Model,
-		LlamaServerBinaryPath: pr.Launch.LlamaServerBinaryPath,
-		NGL:                   profile_editor.ArgString(pr.Args["ngl"]),
-		CtxSize:               profile_editor.ArgString(pr.Args["ctx-size"]),
-		BatchSize:             profile_editor.ArgString(pr.Args["batch-size"]),
-		UBatchSize:            profile_editor.ArgString(pr.Args["ubatch-size"]),
-		Port:                  profile_editor.ArgString(pr.Args["port"]),
-		FlashAttn:             profile_editor.FlashAttnToString(pr.Args["flash-attn"]),
-		CacheTypeK:            profile_editor.ArgString(pr.Args["cache-type-k"]),
-		CacheTypeV:            profile_editor.ArgString(pr.Args["cache-type-v"]),
+		ID:          pr.ID,
+		Name:        pr.Name,
+		Description: pr.Description,
+		Model:       pr.Model,
+		BackendID:   pr.Launch.BackendID,
+		NGL:         profile_editor.ArgString(pr.Args["ngl"]),
+		CtxSize:     profile_editor.ArgString(pr.Args["ctx-size"]),
+		BatchSize:   profile_editor.ArgString(pr.Args["batch-size"]),
+		UBatchSize:  profile_editor.ArgString(pr.Args["ubatch-size"]),
+		Port:        profile_editor.ArgString(pr.Args["port"]),
+		FlashAttn:   profile_editor.FlashAttnToString(pr.Args["flash-attn"]),
+		CacheTypeK:  profile_editor.ArgString(pr.Args["cache-type-k"]),
+		CacheTypeV:  profile_editor.ArgString(pr.Args["cache-type-v"]),
 	}
+	p.editor = p.editor.SetBackendOptions(p.backendOptions())
 	var cmd tea.Cmd
 	p.editor, cmd = p.editor.Open(d)
 	return p, cmd

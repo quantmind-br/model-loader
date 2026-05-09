@@ -64,9 +64,10 @@ func TestReconcile_KeepsLiveLlamaServer(t *testing.T) {
 	// Forge a fresh manager pointing at the same registry — simulates restart.
 	dir := filepath.Dir(mgr.registryPath)
 	freshMgr := New(Config{
-		Binary:       "python3", // matches /proc/<pid>/comm of fake-llama-server.sh's exec'd interpreter
-		LogDir:       filepath.Join(dir, "logs"),
-		RegistryPath: mgr.registryPath,
+		Resolver:      func(_ domain.Profile) (string, error) { return "python3", nil },
+		DefaultBinary: "python3",
+		LogDir:        filepath.Join(dir, "logs"),
+		RegistryPath:  mgr.registryPath,
 	})
 	if err := freshMgr.Reconcile(); err != nil {
 		t.Fatalf("Reconcile: %v", err)
@@ -103,7 +104,7 @@ func TestReconcile_UsesInstanceBinaryPath(t *testing.T) {
 
 	dir := filepath.Dir(mgr.registryPath)
 	freshMgr := New(Config{
-		Binary:       "definitely-not-python3",
+		Resolver:     func(_ domain.Profile) (string, error) { return "definitely-not-python3", nil },
 		LogDir:       filepath.Join(dir, "logs"),
 		RegistryPath: mgr.registryPath,
 	})

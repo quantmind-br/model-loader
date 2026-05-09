@@ -360,27 +360,27 @@ func TestDraft_ApplyToSetsBinaryPath(t *testing.T) {
 		},
 	}
 	d := Draft{
-		ID:                    "x",
-		Name:                  "X",
-		LlamaServerBinaryPath: "/custom/llama-server",
-		NGL:                   "99",
-		CtxSize:               "8192",
-		Port:                  "4321",
+		ID:        "x",
+		Name:      "X",
+		BackendID: "llama-cpp-custom",
+		NGL:       "99",
+		CtxSize:   "8192",
+		Port:      "4321",
 	}
 
 	out := d.ApplyTo(base)
 
-	if got := out.Launch.LlamaServerBinaryPath; got != "/custom/llama-server" {
-		t.Fatalf("LlamaServerBinaryPath = %q, want /custom/llama-server", got)
+	if got := out.Launch.BackendID; got != "llama-cpp-custom" {
+		t.Fatalf("BackendID = %q, want llama-cpp-custom", got)
 	}
 	if got := out.Launch.LogFilePath; got != "/logs/existing.log" {
 		t.Errorf("LogFilePath = %q, want preserved /logs/existing.log", got)
 	}
 
-	d.LlamaServerBinaryPath = ""
+	d.BackendID = ""
 	out = d.ApplyTo(base)
-	if got := out.Launch.LlamaServerBinaryPath; got != "" {
-		t.Errorf("empty draft should clear LlamaServerBinaryPath; got %q", got)
+	if got := out.Launch.BackendID; got != "" {
+		t.Errorf("empty draft should clear BackendID; got %q", got)
 	}
 }
 

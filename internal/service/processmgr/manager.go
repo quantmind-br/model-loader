@@ -16,44 +16,43 @@ import (
 	"time"
 
 	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamabin"
 )
 
 // fsManager is the default Manager implementation backed by os/exec.
 type fsManager struct {
-	binary       string // resolved path or name on PATH; default "llama-server"
-	logDir       string // directory for background stdout/stderr capture
-	registryPath string // absolute path to instances.json
+	resolver     func(domain.Profile) (string, error)
+	defaultBinary string
+	logDir       string
+	registryPath string
 	sink         LastUsedSink
 
 	mu           sync.Mutex
-	tracked      map[int]domain.RunningInstance // pid -> instance
-	fgPID        int                            // 0 if no foreground active; -1 if launching
+	tracked      map[int]domain.RunningInstance
+	fgPID        int
 	livenessStop func()
 }
 
-// Config holds wiring for New. Caller owns the paths; the manager creates
-// directories on demand.
+// Config holds wiring for New.
 type Config struct {
-	Binary       string // override; empty = "llama-server"
-	LogDir       string
-	RegistryPath string
-	LastUsedSink LastUsedSink
+	Resolver      func(domain.Profile) (string, error)
+	DefaultBinary string
+	LogDir        string
+	RegistryPath  string
+	LastUsedSink  LastUsedSink
 }
 
-// New constructs a Manager. It does NOT call Reconcile; main.go orchestrates
-// boot recovery explicitly.
+// New constructs a Manager.
 func New(cfg Config) *fsManager {
-	bin := cfg.Binary
-	if bin == "" {
-		bin = "llama-server"
-	}
 	m := &fsManager{
-		binary:       bin,
-		logDir:       cfg.LogDir,
-		registryPath: cfg.RegistryPath,
-		sink:         cfg.LastUsedSink,
-		tracked:      map[int]domain.RunningInstance{},
+		resolver:      cfg.Resolver,
+		defaultBinary: cfg.DefaultBinary,
+		logDir:        cfg.LogDir,
+		registryPath:  cfg.RegistryPath,
+		sink:          cfg.LastUsedSink,
+		tracked:       map[int]domain.RunningInstance{},
+	}
+	if m.defaultBinary == "" {
+		m.defaultBinary = "llama-server"
 	}
 	m.livenessStop = m.startLiveness()
 	return m
@@ -65,20 +64,6 @@ func (m *fsManager) Close() error {
 		m.livenessStop()
 	}
 	return nil
-}
-
-// NewWithCheck é como New, mas verifica via exec.LookPath se o binário existe
-// antes de retornar. Erro: ErrBinaryNotFound (com o nome buscado embutido).
-// Use em main.go para bootear com fail-fast e modal de instalação.
-func NewWithCheck(cfg Config) (*fsManager, error) {
-	bin := cfg.Binary
-	if bin == "" {
-		bin = "llama-server"
-	}
-	if _, err := exec.LookPath(bin); err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrBinaryNotFound, bin)
-	}
-	return New(cfg), nil
 }
 
 // Launch spawns llama-server with the args derived from p. mode chooses
@@ -108,10 +93,9 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode) (domain.RunningIns
 	if err := os.MkdirAll(m.logDir, 0o755); err != nil {
 		return domain.RunningInstance{}, fmt.Errorf("mkdir log dir: %w", err)
 	}
-	binary := m.effectiveBinary(p)
-	resolvedBinary, err := llamabin.Resolve(binary)
+	resolvedBinary, err := m.resolver(p)
 	if err != nil {
-		return domain.RunningInstance{}, fmt.Errorf("invalid llama-server binary %q: %w", binary, err)
+		return domain.RunningInstance{}, fmt.Errorf("resolve backend executable: %w", err)
 	}
 	logPath := filepath.Join(m.logDir, fmt.Sprintf("%s-%d.log", p.ID, port))
 	logF, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
@@ -126,7 +110,7 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode) (domain.RunningIns
 
 	if err := cmd.Start(); err != nil {
 		_ = logF.Close()
-		return domain.RunningInstance{}, fmt.Errorf("start llama-server: %w", err)
+		return domain.RunningInstance{}, fmt.Errorf("start process: %w", err)
 	}
 	_ = logF.Close() // child inherited its own fd; drop ours
 
@@ -267,10 +251,6 @@ func snapshotLocked(t map[int]domain.RunningInstance) []domain.RunningInstance {
 	return out
 }
 
-func (m *fsManager) effectiveBinary(p domain.Profile) string {
-	return llamabin.Effective(p.Launch.LlamaServerBinaryPath, m.binary)
-}
-
 func portFromProfile(p domain.Profile) (int, bool) {
 	v, ok := p.Args["port"]
 	if !ok {
@@ -311,10 +291,9 @@ func checkPortFree(port int) error {
 // and the process is NOT detached via Setsid: it remains in the TUI's
 // process group so Ctrl+C from the TUI propagates if desired.
 func (m *fsManager) launchForeground(p domain.Profile, port int) (domain.RunningInstance, error) {
-	binary := m.effectiveBinary(p)
-	resolvedBinary, err := llamabin.Resolve(binary)
+	resolvedBinary, err := m.resolver(p)
 	if err != nil {
-		return domain.RunningInstance{}, fmt.Errorf("invalid llama-server binary %q: %w", binary, err)
+		return domain.RunningInstance{}, fmt.Errorf("resolve backend executable: %w", err)
 	}
 
 	m.mu.Lock()
@@ -332,7 +311,7 @@ func (m *fsManager) launchForeground(p domain.Profile, port int) (domain.Running
 		m.mu.Lock()
 		m.fgPID = 0
 		m.mu.Unlock()
-		return domain.RunningInstance{}, fmt.Errorf("start llama-server (fg): %w", err)
+		return domain.RunningInstance{}, fmt.Errorf("start process (fg): %w", err)
 	}
 	go func() { _ = cmd.Wait() }()
 

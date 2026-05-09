@@ -32,30 +32,21 @@ func (s subTab) String() string {
 	return "Advanced"
 }
 
-// Draft is the editor's mutable state. It is exported because it crosses
-// the package boundary via EditorCommittedMsg. Callers use Draft in two
-// places only:
-//   - Constructing a Draft to pass to Editor.Open.
-//   - Reading the saved Draft out of EditorCommittedMsg in their Update.
-//
-// Mutation while the editor is open is internal: the huh form binds
-// &field pointers on a heap-allocated *Draft so bubbletea's value-copy
-// idiom does not invalidate the binding addresses.
 type Draft struct {
-	ID                    string // immutable once created
-	Name                  string
-	Description           string
-	Model                 string
-	LlamaServerBinaryPath string
-	NGL                   string
-	CtxSize               string
-	BatchSize             string
-	UBatchSize            string
-	Port                  string
-	FlashAttn             string
-	CacheTypeK            string
-	CacheTypeV            string
-	IsNew                 bool
+	ID          string
+	Name        string
+	Description string
+	Model       string
+	BackendID   string
+	NGL         string
+	CtxSize     string
+	BatchSize   string
+	UBatchSize  string
+	Port        string
+	FlashAttn   string
+	CacheTypeK  string
+	CacheTypeV  string
+	IsNew       bool
 }
 
 // ToProfile maps the editor draft to a domain.Profile. Always sets
@@ -98,7 +89,7 @@ func (d Draft) ApplyTo(base domain.Profile) domain.Profile {
 	out.Model = d.Model
 	out.Args = args
 	out.Launch.DefaultBackground = true
-	out.Launch.LlamaServerBinaryPath = d.LlamaServerBinaryPath
+	out.Launch.BackendID = d.BackendID
 	return out
 }
 
@@ -137,29 +128,38 @@ func FlashAttnToString(v any) string {
 	}
 }
 
-func buildForm(d *Draft, schema domain.FlagSchema) *huh.Form {
+func buildForm(d *Draft, schema domain.FlagSchema, backendOpts []huh.Option[string]) *huh.Form {
 	cacheOpts := selectOptions(schema, "cache-type-k", []string{"f16", "q8_0", "q4_0"})
-	return huh.NewForm(
+	groups := []*huh.Group{
 		huh.NewGroup(
 			huh.NewInput().Title("Name").Value(&d.Name),
 			huh.NewInput().Title("Description").Value(&d.Description),
 			huh.NewInput().Title("Model path (.gguf)").Value(&d.Model),
-			huh.NewInput().
-				Title("llama-server binary path (optional)").
-				Description("Overrides the global default for this profile").
-				Value(&d.LlamaServerBinaryPath),
 		),
-		huh.NewGroup(
-			huh.NewInput().Title(labelWithHelp(schema, "n-gpu-layers", "ngl (gpu layers)")).Value(&d.NGL).Validate(intRange(-1, 9999, false)),
-			huh.NewInput().Title(labelWithHelp(schema, "ctx-size", "ctx-size")).Value(&d.CtxSize).Validate(intRange(0, 1024*1024, false)),
-			huh.NewInput().Title(labelWithHelp(schema, "batch-size", "batch-size")).Value(&d.BatchSize).Validate(intRange(0, 1024*1024, true)),
-			huh.NewInput().Title(labelWithHelp(schema, "ubatch-size", "ubatch-size")).Value(&d.UBatchSize).Validate(intRange(0, 1024*1024, true)),
-			huh.NewInput().Title(labelWithHelp(schema, "port", "port")).Value(&d.Port).Validate(portValidator()),
-			huh.NewSelect[string]().Title(labelWithHelp(schema, "flash-attn", "flash-attn")).Options(toOptions(selectOptions(schema, "flash-attn", []string{"on", "off", "auto"}))...).Value(&d.FlashAttn),
-			huh.NewSelect[string]().Title("cache-type-k").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeK),
-			huh.NewSelect[string]().Title("cache-type-v").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeV),
-		),
-	).WithShowHelp(true)
+	}
+	if len(backendOpts) > 0 {
+		groups[0] = huh.NewGroup(
+			huh.NewInput().Title("Name").Value(&d.Name),
+			huh.NewInput().Title("Description").Value(&d.Description),
+			huh.NewInput().Title("Model path (.gguf)").Value(&d.Model),
+			huh.NewSelect[string]().
+				Title("Backend").
+				Description("Select the LLM server backend for this profile").
+				Options(backendOpts...).
+				Value(&d.BackendID),
+		)
+	}
+	groups = append(groups, huh.NewGroup(
+		huh.NewInput().Title(labelWithHelp(schema, "n-gpu-layers", "ngl (gpu layers)")).Value(&d.NGL).Validate(intRange(-1, 9999, false)),
+		huh.NewInput().Title(labelWithHelp(schema, "ctx-size", "ctx-size")).Value(&d.CtxSize).Validate(intRange(0, 1024*1024, false)),
+		huh.NewInput().Title(labelWithHelp(schema, "batch-size", "batch-size")).Value(&d.BatchSize).Validate(intRange(0, 1024*1024, true)),
+		huh.NewInput().Title(labelWithHelp(schema, "ubatch-size", "ubatch-size")).Value(&d.UBatchSize).Validate(intRange(0, 1024*1024, true)),
+		huh.NewInput().Title(labelWithHelp(schema, "port", "port")).Value(&d.Port).Validate(portValidator()),
+		huh.NewSelect[string]().Title(labelWithHelp(schema, "flash-attn", "flash-attn")).Options(toOptions(selectOptions(schema, "flash-attn", []string{"on", "off", "auto"}))...).Value(&d.FlashAttn),
+		huh.NewSelect[string]().Title("cache-type-k").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeK),
+		huh.NewSelect[string]().Title("cache-type-v").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeV),
+	))
+	return huh.NewForm(groups...).WithShowHelp(true)
 }
 
 // intRange returns a huh validator for integer fields in [min,max].
