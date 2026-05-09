@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamabin"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/llamabin"
 )
 
 // ExecParser invokes llama-server in PATH to capture --help and --version.

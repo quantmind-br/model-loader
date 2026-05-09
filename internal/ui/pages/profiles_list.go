@@ -13,8 +13,8 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // profilesKeyMap groups the master-list / launcher key bindings used by

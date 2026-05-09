@@ -3,7 +3,7 @@ package backendcatalog
 import (
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 const defaultBackendID = "llama-cpp-default"

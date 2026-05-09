@@ -8,9 +8,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/pages"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/ui/pages"
 )
 
 func TestRoot_StartsOnProfilesAndQuitsOnQ(t *testing.T) {

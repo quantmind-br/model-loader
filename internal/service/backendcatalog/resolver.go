@@ -3,8 +3,8 @@ package backendcatalog
 import (
 	"fmt"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamabin"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/llamabin"
 )
 
 // Resolver resolves a profile to backend, executable path, and schema.

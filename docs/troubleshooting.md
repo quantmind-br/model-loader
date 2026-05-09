@@ -41,7 +41,7 @@ Common issues and their solutions.
 **Symptom:** A background instance launched before closing the TUI does not appear in the Monitor tab on restart.
 
 **Solution:**
-- Check that `instances.json` exists in your state directory (`~/.local/state/llama-cpp-loader/`)
+- Check that `instances.json` exists in your state directory (`~/.local/state/model-loader/`)
 - Verify the process is still running: `ps aux | grep llama-server`
 - If the process crashed, it will be marked with a crash indicator; clear it from the Monitor tab
 

@@ -12,8 +12,8 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/huh"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/internal/filter"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/ui/internal/filter"
 )
 
 // subTab selects between the Essentials huh form and the Advanced

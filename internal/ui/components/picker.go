@@ -11,9 +11,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/internal/filter"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/ui/internal/filter"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // ModelScanner is the minimal Scanner contract the picker depends on.

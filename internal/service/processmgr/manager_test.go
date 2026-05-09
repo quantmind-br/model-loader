@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func freePort(t *testing.T) int {

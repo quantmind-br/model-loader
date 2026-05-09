@@ -52,7 +52,7 @@ llama.cpp-loader/
 │   │   │   └── profiles_test.go                        (T25, atualizado)
 │   │   └── root.go                                     (T25, schema thread-through)
 │   └── service/profilestore/                            (sem alterações)
-└── cmd/llama-cpp-loader/
+└── cmd/model-loader/
     └── main.go                                          (T26, parser+fallback boot)
 ```
 
@@ -169,7 +169,7 @@ package llamahelp
 import (
 	"context"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // Parser exposes schema discovery against a real llama-server binary.
@@ -294,7 +294,7 @@ Acrescente em `parser_test.go`:
 import (
 	"reflect"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func TestParseFlagLine_ShortLongPlaceholder(t *testing.T) {
@@ -1206,7 +1206,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // ExecParser invokes llama-server in PATH to capture --help and --version.
@@ -1281,7 +1281,7 @@ package llamahelp
 import (
 	"testing"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func TestEmbedded_HasAllEssentials(t *testing.T) {
@@ -1333,7 +1333,7 @@ go test ./internal/service/llamahelp/ -run TestEmbedded
 ```go
 package llamahelp
 
-import "github.com/quantmind-br/llama-cpp-loader/internal/domain"
+import "github.com/quantmind-br/model-loader/internal/domain"
 
 // EmbeddedSchema returns the compile-time fallback schema covering the curated
 // essentials. Used when llama-server --help cannot be invoked. Version label
@@ -1481,7 +1481,7 @@ package validator
 import (
 	"testing"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func TestValidator_EmptySchemaProducesNoTypeIssues(t *testing.T) {
@@ -1512,7 +1512,7 @@ go test ./internal/service/validator/ -v
 // Package validator checks profiles against a FlagSchema and fixed rules.
 package validator
 
-import "github.com/quantmind-br/llama-cpp-loader/internal/domain"
+import "github.com/quantmind-br/model-loader/internal/domain"
 
 // Severity grades a FieldIssue.
 type Severity int
@@ -1575,7 +1575,7 @@ func appendIssue(rep Report, issue FieldIssue) Report {
 ```go
 package validator
 
-import "github.com/quantmind-br/llama-cpp-loader/internal/domain"
+import "github.com/quantmind-br/model-loader/internal/domain"
 
 func applyTypeRules(p domain.Profile, schema domain.FlagSchema, rep Report) Report {
 	return rep
@@ -1665,7 +1665,7 @@ package validator
 import (
 	"fmt"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func applyTypeRules(p domain.Profile, schema domain.FlagSchema, rep Report) Report {
@@ -2236,7 +2236,7 @@ type profileDraft struct {
 
 ```go
 import (
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func buildEditorForm(d *profileDraft, schema domain.FlagSchema) *huh.Form {
@@ -2380,7 +2380,7 @@ Substitua o bloco `Args:` em `commitDraft` por:
 	}
 ```
 
-- [ ] **Step 6: Atualizar callers em `cmd/llama-cpp-loader/main.go`**
+- [ ] **Step 6: Atualizar callers em `cmd/model-loader/main.go`**
 
 Em `main.go`, substituir:
 
@@ -2396,7 +2396,7 @@ por (provisoriamente — wiring schema completo virá em T25):
 		WithProfilesPage(pages.NewProfilesPage(store, llamahelp.EmbeddedSchema()))
 ```
 
-E adicionar import: `"github.com/quantmind-br/llama-cpp-loader/internal/service/llamahelp"`.
+E adicionar import: `"github.com/quantmind-br/model-loader/internal/service/llamahelp"`.
 
 - [ ] **Step 7: Atualizar testes existentes em `profiles_test.go`**
 
@@ -2412,7 +2412,7 @@ go test ./...
 - [ ] **Step 9: Commit**
 
 ```bash
-git add internal/ui/pages/profiles_editor.go internal/ui/pages/profiles.go internal/ui/pages/profiles_test.go cmd/llama-cpp-loader/main.go
+git add internal/ui/pages/profiles_editor.go internal/ui/pages/profiles.go internal/ui/pages/profiles_test.go cmd/model-loader/main.go
 git commit -m "feat(ui/pages/profiles): essentials form pulls labels/defaults from FlagSchema"
 ```
 
@@ -2612,7 +2612,7 @@ Em `profiles.go`, adicione:
 
 ```go
 import (
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/validator"
+	"github.com/quantmind-br/model-loader/internal/service/validator"
 )
 
 // previewProfile builds a Profile from the current draft (without saving) for
@@ -2815,14 +2815,14 @@ git commit -m "feat(ui/root): add WithStatusWarn builder for boot warnings"
 ### Task 25: `main.go` — boot do parser com fallback
 
 **Files:**
-- Modify: `cmd/llama-cpp-loader/main.go`
+- Modify: `cmd/model-loader/main.go`
 
 - [ ] **Step 1: Reescrever `main.go` com parser boot + fallback**
 
-Substitua o conteúdo de `cmd/llama-cpp-loader/main.go` por:
+Substitua o conteúdo de `cmd/model-loader/main.go` por:
 
 ```go
-// Command llama-cpp-loader launches the TUI for managing llama.cpp profiles.
+// Command model-loader launches the TUI for managing llama.cpp profiles.
 package main
 
 import (
@@ -2833,12 +2833,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/config"
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamahelp"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/pages"
+	"github.com/quantmind-br/model-loader/internal/config"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/llamahelp"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/ui"
+	"github.com/quantmind-br/model-loader/internal/ui/pages"
 )
 
 func main() {
@@ -2901,7 +2901,7 @@ func parseTab(name string) ui.Tab {
 
 ```bash
 go build ./...
-go run ./cmd/llama-cpp-loader
+go run ./cmd/model-loader
 ```
 
 Esperado: app abre, statusbar limpa (binário presente). Quitar com `q`.
@@ -2909,7 +2909,7 @@ Esperado: app abre, statusbar limpa (binário presente). Quitar com `q`.
 - [ ] **Step 3: Smoke fallback**
 
 ```bash
-env -i HOME="$HOME" PATH="/nonexistent" go run ./cmd/llama-cpp-loader
+env -i HOME="$HOME" PATH="/nonexistent" go run ./cmd/model-loader
 ```
 
 Esperado: app abre, statusbar mostra warning de fallback. Quitar com `q`.
@@ -2917,7 +2917,7 @@ Esperado: app abre, statusbar mostra warning de fallback. Quitar com `q`.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add cmd/llama-cpp-loader/main.go
+git add cmd/model-loader/main.go
 git commit -m "feat(cmd): boot llamahelp parser with embedded fallback warn"
 ```
 
@@ -2985,7 +2985,7 @@ Se `go.sum` tiver mudanças mínimas (hash de `bubbles/table`), commit junto. Se
 - [ ] **Step 3: Smoke manual final**
 
 ```bash
-go run ./cmd/llama-cpp-loader
+go run ./cmd/model-loader
 ```
 
 Verificações manuais:
@@ -2993,7 +2993,7 @@ Verificações manuais:
 - Em Profiles, `n` abre editor com Essentials.
 - `ctrl+t` alterna pra Advanced; tabela renderiza ≥50 linhas; `/` filtra.
 - Volta para Essentials; preenche Name + Model path com `/tmp/foo.gguf` (não existe), valida que aparece error inline `model: model file does not exist`.
-- Salvar (`enter` no fim do form) cria arquivo em `~/.config/llama-cpp-loader/profiles/`.
+- Salvar (`enter` no fim do form) cria arquivo em `~/.config/model-loader/profiles/`.
 - Quit com `q`.
 
 - [ ] **Step 4: Commit do tidy (se houver)**
@@ -3022,7 +3022,7 @@ Ao terminar a Task 27 esta slice está pronta para review/merge. Próximo slice 
 - `internal/ui/pages/profiles_editor.go` (T18-T22) — Essentials + Advanced + filter
 - `internal/ui/pages/profiles.go` (T18-T24) — schema/validator injection, render report
 - `internal/ui/root.go` (T24-T25) — schema thread-through, WithStatusWarn
-- `cmd/llama-cpp-loader/main.go` (T25) — exec parser boot + fallback
+- `cmd/model-loader/main.go` (T25) — exec parser boot + fallback
 
 **Riscos conhecidos:**
 

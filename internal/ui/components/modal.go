@@ -3,7 +3,7 @@ package components
 import (
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // modalBoxStyle returns the outer box style. Built at render time so that

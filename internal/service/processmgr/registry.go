@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // registryFile is the on-disk shape of instances.json. Wrapping the slice in

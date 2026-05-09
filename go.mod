@@ -1,4 +1,4 @@
-module github.com/quantmind-br/llama-cpp-loader
+module github.com/quantmind-br/model-loader
 
 go 1.26.2
 

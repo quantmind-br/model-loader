@@ -5,7 +5,7 @@
 
 ## Overview
 
-The codebase is organized as a classic Go layered application split into a thin entry point (`cmd/llama-cpp-loader/`) and a domain-driven `internal/` tree. The graph reports **102 files, 2,559 symbols, 6,702 edges, 64 communities, and 223 execution flows**, distributed across 14 functional clusters.
+The codebase is organized as a classic Go layered application split into a thin entry point (`cmd/model-loader/`) and a domain-driven `internal/` tree. The graph reports **102 files, 2,559 symbols, 6,702 edges, 64 communities, and 223 execution flows**, distributed across 14 functional clusters.
 
 The system has three macro-responsibilities:
 
@@ -29,7 +29,7 @@ The 14 communities discovered by GitNexus map cleanly onto the directory layout.
 | Llamahelp      | 28      | 88%      | `internal/service/llamahelp/`       | Parse `llama-server --help` → `FlagSchema`; embed v7376 fallback.    |
 | Profilestore   | 26      | 62%      | `internal/service/profilestore/`    | Filesystem CRUD for TOML profiles.                                   |
 | Validator      | 16      | 68%      | `internal/service/validator/`       | Flag-by-flag validation rules driven by the schema.                  |
-| Config         | 7       | 86%      | `internal/config/`                  | Viper TOML loader (`~/.config/llama-cpp-loader/config.toml`).        |
+| Config         | 7       | 86%      | `internal/config/`                  | Viper TOML loader (`~/.config/model-loader/config.toml`).        |
 | Theme          | 7       | 67%      | `internal/ui/theme/`                | Lipgloss color palette and styles.                                   |
 | Domain         | 6       | 73%      | `internal/domain/`                  | Pure types: `Profile`, `Instance`, `Model`, `FlagSchema`.            |
 | Filter         | 5       | 73%      | (within pages/components)           | Cross-page text-filter helpers.                                      |
@@ -45,7 +45,7 @@ GitNexus enumerated 223 processes (50 surfaced, top-by-depth). The five flows be
 Loads the flag dictionary that everything else (validator, editor form, picker enums) depends on.
 
 ```
-loadSchema           cmd/llama-cpp-loader/main.go
+loadSchema           cmd/model-loader/main.go
   └─ Parse           internal/service/llamahelp/exec_parser.go
        └─ ParseHelp        internal/service/llamahelp/parser.go
             ├─ parseFlagLine
@@ -127,7 +127,7 @@ flowchart TB
     classDef ui fill:#9a3412,stroke:#fdba74,color:#fff7ed
     classDef io fill:#374151,stroke:#9ca3af,color:#f3f4f6,stroke-dasharray: 4 2
 
-    CMD["cmd/llama-cpp-loader<br/>main.go (entry)"]:::entry
+    CMD["cmd/model-loader<br/>main.go (entry)"]:::entry
 
     subgraph DOM["Domain (pure types)"]
         DomainTypes["Profile · Instance · Model · FlagSchema"]:::domain
@@ -203,7 +203,7 @@ flowchart TB
 
 - **Solid arrows** are direct calls captured by the graph; **dashed boxes** are external boundaries (binaries, filesystem).
 - The `Domain` cluster is the shared vocabulary — every service depends on it but it depends on nothing.
-- `cmd/llama-cpp-loader` is intentionally thin: bootstrap config, hydrate the schema, restore instances via `processmgr`, then hand control to `ui.RootModel`.
+- `cmd/model-loader` is intentionally thin: bootstrap config, hydrate the schema, restore instances via `processmgr`, then hand control to `ui.RootModel`.
 - The Profile Editor is the only UI component that talks to multiple services (validator + llamahelp + modelscanner) — that fan-out is why `Profile_editor` was extracted into its own package.
 
 ## Re-generating

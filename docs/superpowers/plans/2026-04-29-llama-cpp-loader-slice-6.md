@@ -1,4 +1,4 @@
-# llama-cpp-loader — Slice 6 Implementation Plan
+# model-loader — Slice 6 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -39,7 +39,7 @@
 - `internal/ui/components/help_test.go`
 - `internal/service/processmgr/liveness.go` — goroutine de crash detection
 - `internal/service/processmgr/liveness_test.go`
-- `docs/superpowers/plans/2026-04-29-llama-cpp-loader-slice-6.md` — ESTE arquivo
+- `docs/superpowers/plans/2026-04-29-model-loader-slice-6.md` — ESTE arquivo
 
 ### Modifica (8 arquivos)
 - `internal/domain/instance.go` — campos `Crashed bool`, `ExitedAt *time.Time`
@@ -55,7 +55,7 @@
 - `internal/ui/pages/messages.go` — pode ganhar `monitorSelectPIDMsg`
 - `internal/ui/root.go` — `?` toggle help overlay, forward `SwitchToMonitorMsg.PID`, boot bin modal
 - `internal/ui/root_test.go`
-- `cmd/llama-cpp-loader/main.go` — wire ProfileStore em MonitorPage, fail-fast com modal se bin ausente
+- `cmd/model-loader/main.go` — wire ProfileStore em MonitorPage, fail-fast com modal se bin ausente
 - `go.mod` / `go.sum` — `glamour` adicionada
 
 ### Phases / Tasks
@@ -219,9 +219,9 @@ func NewMonitorPage(pm procMgrIface, mm monitor.Manager, ps profileStoreIface) *
 }
 ```
 
-Atualizar todas as chamadas existentes em testes (`monitor_test.go`) e `cmd/llama-cpp-loader/main.go` para passar `nil` como terceiro argumento. Em `main.go`, sera substituído pelo store real na T4. Em testes, `nil` mantém comportamento atual.
+Atualizar todas as chamadas existentes em testes (`monitor_test.go`) e `cmd/model-loader/main.go` para passar `nil` como terceiro argumento. Em `main.go`, sera substituído pelo store real na T4. Em testes, `nil` mantém comportamento atual.
 
-Editar `cmd/llama-cpp-loader/main.go` — onde tem `pages.NewMonitorPage(mgr, mon)`, mudar para `pages.NewMonitorPage(mgr, mon, nil)`.
+Editar `cmd/model-loader/main.go` — onde tem `pages.NewMonitorPage(mgr, mon)`, mudar para `pages.NewMonitorPage(mgr, mon, nil)`.
 
 Editar `internal/ui/pages/monitor_test.go` — em todas as chamadas `NewMonitorPage(pm, mm)`, mudar para `NewMonitorPage(pm, mm, nil)`.
 
@@ -233,7 +233,7 @@ Expected: PASS — incluindo o novo `TestMonitorPage_CancelOrphanIsAsync`.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add internal/ui/pages/monitor.go internal/ui/pages/monitor_test.go cmd/llama-cpp-loader/main.go
+git add internal/ui/pages/monitor.go internal/ui/pages/monitor_test.go cmd/model-loader/main.go
 git commit -m "$(cat <<'EOF'
 fix(monitor): cancel orphan subs asynchronously to unblock UI
 
@@ -379,7 +379,7 @@ func (r *recordingMonitor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (r *recordingMonitor) View() string { return "" }
 ```
 
-Imports adicionais para `root_test.go` (se ausentes): `"github.com/quantmind-br/llama-cpp-loader/internal/ui/pages"`.
+Imports adicionais para `root_test.go` (se ausentes): `"github.com/quantmind-br/model-loader/internal/ui/pages"`.
 
 - [ ] **Step 2: Test MonitorPage seleciona row pelo PID**
 
@@ -528,7 +528,7 @@ EOF
 **Files:**
 - Modify: `internal/ui/pages/monitor.go` (handler de `r`)
 - Modify: `internal/ui/pages/monitor_test.go`
-- Modify: `cmd/llama-cpp-loader/main.go` (passar store real)
+- Modify: `cmd/model-loader/main.go` (passar store real)
 
 Motivação: hoje `r` mata e some — usuário esperava restart. Spec § 7.2 diz "restart (kill + relaunch mesmo profile)". Precisamos do `ProfileStore` injetado (T1 já adicionou ao construtor); este task implementa o handler.
 
@@ -605,7 +605,7 @@ func (r *restartTrackingMgr) Launch(p domain.Profile, mode processmgr.LaunchMode
 }
 ```
 
-Imports adicionais que possam faltar: `"io"`, `"github.com/quantmind-br/llama-cpp-loader/internal/service/processmgr"`.
+Imports adicionais que possam faltar: `"io"`, `"github.com/quantmind-br/model-loader/internal/service/processmgr"`.
 
 - [ ] **Step 2: Run test — falha**
 
@@ -680,7 +680,7 @@ func (p *MonitorPage) restartCmd(pid int) tea.Cmd {
 
 - [ ] **Step 4: Wire ProfileStore real em main.go**
 
-Editar `cmd/llama-cpp-loader/main.go`. Encontrar a linha `pages.NewMonitorPage(mgr, mon, nil)` (introduzida na T1) e substituir `nil` pelo `store` já existente no escopo (a `profilestore.Store` instanciada para a ProfilesPage). Exemplo:
+Editar `cmd/model-loader/main.go`. Encontrar a linha `pages.NewMonitorPage(mgr, mon, nil)` (introduzida na T1) e substituir `nil` pelo `store` já existente no escopo (a `profilestore.Store` instanciada para a ProfilesPage). Exemplo:
 
 ```go
 	monitorPage := pages.NewMonitorPage(mgr, mon, store)
@@ -701,7 +701,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add internal/ui/pages/monitor.go internal/ui/pages/monitor_test.go cmd/llama-cpp-loader/main.go
+git add internal/ui/pages/monitor.go internal/ui/pages/monitor_test.go cmd/model-loader/main.go
 git commit -m "$(cat <<'EOF'
 feat(monitor): r key performs real restart via ProfileStore.Get + Launch
 
@@ -780,7 +780,7 @@ package profilestore
 import (
 	"errors"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // ListDiagnostic descreve uma entry de profile que falhou ao carregar.
@@ -1264,7 +1264,7 @@ package components
 import (
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 var (
@@ -1327,7 +1327,7 @@ EOF
 - Modify: `internal/service/processmgr/manager_test.go`
 - Modify: `internal/ui/root.go` (renderiza boot blocker)
 - Modify: `internal/ui/root_test.go`
-- Modify: `cmd/llama-cpp-loader/main.go` (coordena init)
+- Modify: `cmd/model-loader/main.go` (coordena init)
 
 Motivação: design § 8 — "llama-server ausente do PATH → Modal bloqueante na boot, instrução para instalar `llama.cpp-cuda`".
 
@@ -1473,7 +1473,7 @@ func (m RootModel) View() string {
 
 - [ ] **Step 7: Wire em main.go — fail-fast com modal se bin não encontrado**
 
-Editar `cmd/llama-cpp-loader/main.go`. Localizar onde `processmgr.New` é chamado e substituir por `NewWithCheck`. Em caso de erro com `ErrBinaryNotFound`, ainda assim instanciar `RootModel` mas com `bootBlocker`:
+Editar `cmd/model-loader/main.go`. Localizar onde `processmgr.New` é chamado e substituir por `NewWithCheck`. Em caso de erro com `ErrBinaryNotFound`, ainda assim instanciar `RootModel` mas com `bootBlocker`:
 
 ```go
 	mgr, err := processmgr.NewWithCheck(processmgr.Config{
@@ -1512,7 +1512,7 @@ Expected: success.
 - [ ] **Step 10: Commit**
 
 ```bash
-git add internal/service/processmgr/processmgr.go internal/service/processmgr/manager.go internal/service/processmgr/manager_test.go internal/ui/root.go internal/ui/root_test.go cmd/llama-cpp-loader/main.go
+git add internal/service/processmgr/processmgr.go internal/service/processmgr/manager.go internal/service/processmgr/manager_test.go internal/ui/root.go internal/ui/root_test.go cmd/model-loader/main.go
 git commit -m "$(cat <<'EOF'
 feat(boot): blocking modal when llama-server is missing from PATH
 
@@ -1560,7 +1560,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func TestLiveness_MarksDeadPIDCrashed(t *testing.T) {
@@ -1784,7 +1784,7 @@ Em `NewWithCheck`, garantir que após `New(cfg)` não precisa nada extra (o live
 
 - [ ] **Step 5: main.go chama `defer mgr.Close()`**
 
-Editar `cmd/llama-cpp-loader/main.go`. Logo após instanciar `mgr`:
+Editar `cmd/model-loader/main.go`. Logo após instanciar `mgr`:
 
 ```go
 	defer mgr.Close()
@@ -1801,7 +1801,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add internal/domain/instance.go internal/service/processmgr/liveness.go internal/service/processmgr/liveness_test.go internal/service/processmgr/manager.go internal/service/processmgr/processmgr.go cmd/llama-cpp-loader/main.go
+git add internal/domain/instance.go internal/service/processmgr/liveness.go internal/service/processmgr/liveness_test.go internal/service/processmgr/manager.go internal/service/processmgr/processmgr.go cmd/model-loader/main.go
 git commit -m "$(cat <<'EOF'
 feat(processmgr): liveness ticker detects crashed background instances
 
@@ -2076,7 +2076,7 @@ import "github.com/charmbracelet/glamour"
 
 // HelpMarkdown é o conteúdo da modal de help acessível via `?` em qualquer
 // página. Atualizado quando keybindings mudam.
-const HelpMarkdown = `# llama-cpp-loader — Keybindings
+const HelpMarkdown = `# model-loader — Keybindings
 
 ## Global
 
@@ -2402,7 +2402,7 @@ EOF
 ### Task 15: Manual smoke test — checklist de fluxos end-to-end
 
 **Files:**
-- Modify: `docs/superpowers/plans/2026-04-29-llama-cpp-loader-slice-6.md` (este arquivo — tickar checklist)
+- Modify: `docs/superpowers/plans/2026-04-29-model-loader-slice-6.md` (este arquivo — tickar checklist)
 
 Não há código. Objetivo: validar manualmente que o binário compila, abre, navega, todos os fluxos críticos funcionam contra o `fake-llama-server.sh`.
 
@@ -2412,11 +2412,11 @@ Não há código. Objetivo: validar manualmente que o binário compila, abre, na
 
 - [x] **Step 3: Tests** — `go test ./internal/...` 196/196 passed in 12 packages.
 
-> **Manual TTY smokes (Steps 4–11) deferred to user verification.** Each requires interacting with the running TUI, which the implementation flow can't drive. Run `./llama-cpp-loader` after merge and tick below as you confirm each.
+> **Manual TTY smokes (Steps 4–11) deferred to user verification.** Each requires interacting with the running TUI, which the implementation flow can't drive. Run `./model-loader` after merge and tick below as you confirm each.
 
 - [ ] **Step 4: Smoke check — `?` modal abre/fecha**
 
-Run: `./llama-cpp-loader` (ou `go run ./cmd/llama-cpp-loader`)
+Run: `./model-loader` (ou `go run ./cmd/model-loader`)
 
 Pressionar `?` — modal deve aparecer com keybindings.
 Pressionar `Esc` — modal fecha.
@@ -2429,9 +2429,9 @@ Pressionar `q` — sai.
 Pre-condição: `testdata/fake-llama-server.sh` está executável e disponível em `PATH`. Para o teste, alias temporário:
 
 ```bash
-export PATH="/path/to/llama-cpp-loader/testdata:$PATH"
+export PATH="/path/to/model-loader/testdata:$PATH"
 ln -sf "$(pwd)/testdata/fake-llama-server.sh" /tmp/llama-server
-PATH="/tmp:$PATH" ./llama-cpp-loader
+PATH="/tmp:$PATH" ./model-loader
 ```
 
 (Ou usar `Config.Binary` no main.go com flag CLI futuro — para o smoke, alias é suficiente.)
@@ -2458,7 +2458,7 @@ Esperado: row some por ~1s, reaparece com novo PID. Logs reiniciam.
 Em outro terminal:
 
 ```bash
-PATH="/usr/sbin:/sbin" ./llama-cpp-loader
+PATH="/usr/sbin:/sbin" ./model-loader
 ```
 
 Esperado: TUI abre com modal centralizado "llama-server not found in PATH" e instruções. `q` fecha.
@@ -2466,8 +2466,8 @@ Esperado: TUI abre com modal centralizado "llama-server not found in PATH" e ins
 - [ ] **Step 8: Smoke check — corrupt profile marker**
 
 ```bash
-echo "{not json" > ~/.config/llama-cpp-loader/profiles/broken.json
-./llama-cpp-loader
+echo "{not json" > ~/.config/model-loader/profiles/broken.json
+./model-loader
 ```
 
 Esperado: ProfilesPage mostra `⚠ broken` na lista, com descrição do erro. Tentar selecionar e pressionar `L` — não lança, status mostra hint sobre corruption.
@@ -2497,7 +2497,7 @@ Esperado: row no Monitor passa a mostrar `✗ <PID>` + "(crashed)" + sub para a 
 Após cada smoke step OK, marcar como ✓ no plan. Commit final:
 
 ```bash
-git add docs/superpowers/plans/2026-04-29-llama-cpp-loader-slice-6.md
+git add docs/superpowers/plans/2026-04-29-model-loader-slice-6.md
 git commit -m "$(cat <<'EOF'
 docs(slice-6): mark manual smoke checklist complete
 
@@ -2550,7 +2550,7 @@ EOF
 
 ## Execution Handoff
 
-**Plan complete and saved to `docs/superpowers/plans/2026-04-29-llama-cpp-loader-slice-6.md`. Two execution options:**
+**Plan complete and saved to `docs/superpowers/plans/2026-04-29-model-loader-slice-6.md`. Two execution options:**
 
 **1. Subagent-Driven (recommended)** — dispatch fresh subagent per task, two-stage review (spec + quality) entre tarefas, iteração rápida.
 

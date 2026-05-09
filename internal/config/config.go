@@ -34,13 +34,13 @@ type UIConfig struct {
 	Keybindings string `mapstructure:"keybindings"`
 }
 
-// DefaultConfigPath returns ~/.config/llama-cpp-loader/config.toml.
+// DefaultConfigPath returns ~/.config/model-loader/config.toml.
 func DefaultConfigPath() (string, error) {
 	home, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("locate user config dir: %w", err)
 	}
-	return filepath.Join(home, "llama-cpp-loader", "config.toml"), nil
+	return filepath.Join(home, "model-loader", "config.toml"), nil
 }
 
 // Load reads the config from the default location, creating defaults if missing.
@@ -103,10 +103,10 @@ func expandTilde(path string) string {
 
 func applyDefaults(v *viper.Viper) {
 	home, _ := os.UserHomeDir()
-	v.SetDefault("paths.profiles_dir", filepath.Join(home, ".config", "llama-cpp-loader", "profiles"))
-	v.SetDefault("paths.log_dir", filepath.Join(home, ".local", "state", "llama-cpp-loader", "logs"))
-	v.SetDefault("paths.state_dir", filepath.Join(home, ".local", "state", "llama-cpp-loader"))
-	v.SetDefault("paths.backends_dir", filepath.Join(home, ".config", "llama-cpp-loader", "backends"))
+	v.SetDefault("paths.profiles_dir", filepath.Join(home, ".config", "model-loader", "profiles"))
+	v.SetDefault("paths.log_dir", filepath.Join(home, ".local", "state", "model-loader", "logs"))
+	v.SetDefault("paths.state_dir", filepath.Join(home, ".local", "state", "model-loader"))
+	v.SetDefault("paths.backends_dir", filepath.Join(home, ".config", "model-loader", "backends"))
 	v.SetDefault("models.search_paths", []string{
 		filepath.Join(home, ".lmstudio", "models"),
 		filepath.Join(home, "models"),

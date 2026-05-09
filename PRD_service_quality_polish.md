@@ -113,7 +113,7 @@ func (m *fsManager) markCrashedInstances(probe func(int) bool) (dirty bool, snap
 
 ### Scope
 **In scope**:
-- Refactor `cmd/llama-cpp-loader/main.go`:
+- Refactor `cmd/model-loader/main.go`:
   - `main` becomes ≤10 lines: call `run()`, print error to stderr, exit 1 on failure.
   - `run() error` carries the current body, returning errors instead of `os.Exit`-ing.
   - Extract `bootstrap(cfg config.Config) (deps, error)` for the dependency-wiring section (store, schema, manager, validator, scanner).
@@ -128,11 +128,11 @@ func (m *fsManager) markCrashedInstances(probe func(int) bool) (dirty bool, snap
 - Preserve `defer mgr.Close()` — must run on the normal exit path; `run()` orchestrates the close.
 
 ### Touchpoints
-- `cmd/llama-cpp-loader/main.go` — split into `main`, `run`, `bootstrap`.
+- `cmd/model-loader/main.go` — split into `main`, `run`, `bootstrap`.
 
 ### Contracts
 ```go
-// cmd/llama-cpp-loader/main.go
+// cmd/model-loader/main.go
 
 func main() {
     if err := run(); err != nil {
@@ -160,7 +160,7 @@ func bootstrap(cfg config.Config) (deps, error)
 - [ ] `bootstrap` is responsible for all dependency construction; `run` for orchestration and TUI startup.
 - [ ] No `os.Exit` calls in `bootstrap` or `run` (all errors flow through return values; `os.Exit` only in `main`).
 - [ ] Application startup behavior unchanged: same env/config resolution, same fallback messages, same final exit codes.
-- [ ] Manual verification: `make build && ./bin/llama-cpp-loader --help` (or default invocation) behaves identically to pre-refactor.
+- [ ] Manual verification: `make build && ./bin/model-loader --help` (or default invocation) behaves identically to pre-refactor.
 
 ### Dependencies
 - None.

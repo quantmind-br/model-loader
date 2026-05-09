@@ -1,4 +1,4 @@
-# llama-cpp-loader — Slice 4 Implementation Plan
+# model-loader — Slice 4 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -42,7 +42,7 @@
 
 **Wire/integration:**
 - `internal/ui/root.go` (MODIFY) — adicionar `WithLauncherPage` builder
-- `cmd/llama-cpp-loader/main.go` (MODIFY) — instanciar `processmgr.New` + `Reconcile` na boot + `pages.NewLauncherPage` + `root.WithLauncherPage`
+- `cmd/model-loader/main.go` (MODIFY) — instanciar `processmgr.New` + `Reconcile` na boot + `pages.NewLauncherPage` + `root.WithLauncherPage`
 - `internal/ui/root_test.go` (MODIFY) — smoke test mostrando "Launcher" ao apertar tab `2`
 
 ---
@@ -64,7 +64,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // LaunchMode selects how the spawned process is attached.
@@ -126,7 +126,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func TestBuildArgs_ModelFirstAndSortedFlags(t *testing.T) {
@@ -208,7 +208,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // BuildArgs converts a Profile into the CLI args slice used to spawn
@@ -292,7 +292,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func TestRegistry_SaveAndLoadRoundTrip(t *testing.T) {
@@ -371,7 +371,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // registryFile is the on-disk shape of instances.json. Wrapping the slice in
@@ -553,7 +553,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // fsManager is the default Manager implementation backed by os/exec.
@@ -605,7 +605,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func freePort(t *testing.T) int {
@@ -1082,7 +1082,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func TestReconcile_DropsZombiePIDs(t *testing.T) {
@@ -1228,7 +1228,7 @@ Adicionar import em `recover.go`:
 
 ```go
 import (
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 ```
 
@@ -1490,8 +1490,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 )
 
 func TestLauncherPage_ListsProfiles(t *testing.T) {
@@ -1538,11 +1538,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/processmgr"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/validator"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/processmgr"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/service/validator"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // LauncherPage is the Tab 2 page: pick a profile, choose mode, launch.
@@ -1803,7 +1803,7 @@ func TestLauncherPage_ValidationBlocksLaunch(t *testing.T) {
 }
 ```
 
-(Imports adicionais necessários no teste: `"github.com/quantmind-br/llama-cpp-loader/internal/service/processmgr"` e `"github.com/quantmind-br/llama-cpp-loader/internal/service/validator"`.)
+(Imports adicionais necessários no teste: `"github.com/quantmind-br/model-loader/internal/service/processmgr"` e `"github.com/quantmind-br/model-loader/internal/service/validator"`.)
 
 - [x] **Step 2: Rodar testes — confirmar falham**
 
@@ -1888,7 +1888,7 @@ E adicionar tipo:
 type healthyMsg struct{ pid int }
 ```
 
-Adicionar import `"time"` em launcher.go (e `"github.com/quantmind-br/llama-cpp-loader/internal/service/processmgr"` já está).
+Adicionar import `"time"` em launcher.go (e `"github.com/quantmind-br/model-loader/internal/service/processmgr"` já está).
 
 - [x] **Step 4: Rodar testes — confirmar passam**
 
@@ -2182,11 +2182,11 @@ git commit -m "feat(ui/root): WithLauncherPage builder"
 ### Task 14: Wire main.go
 
 **Files:**
-- Modify: `cmd/llama-cpp-loader/main.go`
+- Modify: `cmd/model-loader/main.go`
 
 - [x] **Step 1: Atualizar main.go**
 
-Em `cmd/llama-cpp-loader/main.go`, adicionar import `"path/filepath"` e `"github.com/quantmind-br/llama-cpp-loader/internal/service/processmgr"` e `"github.com/quantmind-br/llama-cpp-loader/internal/service/validator"` (se ainda não estiverem). Substituir o bloco que constrói `root` por:
+Em `cmd/model-loader/main.go`, adicionar import `"path/filepath"` e `"github.com/quantmind-br/model-loader/internal/service/processmgr"` e `"github.com/quantmind-br/model-loader/internal/service/validator"` (se ainda não estiverem). Substituir o bloco que constrói `root` por:
 
 ```go
 	scanner := modelscanner.New()
@@ -2225,13 +2225,13 @@ Expected: todos os testes passam.
 
 - [x] **Step 4: Verificar binário**
 
-Run: `go build -o /tmp/llama-cpp-loader ./cmd/llama-cpp-loader && ls -lh /tmp/llama-cpp-loader && /tmp/llama-cpp-loader --version 2>&1 | head -1 || true`
+Run: `go build -o /tmp/model-loader ./cmd/model-loader && ls -lh /tmp/model-loader && /tmp/model-loader --version 2>&1 | head -1 || true`
 Expected: binário criado (~10-12 MB). Não há flag `--version` na app TUI; o teste serve só para garantir que a app inicia (ou falha de forma esperada por falta de TTY ao tentar ir para alt screen).
 
 - [x] **Step 5: Commit**
 
 ```bash
-git add cmd/llama-cpp-loader/main.go
+git add cmd/model-loader/main.go
 git commit -m "feat(cmd): wire ProcessManager and LauncherPage into root"
 ```
 
@@ -2248,12 +2248,12 @@ Expected: PASS, sem warnings.
 
 ```bash
 # Build
-go build -o /tmp/llama-cpp-loader ./cmd/llama-cpp-loader
+go build -o /tmp/model-loader ./cmd/model-loader
 
 # Override binário usando PATH:
 export PATH="$(pwd)/testdata:$PATH"
 ln -sf "$(pwd)/testdata/fake-llama-server.sh" /tmp/llama-server
-PATH="/tmp:$PATH" /tmp/llama-cpp-loader
+PATH="/tmp:$PATH" /tmp/model-loader
 ```
 
 Navegar para tab `2` (Launcher), selecionar profile, apertar Enter. Confirmar que aparece "launched ... port=...". Apertar `k` para matar. Apertar `q` para sair.
@@ -2302,7 +2302,7 @@ Navegar para tab `2` (Launcher), selecionar profile, apertar Enter. Confirmar qu
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-04-28-llama-cpp-loader-slice-4.md`. Two execution options:
+Plan complete and saved to `docs/superpowers/plans/2026-04-28-model-loader-slice-4.md`. Two execution options:
 
 1. **Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration.
 2. **Inline Execution** — Execute tasks in this session using `executing-plans`, batch execution with checkpoints.

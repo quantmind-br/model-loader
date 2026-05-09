@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func newStore(t *testing.T) (*FSStore, string) {

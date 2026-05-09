@@ -12,13 +12,13 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendcatalog"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendschema"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/components"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/pages/profile_editor"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/backendschema"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/ui/components"
+	"github.com/quantmind-br/model-loader/internal/ui/pages/profile_editor"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // modelPickerOverlay groups the page-owned ctrl+p picker overlay state

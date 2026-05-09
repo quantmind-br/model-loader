@@ -10,7 +10,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 ## STRUCTURE
 ```
 ./
-├── cmd/llama-cpp-loader/   # Entry point
+├── cmd/model-loader/   # Entry point
 ├── internal/
 │   ├── config/             # Viper TOML loader
 │   ├── domain/             # Profile, Instance, Model, FlagSchema
@@ -40,11 +40,11 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 | Flag validation | internal/service/validator/ | |
 | GPU monitoring | internal/service/monitor/ | nvidia-smi |
 | TUI pages | internal/ui/pages/ | 4 tabs: profiles/models/launcher/monitor |
-| Config | internal/config/ | Viper TOML at ~/.config/llama-cpp-loader/ |
+| Config | internal/config/ | Viper TOML at ~/.config/model-loader/ |
 
 ## CONVENTIONS
 - **Tests**: Golden tests in `testdata/` — update via `go test ./... -update`
-- **Build**: `make build` → `bin/llama-cpp-loader`
+- **Build**: `make build` → `bin/model-loader`
 - **Embedded schema**: Pinned to llama.cpp build "v7376 (380b4c9)" — refresh in embedded.go
 - **Instance recovery**: Background llama-server processes survive TUI exit; processmgr.Reconcile restores at boot
 
@@ -69,15 +69,15 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 
 ## COMMANDS
 ```bash
-make build    # Build binary to bin/llama-cpp-loader
+make build    # Build binary to bin/model-loader
 make install  # Install to $GOPATH/bin
 make tests    # Run all tests including golden tests
 go test ./... -update  # Update golden test fixtures
 ```
 
 ## NOTES
-- Binary managed: `llama-server` (not llama-cpp-loader)
-- Config path: ~/.config/llama-cpp-loader/config.toml
-- State path: ~/.local/state/llama-cpp-loader/instances.json
-- Profiles dir: ~/.local/share/llama-cpp-loader/profiles/
+- Binary managed: `llama-server` (not model-loader)
+- Config path: ~/.config/model-loader/config.toml
+- State path: ~/.local/state/model-loader/instances.json
+- Profiles dir: ~/.local/share/model-loader/profiles/
 - Schema version: embedded-v7376

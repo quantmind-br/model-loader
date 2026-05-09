@@ -10,11 +10,11 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendcatalog"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/validator"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/components"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/validator"
+	"github.com/quantmind-br/model-loader/internal/ui/components"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // EditorCommittedMsg is emitted by Editor.Update when the user finishes

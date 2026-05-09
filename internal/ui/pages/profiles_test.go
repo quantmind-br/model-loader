@@ -12,14 +12,14 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/x/exp/teatest"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendcatalog"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendschema"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/validator"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/components"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/pages/profile_editor"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/backendschema"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/service/validator"
+	"github.com/quantmind-br/model-loader/internal/ui/components"
+	"github.com/quantmind-br/model-loader/internal/ui/pages/profile_editor"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 func TestProfilesPage_LoadsExistingProfile(t *testing.T) {

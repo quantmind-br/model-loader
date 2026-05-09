@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 func TestModal_RendersTitleAndBody(t *testing.T) {

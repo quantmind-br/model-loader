@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendcatalog"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamabin"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamahelp"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/llamabin"
+	"github.com/quantmind-br/model-loader/internal/service/llamahelp"
 )
 
 func schemaStoreRef(ref string) string {

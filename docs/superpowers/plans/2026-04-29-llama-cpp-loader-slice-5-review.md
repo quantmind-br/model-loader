@@ -203,5 +203,5 @@ The remaining items (I-1 cancel-blocking, I-3 `r` UX, M-1 sparkline placeholder,
 - `/home/diogo/dev/llama.cpp-loader/internal/ui/pages/launcher_test.go`
 - `/home/diogo/dev/llama.cpp-loader/internal/ui/pages/messages.go`
 - `/home/diogo/dev/llama.cpp-loader/internal/ui/components/sparkline.go`
-- `/home/diogo/dev/llama.cpp-loader/cmd/llama-cpp-loader/main.go`
+- `/home/diogo/dev/llama.cpp-loader/cmd/model-loader/main.go`
 - `/home/diogo/dev/llama.cpp-loader/testdata/fake-llama-server.sh`

@@ -1,6 +1,6 @@
 package llamahelp
 
-import "github.com/quantmind-br/llama-cpp-loader/internal/domain"
+import "github.com/quantmind-br/model-loader/internal/domain"
 
 // EmbeddedSchema returns the compile-time fallback FlagSchema covering the
 // curated essential flags listed in the design spec. The schema is pinned to

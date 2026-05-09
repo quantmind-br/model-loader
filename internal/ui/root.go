@@ -7,9 +7,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/components"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/pages"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/ui/components"
+	"github.com/quantmind-br/model-loader/internal/ui/pages"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // Tab identifies a top-level section.

@@ -1,4 +1,4 @@
-# llama-cpp-loader — Slice 3 Implementation Plan
+# model-loader — Slice 3 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -41,7 +41,7 @@
 
 **Root + entry:**
 - `internal/ui/root.go` (MODIFY) — `WithModelsPage` builder; intercept `UseInNewProfileMsg` para tab-switch + forward
-- `cmd/llama-cpp-loader/main.go` (MODIFY) — construct `fsScanner`, wire em `ModelsPage` + `ProfilesPage`
+- `cmd/model-loader/main.go` (MODIFY) — construct `fsScanner`, wire em `ModelsPage` + `ProfilesPage`
 
 ---
 
@@ -157,7 +157,7 @@ package modelscanner
 import (
 	"context"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // Scanner discovers GGUF files under the given root paths.
@@ -737,7 +737,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func writeGGUFFile(t *testing.T, path string, paramCount uint64) {
@@ -822,7 +822,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // New returns a filesystem-backed Scanner.
@@ -1157,9 +1157,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/modelscanner"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/modelscanner"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // pathStatus tracks per-root scan progress shown above the table.
@@ -1635,7 +1635,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // fakeScanner emits a fixed sequence of events for tests.
@@ -1760,8 +1760,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // ModelScanner is the minimal Scanner contract the picker depends on.
@@ -2054,7 +2054,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 type fakePickerScanner struct {
@@ -2193,7 +2193,7 @@ Em `internal/ui/pages/profiles.go`, dentro do struct `ProfilesPage`, adicionar:
 E adicionar import:
 
 ```go
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/components"
+	"github.com/quantmind-br/model-loader/internal/ui/components"
 ```
 
 E após `NewProfilesPage`, adicionar builder:
@@ -2344,9 +2344,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/components"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
 ```
 
@@ -2763,9 +2763,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/pages"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/ui/pages"
 )
 ```
 
@@ -2807,11 +2807,11 @@ git commit -m "feat(ui/root): WithModelsPage builder and UseInNewProfile routing
 ### Task 27: Wire scanner in main.go
 
 **Files:**
-- Modify: `cmd/llama-cpp-loader/main.go`
+- Modify: `cmd/model-loader/main.go`
 
 - [x] **Step 1: Construir scanner e injetar em ambas as pages**
 
-Substituir o body de `main()` em `cmd/llama-cpp-loader/main.go`:
+Substituir o body de `main()` em `cmd/model-loader/main.go`:
 
 ```go
 func main() {
@@ -2852,7 +2852,7 @@ func main() {
 E adicionar import:
 
 ```go
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/modelscanner"
+	"github.com/quantmind-br/model-loader/internal/service/modelscanner"
 ```
 
 - [x] **Step 2: Compilar e rodar full suite**
@@ -2863,7 +2863,7 @@ Expected: PASS — all packages build, all tests green.
 - [x] **Step 3: Commit**
 
 ```bash
-git add cmd/llama-cpp-loader/main.go
+git add cmd/model-loader/main.go
 git commit -m "feat(cmd): wire ModelScanner into ProfilesPage and ModelsPage"
 ```
 
@@ -2880,12 +2880,12 @@ Expected: PASS in all packages, no skipped tests, no race warnings.
 
 - [x] **Step 2: Verificar compilação do binário**
 
-Run: `go build -o /tmp/llama-cpp-loader ./cmd/llama-cpp-loader && ls -la /tmp/llama-cpp-loader`
+Run: `go build -o /tmp/model-loader ./cmd/model-loader && ls -la /tmp/model-loader`
 Expected: binary built successfully.
 
 - [ ] **Step 3: Smoke launch (opcional, manual)** *(skipped — optional sanity-check, automated suite already green)*
 
-Run: `/tmp/llama-cpp-loader` from a terminal — confirm:
+Run: `/tmp/model-loader` from a terminal — confirm:
 - Tab "Models" visível
 - Models tab mostra paths configurados com status
 - Em Profiles, criar new (n), ctrl+p abre picker
@@ -2896,7 +2896,7 @@ Run: `/tmp/llama-cpp-loader` from a terminal — confirm:
 
 - [x] **Step 4: Cleanup binary**
 
-Run: `rm -f /tmp/llama-cpp-loader`
+Run: `rm -f /tmp/model-loader`
 Expected: file removed.
 
 (No commit — this task is a verification gate.)
@@ -2935,7 +2935,7 @@ Spec deviation: "Use in existing → pick" não está implementado. Justificativ
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-04-28-llama-cpp-loader-slice-3.md`.
+Plan complete and saved to `docs/superpowers/plans/2026-04-28-model-loader-slice-3.md`.
 
 **Two execution options:**
 

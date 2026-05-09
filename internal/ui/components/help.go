@@ -4,7 +4,7 @@ import "github.com/charmbracelet/glamour"
 
 // HelpMarkdown é o conteúdo da modal de help acessível via `?` em qualquer
 // página. Atualizado quando keybindings mudam.
-const HelpMarkdown = `# llama-cpp-loader — Keybindings
+const HelpMarkdown = `# model-loader — Keybindings
 
 ## Global
 

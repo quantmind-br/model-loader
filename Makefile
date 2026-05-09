@@ -1,5 +1,5 @@
-BIN        := llama-cpp-loader
-PKG        := ./cmd/llama-cpp-loader
+BIN        := model-loader
+PKG        := ./cmd/model-loader
 OUT        := bin/$(BIN)
 INSTALLDIR := $(HOME)/.local/bin
 

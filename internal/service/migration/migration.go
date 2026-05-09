@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/config"
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendcatalog"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendschema"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/config"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/backendschema"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 )
 
 // Service runs one-time migration from legacy binary paths to backend IDs.

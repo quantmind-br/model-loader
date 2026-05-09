@@ -4,7 +4,7 @@ package profilestore
 import (
 	"errors"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // ListDiagnostic descreve uma entry de profile que falhou ao carregar.

@@ -1,4 +1,4 @@
-# llama-cpp-loader
+# model-loader
 
 A terminal UI (TUI) for managing [llama.cpp](https://github.com/ggerganov/llama.cpp) `llama-server` profiles and processes. Built with Go + [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
@@ -24,8 +24,8 @@ A terminal UI (TUI) for managing [llama.cpp](https://github.com/ggerganov/llama.
 
 ```bash
 # Clone the repository
-git clone https://github.com/quantmind-br/llama-cpp-loader.git
-cd llama-cpp-loader
+git clone https://github.com/quantmind-br/model-loader.git
+cd model-loader
 
 # Build
 make build
@@ -38,9 +38,9 @@ make install
 
 1. **Run the application:**
    ```bash
-   ./bin/llama-cpp-loader
+   ./bin/model-loader
    ```
-   On first run, a default `config.toml` is created at `~/.config/llama-cpp-loader/config.toml`.
+   On first run, a default `config.toml` is created at `~/.config/model-loader/config.toml`.
 
 2. **Create a profile** (Tab 1 — Profiles):
    - Press `n` to create a new profile
@@ -114,14 +114,14 @@ make install
 
 ## Configuration
 
-Configuration is stored in `~/.config/llama-cpp-loader/config.toml`:
+Configuration is stored in `~/.config/model-loader/config.toml`:
 
 ```toml
 [paths]
-profiles_dir = "~/.config/llama-cpp-loader/profiles"
-backends_dir = "~/.config/llama-cpp-loader/backends"
-log_dir = "~/.local/state/llama-cpp-loader/logs"
-state_dir = "~/.local/state/llama-cpp-loader"
+profiles_dir = "~/.config/model-loader/profiles"
+backends_dir = "~/.config/model-loader/backends"
+log_dir = "~/.local/state/model-loader/logs"
+state_dir = "~/.local/state/model-loader"
 
 [models]
 search_paths = ["~/.lmstudio/models", "~/models"]
@@ -136,11 +136,11 @@ See [docs/config.md](docs/config.md) for detailed configuration options.
 
 | Path | Purpose |
 |------|---------|
-| `~/.config/llama-cpp-loader/config.toml` | Application configuration |
-| `~/.config/llama-cpp-loader/profiles/` | Profile JSON files (one per profile) |
-| `~/.config/llama-cpp-loader/backends/` | Backend catalog (`catalog.json`) and schema files |
-| `~/.local/state/llama-cpp-loader/instances.json` | Background instance registry |
-| `~/.local/state/llama-cpp-loader/logs/` | Captured stdout/stderr logs |
+| `~/.config/model-loader/config.toml` | Application configuration |
+| `~/.config/model-loader/profiles/` | Profile JSON files (one per profile) |
+| `~/.config/model-loader/backends/` | Backend catalog (`catalog.json`) and schema files |
+| `~/.local/state/model-loader/instances.json` | Background instance registry |
+| `~/.local/state/model-loader/logs/` | Captured stdout/stderr logs |
 
 ## Development
 

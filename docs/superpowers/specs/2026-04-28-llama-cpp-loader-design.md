@@ -43,7 +43,7 @@ Aplicação TUI que centraliza a criação, edição, lançamento e monitorament
 | # | Decisão | Escolha |
 |---|---------|---------|
 | 1 | Escopo MVP | Editor + Launcher + Monitor + Model Browser |
-| 2 | Storage | Um arquivo JSON por profile em `~/.config/llama-cpp-loader/profiles/` |
+| 2 | Storage | Um arquivo JSON por profile em `~/.config/model-loader/profiles/` |
 | 3 | Editor de params | Tabs `Essentials` (curado) + `Advanced` (schema completo) |
 | 4 | Modo do launcher | Foreground OU background, escolha por launch (default background) |
 | 5 | Profundidade do monitor | Completo (status + GPU + `/slots` + métricas) |
@@ -61,7 +61,7 @@ Aplicação TUI que centraliza a criação, edição, lançamento e monitorament
 ### 4.1 Camadas
 
 ```
-cmd/llama-cpp-loader/main.go           entry, viper config, DI
+cmd/model-loader/main.go           entry, viper config, DI
         │
 internal/ui/   (Bubbletea)             rendering + dispatch
         │
@@ -85,7 +85,7 @@ Aprovada: **Composição hierárquica + serviços puros**. Foi descartada a abor
 
 ### 5.1 Profile JSON
 
-Localização: `~/.config/llama-cpp-loader/profiles/<id>.json` (id = slug ASCII, kebab-case).
+Localização: `~/.config/model-loader/profiles/<id>.json` (id = slug ASCII, kebab-case).
 
 ```json
 {
@@ -124,13 +124,13 @@ Localização: `~/.config/llama-cpp-loader/profiles/<id>.json` (id = slug ASCII,
 - `model` é separado de `args` para destacá-lo no editor e habilitar o picker.
 - `schemaVersion` permite migrações futuras.
 
-### 5.2 App Config (`~/.config/llama-cpp-loader/config.toml`)
+### 5.2 App Config (`~/.config/model-loader/config.toml`)
 
 ```toml
 [paths]
-profiles_dir = "~/.config/llama-cpp-loader/profiles"
-log_dir      = "~/.local/state/llama-cpp-loader/logs"
-state_dir    = "~/.local/state/llama-cpp-loader"
+profiles_dir = "~/.config/model-loader/profiles"
+log_dir      = "~/.local/state/model-loader/logs"
+state_dir    = "~/.local/state/model-loader"
 
 [models]
 search_paths = [
@@ -145,7 +145,7 @@ keybindings = "default"
 
 Criado com defaults na primeira execução se ausente.
 
-### 5.3 Runtime state (`~/.local/state/llama-cpp-loader/instances.json`)
+### 5.3 Runtime state (`~/.local/state/model-loader/instances.json`)
 
 Registry de instâncias background vivas; permite recuperação ao reabrir a TUI.
 
@@ -156,7 +156,7 @@ Registry de instâncias background vivas; permite recuperação ao reabrir a TUI
       "profileId": "qwen-coder-32b",
       "pid": 4521,
       "port": 8080,
-      "logPath": "~/.local/state/llama-cpp-loader/logs/qwen-coder-32b-4521.log",
+      "logPath": "~/.local/state/model-loader/logs/qwen-coder-32b-4521.log",
       "startedAt": "2026-04-28T11:00:00Z",
       "background": true
     }
@@ -462,7 +462,7 @@ type rootModel struct {
 ```
 llama.cpp-loader/
 ├── cmd/
-│   └── llama-cpp-loader/
+│   └── model-loader/
 │       └── main.go
 ├── internal/
 │   ├── domain/
@@ -495,7 +495,7 @@ llama.cpp-loader/
 ├── docs/
 │   └── superpowers/
 │       └── specs/
-│           └── 2026-04-28-llama-cpp-loader-design.md
+│           └── 2026-04-28-model-loader-design.md
 ├── go.mod
 ├── go.sum
 ├── README.md

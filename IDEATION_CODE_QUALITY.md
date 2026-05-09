@@ -263,7 +263,7 @@ case <-ticker.C:
 
 **Category:** complexity, code_smells
 **Severity:** minor
-**File:** `cmd/llama-cpp-loader/main.go:26–100`
+**File:** `cmd/model-loader/main.go:26–100`
 
 127-line `main` doing 7 things (config, store, schema, mgr boot, signal handling, validator, page wiring). Standard Go split:
 

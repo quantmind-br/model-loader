@@ -1,11 +1,11 @@
 # Configuration
 
-llama-cpp-loader uses a single TOML file for configuration. The file is auto-generated on first run if it does not exist.
+model-loader uses a single TOML file for configuration. The file is auto-generated on first run if it does not exist.
 
 ## Config File Location
 
 ```
-~/.config/llama-cpp-loader/config.toml
+~/.config/model-loader/config.toml
 ```
 
 ## Reference
@@ -16,10 +16,10 @@ Directory paths used by the application. All paths support `~` expansion.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `profiles_dir` | `~/.config/llama-cpp-loader/profiles` | Directory where profile JSON files are stored |
-| `backends_dir` | `~/.config/llama-cpp-loader/backends` | Directory for backend catalog (`catalog.json`) and per-backend validation schemas |
-| `log_dir` | `~/.local/state/llama-cpp-loader/logs` | Directory for captured llama-server stdout/stderr logs |
-| `state_dir` | `~/.local/state/llama-cpp-loader` | Parent directory for runtime state (instances.json) |
+| `profiles_dir` | `~/.config/model-loader/profiles` | Directory where profile JSON files are stored |
+| `backends_dir` | `~/.config/model-loader/backends` | Directory for backend catalog (`catalog.json`) and per-backend validation schemas |
+| `log_dir` | `~/.local/state/model-loader/logs` | Directory for captured llama-server stdout/stderr logs |
+| `state_dir` | `~/.local/state/model-loader` | Parent directory for runtime state (instances.json) |
 
 ### `[models]`
 
@@ -42,10 +42,10 @@ User interface preferences.
 
 ```toml
 [paths]
-profiles_dir = "~/.config/llama-cpp-loader/profiles"
-backends_dir = "~/.config/llama-cpp-loader/backends"
-log_dir = "~/.local/state/llama-cpp-loader/logs"
-state_dir = "~/.local/state/llama-cpp-loader"
+profiles_dir = "~/.config/model-loader/profiles"
+backends_dir = "~/.config/model-loader/backends"
+log_dir = "~/.local/state/model-loader/logs"
+state_dir = "~/.local/state/model-loader"
 
 [models]
 search_paths = [

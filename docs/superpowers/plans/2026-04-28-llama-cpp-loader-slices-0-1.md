@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Bootstrap do projeto Go com TUI Bubbletea funcional (root + tabs vazias) e a aba `Profiles` totalmente operacional (lista, criar, duplicar, salvar, deletar profiles em JSON no disco). Ao final, a ferramenta abre, navega entre 4 tabs vazias (3 placeholders) e permite gerenciar profiles persistidos em `~/.config/llama-cpp-loader/profiles/`.
+**Goal:** Bootstrap do projeto Go com TUI Bubbletea funcional (root + tabs vazias) e a aba `Profiles` totalmente operacional (lista, criar, duplicar, salvar, deletar profiles em JSON no disco). Ao final, a ferramenta abre, navega entre 4 tabs vazias (3 placeholders) e permite gerenciar profiles persistidos em `~/.config/model-loader/profiles/`.
 
 **Architecture:** Hierarquia `cmd → internal/ui (Bubbletea) → internal/service (pure Go) → internal/domain (types)`. UI nunca toca disco/processo direto; sempre via service injetado. Profiles em arquivos JSON individuais com escrita atômica. Sem `LlamaHelpParser`/`Validator`/`ProcessManager` ainda — entram nos slices 2 e 4.
 
@@ -28,7 +28,7 @@ llama.cpp-loader/
 ├── go.mod                                          (Slice 0 — T1)
 ├── go.sum                                          (Slice 0 — T2, gerado)
 ├── cmd/
-│   └── llama-cpp-loader/
+│   └── model-loader/
 │       └── main.go                                 (Slice 0 — T8)
 ├── internal/
 │   ├── domain/
@@ -61,14 +61,14 @@ llama.cpp-loader/
 **Responsabilidade de cada arquivo:**
 
 - `domain/*.go` — apenas tipos compartilhados, zero lógica.
-- `config/config.go` — carregar/criar `~/.config/llama-cpp-loader/config.toml` via viper, expor struct `AppConfig`.
+- `config/config.go` — carregar/criar `~/.config/model-loader/config.toml` via viper, expor struct `AppConfig`.
 - `ui/theme/theme.go` — `lipgloss.Style` reutilizáveis (cores, bordas).
 - `ui/components/statusbar.go` — barra inferior com hint de keybindings + última mensagem (info/warn/error).
 - `ui/root.go` — `rootModel` com 4 tabs, dispatch de `tea.KeyMsg` global e roteamento ao page ativo.
 - `ui/pages/placeholder.go` — page genérica usada por Launcher/Monitor/Models nos slices 0+1.
 - `ui/pages/profiles.go` — master-detail real da aba Profiles.
 - `service/profilestore/*.go` — interface `Store` + implementação `FSStore` que persiste em JSON.
-- `cmd/llama-cpp-loader/main.go` — wire-up: carrega config, instancia services, monta `rootModel`, roda `tea.NewProgram`.
+- `cmd/model-loader/main.go` — wire-up: carrega config, instancia services, monta `rootModel`, roda `tea.NewProgram`.
 
 ---
 
@@ -88,10 +88,10 @@ Objetivo: módulo Go inicializado, dependências instaladas, TUI vazia abre com 
 
 Run:
 ```bash
-go mod init github.com/quantmind-br/llama-cpp-loader
+go mod init github.com/quantmind-br/model-loader
 ```
 
-Expected: cria `go.mod` com header `module github.com/quantmind-br/llama-cpp-loader` e diretiva `go 1.26` (ou similar). Pode ajustar para `go 1.22` se preferir compatibilidade — mas mantenha o que `go mod init` colocou se for ≥ 1.22.
+Expected: cria `go.mod` com header `module github.com/quantmind-br/model-loader` e diretiva `go 1.26` (ou similar). Pode ajustar para `go 1.22` se preferir compatibilidade — mas mantenha o que `go mod init` colocou se for ≥ 1.22.
 
 - [ ] **Step 2: Adicionar artefatos Go no `.gitignore`**
 
@@ -401,13 +401,13 @@ type UIConfig struct {
 	Keybindings string `mapstructure:"keybindings"`
 }
 
-// DefaultConfigPath returns ~/.config/llama-cpp-loader/config.toml.
+// DefaultConfigPath returns ~/.config/model-loader/config.toml.
 func DefaultConfigPath() (string, error) {
 	home, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("locate user config dir: %w", err)
 	}
-	return filepath.Join(home, "llama-cpp-loader", "config.toml"), nil
+	return filepath.Join(home, "model-loader", "config.toml"), nil
 }
 
 // Load reads the config from the default location, creating defaults if missing.
@@ -450,9 +450,9 @@ func LoadFrom(path string) (AppConfig, error) {
 
 func applyDefaults(v *viper.Viper) {
 	home, _ := os.UserHomeDir()
-	v.SetDefault("paths.profiles_dir", filepath.Join(home, ".config", "llama-cpp-loader", "profiles"))
-	v.SetDefault("paths.log_dir", filepath.Join(home, ".local", "state", "llama-cpp-loader", "logs"))
-	v.SetDefault("paths.state_dir", filepath.Join(home, ".local", "state", "llama-cpp-loader"))
+	v.SetDefault("paths.profiles_dir", filepath.Join(home, ".config", "model-loader", "profiles"))
+	v.SetDefault("paths.log_dir", filepath.Join(home, ".local", "state", "model-loader", "logs"))
+	v.SetDefault("paths.state_dir", filepath.Join(home, ".local", "state", "model-loader"))
 	v.SetDefault("models.search_paths", []string{
 		filepath.Join(home, ".lmstudio", "models"),
 		filepath.Join(home, "models"),
@@ -567,7 +567,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // StatusLevel categorizes a status message.
@@ -655,7 +655,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // Placeholder is a tab page used until the real implementation lands.
@@ -692,9 +692,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/components"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/pages"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/ui/components"
+	"github.com/quantmind-br/model-loader/internal/ui/pages"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // Tab identifies a top-level section.
@@ -858,15 +858,15 @@ git commit -m "feat(ui): root model with 4-tab routing and placeholder pages"
 
 ---
 
-### Task 0.8: `cmd/llama-cpp-loader/main.go`
+### Task 0.8: `cmd/model-loader/main.go`
 
 **Files:**
-- Create: `cmd/llama-cpp-loader/main.go`
+- Create: `cmd/model-loader/main.go`
 
 - [ ] **Step 1: Implementar entrypoint mínimo**
 
 ```go
-// Command llama-cpp-loader launches the TUI for managing llama.cpp profiles.
+// Command model-loader launches the TUI for managing llama.cpp profiles.
 package main
 
 import (
@@ -875,8 +875,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/config"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui"
+	"github.com/quantmind-br/model-loader/internal/config"
+	"github.com/quantmind-br/model-loader/internal/ui"
 )
 
 func main() {
@@ -918,8 +918,8 @@ func parseTab(name string) ui.Tab {
 
 Run:
 ```bash
-go build -o /tmp/llama-cpp-loader ./cmd/llama-cpp-loader
-ls -la /tmp/llama-cpp-loader
+go build -o /tmp/model-loader ./cmd/model-loader
+ls -la /tmp/model-loader
 ```
 
 Expected: binário ELF criado, sem erros.
@@ -1024,7 +1024,7 @@ Expected: tudo verde.
 
 Run:
 ```bash
-go run ./cmd/llama-cpp-loader
+go run ./cmd/model-loader
 ```
 
 Expected: TUI abre em altscreen com 4 tabs no topo, statusbar embaixo, conteúdo "<TabName> — coming soon" no centro. Teclas `1-4`, `Tab`, `Shift+Tab` trocam aba; `q` ou `Ctrl+C` saem.
@@ -1236,7 +1236,7 @@ package profilestore
 import (
 	"errors"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // Store is the interface for profile persistence.
@@ -1296,7 +1296,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // FSStore persists profiles as one JSON file per profile under a directory.
@@ -1462,7 +1462,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func newStore(t *testing.T) (*FSStore, string) {
@@ -1664,9 +1664,9 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // ProfilesPage is the master-detail page for managing profiles.
@@ -2179,14 +2179,14 @@ git commit -m "feat(ui/pages/profiles): delete confirmation flow"
 ### Task 1.9: Wire-up no `main.go` — substituir placeholder Profiles
 
 **Files:**
-- Modify: `cmd/llama-cpp-loader/main.go`
+- Modify: `cmd/model-loader/main.go`
 
 - [ ] **Step 1: Atualizar `main` para instanciar `FSStore` + `ProfilesPage`**
 
-Substitua o conteúdo de `cmd/llama-cpp-loader/main.go` por:
+Substitua o conteúdo de `cmd/model-loader/main.go` por:
 
 ```go
-// Command llama-cpp-loader launches the TUI for managing llama.cpp profiles.
+// Command model-loader launches the TUI for managing llama.cpp profiles.
 package main
 
 import (
@@ -2195,10 +2195,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/config"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/pages"
+	"github.com/quantmind-br/model-loader/internal/config"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/ui"
+	"github.com/quantmind-br/model-loader/internal/ui/pages"
 )
 
 func main() {
@@ -2250,7 +2250,7 @@ Expected: sem erros.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add cmd/llama-cpp-loader/main.go
+git add cmd/model-loader/main.go
 git commit -m "feat(cmd): wire FSStore and ProfilesPage into root"
 ```
 
@@ -2274,8 +2274,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 )
 
 func TestProfilesPage_LoadsExistingProfile(t *testing.T) {
@@ -2374,7 +2374,7 @@ Expected: tudo verde.
 
 Run:
 ```bash
-go run ./cmd/llama-cpp-loader
+go run ./cmd/model-loader
 ```
 
 Confirme:
@@ -2390,8 +2390,8 @@ Confirme:
 
 Run:
 ```bash
-ls ~/.config/llama-cpp-loader/profiles/
-cat ~/.config/llama-cpp-loader/profiles/smoke-test.json
+ls ~/.config/model-loader/profiles/
+cat ~/.config/model-loader/profiles/smoke-test.json
 ```
 
 Expected: arquivo existe com JSON válido.
@@ -2400,7 +2400,7 @@ Expected: arquivo existe com JSON válido.
 
 Run:
 ```bash
-rm -f ~/.config/llama-cpp-loader/profiles/smoke-test.json
+rm -f ~/.config/model-loader/profiles/smoke-test.json
 ```
 
 - [ ] **Step 5: Tag opcional**
@@ -2417,4 +2417,4 @@ A próxima iteração de planejamento (slice 2) cobre `LlamaHelpParser` + `Valid
 
 > "Escreva o plano do slice 2 a partir do spec."
 
-A spec de referência continua em `docs/superpowers/specs/2026-04-28-llama-cpp-loader-design.md`.
+A spec de referência continua em `docs/superpowers/specs/2026-04-28-model-loader-design.md`.

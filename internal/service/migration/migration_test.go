@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/config"
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendcatalog"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendschema"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/config"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/backendschema"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 )
 
 type fakeGenerator struct {

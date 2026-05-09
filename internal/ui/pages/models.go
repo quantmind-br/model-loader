@@ -14,11 +14,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/modelscanner"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/internal/filter"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/modelscanner"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/ui/internal/filter"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // clipboardWriter is overridable in tests to bypass the system clipboard
@@ -527,7 +527,7 @@ func (p ModelsPage) View() string {
 		footer = style.Render(p.flash)
 	}
 	if len(p.files) == 0 && (len(p.paths) == 0 || p.hasScannedRoot()) {
-		emptyMsg := theme.Subtitle.Render("(no .gguf files in configured search paths — edit ~/.config/llama-cpp-loader/config.toml)")
+		emptyMsg := theme.Subtitle.Render("(no .gguf files in configured search paths — edit ~/.config/model-loader/config.toml)")
 		return lipgloss.JoinVertical(lipgloss.Left, header, statusLine, emptyMsg, filterLine, footer)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, header, statusLine, p.table.View(), filterLine, footer)

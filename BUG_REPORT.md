@@ -1,8 +1,8 @@
-# Relatório de Bugs — TUI llama-cpp-loader
+# Relatório de Bugs — TUI model-loader
 
 **Data:** 2026-04-29
-**Binário testado:** `bin/llama-cpp-loader` (build atual de `main` em `d6e6ff7`)
-**Método:** sessão `tmux` 200x50, envio de teclas via `tmux send-keys`, captura via `tmux capture-pane`. Profile semeado manualmente em `~/.config/llama-cpp-loader/profiles/test-profile.json` para liberar o fluxo Launcher/Monitor.
+**Binário testado:** `bin/model-loader` (build atual de `main` em `d6e6ff7`)
+**Método:** sessão `tmux` 200x50, envio de teclas via `tmux send-keys`, captura via `tmux capture-pane`. Profile semeado manualmente em `~/.config/model-loader/profiles/test-profile.json` para liberar o fluxo Launcher/Monitor.
 **Documentação de referência:** `internal/ui/components/help.go` (`HelpMarkdown`).
 
 ---

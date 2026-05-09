@@ -7,7 +7,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // Reconcile reads the on-disk registry, validates each entry against the

@@ -6,7 +6,7 @@ package modelscanner
 import (
 	"context"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // Scanner discovers GGUF files under the given root paths.

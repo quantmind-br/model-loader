@@ -1,7 +1,7 @@
 // Package validator checks profiles against a FlagSchema and fixed rules.
 package validator
 
-import "github.com/quantmind-br/llama-cpp-loader/internal/domain"
+import "github.com/quantmind-br/model-loader/internal/domain"
 
 // Severity grades a FieldIssue.
 type Severity int

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 )
 
 // Manager orchestrates backend catalog CRUD and schema generation.

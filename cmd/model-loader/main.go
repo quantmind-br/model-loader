@@ -1,4 +1,4 @@
-// Command llama-cpp-loader launches the TUI for managing LLM server profiles.
+// Command model-loader launches the TUI for managing LLM server profiles.
 package main
 
 import (
@@ -9,18 +9,18 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/config"
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendcatalog"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendschema"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/migration"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/modelscanner"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/monitor"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/processmgr"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/validator"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui"
-	"github.com/quantmind-br/llama-cpp-loader/internal/ui/pages"
+	"github.com/quantmind-br/model-loader/internal/config"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/backendschema"
+	"github.com/quantmind-br/model-loader/internal/service/migration"
+	"github.com/quantmind-br/model-loader/internal/service/modelscanner"
+	"github.com/quantmind-br/model-loader/internal/service/monitor"
+	"github.com/quantmind-br/model-loader/internal/service/processmgr"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/service/validator"
+	"github.com/quantmind-br/model-loader/internal/ui"
+	"github.com/quantmind-br/model-loader/internal/ui/pages"
 )
 
 func main() {

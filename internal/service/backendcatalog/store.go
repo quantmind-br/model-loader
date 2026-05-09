@@ -4,7 +4,7 @@ package backendcatalog
 import (
 	"errors"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // Store persists BackendCatalog as JSON.

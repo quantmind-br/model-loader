@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // cacheTypeEnum lists the KV-cache quant types accepted by --cache-type-{k,v}.

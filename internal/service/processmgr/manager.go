@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 // fsManager is the default Manager implementation backed by os/exec.

@@ -1,4 +1,4 @@
-# llama-cpp-loader — Slice 5 Implementation Plan
+# model-loader — Slice 5 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -65,7 +65,7 @@
 - `internal/ui/pages/launcher_test.go` (MODIFY) — assert msg emitida.
 
 **Wire:**
-- `cmd/llama-cpp-loader/main.go` (MODIFY) — instanciar `monitor.New` + `pages.NewMonitorPage` + `root.WithMonitorPage`.
+- `cmd/model-loader/main.go` (MODIFY) — instanciar `monitor.New` + `pages.NewMonitorPage` + `root.WithMonitorPage`.
 
 **Testdata:**
 - `testdata/fake-llama-server.sh` (MODIFY) — adicionar handler `/slots` retornando JSON de exemplo.
@@ -1807,9 +1807,9 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/monitor"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/processmgr"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/monitor"
+	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 )
 
 type fakeProcMgr struct {
@@ -1883,9 +1883,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/monitor"
-	"github.com/quantmind-br/llama-cpp-loader/internal/service/processmgr"
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/monitor"
+	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 )
 
 // procMgrIface is the slice of processmgr.Manager that monitor needs.
@@ -2299,7 +2299,7 @@ case SubViewMetrics:
 	bottom = b.String()
 ```
 
-E adicionar import `"github.com/quantmind-br/llama-cpp-loader/internal/ui/components"`.
+E adicionar import `"github.com/quantmind-br/model-loader/internal/ui/components"`.
 
 - [x] **Step 4: Rodar — confirmar passa**
 
@@ -2457,7 +2457,7 @@ git commit -m "feat(ui/pages/launcher): emit SwitchToMonitorMsg on healthy"
 **Files:**
 - Modify: `internal/ui/root.go`
 - Modify: `internal/ui/root_test.go`
-- Modify: `cmd/llama-cpp-loader/main.go`
+- Modify: `cmd/model-loader/main.go`
 
 - [x] **Step 1: Escrever teste falhando**
 
@@ -2531,13 +2531,13 @@ Expected: PASS.
 
 - [x] **Step 6: Verificar binário**
 
-Run: `go build -o /tmp/llama-cpp-loader ./cmd/llama-cpp-loader`
+Run: `go build -o /tmp/model-loader ./cmd/model-loader`
 Expected: build OK.
 
 - [x] **Step 7: Commit**
 
 ```bash
-git add internal/ui/root.go internal/ui/root_test.go cmd/llama-cpp-loader/main.go
+git add internal/ui/root.go internal/ui/root_test.go cmd/model-loader/main.go
 git commit -m "feat(ui/root, cmd): wire MonitorPage and SwitchToMonitorMsg"
 ```
 
@@ -2553,12 +2553,12 @@ Expected: PASS, sem warnings.
 - [ ] **Smoke teste manual da TUI (opcional)**
 
 ```bash
-go build -o /tmp/llama-cpp-loader ./cmd/llama-cpp-loader
+go build -o /tmp/model-loader ./cmd/model-loader
 
 # Override binário:
 export PATH="$(pwd)/testdata:$PATH"
 ln -sf "$(pwd)/testdata/fake-llama-server.sh" /tmp/llama-server
-PATH="/tmp:$PATH" /tmp/llama-cpp-loader
+PATH="/tmp:$PATH" /tmp/model-loader
 ```
 
 Navegar para tab `2` (Launcher), selecionar profile, Enter. Confirmar:
@@ -2614,7 +2614,7 @@ Navegar para tab `2` (Launcher), selecionar profile, Enter. Confirmar:
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-04-29-llama-cpp-loader-slice-5.md`. Two execution options:
+Plan complete and saved to `docs/superpowers/plans/2026-04-29-model-loader-slice-5.md`. Two execution options:
 
 1. **Subagent-Driven (recommended)** — fresh subagent per task, review between tasks, fast iteration.
 2. **Inline Execution** — execute tasks in this session via `executing-plans`, batch execution with checkpoints.
