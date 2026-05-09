@@ -400,6 +400,7 @@ func (p LauncherPage) launchProfileCmd(selected domain.Profile) tea.Cmd {
 				return launchErrMsg{err: fmt.Errorf("validation failed: %d errors", len(rep.Errors))}
 			}
 		}
+		selected.Launch.ResolvedExecutable = rb.ExecutablePath
 		inst, err := mgr.Launch(selected, mode)
 		if err != nil {
 			return launchErrMsg{err: err}

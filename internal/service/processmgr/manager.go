@@ -93,9 +93,13 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode) (domain.RunningIns
 	if err := os.MkdirAll(m.logDir, 0o755); err != nil {
 		return domain.RunningInstance{}, fmt.Errorf("mkdir log dir: %w", err)
 	}
-	resolvedBinary, err := m.resolver(p)
-	if err != nil {
-		return domain.RunningInstance{}, fmt.Errorf("resolve backend executable: %w", err)
+	resolvedBinary := p.Launch.ResolvedExecutable
+	if resolvedBinary == "" {
+		var err error
+		resolvedBinary, err = m.resolver(p)
+		if err != nil {
+			return domain.RunningInstance{}, fmt.Errorf("resolve backend executable: %w", err)
+		}
 	}
 	logPath := filepath.Join(m.logDir, fmt.Sprintf("%s-%d.log", p.ID, port))
 	logF, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
@@ -291,9 +295,13 @@ func checkPortFree(port int) error {
 // and the process is NOT detached via Setsid: it remains in the TUI's
 // process group so Ctrl+C from the TUI propagates if desired.
 func (m *fsManager) launchForeground(p domain.Profile, port int) (domain.RunningInstance, error) {
-	resolvedBinary, err := m.resolver(p)
-	if err != nil {
-		return domain.RunningInstance{}, fmt.Errorf("resolve backend executable: %w", err)
+	resolvedBinary := p.Launch.ResolvedExecutable
+	if resolvedBinary == "" {
+		var err error
+		resolvedBinary, err = m.resolver(p)
+		if err != nil {
+			return domain.RunningInstance{}, fmt.Errorf("resolve backend executable: %w", err)
+		}
 	}
 
 	m.mu.Lock()

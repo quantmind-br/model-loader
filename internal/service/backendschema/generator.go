@@ -11,6 +11,14 @@ import (
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamahelp"
 )
 
+func schemaStoreRef(ref string) string {
+	const prefix = "schemas/"
+	if len(ref) >= len(prefix) && ref[:len(prefix)] == prefix {
+		return ref[len(prefix):]
+	}
+	return ref
+}
+
 // Generator generates a validation schema for a backend by inspecting its executable.
 type Generator interface {
 	Generate(backend domain.Backend) (domain.BackendValidationSchema, error)
@@ -54,7 +62,8 @@ func (g *LlamaServerGenerator) Generate(backend domain.Backend) (domain.BackendV
 	}
 
 	schema := domain.FlagSchemaToBackend(fs, backend.Kind, backend.ID, src)
-	if err := g.schemaStore.Save(backend.SchemaRef, schema); err != nil {
+	ref := schemaStoreRef(backend.SchemaRef)
+	if err := g.schemaStore.Save(ref, schema); err != nil {
 		return domain.BackendValidationSchema{}, fmt.Errorf("save schema: %w", err)
 	}
 	return schema, nil
@@ -69,5 +78,5 @@ func WriteEmbeddedFallback(schemaStore backendcatalog.SchemaStore, backendID, sc
 		Editable:      true,
 	}
 	schema := domain.FlagSchemaToBackend(fs, domain.BackendKindLlamaServer, backendID, src)
-	return schemaStore.Save(schemaRef, schema)
+	return schemaStore.Save(schemaStoreRef(schemaRef), schema)
 }

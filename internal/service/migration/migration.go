@@ -147,9 +147,17 @@ func findBackendByExecutable(backends []domain.Backend, executable string) strin
 func generateOrFallback(schemaStore backendcatalog.SchemaStore, manager *backendschema.Manager, backend domain.Backend) error {
 	if g, ok := manager.Generators()[domain.BackendKindLlamaServer]; ok {
 		if _, err := g.Generate(backend); err != nil {
-			return backendschema.WriteEmbeddedFallback(schemaStore, backend.ID, backend.SchemaRef)
+			fallbackErr := backendschema.WriteEmbeddedFallback(schemaStore, backend.ID, backend.SchemaRef)
+			if fallbackErr != nil {
+				return fmt.Errorf("generate schema: %v; fallback also failed: %v", err, fallbackErr)
+			}
+			return fmt.Errorf("generate schema: %v (used embedded fallback)", err)
 		}
 		return nil
 	}
-	return backendschema.WriteEmbeddedFallback(schemaStore, backend.ID, backend.SchemaRef)
+	fallbackErr := backendschema.WriteEmbeddedFallback(schemaStore, backend.ID, backend.SchemaRef)
+	if fallbackErr != nil {
+		return fmt.Errorf("no generator registered; fallback also failed: %v", fallbackErr)
+	}
+	return fmt.Errorf("no generator registered (used embedded fallback)")
 }

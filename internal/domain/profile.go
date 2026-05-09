@@ -33,6 +33,11 @@ type LaunchConfig struct {
 
 	// Legacy field kept for read-only migration. Not written after migration.
 	LlamaServerBinaryPath string `json:"llamaServerBinaryPath,omitempty"`
+
+	// ResolvedExecutable is set at launch time by the launcher after
+	// resolving the backend. It avoids double-resolution in processmgr.
+	// Not persisted.
+	ResolvedExecutable string `json:"-"`
 }
 
 // ProfileMeta holds timestamps and bookkeeping.

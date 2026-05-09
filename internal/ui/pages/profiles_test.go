@@ -9,9 +9,12 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendschema"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/validator"
 	"github.com/quantmind-br/llama-cpp-loader/internal/ui/components"
@@ -465,6 +468,11 @@ func TestProfilesPage_IsCapturingInputDuringEditAndPicker(t *testing.T) {
 	if !page.IsCapturingInput() {
 		t.Errorf("deleteConfirm page should capture input")
 	}
+	page.deleteConfirm = components.Confirm{}
+	page.addBackendForm = &huh.Form{}
+	if !page.IsCapturingInput() {
+		t.Errorf("addBackendForm page should capture input")
+	}
 }
 
 // TestProfilesPage_DiscardConfirmKeepsInputCaptured verifies the
@@ -498,6 +506,75 @@ func TestProfilesPage_DiscardConfirmKeepsInputCaptured(t *testing.T) {
 	if !page.editor.Active() {
 		t.Errorf("editor.Active() must remain true while discard-confirm is open")
 	}
+}
+
+func TestProfilesPage_AddBackendForm(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := profilestore.NewFSStore(dir)
+	catalogStore := backendcatalog.NewFSStore(dir)
+	schemaStore := backendcatalog.NewFSSchemaStore(dir)
+	mgr := backendschema.NewManager(catalogStore, schemaStore)
+	mgr.Register(domain.BackendKindLlamaServer, &fakeGenerator{schemaStore: schemaStore})
+
+	page := NewProfilesPage(store, domain.FlagSchema{}).
+		WithBackendManager(mgr)
+
+	updated, _ := page.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	page = updated.(ProfilesPage)
+	if page.addBackendForm == nil {
+		t.Fatal("ctrl+b should open addBackendForm")
+	}
+
+	page.addBackendData.Name = "test-backend"
+	page.addBackendData.Executable = "llama-server"
+	page.addBackendData.Kind = string(domain.BackendKindLlamaServer)
+	page.addBackendForm.State = huh.StateCompleted
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	page = updated.(ProfilesPage)
+
+	backends, err := mgr.ListBackends()
+	if err != nil {
+		t.Fatalf("ListBackends: %v", err)
+	}
+	if len(backends) != 1 {
+		t.Fatalf("expected 1 backend, got %d", len(backends))
+	}
+	if backends[0].ID != "test-backend" {
+		t.Errorf("backend.ID = %q, want test-backend", backends[0].ID)
+	}
+	if page.addBackendForm != nil {
+		t.Error("addBackendForm should be nil after completion")
+	}
+	loadedSchema, err := schemaStore.Load("test-backend.json")
+	if err != nil {
+		t.Fatalf("schema not saved: %v", err)
+	}
+	if loadedSchema.BackendID != "test-backend" {
+		t.Errorf("schema.BackendID = %q, want test-backend", loadedSchema.BackendID)
+	}
+}
+
+type fakeGenerator struct {
+	schemaStore backendcatalog.SchemaStore
+}
+
+func (f *fakeGenerator) Generate(backend domain.Backend) (domain.BackendValidationSchema, error) {
+	schema := domain.BackendValidationSchema{
+		SchemaVersion: 1,
+		BackendID:     backend.ID,
+		BackendKind:   backend.Kind,
+	}
+	if f.schemaStore != nil {
+		ref := backend.SchemaRef
+		const prefix = "schemas/"
+		if len(ref) >= len(prefix) && ref[:len(prefix)] == prefix {
+			ref = ref[len(prefix):]
+		}
+		if err := f.schemaStore.Save(ref, schema); err != nil {
+			return domain.BackendValidationSchema{}, err
+		}
+	}
+	return schema, nil
 }
 
 // [?] help token is now owned by the global status bar (see

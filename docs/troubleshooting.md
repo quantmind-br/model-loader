@@ -4,7 +4,7 @@ Common issues and their solutions.
 
 ## llama-server not found
 
-**Symptom:** Status bar shows "llama-server binary not found in PATH" at startup.
+**Symptom:** Launch fails because no backend binary is available.
 
 **Solution:**
 - Ensure you have compiled [llama.cpp](https://github.com/ggerganov/llama.cpp) with server support
@@ -12,10 +12,7 @@ Common issues and their solutions.
   ```bash
   which llama-server
   ```
-- If installed in a custom location, add it to your shell profile:
-  ```bash
-  export PATH="/path/to/llama.cpp/build/bin:$PATH"
-  ```
+- If installed in a custom location, register it as a backend in the TUI (`Ctrl+B` in the Profiles tab) or add it to your `PATH`
 
 ## Port already in use
 
@@ -81,9 +78,9 @@ Common issues and their solutions.
 **Symptom:** Profile editor shows red validation errors.
 
 **Solution:**
-- Validation is version-aware: it checks flags against the `llama-server --help` output of your installed binary
-- If `llama-server` is not in PATH, an embedded fallback schema (v7376) is used
-- Update llama-server to the latest version if you need newer flags
+- Validation uses the schema of the selected backend. Each backend has its own validation schema
+- Schemas are auto-generated when you add a backend via `Ctrl+B` (by running the binary's `--help`)
+- If a schema is missing or outdated, delete and re-add the backend, or manually edit the schema JSON in the backends directory
 - Use the Advanced tab to enter flags not available in the Essentials tab
 
 ## Clipboard not working

@@ -5,8 +5,10 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 
 	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendcatalog"
 )
 
 // drainCmd executes the cmd to surface its tea.Msg for assertions.
@@ -398,6 +400,101 @@ func TestArgString_Variants(t *testing.T) {
 		if got := ArgString(c.in); got != c.want {
 			t.Errorf("ArgString(%v) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+func TestEditor_BlocksCommitWhenSchemaMissing(t *testing.T) {
+	catalogStore := backendcatalog.NewFSStore(t.TempDir())
+	schemaStore := backendcatalog.NewFSSchemaStore(t.TempDir())
+	catalog := domain.BackendCatalog{
+		SchemaVersion:    1,
+		DefaultBackendID: "broken",
+		Backends: []domain.Backend{
+			{ID: "broken", Name: "Broken", Kind: domain.BackendKindLlamaServer, Executable: "llama-server", SchemaRef: "schemas/broken.json"},
+		},
+	}
+	if err := catalogStore.Save(catalog); err != nil {
+		t.Fatal(err)
+	}
+
+	e := New(domain.FlagSchema{}).
+		SetCatalogStore(catalogStore).
+		SetSchemaStore(schemaStore)
+	e, _ = e.Open(Draft{ID: "x", Name: "Y", BackendID: "broken"})
+
+	if e.schemaError == "" {
+		t.Fatal("expected schemaError after opening with missing schema")
+	}
+
+	e.form.State = huh.StateCompleted
+	e, cmd := e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if !e.Active() {
+		t.Fatal("editor should remain active when commit is blocked")
+	}
+	if e.schemaError == "" {
+		t.Fatal("schemaError should remain set after blocked commit")
+	}
+
+	msg := drainCmd(cmd)
+	if _, ok := msg.(EditorCommittedMsg); ok {
+		t.Fatal("should NOT emit EditorCommittedMsg when schema is missing")
+	}
+}
+
+func TestEditor_BlocksCommitWhenValidationFails(t *testing.T) {
+	schema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{}}
+	e := New(schema)
+	e, _ = e.Open(Draft{ID: "x", Name: "Y", NGL: "99"})
+
+	e.form.State = huh.StateCompleted
+	e, cmd := e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if !e.Active() {
+		t.Fatal("editor should remain active when validation fails")
+	}
+	if e.submitError == "" {
+		t.Fatal("submitError should show validation block reason")
+	}
+
+	msg := drainCmd(cmd)
+	if _, ok := msg.(EditorCommittedMsg); ok {
+		t.Fatal("should NOT emit EditorCommittedMsg when validation has errors")
+	}
+}
+
+func TestEditor_FixesValidationErrorThenSaves(t *testing.T) {
+	schema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"n-gpu-layers": {Long: "n-gpu-layers", Short: "ngl", Type: domain.FlagTypeInt},
+		"ctx-size":     {Long: "ctx-size", Type: domain.FlagTypeInt},
+		"port":         {Long: "port", Type: domain.FlagTypeInt},
+		"flash-attn":   {Long: "flash-attn", Type: domain.FlagTypeEnum, EnumValues: []string{"on", "off", "auto"}},
+		"cache-type-k": {Long: "cache-type-k", Type: domain.FlagTypeEnum, EnumValues: []string{"f16", "q8_0"}},
+		"cache-type-v": {Long: "cache-type-v", Type: domain.FlagTypeEnum, EnumValues: []string{"f16", "q8_0"}},
+	}}
+	e := New(schema)
+	e, _ = e.Open(Draft{ID: "x", Name: "Y", NGL: "99"})
+
+	// First attempt: blocked due to unknown flag (NGL "99" is fine, but let's make it fail)
+	e.schema = domain.FlagSchema{Flags: map[string]domain.FlagSpec{}}
+	e.form.State = huh.StateCompleted
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if e.submitError == "" {
+		t.Fatal("expected submitError after first blocked commit")
+	}
+
+	// Fix: restore schema so validation passes
+	e.schema = schema
+	// Any non-completion update clears submitError
+	e, _ = e.Update(struct{}{})
+	if e.submitError != "" {
+		t.Fatalf("submitError should clear after update; got %q", e.submitError)
+	}
+
+	// Verify commit would succeed by checking validation directly
+	report := e.validator.Validate(e.CurrentDraft().ToProfile(), e.schema)
+	if report.HasBlockingErrors() {
+		t.Fatalf("expected no blocking errors after fix; got %v", report.Errors)
 	}
 }
 

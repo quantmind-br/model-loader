@@ -56,7 +56,13 @@ func (r *resolver) Resolve(profile domain.Profile) (ResolvedBackend, error) {
 
 	schema, err := r.schemaStore.Load(schemaStoreRef(backend.SchemaRef))
 	if err != nil {
-		return ResolvedBackend{}, err
+		return ResolvedBackend{}, fmt.Errorf("load schema: %w", err)
+	}
+	if schema.BackendID != "" && schema.BackendID != backend.ID {
+		return ResolvedBackend{}, fmt.Errorf("schema/backend mismatch: schema has backend_id=%q, expected %q", schema.BackendID, backend.ID)
+	}
+	if backend.Kind != "" && schema.BackendKind != "" && schema.BackendKind != backend.Kind {
+		return ResolvedBackend{}, fmt.Errorf("schema/backend kind mismatch: schema has kind=%q, expected %q", schema.BackendKind, backend.Kind)
 	}
 
 	return ResolvedBackend{
@@ -81,4 +87,11 @@ func schemaStoreRef(ref string) string {
 		return ref[len(prefix):]
 	}
 	return ref
+}
+
+// SchemaStoreRef strips the "schemas/" prefix from a SchemaRef if present.
+// Exported so consumers (editor, tests) can normalize refs before calling
+// SchemaStore.Load/Save, which expect paths relative to the schemas dir.
+func SchemaStoreRef(ref string) string {
+	return schemaStoreRef(ref)
 }

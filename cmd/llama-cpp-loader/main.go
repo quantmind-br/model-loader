@@ -43,13 +43,17 @@ func main() {
 	schemaManager.Register(domain.BackendKindLlamaServer, backendschema.NewLlamaServerGenerator(schemaStore))
 
 	migrator := migration.NewService(cfg, store, catalogStore, schemaStore, schemaManager)
-	if _, err := migrator.Run(context.Background()); err != nil {
+	migReport, err := migrator.Run(context.Background())
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "migration: %v\n", err)
+	}
+	for _, w := range migReport.Warnings {
+		fmt.Fprintf(os.Stderr, "migration warning: %s\n", w)
 	}
 
 	resolver := backendcatalog.NewResolver(catalogStore, schemaStore)
 
-	defaultSchema := loadDefaultSchema(resolver)
+	defaultSchema := ensureDefaultCatalog(catalogStore, schemaStore, schemaManager, cfg.Paths.LlamaServerBinaryPath)
 
 	mgr := processmgr.New(processmgr.Config{
 		Resolver:     buildResolver(resolver),
@@ -67,7 +71,8 @@ func main() {
 
 	profilesPage := pages.NewProfilesPage(store, defaultSchema).
 		WithModelScanner(scanner, cfg.Models.SearchPaths).
-		WithBackendCatalog(catalogStore, schemaStore)
+		WithBackendCatalog(catalogStore, schemaStore).
+		WithBackendManager(schemaManager)
 	modelsPage := pages.NewModelsPage(scanner, cfg.Models.SearchPaths).WithProfileStore(store)
 	launcherPage := pages.NewLauncherPage(store, mgr, val).
 		SetBackendResolver(resolver)
@@ -95,12 +100,36 @@ func main() {
 	}
 }
 
-func loadDefaultSchema(resolver backendcatalog.Resolver) domain.FlagSchema {
-	catalog, err := resolver.Resolve(domain.Profile{})
+func ensureDefaultCatalog(catalogStore backendcatalog.Store, schemaStore backendcatalog.SchemaStore, _ *backendschema.Manager, fallbackBinary string) domain.FlagSchema {
+	catalog, err := catalogStore.Load()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "backend catalog load error: %v\n", err)
+		fmt.Fprintln(os.Stderr, "fix catalog.json or remove it to recreate defaults")
 		return domain.BackendValidationSchema{}.ToFlagSchema()
 	}
-	return catalog.Schema.ToFlagSchema()
+	if len(catalog.Backends) > 0 {
+		resolver := backendcatalog.NewResolver(catalogStore, schemaStore)
+		if rb, err := resolver.Resolve(domain.Profile{}); err == nil {
+			return rb.Schema.ToFlagSchema()
+		}
+		fmt.Fprintf(os.Stderr, "warning: default backend schema missing/invalid, using fallback\n")
+		return domain.BackendValidationSchema{}.ToFlagSchema()
+	}
+	if fallbackBinary == "" {
+		fallbackBinary = "llama-server"
+	}
+	catalog = backendcatalog.DefaultCatalog(fallbackBinary)
+	if err := catalogStore.Save(catalog); err != nil {
+		fmt.Fprintf(os.Stderr, "save default catalog: %v\n", err)
+		return domain.BackendValidationSchema{}.ToFlagSchema()
+	}
+	backend := catalog.Backends[0]
+	_ = backendschema.WriteEmbeddedFallback(schemaStore, backend.ID, backend.SchemaRef)
+	resolver := backendcatalog.NewResolver(catalogStore, schemaStore)
+	if rb, err := resolver.Resolve(domain.Profile{}); err == nil {
+		return rb.Schema.ToFlagSchema()
+	}
+	return domain.BackendValidationSchema{}.ToFlagSchema()
 }
 
 func buildResolver(resolver backendcatalog.Resolver) func(domain.Profile) (string, error) {

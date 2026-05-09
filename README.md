@@ -10,13 +10,14 @@ A terminal UI (TUI) for managing [llama.cpp](https://github.com/ggerganov/llama.
 - **Monitor** — Real-time monitoring of running instances: logs, health status, slot usage, GPU metrics, and throughput
 - **Multi-instance** — Run multiple llama-server instances concurrently, each with its own PID and port
 - **Instance Recovery** — Background instances survive TUI exit and are recovered on restart
-- **Version-aware Validation** — Parses `llama-server --help` to validate flags against the installed binary version
-- **Per-Profile Binary Selection** — Each profile can override the global `llama-server` binary, enabling side-by-side builds
+- **Backend Catalog** — Manage multiple llama-server forks/versions with per-backend validation schemas
+- **Schema-driven Validation** — Each backend has its own validation schema (auto-generated from `--help`, editable by user)
+- **Per-Profile Backend Selection** — Each profile selects a backend from the catalog; validation uses that backend's schema exclusively
 
 ## Requirements
 
 - Go 1.26 or later
-- `llama-server` binary in your `PATH`, or configure an explicit path in `config.toml`
+- `llama-server` binary in your `PATH` (used for auto-generating backend schemas)
 - (Optional) `nvidia-smi` for GPU monitoring
 
 ## Installation
@@ -83,6 +84,7 @@ make install
 | `x` | Delete profile |
 | `L` | Launch selected profile |
 | `/` | Filter profiles |
+| `Ctrl+B` | Add new backend to catalog |
 | `Ctrl+T` | Toggle Essentials / Advanced sub-tab (while editing) |
 
 ### Launcher Tab
@@ -117,6 +119,7 @@ Configuration is stored in `~/.config/llama-cpp-loader/config.toml`:
 ```toml
 [paths]
 profiles_dir = "~/.config/llama-cpp-loader/profiles"
+backends_dir = "~/.config/llama-cpp-loader/backends"
 log_dir = "~/.local/state/llama-cpp-loader/logs"
 state_dir = "~/.local/state/llama-cpp-loader"
 
@@ -125,7 +128,6 @@ search_paths = ["~/.lmstudio/models", "~/models"]
 
 [ui]
 default_tab = "profiles"
-keybindings = "default"
 ```
 
 See [docs/config.md](docs/config.md) for detailed configuration options.
@@ -136,6 +138,7 @@ See [docs/config.md](docs/config.md) for detailed configuration options.
 |------|---------|
 | `~/.config/llama-cpp-loader/config.toml` | Application configuration |
 | `~/.config/llama-cpp-loader/profiles/` | Profile JSON files (one per profile) |
+| `~/.config/llama-cpp-loader/backends/` | Backend catalog (`catalog.json`) and schema files |
 | `~/.local/state/llama-cpp-loader/instances.json` | Background instance registry |
 | `~/.local/state/llama-cpp-loader/logs/` | Captured stdout/stderr logs |
 
@@ -156,11 +159,11 @@ See [AGENTS.md](AGENTS.md) for project conventions and architecture notes.
 
 ## Troubleshooting
 
-- **`llama-server` not found** — Ensure `llama-server` is compiled and available in your `PATH`, or set `llama_server_binary_path` in `config.toml`
+- **`llama-server` not found** — Ensure `llama-server` is compiled and available in your `PATH`. Use `Ctrl+B` in the Profiles tab to register a custom binary location as a backend
 - **Port in use** — Edit the profile and change the port number
 - **Model not found** — Verify the model path in the profile or update `search_paths` in `config.toml`
 - **Instance not recovering** — Check that `instances.json` exists in the state directory
-- **Invalid binary path** — The path must exist and be executable. Use an absolute path (e.g. `/opt/llama.cpp/build/bin/llama-server`) or a bare name resolvable via PATH
+- **Backend schema missing** — Each backend needs a validation schema. Add a backend via `Ctrl+B` to auto-generate one from `--help`, or place a manually edited schema in the backends directory
 
 For more details, see [docs/troubleshooting.md](docs/troubleshooting.md).
 

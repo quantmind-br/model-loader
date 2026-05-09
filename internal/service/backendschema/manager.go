@@ -36,6 +36,9 @@ func (m *Manager) Generators() map[domain.BackendKind]Generator {
 }
 
 // AddBackend creates a new backend entry, generates its schema, and persists the catalog.
+// Schema is generated BEFORE catalog is saved so an invalid binary does not create a
+// broken catalog entry. If catalog save fails after schema generation, the schema is
+// left as an orphan (harmless) rather than a catalog entry without a schema.
 func (m *Manager) AddBackend(ctx context.Context, name, executable string, kind domain.BackendKind) (domain.Backend, error) {
 	id := domain.Slugify(name)
 	if id == "" {
@@ -60,22 +63,27 @@ func (m *Manager) AddBackend(ctx context.Context, name, executable string, kind 
 		},
 	}
 
+	if existing, ok := findBackend(catalog.Backends, id); ok {
+		backend.Meta.CreatedAt = existing.Meta.CreatedAt
+	}
+
+	if g, ok := m.generators[kind]; ok {
+		if _, err := g.Generate(backend); err != nil {
+			return domain.Backend{}, fmt.Errorf("generate schema: %w", err)
+		}
+	} else {
+		return domain.Backend{}, fmt.Errorf("no generator registered for kind: %s", kind)
+	}
+
 	catalog.Backends = upsertBackend(catalog.Backends, backend)
 	if catalog.DefaultBackendID == "" {
 		catalog.DefaultBackendID = id
 	}
 
-	if g, ok := m.generators[kind]; ok {
-		if _, err := g.Generate(backend); err != nil {
-			_ = WriteEmbeddedFallback(m.schemaStore, backend.ID, backend.SchemaRef)
-		}
-	} else {
-		_ = WriteEmbeddedFallback(m.schemaStore, backend.ID, backend.SchemaRef)
-	}
-
 	if err := m.catalogStore.Save(catalog); err != nil {
 		return domain.Backend{}, fmt.Errorf("save catalog: %w", err)
 	}
+
 	return backend, nil
 }
 

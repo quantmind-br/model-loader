@@ -44,7 +44,7 @@ type defaultValidator struct{}
 func (v defaultValidator) Validate(p domain.Profile, schema domain.FlagSchema) Report {
 	rep := Report{}
 	rep = applyTypeRules(p, schema, rep)
-	rep = applyCrossFieldRules(p, rep)
+	rep = applyExtraArgsRules(p, schema, rep)
 	rep = applyExistenceRules(p, rep)
 	return rep
 }

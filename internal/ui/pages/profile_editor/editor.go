@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/validator"
 	"github.com/quantmind-br/llama-cpp-loader/internal/ui/components"
 	"github.com/quantmind-br/llama-cpp-loader/internal/ui/theme"
@@ -43,16 +44,21 @@ type internalDiscardYesMsg struct{}
 // affirmative discard fires EditorCancelledMsg. Both messages bubble
 // out via the returned tea.Cmd.
 type Editor struct {
-	schema          domain.FlagSchema
-	validator       validator.Validator
-	backendOptions  []huh.Option[string]
+	schema         domain.FlagSchema
+	validator      validator.Validator
+	backendOptions []huh.Option[string]
+	schemaStore    backendcatalog.SchemaStore
+	catalogStore   backendcatalog.Store
 
 	active bool
 
 	form  *huh.Form
 	draft *Draft
 
-	openSnapshot Draft
+	openSnapshot  Draft
+	lastBackendID string
+	schemaError   string
+	submitError   string
 
 	subTab subTab
 
@@ -89,13 +95,29 @@ func (e Editor) SetBackendOptions(opts []huh.Option[string]) Editor {
 	return e
 }
 
+// SetSchemaStore injects the schema store so the editor can reload schemas
+// when the user changes the selected backend.
+func (e Editor) SetSchemaStore(s backendcatalog.SchemaStore) Editor {
+	e.schemaStore = s
+	return e
+}
+
+// SetCatalogStore injects the catalog store for backend lookups.
+func (e Editor) SetCatalogStore(s backendcatalog.Store) Editor {
+	e.catalogStore = s
+	return e
+}
+
 // Open starts editing the given draft. Resets sub-tab to Essentials and
-// clears any advanced-filter state from a previous session. Returns the
-// form's Init Cmd so huh's focus/styling handshake fires.
+// clears any advanced-filter state from a previous session. Loads the
+// schema for the draft's BackendID before building the form so existing
+// profiles validate against their own backend's schema immediately.
 func (e Editor) Open(d Draft) (Editor, tea.Cmd) {
 	dp := d
 	e.draft = &dp
 	e.openSnapshot = dp
+	e.lastBackendID = dp.BackendID
+	e = e.loadSchemaForDraft()
 	e.form = buildForm(e.draft, e.schema, e.backendOptions)
 	e.active = true
 	e.subTab = subTabEssentials
@@ -152,6 +174,12 @@ func (e Editor) View() string {
 	}
 	report := e.validator.Validate(e.CurrentDraft().ToProfile(), e.schema)
 	var lines []string
+	if e.schemaError != "" {
+		lines = append(lines, theme.Error.Render("✗ schema: "+e.schemaError))
+	}
+	if e.submitError != "" {
+		lines = append(lines, theme.Error.Render("✗ "+e.submitError))
+	}
 	for _, er := range report.Errors {
 		lines = append(lines, theme.Error.Render("✗ "+er.Field+": "+er.Message))
 	}
@@ -233,6 +261,7 @@ func (e Editor) handleKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 	if e.subTab == subTabAdvanced {
 		return e.handleAdvancedKey(msg)
 	}
+	e.submitError = ""
 	return e.forwardToForm(msg)
 }
 
@@ -258,9 +287,6 @@ func (e Editor) handleAdvancedKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 	return e, cmd
 }
 
-// forwardToForm delivers msg to the embedded huh form and detects
-// completion. On completion the editor self-closes and emits
-// EditorCommittedMsg.
 func (e Editor) forwardToForm(msg tea.Msg) (Editor, tea.Cmd) {
 	if e.form == nil {
 		return e, nil
@@ -269,13 +295,109 @@ func (e Editor) forwardToForm(msg tea.Msg) (Editor, tea.Cmd) {
 	if f, ok := updated.(*huh.Form); ok {
 		e.form = f
 	}
+	if e.draft != nil && e.draft.BackendID != e.lastBackendID {
+		e.lastBackendID = e.draft.BackendID
+		e = e.reloadSchema()
+		cmd = tea.Batch(cmd, e.form.Init())
+	}
 	if e.form != nil && e.form.State == huh.StateCompleted {
+		if e.schemaError != "" {
+			e.submitError = "Cannot save: " + e.schemaError
+			e.form = buildForm(e.draft, e.schema, e.backendOptions)
+			return e, tea.Batch(cmd, e.form.Init())
+		}
+		report := e.validator.Validate(e.CurrentDraft().ToProfile(), e.schema)
+		if report.HasBlockingErrors() {
+			e.submitError = fmt.Sprintf("Cannot save: %d validation errors", len(report.Errors))
+			e.form = buildForm(e.draft, e.schema, e.backendOptions)
+			return e, tea.Batch(cmd, e.form.Init())
+		}
 		committed := *e.draft
 		e = e.close()
 		commitCmd := func() tea.Msg { return EditorCommittedMsg{Draft: committed} }
 		return e, tea.Batch(cmd, commitCmd)
 	}
+	e.submitError = ""
 	return e, cmd
+}
+
+func (e Editor) reloadSchema() Editor {
+	if e.schemaStore == nil || e.catalogStore == nil || e.draft == nil {
+		return e
+	}
+	backend, schema, err := e.resolveBackendSchema(e.draft.BackendID)
+	if err != nil {
+		e.schemaError = err.Error()
+		e.schema = domain.FlagSchema{}
+		return e
+	}
+	e.schemaError = ""
+	e.schema = schema.ToFlagSchema()
+	e.form = buildForm(e.draft, e.schema, e.backendOptions)
+	tbl := newAdvancedTable(e.schema, 100, 12)
+	e.advanced = tbl
+	e.advancedAll = tbl.Rows()
+	if e.advancedFilter != "" {
+		e.advanced.SetRows(filterRows(e.advancedAll, e.advancedFilter))
+	}
+	_ = backend
+	return e
+}
+
+func (e Editor) loadSchemaForDraft() Editor {
+	if e.schemaStore == nil || e.catalogStore == nil || e.draft == nil {
+		return e
+	}
+	backend, schema, err := e.resolveBackendSchema(e.draft.BackendID)
+	if err != nil {
+		e.schemaError = err.Error()
+		e.schema = domain.FlagSchema{}
+		return e
+	}
+	e.schemaError = ""
+	e.schema = schema.ToFlagSchema()
+	tbl := newAdvancedTable(e.schema, 100, 12)
+	e.advanced = tbl
+	e.advancedAll = tbl.Rows()
+	if e.advancedFilter != "" {
+		e.advanced.SetRows(filterRows(e.advancedAll, e.advancedFilter))
+	}
+	_ = backend
+	return e
+}
+
+func (e Editor) resolveBackendSchema(backendID string) (domain.Backend, domain.BackendValidationSchema, error) {
+	catalog, err := e.catalogStore.Load()
+	if err != nil {
+		return domain.Backend{}, domain.BackendValidationSchema{}, fmt.Errorf("catalog load failed: %w", err)
+	}
+	if backendID == "" {
+		backendID = catalog.DefaultBackendID
+	}
+	if backendID == "" {
+		return domain.Backend{}, domain.BackendValidationSchema{}, fmt.Errorf("no backend selected and no default backend")
+	}
+	var backend domain.Backend
+	for _, b := range catalog.Backends {
+		if b.ID == backendID {
+			backend = b
+			break
+		}
+	}
+	if backend.ID == "" {
+		return domain.Backend{}, domain.BackendValidationSchema{}, fmt.Errorf("backend %s not found in catalog", backendID)
+	}
+	schema, err := e.schemaStore.Load(backendcatalog.SchemaStoreRef(backend.SchemaRef))
+	if err != nil {
+		return domain.Backend{}, domain.BackendValidationSchema{}, fmt.Errorf("schema load failed for %s: %w", backend.SchemaRef, err)
+	}
+	if schema.BackendID != "" && schema.BackendID != backend.ID {
+		return domain.Backend{}, domain.BackendValidationSchema{}, fmt.Errorf("schema/backend mismatch: schema has backend_id=%q, expected %q", schema.BackendID, backend.ID)
+	}
+	if backend.Kind != "" && schema.BackendKind != "" && schema.BackendKind != backend.Kind {
+		return domain.Backend{}, domain.BackendValidationSchema{}, fmt.Errorf("schema/backend kind mismatch: schema has kind=%q, expected %q", schema.BackendKind, backend.Kind)
+	}
+	return backend, schema, nil
 }
 
 // close clears all in-flight editor state. Idempotent.
@@ -288,6 +410,8 @@ func (e Editor) close() Editor {
 	e.subTab = subTabEssentials
 	e.advancedFilter = ""
 	e.filterMode = false
+	e.schemaError = ""
+	e.submitError = ""
 	return e
 }
 

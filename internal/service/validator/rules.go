@@ -2,16 +2,36 @@ package validator
 
 import (
 	"fmt"
+	"math"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
 )
 
+var shortToLong = map[string]string{
+	"ngl": "n-gpu-layers",
+}
+
+func canonicalFlag(key string) string {
+	if long, ok := shortToLong[key]; ok {
+		return long
+	}
+	return key
+}
+
 func applyTypeRules(p domain.Profile, schema domain.FlagSchema, rep Report) Report {
 	for key, val := range p.Args {
-		spec, ok := schema.Lookup(key)
+		canonical := canonicalFlag(key)
+		spec, ok := schema.Lookup(canonical)
 		if !ok {
-			continue // unknown flags are not type-checked here
+			rep = appendIssue(rep, FieldIssue{
+				Field:    key,
+				Message:  "unknown flag (not in backend schema)",
+				Severity: SeverityError,
+			})
+			continue
 		}
 		if msg := checkType(spec, val); msg != "" {
 			rep = appendIssue(rep, FieldIssue{Field: key, Message: msg, Severity: SeverityError})
@@ -23,9 +43,20 @@ func applyTypeRules(p domain.Profile, schema domain.FlagSchema, rep Report) Repo
 func checkType(spec domain.FlagSpec, val any) string {
 	switch spec.Type {
 	case domain.FlagTypeInt:
-		switch val.(type) {
-		case int, int32, int64, float64, float32:
+		switch v := val.(type) {
+		case int, int32, int64:
 			return ""
+		case float64:
+			if v == math.Trunc(v) && !math.IsInf(v, 0) && !math.IsNaN(v) {
+				return ""
+			}
+			return fmt.Sprintf("expected int, got %v", v)
+		case float32:
+			vf := float64(v)
+			if v == float32(math.Trunc(vf)) && !math.IsInf(vf, 0) && !math.IsNaN(vf) {
+				return ""
+			}
+			return fmt.Sprintf("expected int, got %v", v)
 		}
 		return fmt.Sprintf("expected int, got %T", val)
 	case domain.FlagTypeFloat:
@@ -64,8 +95,8 @@ func applyCrossFieldRules(p domain.Profile, rep Report) Report {
 		if ubatch, ok := intArg(p.Args, "ubatch-size"); ok && ubatch > batch {
 			rep = appendIssue(rep, FieldIssue{
 				Field:    "ubatch-size",
-				Message:  fmt.Sprintf("ubatch-size (%d) must be ≤ batch-size (%d)", ubatch, batch),
-				Severity: SeverityError,
+				Message:  fmt.Sprintf("ubatch-size (%d) exceeds batch-size (%d)", ubatch, batch),
+				Severity: SeverityWarning,
 			})
 		}
 	}
@@ -98,6 +129,96 @@ func applyCrossFieldRules(p domain.Profile, rep Report) Report {
 		}
 	}
 	return rep
+}
+
+func applyExtraArgsRules(p domain.Profile, schema domain.FlagSchema, rep Report) Report {
+	i := 0
+	for i < len(p.ExtraArgs) {
+		arg := p.ExtraArgs[i]
+		if !strings.HasPrefix(arg, "--") {
+			rep = appendIssue(rep, FieldIssue{
+				Field:    arg,
+				Message:  "expected --flag, got bare value",
+				Severity: SeverityError,
+			})
+			i++
+			continue
+		}
+
+		flag, value, hasValue := parseExtraArg(arg)
+		if !hasValue && i+1 < len(p.ExtraArgs) && !strings.HasPrefix(p.ExtraArgs[i+1], "--") {
+			value = p.ExtraArgs[i+1]
+			hasValue = true
+			i++
+		}
+
+		canonical := canonicalFlag(flag)
+		spec, ok := schema.Lookup(canonical)
+		if !ok {
+			rep = appendIssue(rep, FieldIssue{
+				Field:    flag,
+				Message:  "unknown flag in extra args (not in backend schema)",
+				Severity: SeverityError,
+			})
+			i++
+			continue
+		}
+
+		if spec.Type == domain.FlagTypeBool {
+			if hasValue {
+				rep = appendIssue(rep, FieldIssue{
+					Field:    flag,
+					Message:  "bool flag should not have a value",
+					Severity: SeverityError,
+				})
+			}
+		} else {
+			if !hasValue {
+				rep = appendIssue(rep, FieldIssue{
+					Field:    flag,
+					Message:  "missing value for flag",
+					Severity: SeverityError,
+				})
+			} else if msg := checkExtraArgType(spec, value); msg != "" {
+				rep = appendIssue(rep, FieldIssue{
+					Field:    flag,
+					Message:  msg,
+					Severity: SeverityError,
+				})
+			}
+		}
+		i++
+	}
+	return rep
+}
+
+func parseExtraArg(arg string) (flag string, value string, hasValue bool) {
+	body := strings.TrimPrefix(arg, "--")
+	if eq := strings.Index(body, "="); eq >= 0 {
+		return body[:eq], body[eq+1:], true
+	}
+	return body, "", false
+}
+
+func checkExtraArgType(spec domain.FlagSpec, val string) string {
+	switch spec.Type {
+	case domain.FlagTypeInt:
+		if _, err := strconv.Atoi(val); err != nil {
+			return fmt.Sprintf("expected int, got %q", val)
+		}
+	case domain.FlagTypeFloat:
+		if _, err := strconv.ParseFloat(val, 64); err != nil {
+			return fmt.Sprintf("expected float, got %q", val)
+		}
+	case domain.FlagTypeEnum:
+		for _, v := range spec.EnumValues {
+			if v == val {
+				return ""
+			}
+		}
+		return fmt.Sprintf("%q not in %v", val, spec.EnumValues)
+	}
+	return ""
 }
 
 func applyExistenceRules(p domain.Profile, rep Report) Report {
