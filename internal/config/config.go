@@ -21,6 +21,7 @@ type PathsConfig struct {
 	ProfilesDir         string `mapstructure:"profiles_dir"`
 	LogDir              string `mapstructure:"log_dir"`
 	StateDir            string `mapstructure:"state_dir"`
+	BackendsDir         string `mapstructure:"backends_dir"`
 	LlamaServerBinaryPath string `mapstructure:"llama_server_binary_path"`
 }
 
@@ -80,6 +81,7 @@ func LoadFrom(path string) (AppConfig, error) {
 	cfg.Paths.ProfilesDir = expandTilde(cfg.Paths.ProfilesDir)
 	cfg.Paths.LogDir = expandTilde(cfg.Paths.LogDir)
 	cfg.Paths.StateDir = expandTilde(cfg.Paths.StateDir)
+	cfg.Paths.BackendsDir = expandTilde(cfg.Paths.BackendsDir)
 	cfg.Paths.LlamaServerBinaryPath = expandTilde(cfg.Paths.LlamaServerBinaryPath)
 	for i, p := range cfg.Models.SearchPaths {
 		cfg.Models.SearchPaths[i] = expandTilde(p)
@@ -104,6 +106,7 @@ func applyDefaults(v *viper.Viper) {
 	v.SetDefault("paths.profiles_dir", filepath.Join(home, ".config", "llama-cpp-loader", "profiles"))
 	v.SetDefault("paths.log_dir", filepath.Join(home, ".local", "state", "llama-cpp-loader", "logs"))
 	v.SetDefault("paths.state_dir", filepath.Join(home, ".local", "state", "llama-cpp-loader"))
+	v.SetDefault("paths.backends_dir", filepath.Join(home, ".config", "llama-cpp-loader", "backends"))
 	v.SetDefault("models.search_paths", []string{
 		filepath.Join(home, ".lmstudio", "models"),
 		filepath.Join(home, "models"),
