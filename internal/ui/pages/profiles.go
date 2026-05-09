@@ -57,7 +57,7 @@ type ProfilesPage struct {
 	picker modelPickerOverlay
 
 	addBackendForm *huh.Form
-	addBackendData struct {
+	addBackendData *struct {
 		Name       string
 		Executable string
 		Kind       string
@@ -455,7 +455,7 @@ func (p ProfilesPage) startAddBackend() (tea.Model, tea.Cmd) {
 		p, fc := p.withFlash("no backend generators registered")
 		return p, fc
 	}
-	p.addBackendData = struct {
+	p.addBackendData = &struct {
 		Name       string
 		Executable string
 		Kind       string
@@ -519,11 +519,7 @@ func (p ProfilesPage) forwardToAddBackendForm(msg tea.Msg) (tea.Model, tea.Cmd) 
 		exe := p.addBackendData.Executable
 		kind := domain.BackendKind(p.addBackendData.Kind)
 		p.addBackendForm = nil
-		p.addBackendData = struct {
-			Name       string
-			Executable string
-			Kind       string
-		}{}
+		p.addBackendData = nil
 		_, err := p.backendManager.AddBackend(context.Background(), name, exe, kind)
 		var fc tea.Cmd
 		if err != nil {
