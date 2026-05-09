@@ -147,6 +147,28 @@ func TestValidator_ModelExistence(t *testing.T) {
 	}
 }
 
+func TestValidator_BinaryPathInvalid(t *testing.T) {
+	v := New()
+	p := domain.Profile{
+		ID: "x",
+		Launch: domain.LaunchConfig{
+			LlamaServerBinaryPath: "/definitely/missing/llama-server",
+		},
+	}
+
+	rep := v.Validate(p, domain.FlagSchema{})
+
+	if got := len(rep.Errors); got != 1 {
+		t.Fatalf("Errors=%d (%v), want 1", got, rep.Errors)
+	}
+	if rep.Errors[0].Field != "launch.llamaServerBinaryPath" {
+		t.Errorf("Errors[0].Field=%q, want launch.llamaServerBinaryPath", rep.Errors[0].Field)
+	}
+	if rep.Errors[0].Severity != SeverityError {
+		t.Errorf("Errors[0].Severity=%v, want SeverityError", rep.Errors[0].Severity)
+	}
+}
+
 func cacheTypes() []string {
 	return []string{"f32", "f16", "bf16", "q8_0", "q4_0"}
 }

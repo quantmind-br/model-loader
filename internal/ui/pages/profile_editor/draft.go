@@ -42,25 +42,32 @@ func (s subTab) String() string {
 // &field pointers on a heap-allocated *Draft so bubbletea's value-copy
 // idiom does not invalidate the binding addresses.
 type Draft struct {
-	ID          string // immutable once created
-	Name        string
-	Description string
-	Model       string
-	NGL         string
-	CtxSize     string
-	BatchSize   string
-	UBatchSize  string
-	Port        string
-	FlashAttn   string
-	CacheTypeK  string
-	CacheTypeV  string
-	IsNew       bool
+	ID                    string // immutable once created
+	Name                  string
+	Description           string
+	Model                 string
+	LlamaServerBinaryPath string
+	NGL                   string
+	CtxSize               string
+	BatchSize             string
+	UBatchSize            string
+	Port                  string
+	FlashAttn             string
+	CacheTypeK            string
+	CacheTypeV            string
+	IsNew                 bool
 }
 
 // ToProfile maps the editor draft to a domain.Profile. Always sets
 // ngl/ctx-size/port (zero on parse fail) so save and live preview produce
 // the same shape. Caller owns ID generation and Meta preservation.
 func (d Draft) ToProfile() domain.Profile {
+	return d.ApplyTo(domain.Profile{})
+}
+
+// ApplyTo maps the editor draft onto base, preserving caller-owned fields
+// that the editor does not track while overwriting editor-tracked fields.
+func (d Draft) ApplyTo(base domain.Profile) domain.Profile {
 	ngl, _ := strconv.Atoi(d.NGL)
 	ctx, _ := strconv.Atoi(d.CtxSize)
 	port, _ := strconv.Atoi(d.Port)
@@ -84,14 +91,15 @@ func (d Draft) ToProfile() domain.Profile {
 	if d.CacheTypeV != "" {
 		args["cache-type-v"] = d.CacheTypeV
 	}
-	return domain.Profile{
-		ID:          d.ID,
-		Name:        d.Name,
-		Description: d.Description,
-		Model:       d.Model,
-		Args:        args,
-		Launch:      domain.LaunchConfig{DefaultBackground: true},
-	}
+	out := base
+	out.ID = d.ID
+	out.Name = d.Name
+	out.Description = d.Description
+	out.Model = d.Model
+	out.Args = args
+	out.Launch.DefaultBackground = true
+	out.Launch.LlamaServerBinaryPath = d.LlamaServerBinaryPath
+	return out
 }
 
 // ArgString converts a stored args-map value to its editor-string form.
@@ -136,6 +144,10 @@ func buildForm(d *Draft, schema domain.FlagSchema) *huh.Form {
 			huh.NewInput().Title("Name").Value(&d.Name),
 			huh.NewInput().Title("Description").Value(&d.Description),
 			huh.NewInput().Title("Model path (.gguf)").Value(&d.Model),
+			huh.NewInput().
+				Title("llama-server binary path (optional)").
+				Description("Overrides the global default for this profile").
+				Value(&d.LlamaServerBinaryPath),
 		),
 		huh.NewGroup(
 			huh.NewInput().Title(labelWithHelp(schema, "n-gpu-layers", "ngl (gpu layers)")).Value(&d.NGL).Validate(intRange(-1, 9999, false)),

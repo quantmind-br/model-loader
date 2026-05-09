@@ -27,8 +27,9 @@ type Profile struct {
 
 // LaunchConfig holds per-profile launcher defaults.
 type LaunchConfig struct {
-	DefaultBackground bool   `json:"defaultBackground"`
-	LogFilePath       string `json:"logFilePath,omitempty"`
+	DefaultBackground     bool   `json:"defaultBackground"`
+	LogFilePath           string `json:"logFilePath,omitempty"`
+	LlamaServerBinaryPath string `json:"llamaServerBinaryPath,omitempty"`
 }
 
 // ProfileMeta holds timestamps and bookkeeping.

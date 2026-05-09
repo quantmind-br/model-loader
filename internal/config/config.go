@@ -18,9 +18,10 @@ type AppConfig struct {
 }
 
 type PathsConfig struct {
-	ProfilesDir string `mapstructure:"profiles_dir"`
-	LogDir      string `mapstructure:"log_dir"`
-	StateDir    string `mapstructure:"state_dir"`
+	ProfilesDir         string `mapstructure:"profiles_dir"`
+	LogDir              string `mapstructure:"log_dir"`
+	StateDir            string `mapstructure:"state_dir"`
+	LlamaServerBinaryPath string `mapstructure:"llama_server_binary_path"`
 }
 
 type ModelsConfig struct {
@@ -79,6 +80,7 @@ func LoadFrom(path string) (AppConfig, error) {
 	cfg.Paths.ProfilesDir = expandTilde(cfg.Paths.ProfilesDir)
 	cfg.Paths.LogDir = expandTilde(cfg.Paths.LogDir)
 	cfg.Paths.StateDir = expandTilde(cfg.Paths.StateDir)
+	cfg.Paths.LlamaServerBinaryPath = expandTilde(cfg.Paths.LlamaServerBinaryPath)
 	for i, p := range cfg.Models.SearchPaths {
 		cfg.Models.SearchPaths[i] = expandTilde(p)
 	}

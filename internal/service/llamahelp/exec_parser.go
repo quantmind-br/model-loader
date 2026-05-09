@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamabin"
 )
 
 // ExecParser invokes llama-server in PATH to capture --help and --version.
@@ -17,7 +18,13 @@ type ExecParser struct {
 
 // NewExecParser returns an ExecParser that resolves "llama-server" via PATH.
 func NewExecParser() *ExecParser {
-	return &ExecParser{binary: "llama-server"}
+	return NewExecParserFor(llamabin.DefaultName)
+
+}
+
+// NewExecParserFor returns an ExecParser that invokes binary directly.
+func NewExecParserFor(binary string) *ExecParser {
+	return &ExecParser{binary: binary}
 }
 
 func (p *ExecParser) Parse(ctx context.Context) (domain.FlagSchema, error) {

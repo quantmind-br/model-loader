@@ -352,6 +352,38 @@ func TestDraft_ToProfileDefaults(t *testing.T) {
 	}
 }
 
+func TestDraft_ApplyToSetsBinaryPath(t *testing.T) {
+	base := domain.Profile{
+		Launch: domain.LaunchConfig{
+			LogFilePath:           "/logs/existing.log",
+			LlamaServerBinaryPath: "/old/llama-server",
+		},
+	}
+	d := Draft{
+		ID:                    "x",
+		Name:                  "X",
+		LlamaServerBinaryPath: "/custom/llama-server",
+		NGL:                   "99",
+		CtxSize:               "8192",
+		Port:                  "4321",
+	}
+
+	out := d.ApplyTo(base)
+
+	if got := out.Launch.LlamaServerBinaryPath; got != "/custom/llama-server" {
+		t.Fatalf("LlamaServerBinaryPath = %q, want /custom/llama-server", got)
+	}
+	if got := out.Launch.LogFilePath; got != "/logs/existing.log" {
+		t.Errorf("LogFilePath = %q, want preserved /logs/existing.log", got)
+	}
+
+	d.LlamaServerBinaryPath = ""
+	out = d.ApplyTo(base)
+	if got := out.Launch.LlamaServerBinaryPath; got != "" {
+		t.Errorf("empty draft should clear LlamaServerBinaryPath; got %q", got)
+	}
+}
+
 func TestArgString_Variants(t *testing.T) {
 	cases := []struct {
 		in   any

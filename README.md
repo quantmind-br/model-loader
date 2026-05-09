@@ -11,11 +11,12 @@ A terminal UI (TUI) for managing [llama.cpp](https://github.com/ggerganov/llama.
 - **Multi-instance** — Run multiple llama-server instances concurrently, each with its own PID and port
 - **Instance Recovery** — Background instances survive TUI exit and are recovered on restart
 - **Version-aware Validation** — Parses `llama-server --help` to validate flags against the installed binary version
+- **Per-Profile Binary Selection** — Each profile can override the global `llama-server` binary, enabling side-by-side builds
 
 ## Requirements
 
 - Go 1.26 or later
-- `llama-server` binary in your `PATH` (from [llama.cpp](https://github.com/ggerganov/llama.cpp))
+- `llama-server` binary in your `PATH`, or configure an explicit path in `config.toml`
 - (Optional) `nvidia-smi` for GPU monitoring
 
 ## Installation
@@ -155,10 +156,11 @@ See [AGENTS.md](AGENTS.md) for project conventions and architecture notes.
 
 ## Troubleshooting
 
-- **`llama-server` not found** — Ensure `llama-server` is compiled and available in your `PATH`
+- **`llama-server` not found** — Ensure `llama-server` is compiled and available in your `PATH`, or set `llama_server_binary_path` in `config.toml`
 - **Port in use** — Edit the profile and change the port number
 - **Model not found** — Verify the model path in the profile or update `search_paths` in `config.toml`
 - **Instance not recovering** — Check that `instances.json` exists in the state directory
+- **Invalid binary path** — The path must exist and be executable. Use an absolute path (e.g. `/opt/llama.cpp/build/bin/llama-server`) or a bare name resolvable via PATH
 
 For more details, see [docs/troubleshooting.md](docs/troubleshooting.md).
 

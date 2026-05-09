@@ -1,8 +1,10 @@
 package processmgr
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -53,6 +55,11 @@ func TestReconcile_KeepsLiveLlamaServer(t *testing.T) {
 	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second); err != nil {
 		t.Fatalf("WaitHealthy: %v", err)
 	}
+	entries := []domain.RunningInstance{inst}
+	entries[0].BinaryPath = "" // legacy registry entry: falls back to manager binary
+	if err := saveRegistry(mgr.registryPath, entries); err != nil {
+		t.Fatal(err)
+	}
 
 	// Forge a fresh manager pointing at the same registry — simulates restart.
 	dir := filepath.Dir(mgr.registryPath)
@@ -72,4 +79,65 @@ func TestReconcile_KeepsLiveLlamaServer(t *testing.T) {
 
 	// Cleanup via fresh manager.
 	_ = freshMgr.Kill(inst.PID)
+}
+
+func TestReconcile_UsesInstanceBinaryPath(t *testing.T) {
+	mgr, _ := newTestManager(t)
+	port := freePort(t)
+	p := domain.Profile{ID: "instance-binary", Model: "/dev/null", Args: map[string]any{"port": float64(port)}}
+	inst, err := mgr.Launch(p, LaunchBackground)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	defer mgr.Kill(inst.PID)
+
+	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second); err != nil {
+		t.Fatalf("WaitHealthy: %v", err)
+	}
+
+	entries := []domain.RunningInstance{inst}
+	entries[0].BinaryPath = "python3"
+	if err := saveRegistry(mgr.registryPath, entries); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := filepath.Dir(mgr.registryPath)
+	freshMgr := New(Config{
+		Binary:       "definitely-not-python3",
+		LogDir:       filepath.Join(dir, "logs"),
+		RegistryPath: mgr.registryPath,
+	})
+	if err := freshMgr.Reconcile(); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+
+	got := freshMgr.List()
+	if len(got) != 1 || got[0].PID != inst.PID || got[0].BinaryPath != "python3" {
+		t.Fatalf("List after Reconcile = %+v, want pid=%d binary=python3", got, inst.PID)
+	}
+
+	_ = freshMgr.Kill(inst.PID)
+}
+
+// TestPidAliveAndNameMatches_LongBinaryName verifies that /proc/<pid>/comm
+// truncation (Linux TASK_COMM_LEN=16, so 15 visible chars) does not cause
+// a false-negative when the binary basename is longer than 15 bytes.
+func TestPidAliveAndNameMatches_LongBinaryName(t *testing.T) {
+	pid := os.Getpid()
+
+	// Read our own comm — it may be truncated to 15 bytes by the kernel.
+	commBytes, err := os.ReadFile(filepath.Join("/proc", fmt.Sprintf("%d", pid), "comm"))
+	if err != nil {
+		t.Skip("cannot read /proc/comm:", err)
+	}
+	comm := strings.TrimSpace(string(commBytes))
+
+	// Build an expectedComm that is our comm plus a long suffix.
+	// If our comm is already 15 bytes, truncation makes expected == comm.
+	// If shorter, truncation still leaves a prefix that matches.
+	longExpected := comm + "-very-long-suffix-exceeds-fifteen"
+
+	if !pidAliveAndNameMatches(pid, longExpected) {
+		t.Errorf("pidAliveAndNameMatches(%d, %q) = false, want true (comm=%q)", pid, longExpected, comm)
+	}
 }

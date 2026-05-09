@@ -13,6 +13,7 @@ import (
 
 	"github.com/quantmind-br/llama-cpp-loader/internal/config"
 	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamabin"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamahelp"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/modelscanner"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/monitor"
@@ -36,11 +37,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	schema, schemaWarn := loadSchema()
+	// Resolve and validate the global binary (config > PATH default).
+	globalBinary := cfg.Paths.LlamaServerBinaryPath
+	if globalBinary == "" {
+		globalBinary = llamabin.DefaultName
+	}
+	if _, err := llamabin.Resolve(globalBinary); err != nil {
+		fmt.Fprintf(os.Stderr, "config error: invalid llama-server binary %q: %v\n", globalBinary, err)
+		os.Exit(1)
+	}
+
+	schemaCache := llamahelp.NewSchemaCache(5 * time.Second)
+	schema, schemaWarn := loadSchema(globalBinary, schemaCache)
 	scanner := modelscanner.New()
 
 	mgr, err := processmgr.NewWithCheck(processmgr.Config{
-		Binary:       "llama-server",
+		Binary:       globalBinary,
 		LogDir:       cfg.Paths.LogDir,
 		RegistryPath: filepath.Join(cfg.Paths.StateDir, "instances.json"),
 		LastUsedSink: store,
@@ -69,7 +81,7 @@ func main() {
 	profilesPage := pages.NewProfilesPage(store, schema).
 		WithModelScanner(scanner, cfg.Models.SearchPaths)
 	modelsPage := pages.NewModelsPage(scanner, cfg.Models.SearchPaths).WithProfileStore(store)
-	launcherPage := pages.NewLauncherPage(store, mgr, val).SetSchema(schema)
+	launcherPage := pages.NewLauncherPage(store, mgr, val).SetSchema(schema).SetBinaryResolver(globalBinary, schemaCache)
 
 	mon := monitor.New(monitor.Config{NvidiaSMIPath: "nvidia-smi"})
 	monitorPage := pages.NewMonitorPage(mgr, mon, store)
@@ -99,14 +111,13 @@ func main() {
 	}
 }
 
-// loadSchema attempts to parse llama-server --help. On failure (binary absent,
-// timeout, parse error) it returns the embedded fallback and a warning string
-// suitable for the status bar.
-func loadSchema() (domain.FlagSchema, string) {
-	parser := llamahelp.NewExecParser()
+// loadSchema attempts to parse the binary's --help via the schema cache.
+// On failure (binary absent, timeout, parse error) it returns the embedded
+// fallback and a warning string suitable for the status bar.
+func loadSchema(binary string, cache *llamahelp.SchemaCache) (domain.FlagSchema, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	schema, err := parser.Parse(ctx)
+	schema, err := cache.Get(ctx, binary)
 	if err != nil {
 		return llamahelp.EmbeddedSchema(), fmt.Sprintf("schema fallback: %v", err)
 	}

@@ -15,8 +15,8 @@ import (
 //
 // An entry survives only if BOTH:
 //   - the PID is alive (signal 0 succeeds), AND
-//   - /proc/<pid>/comm contains the basename of the binary the manager
-//     was configured with (default: "llama-server"). This avoids
+//   - /proc/<pid>/comm contains the basename of the binary stored on the
+//     instance, falling back to the manager binary (default: "llama-server"). This avoids
 //     mistaking a recycled PID for a live server.
 //
 // Must be called at boot, before any Launch/Kill. It rewrites m.tracked
@@ -29,12 +29,14 @@ func (m *fsManager) Reconcile() error {
 	if err != nil {
 		return err
 	}
-	expectedComm := filepath.Base(m.binary)
-
 	survivors := make([]domain.RunningInstance, 0, len(loaded))
 	tracked := make(map[int]domain.RunningInstance, len(loaded))
 	for _, ri := range loaded {
-		if !pidAliveAndNameMatches(ri.PID, expectedComm) {
+		binary := ri.BinaryPath
+		if binary == "" {
+			binary = m.binary
+		}
+		if !pidAliveAndNameMatches(ri.PID, filepath.Base(binary)) {
 			continue
 		}
 		survivors = append(survivors, ri)
@@ -53,6 +55,9 @@ func (m *fsManager) Reconcile() error {
 
 // pidAliveAndNameMatches returns true iff pid is alive AND the basename of
 // /proc/<pid>/comm contains expectedComm. Reads /proc directly (Linux).
+//
+// Linux truncates /proc/<pid>/comm to TASK_COMM_LEN-1 (15 bytes), so
+// expectedComm is truncated to the same length before comparison.
 func pidAliveAndNameMatches(pid int, expectedComm string) bool {
 	proc, err := os.FindProcess(pid)
 	if err != nil {
@@ -66,5 +71,9 @@ func pidAliveAndNameMatches(pid int, expectedComm string) bool {
 		return false
 	}
 	comm := strings.TrimSpace(string(commBytes))
+	const taskCommLen = 15 // Linux TASK_COMM_LEN - 1
+	if len(expectedComm) > taskCommLen {
+		expectedComm = expectedComm[:taskCommLen]
+	}
 	return strings.Contains(comm, expectedComm)
 }

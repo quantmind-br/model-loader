@@ -143,6 +143,33 @@ func TestProfilesPage_PickerWritesDraftModel(t *testing.T) {
 	}
 }
 
+func TestProfilesPage_EditHydratesBinaryPath(t *testing.T) {
+	store := newFakeStoreWithDiagnostics([]domain.Profile{
+		{
+			ID:    "demo",
+			Name:  "Demo",
+			Model: "/m.gguf",
+			Args:  map[string]any{"ngl": float64(99), "ctx-size": float64(8192), "port": float64(4321)},
+			Launch: domain.LaunchConfig{
+				LlamaServerBinaryPath: "/custom/llama-server",
+			},
+		},
+	}, nil)
+	page := NewProfilesPage(store, domain.FlagSchema{})
+	updated, _ := page.Update(loadedMsg{profiles: store.ps})
+	page = updated.(ProfilesPage)
+
+	updated, _ = page.startEditSelected()
+	page = updated.(ProfilesPage)
+
+	if !page.editor.Active() {
+		t.Fatal("startEditSelected should activate editor")
+	}
+	if got := page.editor.CurrentDraft().LlamaServerBinaryPath; got != "/custom/llama-server" {
+		t.Fatalf("draft.LlamaServerBinaryPath = %q, want /custom/llama-server", got)
+	}
+}
+
 func TestProfilesPage_RendersCorruptMarker(t *testing.T) {
 	store := newFakeStoreWithDiagnostics(
 		[]domain.Profile{{ID: "ok", Name: "Ok"}},

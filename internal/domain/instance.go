@@ -8,6 +8,7 @@ type RunningInstance struct {
 	PID        int        `json:"pid"`
 	Port       int        `json:"port"`
 	LogPath    string     `json:"logPath"`
+	BinaryPath string     `json:"binaryPath,omitempty"`
 	StartedAt  time.Time  `json:"startedAt"`
 	Background bool       `json:"background"`
 	Crashed    bool       `json:"crashed,omitempty"`

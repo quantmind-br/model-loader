@@ -408,16 +408,17 @@ func (p ProfilesPage) performDelete(id string) (tea.Model, tea.Cmd) {
 // for new profiles. Shared by [n] (start new) and "use in new profile".
 func newDraftDefaults() profile_editor.Draft {
 	return profile_editor.Draft{
-		Name:       "New Profile",
-		NGL:        "99",
-		CtxSize:    "8192",
-		BatchSize:  "2048",
-		UBatchSize: "512",
-		Port:       "4321",
-		FlashAttn:  "auto",
-		CacheTypeK: "q8_0",
-		CacheTypeV: "q8_0",
-		IsNew:      true,
+		Name:                  "New Profile",
+		LlamaServerBinaryPath: "",
+		NGL:                   "99",
+		CtxSize:               "8192",
+		BatchSize:             "2048",
+		UBatchSize:            "512",
+		Port:                  "4321",
+		FlashAttn:             "auto",
+		CacheTypeK:            "q8_0",
+		CacheTypeV:            "q8_0",
+		IsNew:                 true,
 	}
 }
 
@@ -438,18 +439,19 @@ func (p ProfilesPage) startEditSelected() (tea.Model, tea.Cmd) {
 	}
 	pr := sel.p
 	d := profile_editor.Draft{
-		ID:          pr.ID,
-		Name:        pr.Name,
-		Description: pr.Description,
-		Model:       pr.Model,
-		NGL:         profile_editor.ArgString(pr.Args["ngl"]),
-		CtxSize:     profile_editor.ArgString(pr.Args["ctx-size"]),
-		BatchSize:   profile_editor.ArgString(pr.Args["batch-size"]),
-		UBatchSize:  profile_editor.ArgString(pr.Args["ubatch-size"]),
-		Port:        profile_editor.ArgString(pr.Args["port"]),
-		FlashAttn:   profile_editor.FlashAttnToString(pr.Args["flash-attn"]),
-		CacheTypeK:  profile_editor.ArgString(pr.Args["cache-type-k"]),
-		CacheTypeV:  profile_editor.ArgString(pr.Args["cache-type-v"]),
+		ID:                    pr.ID,
+		Name:                  pr.Name,
+		Description:           pr.Description,
+		Model:                 pr.Model,
+		LlamaServerBinaryPath: pr.Launch.LlamaServerBinaryPath,
+		NGL:                   profile_editor.ArgString(pr.Args["ngl"]),
+		CtxSize:               profile_editor.ArgString(pr.Args["ctx-size"]),
+		BatchSize:             profile_editor.ArgString(pr.Args["batch-size"]),
+		UBatchSize:            profile_editor.ArgString(pr.Args["ubatch-size"]),
+		Port:                  profile_editor.ArgString(pr.Args["port"]),
+		FlashAttn:             profile_editor.FlashAttnToString(pr.Args["flash-attn"]),
+		CacheTypeK:            profile_editor.ArgString(pr.Args["cache-type-k"]),
+		CacheTypeV:            profile_editor.ArgString(pr.Args["cache-type-v"]),
 	}
 	var cmd tea.Cmd
 	p.editor, cmd = p.editor.Open(d)

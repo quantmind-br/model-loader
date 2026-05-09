@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamabin"
 )
 
 // fsManager is the default Manager implementation backed by os/exec.
@@ -107,13 +108,18 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode) (domain.RunningIns
 	if err := os.MkdirAll(m.logDir, 0o755); err != nil {
 		return domain.RunningInstance{}, fmt.Errorf("mkdir log dir: %w", err)
 	}
+	binary := m.effectiveBinary(p)
+	resolvedBinary, err := llamabin.Resolve(binary)
+	if err != nil {
+		return domain.RunningInstance{}, fmt.Errorf("invalid llama-server binary %q: %w", binary, err)
+	}
 	logPath := filepath.Join(m.logDir, fmt.Sprintf("%s-%d.log", p.ID, port))
 	logF, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return domain.RunningInstance{}, fmt.Errorf("open log: %w", err)
 	}
 
-	cmd := exec.Command(m.binary, BuildArgs(p)...)
+	cmd := exec.Command(resolvedBinary, BuildArgs(p)...)
 	cmd.Stdout = logF
 	cmd.Stderr = logF
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
@@ -129,6 +135,7 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode) (domain.RunningIns
 		PID:        cmd.Process.Pid,
 		Port:       port,
 		LogPath:    logPath,
+		BinaryPath: resolvedBinary,
 		StartedAt:  time.Now().UTC(),
 		Background: true,
 	}
@@ -260,6 +267,10 @@ func snapshotLocked(t map[int]domain.RunningInstance) []domain.RunningInstance {
 	return out
 }
 
+func (m *fsManager) effectiveBinary(p domain.Profile) string {
+	return llamabin.Effective(p.Launch.LlamaServerBinaryPath, m.binary)
+}
+
 func portFromProfile(p domain.Profile) (int, bool) {
 	v, ok := p.Args["port"]
 	if !ok {
@@ -300,6 +311,12 @@ func checkPortFree(port int) error {
 // and the process is NOT detached via Setsid: it remains in the TUI's
 // process group so Ctrl+C from the TUI propagates if desired.
 func (m *fsManager) launchForeground(p domain.Profile, port int) (domain.RunningInstance, error) {
+	binary := m.effectiveBinary(p)
+	resolvedBinary, err := llamabin.Resolve(binary)
+	if err != nil {
+		return domain.RunningInstance{}, fmt.Errorf("invalid llama-server binary %q: %w", binary, err)
+	}
+
 	m.mu.Lock()
 	if m.fgPID != 0 {
 		m.mu.Unlock()
@@ -308,7 +325,7 @@ func (m *fsManager) launchForeground(p domain.Profile, port int) (domain.Running
 	m.fgPID = -1 // sentinel: launching in progress
 	m.mu.Unlock()
 
-	cmd := exec.Command(m.binary, BuildArgs(p)...)
+	cmd := exec.Command(resolvedBinary, BuildArgs(p)...)
 	// Inherit stdout/stderr — caller drains via TailLogs in slice 5.
 	if err := cmd.Start(); err != nil {
 		// Roll back sentinel so future calls can proceed.
@@ -324,6 +341,7 @@ func (m *fsManager) launchForeground(p domain.Profile, port int) (domain.Running
 		PID:        cmd.Process.Pid,
 		Port:       port,
 		LogPath:    "", // no log file for foreground
+		BinaryPath: resolvedBinary,
 		StartedAt:  time.Now().UTC(),
 		Background: false,
 	}

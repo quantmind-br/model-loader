@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamabin"
 )
 
 func applyTypeRules(p domain.Profile, schema domain.FlagSchema, rep Report) Report {
@@ -115,6 +116,20 @@ func applyExistenceRules(p domain.Profile, rep Report) Report {
 		return appendIssue(rep, FieldIssue{
 			Field:    "model",
 			Message:  "model path stat failed: " + err.Error(),
+			Severity: SeverityError,
+		})
+	}
+	return rep
+}
+
+func applyBinaryRules(p domain.Profile, rep Report) Report {
+	if p.Launch.LlamaServerBinaryPath == "" {
+		return rep
+	}
+	if err := llamabin.Validate(p.Launch.LlamaServerBinaryPath); err != nil {
+		return appendIssue(rep, FieldIssue{
+			Field:    "launch.llamaServerBinaryPath",
+			Message:  err.Error(),
 			Severity: SeverityError,
 		})
 	}

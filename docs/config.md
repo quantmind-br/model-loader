@@ -19,6 +19,7 @@ Directory paths used by the application. All paths support `~` expansion.
 | `profiles_dir` | `~/.config/llama-cpp-loader/profiles` | Directory where profile JSON files are stored |
 | `log_dir` | `~/.local/state/llama-cpp-loader/logs` | Directory for captured llama-server stdout/stderr logs |
 | `state_dir` | `~/.local/state/llama-cpp-loader` | Parent directory for runtime state (instances.json) |
+| `llama_server_binary_path` | `"llama-server"` | Path to the `llama-server` binary. Bare name resolves via PATH; absolute/relative path must exist and be executable |
 
 ### `[models]`
 
@@ -44,6 +45,8 @@ User interface preferences.
 profiles_dir = "~/.config/llama-cpp-loader/profiles"
 log_dir = "~/.local/state/llama-cpp-loader/logs"
 state_dir = "~/.local/state/llama-cpp-loader"
+# Use a specific llama.cpp build globally
+# llama_server_binary_path = "/opt/llama.cpp/build/bin/llama-server"
 
 [models]
 search_paths = [

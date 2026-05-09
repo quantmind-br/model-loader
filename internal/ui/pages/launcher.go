@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -12,6 +13,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/llama-cpp-loader/internal/domain"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamabin"
+	"github.com/quantmind-br/llama-cpp-loader/internal/service/llamahelp"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/processmgr"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/profilestore"
 	"github.com/quantmind-br/llama-cpp-loader/internal/service/validator"
@@ -25,6 +28,10 @@ type LauncherPage struct {
 	manager   processmgr.Manager
 	validator validator.Validator
 	schema    domain.FlagSchema
+
+	// Binary selection: global default + per-profile override.
+	globalBinary string
+	schemaCache  *llamahelp.SchemaCache
 
 	profiles []domain.Profile
 	plist    list.Model
@@ -90,6 +97,15 @@ func friendlyLaunchError(err error) string {
 // SetSchema injects the FlagSchema (used by validator at launch time).
 func (p LauncherPage) SetSchema(s domain.FlagSchema) LauncherPage {
 	p.schema = s
+	return p
+}
+
+// SetBinaryResolver injects the global default binary and schema cache so
+// the launcher can validate against the correct --help schema for the
+// effective binary (global default or per-profile override).
+func (p LauncherPage) SetBinaryResolver(globalBinary string, cache *llamahelp.SchemaCache) LauncherPage {
+	p.globalBinary = globalBinary
+	p.schemaCache = cache
 	return p
 }
 
@@ -378,15 +394,30 @@ func (p LauncherPage) withStatus(msg string) (LauncherPage, tea.Cmd) {
 // triggered from the Profiles tab via [L].
 func (p LauncherPage) launchProfileCmd(selected domain.Profile) tea.Cmd {
 	val := p.validator
-	schema := p.schema
 	mgr := p.manager
 	mode := processmgr.LaunchBackground
 	if !p.background {
 		mode = processmgr.LaunchForeground
 	}
+	globalBinary := p.globalBinary
+	cache := p.schemaCache
+	schema := p.schema
 	return func() tea.Msg {
+		// Resolve the effective binary (profile override > global > PATH default).
+		effectiveBinary := llamabin.Effective(selected.Launch.LlamaServerBinaryPath, globalBinary)
+
+		// Fetch the correct schema for this binary (cache hit or re-parse).
+		activeSchema := schema
+		if cache != nil && effectiveBinary != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if s, err := cache.Get(ctx, effectiveBinary); err == nil {
+				activeSchema = s
+			}
+		}
+
 		if val != nil {
-			rep := val.Validate(selected, schema)
+			rep := val.Validate(selected, activeSchema)
 			if rep.HasBlockingErrors() {
 				return launchErrMsg{err: fmt.Errorf("validation failed: %d errors", len(rep.Errors))}
 			}
@@ -426,12 +457,14 @@ func (p LauncherPage) renderProfileDetail() string {
 		if p.background {
 			mode = "Background"
 		}
+		effective := llamabin.Effective(it.p.Launch.LlamaServerBinaryPath, p.globalBinary)
 		rightContent = lipgloss.JoinVertical(lipgloss.Left,
 			theme.Subtitle.Render(it.p.Name),
-			fmt.Sprintf("ID:    %s", it.p.ID),
-			fmt.Sprintf("Model: %s", it.p.Model),
-			fmt.Sprintf("Port:  %v", it.p.Args["port"]),
-			fmt.Sprintf("Mode:  [%s]   (b to toggle)", mode),
+			fmt.Sprintf("ID:     %s", it.p.ID),
+			fmt.Sprintf("Model:  %s", it.p.Model),
+			fmt.Sprintf("Port:   %v", it.p.Args["port"]),
+			fmt.Sprintf("Mode:   [%s]   (b to toggle)", mode),
+			fmt.Sprintf("Binary: %s", effective),
 		)
 	} else {
 		rightContent = theme.Subtitle.Render("No profile selected")

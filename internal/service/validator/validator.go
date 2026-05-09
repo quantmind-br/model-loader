@@ -46,6 +46,7 @@ func (v defaultValidator) Validate(p domain.Profile, schema domain.FlagSchema) R
 	rep = applyTypeRules(p, schema, rep)
 	rep = applyCrossFieldRules(p, rep)
 	rep = applyExistenceRules(p, rep)
+	rep = applyBinaryRules(p, rep)
 	return rep
 }
 

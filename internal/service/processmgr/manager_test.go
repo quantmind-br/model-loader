@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -75,6 +77,75 @@ func TestManager_LaunchBackground_WaitsHealthyAndPersists(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("registry missing pid %d; got %+v", inst.PID, loaded)
+	}
+}
+
+func TestManager_LaunchBackground_ProfileOverrideUsesEffectiveBinary(t *testing.T) {
+	dir := t.TempDir()
+	defaultBinary := filepath.Join(dir, "missing-default")
+	overrideBinary := fakeBinary(t)
+	mgr := New(Config{
+		Binary:       defaultBinary,
+		LogDir:       filepath.Join(dir, "logs"),
+		RegistryPath: filepath.Join(dir, "instances.json"),
+	})
+	port := freePort(t)
+	p := domain.Profile{
+		ID:     "override",
+		Model:  "/dev/null",
+		Args:   map[string]any{"port": float64(port)},
+		Launch: domain.LaunchConfig{LlamaServerBinaryPath: overrideBinary},
+	}
+	inst, err := mgr.Launch(p, LaunchBackground)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	defer mgr.Kill(inst.PID)
+
+	if inst.BinaryPath != overrideBinary {
+		t.Fatalf("BinaryPath = %q, want %q", inst.BinaryPath, overrideBinary)
+	}
+	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second); err != nil {
+		t.Fatalf("WaitHealthy: %v", err)
+	}
+}
+
+func TestManager_LaunchBackground_NoOverrideUsesDefaultBinary(t *testing.T) {
+	mgr, _ := newTestManager(t)
+	port := freePort(t)
+	p := domain.Profile{
+		ID:    "default-binary",
+		Model: "/dev/null",
+		Args:  map[string]any{"port": float64(port)},
+	}
+	inst, err := mgr.Launch(p, LaunchBackground)
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	defer mgr.Kill(inst.PID)
+
+	if inst.BinaryPath != mgr.binary {
+		t.Fatalf("BinaryPath = %q, want %q", inst.BinaryPath, mgr.binary)
+	}
+}
+
+func TestManager_LaunchBackground_InvalidEffectiveBinary(t *testing.T) {
+	mgr, _ := newTestManager(t)
+	port := freePort(t)
+	badBinary := filepath.Join(t.TempDir(), "does-not-exist")
+	p := domain.Profile{
+		ID:     "invalid-binary",
+		Model:  "/dev/null",
+		Args:   map[string]any{"port": float64(port)},
+		Launch: domain.LaunchConfig{LlamaServerBinaryPath: badBinary},
+	}
+	_, err := mgr.Launch(p, LaunchBackground)
+	if err == nil {
+		t.Fatal("expected invalid binary error, got nil")
+	}
+	want := "invalid llama-server binary " + strconv.Quote(badBinary)
+	if !strings.Contains(err.Error(), want) {
+		t.Fatalf("err = %v, want prefix containing %q", err, want)
 	}
 }
 
