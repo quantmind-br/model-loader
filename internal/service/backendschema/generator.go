@@ -35,9 +35,16 @@ func NewLlamaServerGenerator(schemaStore backendcatalog.SchemaStore) *LlamaServe
 }
 
 // Generate resolves the backend executable, runs --help, parses flags, and persists the schema.
+// If the existing schema has source.editable=true, generation is skipped to preserve manual edits.
 func (g *LlamaServerGenerator) Generate(backend domain.Backend) (domain.BackendValidationSchema, error) {
 	if backend.Kind != domain.BackendKindLlamaServer {
 		return domain.BackendValidationSchema{}, fmt.Errorf("unsupported backend kind: %s", backend.Kind)
+	}
+
+	ref := schemaStoreRef(backend.SchemaRef)
+	existing, err := g.schemaStore.Load(ref)
+	if err == nil && existing.Source.Editable {
+		return existing, nil
 	}
 
 	resolved, err := llamabin.Resolve(backend.Executable)
@@ -62,7 +69,6 @@ func (g *LlamaServerGenerator) Generate(backend domain.Backend) (domain.BackendV
 	}
 
 	schema := domain.FlagSchemaToBackend(fs, backend.Kind, backend.ID, src)
-	ref := schemaStoreRef(backend.SchemaRef)
 	if err := g.schemaStore.Save(ref, schema); err != nil {
 		return domain.BackendValidationSchema{}, fmt.Errorf("save schema: %w", err)
 	}

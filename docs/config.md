@@ -115,15 +115,22 @@ Example:
   },
   "flags": {
     "n-gpu-layers": {
-      "long": "n-gpu-layers",
-      "short": "ngl",
-      "type": "int",
-      "description": "Number of layers to offload to GPU"
+      "Long": "n-gpu-layers",
+      "Short": "ngl",
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Number of layers to offload to GPU",
+      "Group": "common"
     },
     "ctx-size": {
-      "long": "ctx-size",
-      "type": "int",
-      "description": "Context size"
+      "Long": "ctx-size",
+      "Short": "c",
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 4096,
+      "HelpText": "Context size",
+      "Group": "common"
     }
   }
 }
@@ -135,7 +142,20 @@ Example:
 | `backendId` | Must match the backend's `id` in `catalog.json` |
 | `backendKind` | Must match the backend's `kind` in `catalog.json` |
 | `source.editable` | `true` if the file was manually edited (prevents overwrite during auto-refresh) |
-| `flags` | Map of flag name → `FlagSpec` (type, description, enum values) |
+| `flags` | Map of flag name → `FlagSpec` |
+
+**FlagSpec fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Long` | string | Canonical long name without `--` |
+| `Short` | string | Short alias without `-` (empty if none) |
+| `Aliases` | []string | Additional long aliases |
+| `Type` | int | `0`=bool, `1`=int, `2`=float, `3`=string, `4`=enum |
+| `EnumValues` | []string | Allowed values when `Type` is `4` |
+| `Default` | any | Default value |
+| `HelpText` | string | Description shown in UI |
+| `Group` | string | Category: `common`, `sampling`, `example-specific`, `embedded` |
 
 ## Notes
 
