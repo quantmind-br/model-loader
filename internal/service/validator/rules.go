@@ -90,47 +90,6 @@ func checkType(spec domain.FlagSpec, val any) string {
 	return ""
 }
 
-func applyCrossFieldRules(p domain.Profile, rep Report) Report {
-	if batch, ok := intArg(p.Args, "batch-size"); ok {
-		if ubatch, ok := intArg(p.Args, "ubatch-size"); ok && ubatch > batch {
-			rep = appendIssue(rep, FieldIssue{
-				Field:    "ubatch-size",
-				Message:  fmt.Sprintf("ubatch-size (%d) exceeds batch-size (%d)", ubatch, batch),
-				Severity: SeverityWarning,
-			})
-		}
-	}
-	if fa, ok := stringArg(p.Args, "flash-attn"); ok && fa == "on" {
-		if k, _ := stringArg(p.Args, "cache-type-k"); k == "f16" {
-			rep = appendIssue(rep, FieldIssue{
-				Field:    "cache-type-k",
-				Message:  "flash-attn=on with f16 KV cache is suboptimal; consider q8_0",
-				Severity: SeverityWarning,
-			})
-		} else if v, _ := stringArg(p.Args, "cache-type-v"); v == "f16" {
-			rep = appendIssue(rep, FieldIssue{
-				Field:    "cache-type-v",
-				Message:  "flash-attn=on with f16 KV cache is suboptimal; consider q8_0",
-				Severity: SeverityWarning,
-			})
-		}
-	}
-	if ctx, ok := intArg(p.Args, "ctx-size"); ok && ctx > 32768 {
-		ngl, hasNGL := intArg(p.Args, "ngl")
-		if !hasNGL {
-			ngl, hasNGL = intArg(p.Args, "n-gpu-layers")
-		}
-		if hasNGL && ngl < 99 {
-			rep = appendIssue(rep, FieldIssue{
-				Field:    "ngl",
-				Message:  fmt.Sprintf("ctx-size %d with ngl %d may force CPU offload", ctx, ngl),
-				Severity: SeverityWarning,
-			})
-		}
-	}
-	return rep
-}
-
 func applyExtraArgsRules(p domain.Profile, schema domain.FlagSchema, rep Report) Report {
 	i := 0
 	for i < len(p.ExtraArgs) {
@@ -242,31 +201,4 @@ func applyExistenceRules(p domain.Profile, rep Report) Report {
 	return rep
 }
 
-func intArg(args map[string]any, key string) (int, bool) {
-	v, ok := args[key]
-	if !ok {
-		return 0, false
-	}
-	switch n := v.(type) {
-	case int:
-		return n, true
-	case int32:
-		return int(n), true
-	case int64:
-		return int(n), true
-	case float64:
-		return int(n), true
-	case float32:
-		return int(n), true
-	}
-	return 0, false
-}
 
-func stringArg(args map[string]any, key string) (string, bool) {
-	v, ok := args[key]
-	if !ok {
-		return "", false
-	}
-	s, ok := v.(string)
-	return s, ok
-}

@@ -78,9 +78,9 @@ func (s *migrationService) Run(ctx context.Context) (Report, error) {
 		rep.CreatedBackends++
 
 		defaultBackend := catalog.Backends[0]
-		if err := generateOrFallback(s.schemaStore, s.manager, defaultBackend); err != nil {
+		if err := backendschema.WriteEmbeddedFallback(s.schemaStore, defaultBackend.ID, defaultBackend.SchemaRef); err != nil {
 			rep.SchemaFailures++
-			rep.Warnings = append(rep.Warnings, fmt.Sprintf("default backend schema: %v", err))
+			rep.Warnings = append(rep.Warnings, fmt.Sprintf("default backend schema fallback: %v", err))
 		}
 	}
 
@@ -100,8 +100,24 @@ func (s *migrationService) Run(ctx context.Context) (Report, error) {
 				}
 				backend, err := s.manager.AddBackend(ctx, id, p.Launch.LlamaServerBinaryPath, domain.BackendKindLlamaServer)
 				if err != nil {
-					rep.Warnings = append(rep.Warnings, fmt.Sprintf("profile %s: create backend: %v", p.ID, err))
-					p.Launch.BackendID = catalog.DefaultBackendID
+					rep.Warnings = append(rep.Warnings, fmt.Sprintf("profile %s: schema generation failed for %s: %v", p.ID, p.Launch.LlamaServerBinaryPath, err))
+					backend = domain.Backend{
+						ID:         id,
+						Name:       id,
+						Kind:       domain.BackendKindLlamaServer,
+						Executable: p.Launch.LlamaServerBinaryPath,
+						SchemaRef:  "schemas/" + id + ".json",
+					}
+					catalog.Backends = append(catalog.Backends, backend)
+					if err := s.catalogStore.Save(catalog); err != nil {
+						rep.Warnings = append(rep.Warnings, fmt.Sprintf("profile %s: save catalog: %v", p.ID, err))
+						p.Launch.BackendID = catalog.DefaultBackendID
+					} else {
+						_ = backendschema.WriteEmbeddedFallback(s.schemaStore, backend.ID, backend.SchemaRef)
+						backendID = backend.ID
+						rep.CreatedBackends++
+						catalog, _ = s.catalogStore.Load()
+					}
 				} else {
 					backendID = backend.ID
 					rep.CreatedBackends++
@@ -142,22 +158,4 @@ func findBackendByExecutable(backends []domain.Backend, executable string) strin
 		}
 	}
 	return ""
-}
-
-func generateOrFallback(schemaStore backendcatalog.SchemaStore, manager *backendschema.Manager, backend domain.Backend) error {
-	if g, ok := manager.Generators()[domain.BackendKindLlamaServer]; ok {
-		if _, err := g.Generate(backend); err != nil {
-			fallbackErr := backendschema.WriteEmbeddedFallback(schemaStore, backend.ID, backend.SchemaRef)
-			if fallbackErr != nil {
-				return fmt.Errorf("generate schema: %v; fallback also failed: %v", err, fallbackErr)
-			}
-			return fmt.Errorf("generate schema: %v (used embedded fallback)", err)
-		}
-		return nil
-	}
-	fallbackErr := backendschema.WriteEmbeddedFallback(schemaStore, backend.ID, backend.SchemaRef)
-	if fallbackErr != nil {
-		return fmt.Errorf("no generator registered; fallback also failed: %v", fallbackErr)
-	}
-	return fmt.Errorf("no generator registered (used embedded fallback)")
 }

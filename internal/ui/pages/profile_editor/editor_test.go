@@ -512,3 +512,74 @@ func TestFlashAttnToString_Variants(t *testing.T) {
 		t.Error("unknown→auto")
 	}
 }
+
+func TestEditor_SwitchesBackendAndSchema(t *testing.T) {
+	catalogDir := t.TempDir()
+	catalogStore := backendcatalog.NewFSStore(catalogDir)
+	schemaStore := backendcatalog.NewFSSchemaStore(catalogDir)
+
+	schemaA := domain.BackendValidationSchema{
+		SchemaVersion: 1,
+		BackendID:     "backend-a",
+		BackendKind:   domain.BackendKindLlamaServer,
+		Flags: map[string]domain.FlagSpec{
+			"custom-flag-a": {Long: "custom-flag-a", Type: domain.FlagTypeBool},
+		},
+	}
+	schemaB := domain.BackendValidationSchema{
+		SchemaVersion: 1,
+		BackendID:     "backend-b",
+		BackendKind:   domain.BackendKindLlamaServer,
+		Flags: map[string]domain.FlagSpec{
+			"custom-flag-b": {Long: "custom-flag-b", Type: domain.FlagTypeBool},
+		},
+	}
+	_ = schemaStore.Save("backend-a.json", schemaA)
+	_ = schemaStore.Save("backend-b.json", schemaB)
+
+	catalog := domain.BackendCatalog{
+		SchemaVersion:    1,
+		DefaultBackendID: "backend-a",
+		Backends: []domain.Backend{
+			{ID: "backend-a", Name: "Backend A", Kind: domain.BackendKindLlamaServer, Executable: "a", SchemaRef: "schemas/backend-a.json"},
+			{ID: "backend-b", Name: "Backend B", Kind: domain.BackendKindLlamaServer, Executable: "b", SchemaRef: "schemas/backend-b.json"},
+		},
+	}
+	_ = catalogStore.Save(catalog)
+
+	e := New(domain.FlagSchema{}).
+		SetCatalogStore(catalogStore).
+		SetSchemaStore(schemaStore).
+		SetBackendOptions([]huh.Option[string]{
+			huh.NewOption("Backend A", "backend-a"),
+			huh.NewOption("Backend B", "backend-b"),
+		})
+
+	e, _ = e.Open(Draft{ID: "x", Name: "Y", BackendID: "backend-a"})
+
+	if e.schemaError != "" {
+		t.Fatalf("unexpected schemaError on open: %s", e.schemaError)
+	}
+
+	profileA := domain.Profile{ID: "x", Args: map[string]any{"custom-flag-a": true}, Launch: domain.LaunchConfig{BackendID: "backend-a"}}
+	report := e.validator.Validate(profileA, e.schema)
+	if report.HasBlockingErrors() {
+		t.Fatalf("expected no errors with backend-a schema; got %v", report.Errors)
+	}
+
+	e.draft.BackendID = "backend-b"
+	e, _ = e.Update(struct{}{})
+
+	if e.schemaError != "" {
+		t.Fatalf("unexpected schemaError after switch: %s", e.schemaError)
+	}
+
+	profileB := domain.Profile{ID: "x", Args: map[string]any{"custom-flag-a": true}, Launch: domain.LaunchConfig{BackendID: "backend-b"}}
+	report = e.validator.Validate(profileB, e.schema)
+	if !report.HasBlockingErrors() {
+		t.Fatal("expected validation errors after switching to backend-b (custom-flag-a is unknown)")
+	}
+	if len(report.Errors) != 1 || report.Errors[0].Field != "custom-flag-a" {
+		t.Fatalf("expected error on custom-flag-a; got %v", report.Errors)
+	}
+}
