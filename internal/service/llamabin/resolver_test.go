@@ -114,3 +114,33 @@ func TestResolveInPATH(t *testing.T) {
 		t.Errorf("Resolve(\"llama-server\") with empty PATH expected ErrBinaryNotFound, got %v", err)
 	}
 }
+
+func TestResolveCommandString(t *testing.T) {
+	tmp := t.TempDir()
+	pythonBin := filepath.Join(tmp, "python")
+	if err := os.WriteFile(pythonBin, []byte("#!/bin/sh"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	oldPATH := os.Getenv("PATH")
+	os.Setenv("PATH", tmp)
+	defer os.Setenv("PATH", oldPATH)
+
+	// Command string with spaces: should resolve first word and return raw string.
+	resolved, err := Resolve("python -m sglang.launch_server")
+	if err != nil {
+		t.Fatalf("Resolve error: %v", err)
+	}
+	if resolved != "python -m sglang.launch_server" {
+		t.Errorf("Resolve = %q, want raw command string", resolved)
+	}
+
+	// Simple bare name without spaces: should return resolved absolute path.
+	resolved, err = Resolve("python")
+	if err != nil {
+		t.Fatalf("Resolve error: %v", err)
+	}
+	if resolved != pythonBin {
+		t.Errorf("Resolve = %q, want %q", resolved, pythonBin)
+	}
+}

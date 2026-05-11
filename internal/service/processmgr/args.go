@@ -32,13 +32,27 @@ func canonicalFlag(key string) string {
 // llama-server. The argument order is deterministic: --model first, then
 // flags from p.Args sorted by key, then p.ExtraArgs verbatim.
 //
-// Value mapping:
-//   - bool true  -> "--<key>"        (false is omitted; the flag's default
-//     is assumed to be false; --no-X variants live in ExtraArgs)
-//   - string     -> "--<key>" "<v>"
-//   - float64    -> "--<key>" "<v>"  (printed as int if mathematically integral)
-//   - []any      -> "--<key>" "<v0,v1,...>" (comma-joined, e.g. tensor-split)
+// This is a convenience wrapper for llama-server; new backends should
+// use BuildArgsForBackend.
 func BuildArgs(p domain.Profile) []string {
+	return buildLlamaArgs(p)
+}
+
+// BuildArgsForBackend converts a Profile into CLI args for the given backend
+// kind. It dispatches to the appropriate builder (llama-server, sglang, etc.).
+// An empty kind defaults to llama-server for backward compatibility.
+func BuildArgsForBackend(p domain.Profile, kind domain.BackendKind) ([]string, error) {
+	switch kind {
+	case domain.BackendKindLlamaServer, "":
+		return buildLlamaArgs(p), nil
+	case domain.BackendKindSGLang:
+		return buildSGLangArgs(p), nil
+	default:
+		return nil, fmt.Errorf("unsupported backend kind for arg building: %s", kind)
+	}
+}
+
+func buildLlamaArgs(p domain.Profile) []string {
 	args := make([]string, 0, 2+2*len(p.Args)+len(p.ExtraArgs))
 	args = append(args, "--model", p.Model)
 
@@ -50,6 +64,43 @@ func BuildArgs(p domain.Profile) []string {
 
 	for _, k := range keys {
 		flag := "--" + canonicalFlag(k)
+		switch v := p.Args[k].(type) {
+		case bool:
+			if v {
+				args = append(args, flag)
+			}
+		case string:
+			args = append(args, flag, v)
+		case float64:
+			args = append(args, flag, formatFloat(v))
+		case []any:
+			parts := make([]string, len(v))
+			for i, x := range v {
+				parts[i] = fmt.Sprint(x)
+			}
+			args = append(args, flag, strings.Join(parts, ","))
+		}
+	}
+	args = append(args, p.ExtraArgs...)
+	return args
+}
+
+func buildSGLangArgs(p domain.Profile) []string {
+	args := make([]string, 0, 2+2*len(p.Args)+len(p.ExtraArgs))
+	args = append(args, "--model-path", p.Model)
+
+	keys := make([]string, 0, len(p.Args))
+	for k := range p.Args {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		// model-path is already emitted from p.Model above.
+		if k == "model-path" {
+			continue
+		}
+		flag := "--" + k
 		switch v := p.Args[k].(type) {
 		case bool:
 			if v {

@@ -141,6 +141,47 @@ func TestResolver_Errors(t *testing.T) {
 	}
 }
 
+func TestResolver_SGLangFallsBackToPython3(t *testing.T) {
+	dir := t.TempDir()
+	catalogStore := NewFSStore(dir)
+	schemaStore := NewFSSchemaStore(dir)
+
+	// Only python3 exists, not python.
+	py3 := filepath.Join(dir, "python3")
+	if err := os.WriteFile(py3, []byte("#!/bin/sh\necho ok\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldPATH := os.Getenv("PATH")
+	os.Setenv("PATH", dir)
+	defer os.Setenv("PATH", oldPATH)
+
+	catalog := domain.BackendCatalog{
+		SchemaVersion:    catalogSchemaVersion,
+		DefaultBackendID: "sglang",
+		Backends: []domain.Backend{
+			{ID: "sglang", Name: "SGLang", Kind: domain.BackendKindSGLang, Executable: "python -m sglang.launch_server", SchemaRef: "schemas/sglang.json"},
+		},
+	}
+	if err := catalogStore.Save(catalog); err != nil {
+		t.Fatalf("Save catalog: %v", err)
+	}
+	schema := sampleSchema()
+	schema.BackendID = "sglang"
+	schema.BackendKind = domain.BackendKindSGLang
+	if err := schemaStore.Save("sglang.json", schema); err != nil {
+		t.Fatalf("Save schema: %v", err)
+	}
+
+	resolved, err := NewResolver(catalogStore, schemaStore).Resolve(domain.Profile{})
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	want := py3 + " -m sglang.launch_server"
+	if resolved.ExecutablePath != want {
+		t.Errorf("ExecutablePath = %q, want %q", resolved.ExecutablePath, want)
+	}
+}
+
 func writeExecutable(t *testing.T, dir string) string {
 	t.Helper()
 	path := filepath.Join(dir, "llama-server")

@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/quantmind-br/model-loader/docs/profile-schema.json",
+  "title": "model-loader Profile",
+  "description": "JSON schema for a model-loader llama-server profile. Each profile is persisted as a single .json file under the profiles directory.",
+  "type": "object",
+  "required": ["schemaVersion", "id", "name", "model", "args", "launch", "meta"],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Profile JSON schema version. Always 1 for current format."
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for the profile. Used as the filename (id.json). Must be kebab-case ASCII (letters, digits, hyphens only). Auto-generated from name via Slugify when not provided."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable profile name. Displayed in the TUI."
+    },
+    "description": {
+      "type": "string",
+      "description": "Optional free-text description of the profile."
+    },
+    "tags": {
+      "type": "array",
+      "description": "Optional list of string tags for filtering/grouping in the UI.",
+      "items": { "type": "string" }
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute or relative path to the GGUF model file. Validated at runtime: file must exist on disk."
+    },
+    "args": {
+      "type": "object",
+      "description": "Structured backend flags as key/value pairs. Each key is a flag name (canonical long form, e.g. 'ctx-size', or short alias mapped by the validator). Values must match the type declared in the backend's FlagSchema.",
+      "additionalProperties": {
+        "anyOf": [
+          { "type": "boolean", "description": "FlagTypeBool: true/false flags (e.g. --flash-attn)." },
+          { "type": "integer", "description": "FlagTypeInt: whole numbers (e.g. ctx-size, port, ngl). JSON numbers without fraction." },
+          { "type": "number", "description": "FlagTypeFloat: floating-point values (e.g. temperature). Accepts both integers and floats." },
+          { "type": "string", "description": "FlagTypeString: free-text values (e.g. model alias, API key)." }
+        ]
+      }
+    },
+    "extraArgs": {
+      "type": "array",
+      "description": "Raw extra CLI arguments passed as-is to the backend binary. Each entry must start with '--'. Format: '--flag' or '--flag=value'. For non-bool flags without '=' the next array element is consumed as the value.",
+      "items": {
+        "type": "string",
+        "pattern": "^--",
+        "description": "Must start with '--'."
+      }
+    },
+    "launch": {
+      "type": "object",
+      "required": ["defaultBackground"],
+      "description": "Launch configuration for this profile.",
+      "properties": {
+        "defaultBackground": {
+          "type": "boolean",
+          "description": "If true, the process starts in background mode by default when launched from the TUI."
+        },
+        "logFilePath": {
+          "type": "string",
+          "description": "Optional custom log file path for this profile's llama-server output. Falls back to global log directory if empty."
+        },
+        "backendId": {
+          "type": "string",
+          "description": "Optional ID of the backend to use for launching this profile. If empty, the default backend from the catalog is used."
+        },
+        "llamaServerBinaryPath": {
+          "type": "string",
+          "description": "LEGACY: read-only migration field. Not written after migration. Use backend catalog instead."
+        }
+      },
+      "additionalProperties": false
+    },
+    "meta": {
+      "type": "object",
+      "required": ["createdAt", "updatedAt"],
+      "description": "System-managed metadata. Populated automatically by the store on save.",
+      "properties": {
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 / RFC 3339 timestamp when the profile was first created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 / RFC 3339 timestamp when the profile was last modified."
+        },
+        "lastUsedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional ISO 8601 timestamp of the most recent launch. Null if never launched."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+
+  "$defs": {
+    "flagTypeNote": {
+      "description": "Flag value type semantics: boolean -> FlagTypeBool, integer -> FlagTypeInt, number -> FlagTypeFloat, string -> FlagTypeString. Enum flags are represented as strings restricted to a fixed set of values, validated against the backend schema's EnumValues."
+    },
+    "argsExample": {
+      "type": "object",
+      "description": "Example args block for a typical llama-server profile.",
+      "examples": [
+        {
+          "ngl": 99,
+          "ctx-size": 8192,
+          "port": 8080,
+          "flash-attn": true,
+          "cache-type-k": "q8_0"
+        }
+      ]
+    },
+    "extraArgsExample": {
+      "type": "array",
+      "description": "Example extraArgs demonstrating both inline-value and next-element value styles.",
+      "examples": [
+        ["--override-tensor", "model.layers.0.attention.q.weight=q4_0"]
+      ]
+    }
+  }
+}

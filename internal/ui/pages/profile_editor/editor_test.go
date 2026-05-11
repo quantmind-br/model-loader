@@ -1,6 +1,7 @@
 package profile_editor
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -77,7 +78,7 @@ func TestEditor_CancelExits(t *testing.T) {
 	if e.Active() {
 		t.Error("editor should be inactive after Cancel")
 	}
-	if e.CurrentDraft() != (Draft{}) {
+	if !reflect.DeepEqual(e.CurrentDraft(), Draft{}) {
 		t.Errorf("draft should clear; got %+v", e.CurrentDraft())
 	}
 }
@@ -403,6 +404,57 @@ func TestArgString_Variants(t *testing.T) {
 	}
 }
 
+func TestDraft_ToProfileWithSchema_FiltersByBackend(t *testing.T) {
+	d := Draft{
+		Name:       "n",
+		NGL:        "99",
+		CtxSize:    "8192",
+		BatchSize:  "2048",
+		UBatchSize: "512",
+		Port:       "4321",
+		FlashAttn:  "on",
+		CacheTypeK: "q8_0",
+		CacheTypeV: "q8_0",
+	}
+
+	// Empty schema (fallback) includes everything.
+	prAll := d.ToProfileWithSchema(domain.FlagSchema{})
+	if len(prAll.Args) != 8 {
+		t.Errorf("empty schema: want 8 args, got %d %v", len(prAll.Args), prAll.Args)
+	}
+
+	// Llama schema includes all known llama flags.
+	llamaSchema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"n-gpu-layers": {Long: "n-gpu-layers", Short: "ngl", Type: domain.FlagTypeInt},
+		"ctx-size":     {Long: "ctx-size", Type: domain.FlagTypeInt},
+		"port":         {Long: "port", Type: domain.FlagTypeInt},
+		"flash-attn":   {Long: "flash-attn", Type: domain.FlagTypeEnum, EnumValues: []string{"on", "off", "auto"}},
+		"batch-size":   {Long: "batch-size", Type: domain.FlagTypeInt},
+		"ubatch-size":  {Long: "ubatch-size", Type: domain.FlagTypeInt},
+		"cache-type-k": {Long: "cache-type-k", Type: domain.FlagTypeEnum, EnumValues: []string{"f16", "q8_0"}},
+		"cache-type-v": {Long: "cache-type-v", Type: domain.FlagTypeEnum, EnumValues: []string{"f16", "q8_0"}},
+	}}
+	prLlama := d.ToProfileWithSchema(llamaSchema)
+	if len(prLlama.Args) != 8 {
+		t.Errorf("llama schema: want 8 args, got %d %v", len(prLlama.Args), prLlama.Args)
+	}
+
+	// SGLang schema only knows port — everything else is filtered out.
+	sglangSchema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"port": {Long: "port", Type: domain.FlagTypeInt},
+	}}
+	prSglang := d.ToProfileWithSchema(sglangSchema)
+	if len(prSglang.Args) != 1 {
+		t.Errorf("sglang schema: want 1 arg, got %d %v", len(prSglang.Args), prSglang.Args)
+	}
+	if _, ok := prSglang.Args["port"]; !ok {
+		t.Errorf("sglang schema: expected port arg")
+	}
+	if _, ok := prSglang.Args["ngl"]; ok {
+		t.Errorf("sglang schema: ngl should be filtered out")
+	}
+}
+
 func TestEditor_BlocksCommitWhenSchemaMissing(t *testing.T) {
 	catalogStore := backendcatalog.NewFSStore(t.TempDir())
 	schemaStore := backendcatalog.NewFSSchemaStore(t.TempDir())
@@ -492,7 +544,7 @@ func TestEditor_FixesValidationErrorThenSaves(t *testing.T) {
 	}
 
 	// Verify commit would succeed by checking validation directly
-	report := e.validator.Validate(e.CurrentDraft().ToProfile(), e.schema)
+	report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema)
 	if report.HasBlockingErrors() {
 		t.Fatalf("expected no blocking errors after fix; got %v", report.Errors)
 	}
@@ -581,5 +633,159 @@ func TestEditor_SwitchesBackendAndSchema(t *testing.T) {
 	}
 	if len(report.Errors) != 1 || report.Errors[0].Field != "custom-flag-a" {
 		t.Fatalf("expected error on custom-flag-a; got %v", report.Errors)
+	}
+}
+
+func TestDraft_ApplyToWithSchema_PreservesExistingArgs(t *testing.T) {
+	sglangSchema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"port":              {Long: "port", Type: domain.FlagTypeInt},
+		"tp-size":           {Long: "tp-size", Type: domain.FlagTypeInt},
+		"dtype":             {Long: "dtype", Type: domain.FlagTypeEnum, EnumValues: []string{"float16", "bfloat16", "float32"}},
+		"mem-fraction-static": {Long: "mem-fraction-static", Type: domain.FlagTypeFloat},
+	}}
+	base := domain.Profile{
+		Args: map[string]any{
+			"tp-size":             float64(2),
+			"dtype":               "float16",
+			"mem-fraction-static": float64(0.85),
+		},
+	}
+	d := Draft{Port: "30000", Args: map[string]any{"tp-size": float64(4)}}
+	pr := d.ApplyToWithSchema(base, sglangSchema)
+
+	if pr.Args["tp-size"] != float64(4) {
+		t.Errorf("Draft.Args should overlay base.Args; got tp-size=%v", pr.Args["tp-size"])
+	}
+	if pr.Args["dtype"] != "float16" {
+		t.Errorf("base.Args dtype should be preserved; got %v", pr.Args["dtype"])
+	}
+	if pr.Args["mem-fraction-static"] != float64(0.85) {
+		t.Errorf("base.Args mem-fraction-static should be preserved; got %v", pr.Args["mem-fraction-static"])
+	}
+	if pr.Args["port"] != float64(30000) {
+		t.Errorf("Essentials port should be set; got %v", pr.Args["port"])
+	}
+}
+
+func TestEditor_AdvancedTabInlineEdit(t *testing.T) {
+	schema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"alpha": {Long: "alpha", Type: domain.FlagTypeInt},
+		"beta":  {Long: "beta", Type: domain.FlagTypeString},
+	}}
+	e := New(schema)
+	d := Draft{Name: "X", Args: map[string]any{"alpha": float64(1)}}
+	e, _ = e.Open(d)
+
+	// Switch to Advanced tab.
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	if e.subTab != subTabAdvanced {
+		t.Fatal("expected Advanced sub-tab")
+	}
+
+	// Press enter on first row to start editing.
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !e.advancedEditing {
+		t.Fatal("expected advancedEditing after enter")
+	}
+	if e.advancedEditFlag != "alpha" {
+		t.Fatalf("expected editing alpha, got %q", e.advancedEditFlag)
+	}
+	if e.advancedEditVal != "1" {
+		t.Fatalf("expected initial value 1, got %q", e.advancedEditVal)
+	}
+
+	// Type "42".
+	for _, r := range "42" {
+		e, _ = e.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	if e.advancedEditVal != "142" {
+		t.Fatalf("expected 142 after typing, got %q", e.advancedEditVal)
+	}
+
+	// Press enter to save.
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if e.advancedEditing {
+		t.Fatal("expected editing to stop after enter")
+	}
+	if e.draft.Args["alpha"] != float64(142) {
+		t.Fatalf("expected alpha=142, got %v", e.draft.Args["alpha"])
+	}
+
+	// Press enter on second row (beta) and clear it.
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyDown})
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if e.advancedEditFlag != "beta" {
+		t.Fatalf("expected editing beta, got %q", e.advancedEditFlag)
+	}
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if e.draft.Args["beta"] != nil {
+		t.Fatalf("expected beta deleted on empty save, got %v", e.draft.Args["beta"])
+	}
+}
+
+func TestEditor_AdvancedEdit_NoPanicOnNilArgs(t *testing.T) {
+	schema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"alpha": {Long: "alpha", Type: domain.FlagTypeInt},
+	}}
+	e := New(schema)
+	// Draft with nil Args simulates a new profile before newDraftDefaults fix.
+	d := Draft{Name: "X"}
+	e, _ = e.Open(d)
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !e.advancedEditing {
+		t.Fatal("expected editing mode")
+	}
+	// This must not panic even though d.Args is nil.
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'9'}})
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if e.draft.Args["alpha"] != float64(9) {
+		t.Fatalf("expected alpha=9, got %v", e.draft.Args["alpha"])
+	}
+}
+
+func TestEditor_AdvancedEdit_RejectsInvalidValue(t *testing.T) {
+	schema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"alpha": {Long: "alpha", Type: domain.FlagTypeInt},
+	}}
+	e := New(schema)
+	d := Draft{Name: "X", Args: map[string]any{}}
+	e, _ = e.Open(d)
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	for _, r := range "abc" {
+		e, _ = e.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !e.advancedEditing {
+		t.Fatal("expected editing to remain active on invalid input")
+	}
+	if e.submitError == "" {
+		t.Fatal("expected submitError after invalid value")
+	}
+	if _, ok := e.draft.Args["alpha"]; ok {
+		t.Fatal("invalid value should not be stored")
+	}
+}
+
+func TestEditor_AdvancedEdit_RefreshesTableAfterSave(t *testing.T) {
+	schema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"alpha": {Long: "alpha", Type: domain.FlagTypeInt},
+	}}
+	e := New(schema)
+	d := Draft{Name: "X", Args: map[string]any{}}
+	e, _ = e.Open(d)
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	for _, r := range "42" {
+		e, _ = e.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	rows := e.advanced.Rows()
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	if rows[0][2] != "42" {
+		t.Fatalf("expected Value column to show 42 after save, got %q", rows[0][2])
 	}
 }

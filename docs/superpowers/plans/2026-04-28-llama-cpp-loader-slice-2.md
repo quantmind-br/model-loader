@@ -2989,7 +2989,7 @@ go run ./cmd/model-loader
 ```
 
 Verificações manuais:
-- App abre, navega entre 4 tabs.
+- App abre, navega entre 5 tabs.
 - Em Profiles, `n` abre editor com Essentials.
 - `ctrl+t` alterna pra Advanced; tabela renderiza ≥50 linhas; `/` filtra.
 - Volta para Essentials; preenche Name + Model path com `/tmp/foo.gguf` (não existe), valida que aparece error inline `model: model file does not exist`.

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -73,11 +74,17 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode) (domain.RunningIns
 	if p.Model == "" {
 		return domain.RunningInstance{}, ErrModelNotFound
 	}
-	if _, err := os.Stat(p.Model); err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return domain.RunningInstance{}, fmt.Errorf("%w: %s", ErrModelNotFound, p.Model)
+	_, err := os.Stat(p.Model)
+	if err != nil {
+		// Only skip the missing-file error for HuggingFace-style repo IDs.
+		// Local paths that exist are accepted above; local paths that
+		// don't exist AND don't look like a HF repo are rejected.
+		if !looksLikeHFRepo(p.Model) {
+			if errors.Is(err, fs.ErrNotExist) {
+				return domain.RunningInstance{}, fmt.Errorf("%w: %s", ErrModelNotFound, p.Model)
+			}
+			return domain.RunningInstance{}, fmt.Errorf("stat model: %w", err)
 		}
-		return domain.RunningInstance{}, fmt.Errorf("stat model: %w", err)
 	}
 	port, ok := portFromProfile(p)
 	if !ok {
@@ -107,7 +114,12 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode) (domain.RunningIns
 		return domain.RunningInstance{}, fmt.Errorf("open log: %w", err)
 	}
 
-	cmd := exec.Command(resolvedBinary, BuildArgs(p)...)
+	profileArgs, err := BuildArgsForBackend(p, p.Launch.ResolvedBackendKind)
+	if err != nil {
+		_ = logF.Close()
+		return domain.RunningInstance{}, fmt.Errorf("build args: %w", err)
+	}
+	cmd := makeCommand(resolvedBinary, profileArgs)
 	cmd.Stdout = logF
 	cmd.Stderr = logF
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
@@ -312,7 +324,11 @@ func (m *fsManager) launchForeground(p domain.Profile, port int) (domain.Running
 	m.fgPID = -1 // sentinel: launching in progress
 	m.mu.Unlock()
 
-	cmd := exec.Command(resolvedBinary, BuildArgs(p)...)
+	profileArgs, err := BuildArgsForBackend(p, p.Launch.ResolvedBackendKind)
+	if err != nil {
+		return domain.RunningInstance{}, fmt.Errorf("build args: %w", err)
+	}
+	cmd := makeCommand(resolvedBinary, profileArgs)
 	// Inherit stdout/stderr — caller drains via TailLogs in slice 5.
 	if err := cmd.Start(); err != nil {
 		// Roll back sentinel so future calls can proceed.
@@ -343,4 +359,50 @@ func (m *fsManager) launchForeground(p domain.Profile, port int) (domain.Running
 		return inst, fmt.Errorf("fg started but registry save failed: %w", err)
 	}
 	return inst, nil
+}
+
+// makeCommand builds an exec.Command from a possibly compound command string
+// (e.g. "python -m sglang.launch_server") and the profile args.
+func makeCommand(resolvedBinary string, profileArgs []string) *exec.Cmd {
+	fields, err := splitCommandLine(resolvedBinary)
+	if err != nil || len(fields) == 0 {
+		return exec.Command("")
+	}
+	if len(fields) == 1 {
+		return exec.Command(fields[0], profileArgs...)
+	}
+	all := make([]string, 0, len(fields)-1+len(profileArgs))
+	all = append(all, fields[1:]...)
+	all = append(all, profileArgs...)
+	return exec.Command(fields[0], all...)
+}
+
+// knownModelExtensions are file suffixes that indicate a local model file.
+var knownModelExtensions = map[string]bool{
+	".gguf":        true,
+	".bin":         true,
+	".safetensors": true,
+	".pt":          true,
+	".pth":         true,
+	".onnx":        true,
+	".ckpt":        true,
+	".ggml":        true,
+}
+
+// looksLikeHFRepo reports whether a model path looks like a HuggingFace
+// repository ID (e.g. "org/model-name") rather than a local filesystem path.
+// It rejects absolute paths, home-relative paths, and paths with known model
+// file extensions, but accepts dotted repo IDs like "Qwen/Qwen2.5-7B".
+func looksLikeHFRepo(path string) bool {
+	if filepath.IsAbs(path) {
+		return false
+	}
+	if strings.HasPrefix(path, ".") || strings.HasPrefix(path, "~/") {
+		return false
+	}
+	if knownModelExtensions[filepath.Ext(path)] {
+		return false // "models/foo.gguf" is a file, not a HF repo
+	}
+	parts := strings.Split(path, "/")
+	return len(parts) == 2 && parts[0] != "" && parts[1] != ""
 }

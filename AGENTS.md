@@ -39,7 +39,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 | Profile CRUD | internal/service/profilestore/ | FS-based |
 | Flag validation | internal/service/validator/ | |
 | GPU monitoring | internal/service/monitor/ | nvidia-smi |
-| TUI pages | internal/ui/pages/ | 4 tabs: profiles/models/launcher/monitor |
+| TUI pages | internal/ui/pages/ | 5 tabs: launcher/profiles/monitor/models/backends |
 | Config | internal/config/ | Viper TOML at ~/.config/model-loader/ |
 
 ## CONVENTIONS
@@ -52,7 +52,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 - DO NOT run `llama-server` manually while TUI is managing instances
 - DO NOT edit `testdata/help-v7376.golden.json` directly — regenerate via golden test update
 - DO NOT assume process cleanup on TUI exit — processes are intentionally orphaned
-- DO NOT intercept printable runes (`q`, `1-4`, `?`, letters, digits) globally in `internal/ui/root.go` without first checking `activePageCapturesInput()`. Only `ctrl+c` may bypass this gate. Pages with active huh forms / pickers / inline modals must implement `InputCapture.IsCapturingInput() bool` returning `true` while in those states. Otherwise the global shortcut steals the keystroke from the editable field and the user can't type that character.
+- DO NOT intercept printable runes (`q`, `1-5`, `?`, letters, digits) globally in `internal/ui/root.go` without first checking `activePageCapturesInput()`. Only `ctrl+c` may bypass this gate. Pages with active huh forms / pickers / inline modals must implement `InputCapture.IsCapturingInput() bool` returning `true` while in those states. Otherwise the global shortcut steals the keystroke from the editable field and the user can't type that character.
 
 ## TUI INPUT ROUTING RULES
 - **Global shortcut gate**: every shortcut in `RootModel.Update` that consumes a printable rune MUST be wrapped in `if !m.activePageCapturesInput() { ... }`. Exception: `ctrl+c` is unconditional escape.
@@ -61,7 +61,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 - **Tests**: any new global shortcut MUST have a paired test using the `capturingPage` test double in `internal/ui/root_test.go` proving the key is forwarded (not consumed) when the active page captures input.
 
 ## UNIQUE STYLES
-- Charmbracelet TUI with 4-tab model (tea.Program)
+- Charmbracelet TUI with 5-tab model (tea.Program)
 - Viper config with mapstructure tags
 - Domain-driven service layer under internal/service/
 - Embedded fallback schema for llama-server --help (parses at runtime if binary present)
@@ -81,3 +81,47 @@ go test ./... -update  # Update golden test fixtures
 - State path: ~/.local/state/model-loader/instances.json
 - Profiles dir: ~/.local/share/model-loader/profiles/
 - Schema version: embedded-v7376
+
+<!-- gitnexus:start -->
+# GitNexus — Code Intelligence
+
+This project is indexed by GitNexus as **model-loader** (3150 symbols, 10224 relationships, 273 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+
+> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+
+## Always Do
+
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+
+## Never Do
+
+- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
+- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+
+## Resources
+
+| Resource | Use for |
+|----------|---------|
+| `gitnexus://repo/model-loader/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/model-loader/clusters` | All functional areas |
+| `gitnexus://repo/model-loader/processes` | All execution flows |
+| `gitnexus://repo/model-loader/process/{name}` | Step-by-step execution trace |
+
+## CLI
+
+| Task | Read this skill file |
+|------|---------------------|
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
+| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
+| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+
+<!-- gitnexus:end -->

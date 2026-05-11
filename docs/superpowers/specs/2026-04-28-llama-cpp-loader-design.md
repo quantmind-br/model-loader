@@ -139,7 +139,7 @@ search_paths = [
 ]
 
 [ui]
-default_tab = "profiles"
+default_tab = "launcher"
 keybindings = "default"
 ```
 

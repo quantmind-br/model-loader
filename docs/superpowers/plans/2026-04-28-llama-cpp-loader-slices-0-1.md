@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Bootstrap do projeto Go com TUI Bubbletea funcional (root + tabs vazias) e a aba `Profiles` totalmente operacional (lista, criar, duplicar, salvar, deletar profiles em JSON no disco). Ao final, a ferramenta abre, navega entre 4 tabs vazias (3 placeholders) e permite gerenciar profiles persistidos em `~/.config/model-loader/profiles/`.
+**Goal:** Bootstrap do projeto Go com TUI Bubbletea funcional (root + tabs vazias) e a aba `Profiles` totalmente operacional (lista, criar, duplicar, salvar, deletar profiles em JSON no disco). Ao final, a ferramenta abre, navega entre 5 tabs (Launcher + Profiles + 3 placeholders) e permite gerenciar profiles persistidos em `~/.config/model-loader/profiles/`.
 
 **Architecture:** Hierarquia `cmd → internal/ui (Bubbletea) → internal/service (pure Go) → internal/domain (types)`. UI nunca toca disco/processo direto; sempre via service injetado. Profiles em arquivos JSON individuais com escrita atômica. Sem `LlamaHelpParser`/`Validator`/`ProcessManager` ainda — entram nos slices 2 e 4.
 
@@ -64,7 +64,7 @@ llama.cpp-loader/
 - `config/config.go` — carregar/criar `~/.config/model-loader/config.toml` via viper, expor struct `AppConfig`.
 - `ui/theme/theme.go` — `lipgloss.Style` reutilizáveis (cores, bordas).
 - `ui/components/statusbar.go` — barra inferior com hint de keybindings + última mensagem (info/warn/error).
-- `ui/root.go` — `rootModel` com 4 tabs, dispatch de `tea.KeyMsg` global e roteamento ao page ativo.
+- `ui/root.go` — `rootModel` com 5 tabs, dispatch de `tea.KeyMsg` global e roteamento ao page ativo.
 - `ui/pages/placeholder.go` — page genérica usada por Launcher/Monitor/Models nos slices 0+1.
 - `ui/pages/profiles.go` — master-detail real da aba Profiles.
 - `service/profilestore/*.go` — interface `Store` + implementação `FSStore` que persiste em JSON.
@@ -74,7 +74,7 @@ llama.cpp-loader/
 
 # Slice 0 — Bootstrap
 
-Objetivo: módulo Go inicializado, dependências instaladas, TUI vazia abre com 4 tabs navegáveis e statusbar. Smoke test passando. Não há persistência ainda.
+Objetivo: módulo Go inicializado, dependências instaladas, TUI vazia abre com 5 tabs navegáveis e statusbar. Smoke test passando. Não há persistência ainda.
 
 ---
 
@@ -457,7 +457,7 @@ func applyDefaults(v *viper.Viper) {
 		filepath.Join(home, ".lmstudio", "models"),
 		filepath.Join(home, "models"),
 	})
-	v.SetDefault("ui.default_tab", "profiles")
+	v.SetDefault("ui.default_tab", "launcher")
 	v.SetDefault("ui.keybindings", "default")
 }
 ```
@@ -701,22 +701,25 @@ import (
 type Tab int
 
 const (
-	TabProfiles Tab = iota
-	TabLauncher
+	TabLauncher Tab = iota
+	TabProfiles
 	TabMonitor
 	TabModels
+	TabBackends
 )
 
 func (t Tab) Title() string {
 	switch t {
-	case TabProfiles:
-		return "Profiles"
 	case TabLauncher:
 		return "Launcher"
+	case TabProfiles:
+		return "Profiles"
 	case TabMonitor:
 		return "Monitor"
 	case TabModels:
 		return "Models"
+	case TabBackends:
+		return "Backends"
 	default:
 		return "?"
 	}
@@ -742,14 +745,15 @@ type RootModel struct {
 // Slice 1 swaps the Profiles slot with the real implementation in main.go.
 func NewRoot(initial Tab) RootModel {
 	return RootModel{
-		pages: [4]tea.Model{
-			pages.Placeholder{TabName: TabProfiles.Title()},
+		pages: [5]tea.Model{
 			pages.Placeholder{TabName: TabLauncher.Title()},
+			pages.Placeholder{TabName: TabProfiles.Title()},
 			pages.Placeholder{TabName: TabMonitor.Title()},
 			pages.Placeholder{TabName: TabModels.Title()},
+			pages.Placeholder{TabName: TabBackends.Title()},
 		},
 		active: initial,
-		status: components.StatusBar{Hints: "[1-4] tabs  [tab] next  [q] quit"},
+		status: components.StatusBar{Hints: "[1-5] tabs  [tab] next  [q] quit"},
 	}
 }
 
@@ -793,10 +797,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		case "1":
-			m.active = TabProfiles
+			m.active = TabLauncher
 			return m, nil
 		case "2":
-			m.active = TabLauncher
+			m.active = TabProfiles
 			return m, nil
 		case "3":
 			m.active = TabMonitor
@@ -853,7 +857,7 @@ Expected: sem erros.
 
 ```bash
 git add internal/ui/root.go internal/ui/pages/placeholder.go
-git commit -m "feat(ui): root model with 4-tab routing and placeholder pages"
+git commit -m "feat(ui): root model with 5-tab routing and placeholder pages"
 ```
 
 ---
@@ -1027,7 +1031,7 @@ Run:
 go run ./cmd/model-loader
 ```
 
-Expected: TUI abre em altscreen com 4 tabs no topo, statusbar embaixo, conteúdo "<TabName> — coming soon" no centro. Teclas `1-4`, `Tab`, `Shift+Tab` trocam aba; `q` ou `Ctrl+C` saem.
+Expected: TUI abre em altscreen com 5 tabs no topo, statusbar embaixo, conteúdo "<TabName> — coming soon" no centro. Teclas `1-5`, `Tab`, `Shift+Tab` trocam aba; `q` ou `Ctrl+C` saem.
 
 Sai com `q`. Sem deixar lixo no terminal.
 

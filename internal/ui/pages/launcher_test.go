@@ -460,8 +460,12 @@ func TestLauncherPage_EmptyStateHint(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := profilestore.NewFSStore(dir)
 	page := NewLauncherPage(store, nil, nil)
-	if !strings.Contains(page.View(), "no profiles yet") {
-		t.Errorf("empty Launcher view missing hint; got:\n%s", page.View())
+	view := page.View()
+	if !strings.Contains(view, "no profiles yet") {
+		t.Errorf("empty Launcher view missing hint; got:\n%s", view)
+	}
+	if !strings.Contains(view, "Profiles [2]") {
+		t.Errorf("empty Launcher view should reference Profiles tab as [2]; got:\n%s", view)
 	}
 }
 

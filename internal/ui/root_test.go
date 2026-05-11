@@ -45,6 +45,40 @@ func TestRoot_TabSwitchByNumber(t *testing.T) {
 	}
 }
 
+func TestRoot_NumberOneSwitchesToLauncher(t *testing.T) {
+	tm := teatest.NewTestModel(t, NewRoot(TabProfiles), teatest.WithInitialTermSize(120, 30))
+	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+
+	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
+		return strings.Contains(string(out), "1 Launcher")
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+
+	if err := tm.Quit(); err != nil {
+		t.Fatalf("Quit returned err: %v", err)
+	}
+}
+
+func TestRoot_NumberTwoSwitchesToProfiles(t *testing.T) {
+	tm := teatest.NewTestModel(t, NewRoot(TabLauncher), teatest.WithInitialTermSize(120, 30))
+	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+
+	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
+		return strings.Contains(string(out), "2 Profiles")
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+
+	if err := tm.Quit(); err != nil {
+		t.Fatalf("Quit returned err: %v", err)
+	}
+}
+
 func TestRoot_UseInNewProfileSwitchesTab(t *testing.T) {
 	dir := t.TempDir()
 	store, err := profilestore.NewFSStore(dir)
@@ -81,7 +115,7 @@ func TestRoot_TabSwitchToLauncherShowsPage(t *testing.T) {
 	tm := teatest.NewTestModel(t, root, teatest.WithInitialTermSize(120, 30))
 	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
 
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
 		return strings.Contains(string(out), "AlphaProfile")
 	}, teatest.WithDuration(2*time.Second))
@@ -303,17 +337,17 @@ func TestRoot_CtrlCAlwaysQuitsEvenWhenCapturingInput(t *testing.T) {
 
 func TestRoot_TabSwitchesWhenPageDoesNotCapture(t *testing.T) {
 	cap := &capturingPage{captured: false}
-	r := NewRoot(TabProfiles).
-		WithProfilesPage(cap).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
+	r := NewRoot(TabLauncher).
+		WithProfilesPage(pages.Placeholder{TabName: "P"}).
+		WithLauncherPage(cap).
 		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 
 	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyTab})
 	rm := updated.(RootModel)
 
-	if rm.active != TabLauncher {
-		t.Errorf("active = %v, want TabLauncher", rm.active)
+	if rm.active != TabProfiles {
+		t.Errorf("active = %v, want TabProfiles", rm.active)
 	}
 }
 
@@ -442,6 +476,91 @@ func TestRoot_StatusBarIncludesActivePageHints(t *testing.T) {
 	}
 	if !strings.Contains(view, "[?] help") {
 		t.Errorf("global help token missing after tab switch; view:\n%s", view)
+	}
+}
+
+func TestRoot_BackendsTabSwitchByNumber(t *testing.T) {
+	tm := teatest.NewTestModel(t, NewRoot(TabProfiles), teatest.WithInitialTermSize(120, 30))
+	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'5'}})
+
+	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
+		return strings.Contains(string(out), "Backends")
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+
+	if err := tm.Quit(); err != nil {
+		t.Fatalf("Quit returned err: %v", err)
+	}
+}
+
+func TestRoot_TabCyclesThroughBackends(t *testing.T) {
+	tm := teatest.NewTestModel(t, NewRoot(TabModels), teatest.WithInitialTermSize(120, 30))
+	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
+		return strings.Contains(string(out), "Backends")
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
+		return strings.Contains(string(out), "Launcher")
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if err := tm.Quit(); err != nil {
+		t.Fatalf("Quit returned err: %v", err)
+	}
+}
+
+func TestRoot_ShiftTabFromLauncherGoesToBackends(t *testing.T) {
+	tm := teatest.NewTestModel(t, NewRoot(TabLauncher), teatest.WithInitialTermSize(120, 30))
+	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyShiftTab})
+	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
+		return strings.Contains(string(out), "Backends")
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if err := tm.Quit(); err != nil {
+		t.Fatalf("Quit returned err: %v", err)
+	}
+}
+
+func TestRoot_WithBackendsPageReplacesPlaceholder(t *testing.T) {
+	root := NewRoot(TabBackends).WithBackendsPage(pages.Placeholder{TabName: "BACKENDS_REPLACED"})
+
+	tm := teatest.NewTestModel(t, root, teatest.WithInitialTermSize(120, 30))
+	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
+
+	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
+		return strings.Contains(string(out), "BACKENDS_REPLACED")
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	_ = tm.Quit()
+}
+
+func TestRoot_NumberFiveSwallowedWhilePageCapturesInput(t *testing.T) {
+	cap := &capturingPage{captured: true}
+	r := NewRoot(TabBackends).
+		WithProfilesPage(pages.Placeholder{TabName: "P"}).
+		WithLauncherPage(pages.Placeholder{TabName: "L"}).
+		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithModelsPage(pages.Placeholder{TabName: "Md"}).
+		WithBackendsPage(cap)
+
+	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'5'}})
+	rm := updated.(RootModel)
+	if rm.active != TabBackends {
+		t.Errorf("active = %v, want still TabBackends (page captures input)", rm.active)
+	}
+	if len(cap.keys) != 1 || cap.keys[0] != "5" {
+		t.Errorf("page did not receive '5'; keys=%v", cap.keys)
 	}
 }
 

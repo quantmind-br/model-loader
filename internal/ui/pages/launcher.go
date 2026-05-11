@@ -20,7 +20,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
-// LauncherPage is the Tab 2 page: pick a profile, choose mode, launch.
+// LauncherPage is the Tab 1 page: pick a profile, choose mode, launch.
 type LauncherPage struct {
 	store     profilestore.Store
 	manager   processmgr.Manager
@@ -401,6 +401,7 @@ func (p LauncherPage) launchProfileCmd(selected domain.Profile) tea.Cmd {
 			}
 		}
 		selected.Launch.ResolvedExecutable = rb.ExecutablePath
+		selected.Launch.ResolvedBackendKind = rb.Backend.Kind
 		inst, err := mgr.Launch(selected, mode)
 		if err != nil {
 			return launchErrMsg{err: err}
@@ -417,7 +418,7 @@ func (p LauncherPage) View() string {
 		return theme.Subtitle.Render(fmt.Sprintf("load profiles: %v", p.loadErr))
 	}
 	if len(p.profiles) == 0 && p.status == "" {
-		return theme.Subtitle.Render("(no profiles yet — switch to Profiles [1] to create one)")
+		return theme.Subtitle.Render("(no profiles yet — switch to Profiles [2] to create one)")
 	}
 
 	parts := []string{p.renderProfileDetail(), "", p.renderRunningList()}

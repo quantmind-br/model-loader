@@ -2,7 +2,6 @@
 package pages
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
-	"github.com/quantmind-br/model-loader/internal/service/backendschema"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/pages/profile_editor"
@@ -41,8 +39,6 @@ type ProfilesPage struct {
 	schema         domain.FlagSchema
 	catalogStore   backendcatalog.Store
 	schemaStore    backendcatalog.SchemaStore
-	backendManager *backendschema.Manager
-
 	list     list.Model
 	listKeys profilesKeyMap
 	width    int
@@ -56,12 +52,6 @@ type ProfilesPage struct {
 
 	picker modelPickerOverlay
 
-	addBackendForm *huh.Form
-	addBackendData *struct {
-		Name       string
-		Executable string
-		Kind       string
-	}
 }
 
 // NewProfilesPage constructs the page wired to a Store and FlagSchema.
@@ -92,12 +82,6 @@ func (p ProfilesPage) WithModelScanner(scanner components.ModelScanner, paths []
 func (p ProfilesPage) WithBackendCatalog(catalogStore backendcatalog.Store, schemaStore backendcatalog.SchemaStore) ProfilesPage {
 	p.catalogStore = catalogStore
 	p.schemaStore = schemaStore
-	return p
-}
-
-// WithBackendManager injects the backend schema manager for TUI backend creation.
-func (p ProfilesPage) WithBackendManager(m *backendschema.Manager) ProfilesPage {
-	p.backendManager = m
 	return p
 }
 
@@ -213,6 +197,36 @@ func (p ProfilesPage) handleModelPickerCancelled(_ components.ModelPickerCancell
 	return p, nil
 }
 
+// resolveSchemaForBackendID looks up the schema for a backend ID through
+// the catalog and schema stores. Returns an empty schema on any error.
+func (p ProfilesPage) resolveSchemaForBackendID(backendID string) domain.FlagSchema {
+	if p.catalogStore == nil || p.schemaStore == nil {
+		return domain.FlagSchema{}
+	}
+	catalog, err := p.catalogStore.Load()
+	if err != nil {
+		return domain.FlagSchema{}
+	}
+	if backendID == "" {
+		backendID = catalog.DefaultBackendID
+	}
+	var backend domain.Backend
+	for _, b := range catalog.Backends {
+		if b.ID == backendID {
+			backend = b
+			break
+		}
+	}
+	if backend.ID == "" {
+		return domain.FlagSchema{}
+	}
+	schema, err := p.schemaStore.Load(backendcatalog.SchemaStoreRef(backend.SchemaRef))
+	if err != nil {
+		return domain.FlagSchema{}
+	}
+	return schema.ToFlagSchema()
+}
+
 // handleEditorCommitted persists the saved Draft via the store, refreshes
 // the list, and surfaces success/failure as a flash.
 func (p ProfilesPage) handleEditorCommitted(msg profile_editor.EditorCommittedMsg) (tea.Model, tea.Cmd) {
@@ -220,13 +234,18 @@ func (p ProfilesPage) handleEditorCommitted(msg profile_editor.EditorCommittedMs
 	if d.ID == "" {
 		d.ID = domain.Slugify(d.Name)
 	}
-	pr := d.ToProfile()
+	schema := p.resolveSchemaForBackendID(d.BackendID)
 
-	// Preserve existing meta when editing.
+	var pr domain.Profile
 	if !d.IsNew {
 		if existing, err := p.store.Get(d.ID); err == nil {
+			pr = d.ApplyToWithSchema(existing, schema)
 			pr.Meta = existing.Meta
+		} else {
+			pr = d.ToProfileWithSchema(schema)
 		}
+	} else {
+		pr = d.ToProfileWithSchema(schema)
 	}
 
 	var fc tea.Cmd
@@ -244,9 +263,6 @@ func (p ProfilesPage) handleEditorCommitted(msg profile_editor.EditorCommittedMs
 func (p ProfilesPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if p.picker.active {
 		return p.updatePicker(msg)
-	}
-	if p.addBackendForm != nil {
-		return p.updateAddBackendForm(msg)
 	}
 	if p.editor.Active() {
 		if msg.String() == "ctrl+p" && p.picker.scanner != nil {
@@ -266,12 +282,9 @@ func (p ProfilesPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // forwardNonKey routes non-key messages to the highest-priority active
 // surface so its internal Cmd→Msg loops complete (huh focus init, async
-// validation). Add-backend form first, then editor (its discard confirm
-// and form both need non-key forwarding), then delete confirm.
+// validation). Editor first (its discard confirm and form both need
+// non-key forwarding), then delete confirm.
 func (p ProfilesPage) forwardNonKey(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if p.addBackendForm != nil {
-		return p.forwardToAddBackendForm(msg)
-	}
 	if p.editor.Active() {
 		var cmd tea.Cmd
 		p.editor, cmd = p.editor.Update(msg)
@@ -293,9 +306,6 @@ type profileDeleteConfirmedMsg struct{ id string }
 func (p ProfilesPage) View() string {
 	if p.picker.active {
 		return p.picker.picker.View()
-	}
-	if p.addBackendForm != nil {
-		return p.addBackendForm.View()
 	}
 	if p.editor.Active() {
 		return p.editor.View()
@@ -332,13 +342,13 @@ func (p ProfilesPage) detailView() string {
 		backend = "(default)"
 	}
 	return fmt.Sprintf(
-		"%s\n%s\n\nID:      %s\nModel:   %s\nBackend: %s\nArgs:    ngl=%v ctx=%v port=%v flash-attn=%v",
+		"%s\n%s\n\nID:      %s\nModel:   %s\nBackend: %s\nArgs:    %v",
 		theme.Title.Render(pr.Name),
 		theme.Subtitle.Render(pr.Description),
 		pr.ID,
 		pr.Model,
 		backend,
-		pr.Args["ngl"], pr.Args["ctx-size"], pr.Args["port"], pr.Args["flash-attn"],
+		pr.Args,
 	)
 }
 
@@ -348,14 +358,12 @@ func (p ProfilesPage) Hints() string {
 	switch {
 	case p.picker.active:
 		return "[↑↓] move  [enter] pick  [esc] cancel"
-	case p.addBackendForm != nil:
-		return "[enter] submit  [esc] cancel"
 	case p.deleteConfirm.Active():
 		return "[←→] choose  [enter] confirm"
 	case p.editor.Active():
 		return "[ctrl+t] sub-tab  [ctrl+p] pick model  [esc] cancel"
 	default:
-		return "[enter] edit  [n] new  [d] dup  [x] del  [L] launch  [/] filter  [ctrl+b] add backend"
+		return "[enter] edit  [n] new  [d] dup  [x] del  [L] launch  [/] filter"
 	}
 }
 
@@ -371,8 +379,6 @@ func (p ProfilesPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.askDeleteSelected()
 	case key.Matches(msg, p.listKeys.Launch):
 		return p.launchSelected()
-	case msg.String() == "ctrl+b":
-		return p.startAddBackend()
 	}
 
 	updated, cmd := p.list.Update(msg)
@@ -396,7 +402,7 @@ func (p ProfilesPage) launchSelected() (tea.Model, tea.Cmd) {
 }
 
 func (p ProfilesPage) IsCapturingInput() bool {
-	return p.editor.Active() || p.deleteConfirm.Active() || p.picker.active || p.addBackendForm != nil
+	return p.editor.Active() || p.deleteConfirm.Active() || p.picker.active
 }
 
 // Reload triggers a fresh load from the underlying store. Called by the
@@ -445,107 +451,21 @@ func (p ProfilesPage) performDelete(id string) (tea.Model, tea.Cmd) {
 	return p, tea.Batch(p.loadCmd(), fc)
 }
 
-// startAddBackend opens a huh form to add a new backend fork.
-func (p ProfilesPage) startAddBackend() (tea.Model, tea.Cmd) {
-	if p.backendManager == nil {
-		p, fc := p.withFlash("backend manager not available")
-		return p, fc
-	}
-	if len(p.availableKindOptions()) == 0 {
-		p, fc := p.withFlash("no backend generators registered")
-		return p, fc
-	}
-	p.addBackendData = &struct {
-		Name       string
-		Executable string
-		Kind       string
-	}{}
-	f := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Backend Name").
-				Description("e.g. llama.cpp-custom").
-				Value(&p.addBackendData.Name).
-				Validate(func(v string) error {
-					if v == "" {
-						return fmt.Errorf("name is required")
-					}
-					return nil
-				}),
-			huh.NewSelect[string]().
-				Title("Backend Kind").
-				Description("Type of LLM server").
-				Options(p.availableKindOptions()...).
-				Value(&p.addBackendData.Kind),
-			huh.NewInput().
-				Title("Executable Path").
-				Description("Path to binary (or name resolvable via PATH)").
-				Value(&p.addBackendData.Executable).
-				Validate(func(v string) error {
-					if v == "" {
-						return fmt.Errorf("executable path is required")
-					}
-					return nil
-				}),
-		),
-	)
-	p.addBackendForm = f
-	return p, p.addBackendForm.Init()
-}
-
-// updateAddBackendForm routes key messages to the add-backend form.
-// On esc it cancels; on completion it calls the backend manager.
-func (p ProfilesPage) updateAddBackendForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "esc" {
-		p.addBackendForm = nil
-		p, fc := p.withFlash("add backend cancelled")
-		return p, fc
-	}
-	return p.forwardToAddBackendForm(msg)
-}
-
-// forwardToAddBackendForm forwards any message to the form and checks
-// for completion (StateCompleted).
-func (p ProfilesPage) forwardToAddBackendForm(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if p.addBackendForm == nil {
-		return p, nil
-	}
-	updated, cmd := p.addBackendForm.Update(msg)
-	if f, ok := updated.(*huh.Form); ok {
-		p.addBackendForm = f
-	}
-	if p.addBackendForm != nil && p.addBackendForm.State == huh.StateCompleted {
-		name := p.addBackendData.Name
-		exe := p.addBackendData.Executable
-		kind := domain.BackendKind(p.addBackendData.Kind)
-		p.addBackendForm = nil
-		p.addBackendData = nil
-		_, err := p.backendManager.AddBackend(context.Background(), name, exe, kind)
-		var fc tea.Cmd
-		if err != nil {
-			p, fc = p.withFlash("add backend failed: " + err.Error())
-		} else {
-			p, fc = p.withFlash("added backend " + name)
-		}
-		return p, tea.Batch(fc)
-	}
-	return p, cmd
-}
-
 // newDraftDefaults builds a fresh Draft pre-seeded with sensible defaults
 // for new profiles. Shared by [n] (start new) and "use in new profile".
 func (p ProfilesPage) newDraftDefaults() profile_editor.Draft {
 	d := profile_editor.Draft{
-		Name:        "New Profile",
-		NGL:         "99",
-		CtxSize:     "8192",
-		BatchSize:   "2048",
-		UBatchSize:  "512",
-		Port:        "4321",
-		FlashAttn:   "auto",
-		CacheTypeK:  "q8_0",
-		CacheTypeV:  "q8_0",
-		IsNew:       true,
+		Name:       "New Profile",
+		NGL:        "99",
+		CtxSize:    "8192",
+		BatchSize:  "2048",
+		UBatchSize: "512",
+		Port:       "4321",
+		FlashAttn:  "auto",
+		CacheTypeK: "q8_0",
+		CacheTypeV: "q8_0",
+		IsNew:      true,
+		Args:       map[string]any{},
 	}
 	if p.catalogStore != nil {
 		if catalog, err := p.catalogStore.Load(); err == nil && catalog.DefaultBackendID != "" {
@@ -553,18 +473,6 @@ func (p ProfilesPage) newDraftDefaults() profile_editor.Draft {
 		}
 	}
 	return d
-}
-
-func (p ProfilesPage) availableKindOptions() []huh.Option[string] {
-	if p.backendManager == nil {
-		return nil
-	}
-	gens := p.backendManager.Generators()
-	opts := make([]huh.Option[string], 0, len(gens))
-	for kind := range gens {
-		opts = append(opts, huh.NewOption(string(kind), string(kind)))
-	}
-	return opts
 }
 
 func (p ProfilesPage) backendOptions() []huh.Option[string] {
@@ -620,6 +528,16 @@ func (p ProfilesPage) startEditSelected() (tea.Model, tea.Cmd) {
 		FlashAttn:   profile_editor.FlashAttnToString(pr.Args["flash-attn"]),
 		CacheTypeK:  profile_editor.ArgString(pr.Args["cache-type-k"]),
 		CacheTypeV:  profile_editor.ArgString(pr.Args["cache-type-v"]),
+	}
+	// Copy remaining args not mapped to hardcoded Essentials fields into
+	// the generic Args map so the Advanced tab can edit them.
+	d.Args = map[string]any{}
+	for k, v := range pr.Args {
+		switch k {
+		case "ngl", "ctx-size", "batch-size", "ubatch-size", "port", "flash-attn", "cache-type-k", "cache-type-v":
+			continue
+		}
+		d.Args[k] = v
 	}
 	p.editor = p.prepareEditor()
 	var cmd tea.Cmd

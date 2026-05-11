@@ -86,6 +86,45 @@ func TestValidator_ModelExistence(t *testing.T) {
 	}
 }
 
+func TestValidator_HFRepoIDNoExistenceError(t *testing.T) {
+	v := New()
+	cases := []struct {
+		name    string
+		model   string
+		wantErr bool
+	}{
+		{"dotted HF repo ID", "Qwen/Qwen2.5-7B-Instruct", false},
+		{"dotted HF repo ID 2", "meta-llama/Llama-3.1-8B-Instruct", false},
+		{"local gguf file missing", "models/model.gguf", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := domain.Profile{ID: "x", Model: tc.model}
+			rep := v.Validate(p, domain.FlagSchema{})
+			gotErr := len(rep.Errors) > 0
+			if gotErr != tc.wantErr {
+				t.Errorf("Errors=%v, wantErr=%v", rep.Errors, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidator_ExistingLocalPathNotTreatedAsHFRepo(t *testing.T) {
+	tmp := t.TempDir()
+	existingDir := tmp + "/models"
+	if err := os.MkdirAll(existingDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	v := New()
+	// A local path like "models/llama3" that exists should be validated
+	// as a local path, not treated as a HF repo ID.
+	p := domain.Profile{ID: "x", Model: existingDir}
+	rep := v.Validate(p, domain.FlagSchema{})
+	if len(rep.Errors) != 0 {
+		t.Errorf("existing local dir should not error; got %v", rep.Errors)
+	}
+}
+
 func cacheTypes() []string {
 	return []string{"f32", "f16", "bf16", "q8_0", "q4_0"}
 }

@@ -41,6 +41,7 @@ func main() {
 
 	schemaManager := backendschema.NewManager(catalogStore, schemaStore)
 	schemaManager.Register(domain.BackendKindLlamaServer, backendschema.NewLlamaServerGenerator(schemaStore))
+	schemaManager.Register(domain.BackendKindSGLang, backendschema.NewSGLangGenerator(schemaStore))
 
 	migrator := migration.NewService(cfg, store, catalogStore, schemaStore, schemaManager)
 	migReport, err := migrator.Run(context.Background())
@@ -71,20 +72,22 @@ func main() {
 
 	profilesPage := pages.NewProfilesPage(store, defaultSchema).
 		WithModelScanner(scanner, cfg.Models.SearchPaths).
-		WithBackendCatalog(catalogStore, schemaStore).
-		WithBackendManager(schemaManager)
+		WithBackendCatalog(catalogStore, schemaStore)
 	modelsPage := pages.NewModelsPage(scanner, cfg.Models.SearchPaths).WithProfileStore(store)
 	launcherPage := pages.NewLauncherPage(store, mgr, val).
 		SetBackendResolver(resolver)
 
 	mon := monitor.New(monitor.Config{NvidiaSMIPath: "nvidia-smi"})
-	monitorPage := pages.NewMonitorPage(mgr, mon, store)
+	monitorPage := pages.NewMonitorPage(mgr, mon, store).
+		SetBackendResolver(resolver)
+	backendsPage := pages.NewBackendsPage(schemaManager)
 
 	root := ui.NewRoot(parseTab(cfg.UI.DefaultTab)).
 		WithProfilesPage(profilesPage).
 		WithModelsPage(modelsPage).
 		WithLauncherPage(launcherPage).
-		WithMonitorPage(monitorPage)
+		WithMonitorPage(monitorPage).
+		WithBackendsPage(backendsPage)
 
 	prog := tea.NewProgram(root, tea.WithAltScreen())
 	if _, err := prog.Run(); err != nil {
@@ -146,11 +149,15 @@ func parseTab(name string) ui.Tab {
 	switch name {
 	case "launcher":
 		return ui.TabLauncher
+	case "profiles":
+		return ui.TabProfiles
 	case "monitor":
 		return ui.TabMonitor
 	case "models":
 		return ui.TabModels
+	case "backends":
+		return ui.TabBackends
 	default:
-		return ui.TabProfiles
+		return ui.TabLauncher
 	}
 }

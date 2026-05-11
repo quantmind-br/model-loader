@@ -2,6 +2,7 @@
 .superpowers/
 
 # Build output
+/model-loader
 /llama-cpp-loader
 /dist/
 /bin/
@@ -26,3 +27,25 @@ Thumbs.db
 # Go test/coverage artifacts
 coverage.out
 coverage.html
+
+# Debug binaries
+__debug_bin*
+
+# CMake build dirs inside llamacpp
+llamacpp/**/build/
+
+# Loader binaries
+/loaders/
+
+# Personal scratch dirs
+thoughts/
+
+# Auto-generated agent skills
+.claude/skills/gitnexus/
+
+# Temp / logs
+tmp/
+*.log
+
+.gitnexus/
+.sisyphus/

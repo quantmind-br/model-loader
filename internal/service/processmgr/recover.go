@@ -36,8 +36,19 @@ func (m *fsManager) Reconcile() error {
 		if binary == "" {
 			binary = m.defaultBinary
 		}
-		if !pidAliveAndNameMatches(ri.PID, filepath.Base(binary)) {
+		// For compound command strings (e.g. "python -m sglang.launch_server"),
+		// extract the executable token before taking basename.
+		exeToken := exeFromBinaryPath(binary)
+		if !pidAliveAndNameMatches(ri.PID, filepath.Base(exeToken)) {
 			continue
+		}
+		// For compound commands, also verify the cmdline contains the expected
+		// module/prefix args to avoid recovering an unrelated process.
+		if exeToken != binary {
+			cmdlineToken := strings.TrimSpace(binary[len(exeToken):])
+			if cmdlineToken != "" && !pidAliveAndCmdlineContains(ri.PID, cmdlineToken) {
+				continue
+			}
 		}
 		survivors = append(survivors, ri)
 		tracked[ri.PID] = ri
@@ -77,3 +88,26 @@ func pidAliveAndNameMatches(pid int, expectedComm string) bool {
 	}
 	return strings.Contains(comm, expectedComm)
 }
+
+// pidAliveAndCmdlineContains returns true iff pid is alive AND
+// /proc/<pid>/cmdline contains the given token. Used for compound
+// commands (e.g. "python -m sglang.launch_server") where /proc/comm
+// only shows the executable basename.
+func pidAliveAndCmdlineContains(pid int, token string) bool {
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	if err := proc.Signal(syscall.Signal(0)); err != nil {
+		return false
+	}
+	cmdlineBytes, err := os.ReadFile(filepath.Join("/proc", fmt.Sprintf("%d", pid), "cmdline"))
+	if err != nil {
+		return false
+	}
+	// cmdline uses null bytes as separators; join with spaces for matching.
+	cmdline := strings.Join(strings.Split(string(cmdlineBytes), "\x00"), " ")
+	return strings.Contains(cmdline, token)
+}
+
+

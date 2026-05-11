@@ -38,6 +38,10 @@ type LaunchConfig struct {
 	// resolving the backend. It avoids double-resolution in processmgr.
 	// Not persisted.
 	ResolvedExecutable string `json:"-"`
+
+	// ResolvedBackendKind is set at launch time by the launcher so
+	// processmgr knows which arg builder to use. Not persisted.
+	ResolvedBackendKind BackendKind `json:"-"`
 }
 
 // ProfileMeta holds timestamps and bookkeeping.

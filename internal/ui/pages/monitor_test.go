@@ -767,6 +767,9 @@ func TestMonitorPage_EmptyStateHint(t *testing.T) {
 	if !strings.Contains(out, "no instances running") {
 		t.Errorf("empty Monitor view missing hint; got:\n%s", out)
 	}
+	if !strings.Contains(out, "Launcher [1]") {
+		t.Errorf("empty Monitor view should reference Launcher tab as [1]; got:\n%s", out)
+	}
 }
 
 func TestMonitorPage_SubViewTabsHighlightActive(t *testing.T) {

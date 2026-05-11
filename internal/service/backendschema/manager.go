@@ -63,8 +63,8 @@ func (m *Manager) AddBackend(ctx context.Context, name, executable string, kind 
 		},
 	}
 
-	if existing, ok := findBackend(catalog.Backends, id); ok {
-		backend.Meta.CreatedAt = existing.Meta.CreatedAt
+	if _, ok := findBackend(catalog.Backends, id); ok {
+		return domain.Backend{}, fmt.Errorf("backend already exists: %s", id)
 	}
 
 	if g, ok := m.generators[kind]; ok {
@@ -119,6 +119,15 @@ func (m *Manager) ListBackends() ([]domain.Backend, error) {
 	return catalog.Backends, nil
 }
 
+// DefaultBackendID returns the catalog's default backend ID, or empty string if none.
+func (m *Manager) DefaultBackendID() (string, error) {
+	catalog, err := m.catalogStore.Load()
+	if err != nil {
+		return "", err
+	}
+	return catalog.DefaultBackendID, nil
+}
+
 // GetBackend returns a single backend by ID.
 func (m *Manager) GetBackend(id string) (domain.Backend, error) {
 	catalog, err := m.catalogStore.Load()
@@ -129,6 +138,47 @@ func (m *Manager) GetBackend(id string) (domain.Backend, error) {
 		return b, nil
 	}
 	return domain.Backend{}, fmt.Errorf("%w: %s", backendcatalog.ErrBackendNotFound, id)
+}
+
+// UpdateBackend updates mutable fields of an existing backend.
+// Preserves immutable fields: ID, Kind, SchemaRef, Meta.CreatedAt, Meta.GeneratedAt, Meta.SourceVersion.
+func (m *Manager) UpdateBackend(id string, next domain.Backend) (domain.Backend, error) {
+	catalog, err := m.catalogStore.Load()
+	if err != nil {
+		return domain.Backend{}, fmt.Errorf("load catalog: %w", err)
+	}
+
+	existing, ok := findBackend(catalog.Backends, id)
+	if !ok {
+		return domain.Backend{}, fmt.Errorf("%w: %s", backendcatalog.ErrBackendNotFound, id)
+	}
+
+	existing.Name = next.Name
+	existing.Executable = next.Executable
+	existing.Description = next.Description
+	existing.Tags = next.Tags
+	existing.Meta.UpdatedAt = time.Now().UTC()
+
+	catalog.Backends = upsertBackend(catalog.Backends, existing)
+	if err := m.catalogStore.Save(catalog); err != nil {
+		return domain.Backend{}, fmt.Errorf("save catalog: %w", err)
+	}
+	return existing, nil
+}
+
+// SetDefaultBackend sets the default backend ID in the catalog.
+func (m *Manager) SetDefaultBackend(id string) error {
+	catalog, err := m.catalogStore.Load()
+	if err != nil {
+		return fmt.Errorf("load catalog: %w", err)
+	}
+
+	if _, ok := findBackend(catalog.Backends, id); !ok {
+		return fmt.Errorf("%w: %s", backendcatalog.ErrBackendNotFound, id)
+	}
+
+	catalog.DefaultBackendID = id
+	return m.catalogStore.Save(catalog)
 }
 
 // DeleteBackend removes a backend from the catalog.

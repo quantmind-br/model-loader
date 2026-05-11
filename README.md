@@ -42,15 +42,15 @@ make install
    ```
    On first run, a default `config.toml` is created at `~/.config/model-loader/config.toml`.
 
-2. **Create a profile** (Tab 1 — Profiles):
-   - Press `n` to create a new profile
-   - Fill in the model path, name, and parameters (use `Tab` / `Shift+Tab` to move between fields)
-   - Press `Enter` on the **Save** button to persist the profile (or `Esc` to cancel)
-
-3. **Launch** (Tab 2 — Launcher):
+2. **Launch** (Tab 1 — Launcher):
    - Select a profile from the list
    - Toggle `b` for background mode (default) or foreground
    - Press `Enter` to launch
+
+3. **Create a profile** (Tab 2 — Profiles):
+   - Press `n` to create a new profile
+   - Fill in the model path, name, and parameters (use `Tab` / `Shift+Tab` to move between fields)
+   - Press `Enter` on the **Save** button to persist the profile (or `Esc` to cancel)
 
 4. **Monitor** (Tab 3 — Monitor):
    - Select a running instance to view logs, slots, GPU stats, and metrics
@@ -65,10 +65,11 @@ make install
 
 | Key | Action |
 |-----|--------|
-| `1` | Profiles tab |
-| `2` | Launcher tab |
+| `1` | Launcher tab |
+| `2` | Profiles tab |
 | `3` | Monitor tab |
 | `4` | Models tab |
+| `5` | Backends tab |
 | `Tab` / `Shift+Tab` | Next / previous tab |
 | `q` | Quit |
 | `?` | Show help |
@@ -127,7 +128,7 @@ state_dir = "~/.local/state/model-loader"
 search_paths = ["~/.lmstudio/models", "~/models"]
 
 [ui]
-default_tab = "profiles"
+default_tab = "launcher"
 ```
 
 See [docs/config.md](docs/config.md) for detailed configuration options.

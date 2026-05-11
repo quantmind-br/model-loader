@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
@@ -49,6 +50,12 @@ type procMgrIface interface {
 	Kill(pid int) error
 	Launch(domain.Profile, processmgr.LaunchMode) (domain.RunningInstance, error)
 	TailLogs(pid int) (io.ReadCloser, error)
+}
+
+// backendResolverIface is the subset of backendcatalog.Resolver that
+// MonitorPage needs to resolve backend kind on restart.
+type backendResolverIface interface {
+	Resolve(profile domain.Profile) (backendcatalog.ResolvedBackend, error)
 }
 
 // profileStoreIface é o subset de profilestore.Store usado pela MonitorPage
@@ -95,7 +102,8 @@ type MonitorPage struct {
 	pm                 procMgrIface
 	mm                 monitor.Manager
 	ps                 profileStoreIface // injected for `r` real restart (slice 6 / Task 4)
-	pendingSelectPID   int               // set by MonitorSelectPIDMsg, consumed after the next refresh
+	resolver           backendResolverIface // injected to resolve backend kind on restart
+	pendingSelectPID   int                // set by MonitorSelectPIDMsg, consumed after the next refresh
 	tbl                table.Model
 	subs               map[int]*subState
 	chans              map[int]<-chan monitor.MonitorEvent
@@ -104,14 +112,10 @@ type MonitorPage struct {
 	periodicTickActive bool
 	width              int
 	height             int
-
-	// Kill confirmation overlay (UIUX-002).
-	killConfirm components.Confirm
-
-	// Restart confirmation overlay.
-	restartConfirm components.Confirm
-
-	flash string
+	flash              string
+	pauseFlash         string
+	restartConfirm     components.Confirm
+	killConfirm        components.Confirm
 }
 
 // monitorKillConfirmedMsg is emitted by killConfirm.onYes when the user
@@ -133,6 +137,12 @@ type monitorRestartConfirmedMsg struct {
 // background refreshes of the instance list, so crashes detected by the
 // processmgr liveness goroutine surface in the UI without user interaction.
 type monitorPeriodicTickMsg struct{}
+
+// SetBackendResolver injects the backend resolver used on restart.
+func (p *MonitorPage) SetBackendResolver(r backendResolverIface) *MonitorPage {
+	p.resolver = r
+	return p
+}
 
 func NewMonitorPage(pm procMgrIface, mm monitor.Manager, ps profileStoreIface) *MonitorPage {
 	cols := []table.Column{
@@ -281,7 +291,15 @@ func (p *MonitorPage) handleKillConfirmed(m monitorKillConfirmedMsg) (tea.Model,
 }
 
 func (p *MonitorPage) handleRestartConfirmed(m monitorRestartConfirmedMsg) (tea.Model, tea.Cmd) {
-	return p, tea.Batch(restartCmd(p.pm, m.pid, m.profile, m.background), p.forwardToConfirms(m))
+	prof := m.profile
+	if p.resolver != nil {
+		rb, err := p.resolver.Resolve(prof)
+		if err == nil {
+			prof.Launch.ResolvedExecutable = rb.ExecutablePath
+			prof.Launch.ResolvedBackendKind = rb.Backend.Kind
+		}
+	}
+	return p, tea.Batch(restartCmd(p.pm, m.pid, prof, m.background), p.forwardToConfirms(m))
 }
 
 func (p *MonitorPage) handleMonitorEvent(m monitorEventMsg) (tea.Model, tea.Cmd) {
@@ -548,7 +566,7 @@ func (p *MonitorPage) View() string {
 		if p.flash != "" {
 			header = theme.Error.Render(p.flash) + "\n" + header
 		}
-		return header + "\n" + theme.Subtitle.Render("(no instances running — switch to Launcher [2] to start one)")
+		return header + "\n" + theme.Subtitle.Render("(no instances running — switch to Launcher [1] to start one)")
 	}
 	return p.renderTable() + "\n\n" + p.renderStatusLine() + "\n" + p.renderSubViewBody()
 }

@@ -13,7 +13,7 @@
 - **`TailLogs(pid)` interface method:** spec § 6.4 lista no interface; slice 4 não consome (Monitor é slice 5). Deferido — adicionado em slice 5 junto com fsnotify-based tail.
 - **PID validation via gopsutil:** spec § 6.4 / § 12 cita `gopsutil`. Slice 4 usa stdlib (`os.FindProcess` + `Signal(0)` para liveness; leitura de `/proc/<pid>/comm` para nome). Linux-only, alinhado a § 0 plataforma alvo. `gopsutil` será adicionado em slice 5 (Monitor precisa de GPU stats fallback). Justificativa: 1 dep a menos no slice 4, recover é trivial com stdlib.
 - **Auto-switch para `monitorPage` após launch:** spec § 7.2 F2 step 4 diz "navega para monitorPage"; slice 5 entrega monitor. Slice 4 fica na própria launcherPage e exibe instância em painel "Running" inline.
-- **Cross-tab `L` em profilesPage:** spec § 7.2 lista `L launch` em profilesPage. Slice 4 mantém launcher standalone (acessado via tab `2`). Cross-tab L fica para slice 6 (polimento).
+- **Cross-tab `L` em profilesPage:** spec § 7.2 lista `L launch` em profilesPage. Slice 4 mantém launcher standalone (acessado via tab `1`). Cross-tab L fica para slice 6 (polimento).
 
 ---
 
@@ -43,7 +43,7 @@
 **Wire/integration:**
 - `internal/ui/root.go` (MODIFY) — adicionar `WithLauncherPage` builder
 - `cmd/model-loader/main.go` (MODIFY) — instanciar `processmgr.New` + `Reconcile` na boot + `pages.NewLauncherPage` + `root.WithLauncherPage`
-- `internal/ui/root_test.go` (MODIFY) — smoke test mostrando "Launcher" ao apertar tab `2`
+- `internal/ui/root_test.go` (MODIFY) — smoke test mostrando "Launcher" ao apertar tab `1`
 
 ---
 
@@ -1545,7 +1545,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
-// LauncherPage is the Tab 2 page: pick a profile, choose mode, launch.
+// LauncherPage is the Tab 1 page: pick a profile, choose mode, launch.
 type LauncherPage struct {
 	store     profilestore.Store
 	manager   processmgr.Manager
@@ -2256,7 +2256,7 @@ ln -sf "$(pwd)/testdata/fake-llama-server.sh" /tmp/llama-server
 PATH="/tmp:$PATH" /tmp/model-loader
 ```
 
-Navegar para tab `2` (Launcher), selecionar profile, apertar Enter. Confirmar que aparece "launched ... port=...". Apertar `k` para matar. Apertar `q` para sair.
+Navegar para tab `1` (Launcher), selecionar profile, apertar Enter. Confirmar que aparece "launched ... port=...". Apertar `k` para matar. Apertar `q` para sair.
 
 (Não comprometer; só sanity-check.)
 

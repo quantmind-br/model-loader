@@ -1,0 +1,21 @@
+# Ignore external llama.cpp forks and tooling artifacts
+llamacpp/
+.agents/
+.pi/
+.claude/
+thoughts/
+docs/superpowers/
+
+# Ignore prebuilt binaries and build artifacts
+llama-cpp-loader
+bin/
+dist/
+*.test
+*.out
+
+# Ignore node_modules and python artifacts
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/

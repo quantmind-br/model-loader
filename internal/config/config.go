@@ -74,6 +74,15 @@ func LoadFrom(path string) (AppConfig, error) {
 		return AppConfig{}, fmt.Errorf("read config: %w", err)
 	}
 
+	// Migrate old default_tab value after tab reorder (Profiles was tab 1, now Launcher is).
+	if v.GetString("ui.default_tab") == "profiles" {
+		v.Set("ui.default_tab", "launcher")
+		if err := v.WriteConfigAs(path); err != nil {
+			// Non-fatal: warn but continue with the corrected in-memory value.
+			fmt.Fprintf(os.Stderr, "config migration warning: could not rewrite default_tab: %v\n", err)
+		}
+	}
+
 	var cfg AppConfig
 	if err := v.Unmarshal(&cfg); err != nil {
 		return AppConfig{}, fmt.Errorf("unmarshal config: %w", err)
@@ -111,6 +120,6 @@ func applyDefaults(v *viper.Viper) {
 		filepath.Join(home, ".lmstudio", "models"),
 		filepath.Join(home, "models"),
 	})
-	v.SetDefault("ui.default_tab", "profiles")
+	v.SetDefault("ui.default_tab", "launcher")
 	v.SetDefault("ui.keybindings", "default")
 }

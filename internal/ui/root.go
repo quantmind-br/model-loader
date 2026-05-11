@@ -16,22 +16,25 @@ import (
 type Tab int
 
 const (
-	TabProfiles Tab = iota
-	TabLauncher
+	TabLauncher Tab = iota
+	TabProfiles
 	TabMonitor
 	TabModels
+	TabBackends
 )
 
 func (t Tab) Title() string {
 	switch t {
-	case TabProfiles:
-		return "Profiles"
 	case TabLauncher:
 		return "Launcher"
+	case TabProfiles:
+		return "Profiles"
 	case TabMonitor:
 		return "Monitor"
 	case TabModels:
 		return "Models"
+	case TabBackends:
+		return "Backends"
 	default:
 		return "?"
 	}
@@ -68,7 +71,7 @@ type HintProvider interface {
 }
 
 // globalHints is the prefix shown in every status bar line.
-const globalHints = "[1-4] tabs  [tab] next  [q] quit" + components.HelpToken
+const globalHints = "[1-5] tabs  [tab] next  [q] quit" + components.HelpToken
 
 // bootBlocker carrega o conteúdo de um modal bloqueante exibido sobre toda a UI.
 type bootBlocker struct {
@@ -78,7 +81,7 @@ type bootBlocker struct {
 
 // RootModel is the top-level tea.Model.
 type RootModel struct {
-	pages       [4]tea.Model
+	pages       [5]tea.Model
 	active      Tab
 	status      components.StatusBar
 	width       int
@@ -88,14 +91,15 @@ type RootModel struct {
 }
 
 // NewRoot constructs a RootModel with placeholder pages.
-// Slice 1 swaps the Profiles slot with the real implementation in main.go.
+// Slice 0 swaps the Launcher slot with the real implementation in main.go.
 func NewRoot(initial Tab) RootModel {
 	return RootModel{
-		pages: [4]tea.Model{
-			pages.Placeholder{TabName: TabProfiles.Title()},
+		pages: [5]tea.Model{
 			pages.Placeholder{TabName: TabLauncher.Title()},
+			pages.Placeholder{TabName: TabProfiles.Title()},
 			pages.Placeholder{TabName: TabMonitor.Title()},
 			pages.Placeholder{TabName: TabModels.Title()},
+			pages.Placeholder{TabName: TabBackends.Title()},
 		},
 		active: initial,
 		status: components.StatusBar{Hints: globalHints},
@@ -124,6 +128,12 @@ func (m RootModel) WithLauncherPage(p tea.Model) RootModel {
 // WithMonitorPage replaces the placeholder Monitor tab with a real model.
 func (m RootModel) WithMonitorPage(p tea.Model) RootModel {
 	m.pages[TabMonitor] = p
+	return m
+}
+
+// WithBackendsPage replaces the placeholder Backends tab with a real model.
+func (m RootModel) WithBackendsPage(p tea.Model) RootModel {
+	m.pages[TabBackends] = p
 	return m
 }
 
@@ -221,7 +231,7 @@ func (m RootModel) handleSwitchToMonitor(msg pages.SwitchToMonitorMsg) (tea.Mode
 }
 
 // handleKey dispatches a key event. ctrl+c is the only unconditional global
-// shortcut — every other binding (?, q, 1-4, tab, shift+tab) is gated by
+// shortcut — every other binding (?, q, 1-5, tab, shift+tab) is gated by
 // IsCapturingInput so printable keys reach an active editor/picker
 // instead of triggering quit/tab-switch/help.
 func (m RootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -240,17 +250,19 @@ func (m RootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "q":
 			return m, tea.Quit
 		case "1":
-			return m.activate(TabProfiles)
-		case "2":
 			return m.activate(TabLauncher)
+		case "2":
+			return m.activate(TabProfiles)
 		case "3":
 			return m.activate(TabMonitor)
 		case "4":
 			return m.activate(TabModels)
+		case "5":
+			return m.activate(TabBackends)
 		case "tab":
-			return m.activate((m.active + 1) % 4)
+			return m.activate((m.active + 1) % 5)
 		case "shift+tab":
-			return m.activate((m.active + 3) % 4)
+			return m.activate((m.active + 4) % 5)
 		}
 	}
 	updated, cmd := m.forwardToActivePage(msg)
@@ -370,7 +382,7 @@ func (m RootModel) activePageCapturesInput() bool {
 func (m RootModel) renderTabs() string {
 	sep := theme.Subtitle.Render(" │ ")
 	parts := make([]string, 0, 8)
-	for i := Tab(0); i < 4; i++ {
+	for i := Tab(0); i < 5; i++ {
 		if i > 0 {
 			parts = append(parts, sep)
 		}

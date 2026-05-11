@@ -2,6 +2,7 @@ package profile_editor
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -67,6 +68,10 @@ type Editor struct {
 	advancedFilter string
 	filterMode     bool
 
+	advancedEditing  bool
+	advancedEditFlag string
+	advancedEditVal  string
+
 	discardConfirm components.Confirm
 }
 
@@ -74,7 +79,7 @@ type Editor struct {
 // schema seeds the advanced flag-reference table and labels Essentials
 // inputs with --help text. Active() is false until Open is called.
 func New(schema domain.FlagSchema) Editor {
-	tbl := newAdvancedTable(schema, 100, 12)
+	tbl := newAdvancedTable(schema, nil, 100, 12)
 	return Editor{
 		schema:      schema,
 		validator:   validator.New(),
@@ -169,10 +174,12 @@ func (e Editor) View() string {
 	var body string
 	if e.subTab == subTabEssentials {
 		body = e.form.View()
+	} else if e.advancedEditing {
+		body = theme.Subtitle.Render(fmt.Sprintf("Editing --%s: %s_", e.advancedEditFlag, e.advancedEditVal))
 	} else {
 		body = e.advanced.View()
 	}
-	report := e.validator.Validate(e.CurrentDraft().ToProfile(), e.schema)
+		report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema)
 	var lines []string
 	if e.schemaError != "" {
 		lines = append(lines, theme.Error.Render("✗ schema: "+e.schemaError))
@@ -244,7 +251,7 @@ func (e Editor) askDiscard() (Editor, tea.Cmd) {
 
 func (e Editor) handleKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 	if msg.String() == "esc" {
-		if e.draft != nil && *e.draft != e.openSnapshot {
+		if e.draft != nil && !reflect.DeepEqual(*e.draft, e.openSnapshot) {
 			return e.askDiscard()
 		}
 		e = e.close()
@@ -266,6 +273,53 @@ func (e Editor) handleKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 }
 
 func (e Editor) handleAdvancedKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
+	if e.advancedEditing {
+		switch msg.String() {
+		case "esc":
+			e.advancedEditing = false
+			e.advancedEditFlag = ""
+			e.advancedEditVal = ""
+			return e, nil
+		case "enter":
+			if e.draft != nil {
+				if e.draft.Args == nil {
+					e.draft.Args = map[string]any{}
+				}
+				if e.advancedEditVal == "" {
+					delete(e.draft.Args, e.advancedEditFlag)
+				} else {
+					val, err := parseFlagValue(e.advancedEditVal, e.schema, e.advancedEditFlag)
+					if err != nil {
+						e.submitError = fmt.Sprintf("Invalid value for --%s: %s", e.advancedEditFlag, err)
+						return e, nil
+					}
+					e.draft.Args[e.advancedEditFlag] = val
+				}
+				tbl := newAdvancedTable(e.schema, e.draft.Args, 100, 12)
+				e.advanced = tbl
+				e.advancedAll = tbl.Rows()
+				if e.advancedFilter != "" {
+					e.advanced.SetRows(filterRows(e.advancedAll, e.advancedFilter))
+				}
+			}
+			e.advancedEditing = false
+			e.advancedEditFlag = ""
+			e.advancedEditVal = ""
+			e.submitError = ""
+			return e, nil
+		case "backspace":
+			if len(e.advancedEditVal) > 0 {
+				e.advancedEditVal = e.advancedEditVal[:len(e.advancedEditVal)-1]
+			}
+			return e, nil
+		}
+		if len(msg.Runes) == 1 && msg.Runes[0] >= 32 {
+			e.advancedEditVal += string(msg.Runes)
+			return e, nil
+		}
+		return e, nil
+	}
+
 	switch msg.String() {
 	case "/":
 		e.filterMode = !e.filterMode
@@ -275,6 +329,19 @@ func (e Editor) handleAdvancedKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 			e.advancedFilter = e.advancedFilter[:len(e.advancedFilter)-1]
 			e.advanced.SetRows(filterRows(e.advancedAll, e.advancedFilter))
 		}
+		return e, nil
+	case "enter":
+		if e.draft == nil {
+			return e, nil
+		}
+		row := e.advanced.SelectedRow()
+		if row == nil || len(row) == 0 {
+			return e, nil
+		}
+		flag := string(row[0])
+		e.advancedEditing = true
+		e.advancedEditFlag = flag
+		e.advancedEditVal = ArgString(e.draft.Args[flag])
 		return e, nil
 	}
 	if e.filterMode && len(msg.Runes) == 1 {
@@ -306,7 +373,7 @@ func (e Editor) forwardToForm(msg tea.Msg) (Editor, tea.Cmd) {
 			e.form = buildForm(e.draft, e.schema, e.backendOptions)
 			return e, tea.Batch(cmd, e.form.Init())
 		}
-		report := e.validator.Validate(e.CurrentDraft().ToProfile(), e.schema)
+	report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema)
 		if report.HasBlockingErrors() {
 			e.submitError = fmt.Sprintf("Cannot save: %d validation errors", len(report.Errors))
 			e.form = buildForm(e.draft, e.schema, e.backendOptions)
@@ -334,7 +401,11 @@ func (e Editor) reloadSchema() Editor {
 	e.schemaError = ""
 	e.schema = schema.ToFlagSchema()
 	e.form = buildForm(e.draft, e.schema, e.backendOptions)
-	tbl := newAdvancedTable(e.schema, 100, 12)
+	var args map[string]any
+	if e.draft != nil {
+		args = e.draft.Args
+	}
+	tbl := newAdvancedTable(e.schema, args, 100, 12)
 	e.advanced = tbl
 	e.advancedAll = tbl.Rows()
 	if e.advancedFilter != "" {
@@ -356,7 +427,11 @@ func (e Editor) loadSchemaForDraft() Editor {
 	}
 	e.schemaError = ""
 	e.schema = schema.ToFlagSchema()
-	tbl := newAdvancedTable(e.schema, 100, 12)
+	var args map[string]any
+	if e.draft != nil {
+		args = e.draft.Args
+	}
+	tbl := newAdvancedTable(e.schema, args, 100, 12)
 	e.advanced = tbl
 	e.advancedAll = tbl.Rows()
 	if e.advancedFilter != "" {
@@ -410,6 +485,9 @@ func (e Editor) close() Editor {
 	e.subTab = subTabEssentials
 	e.advancedFilter = ""
 	e.filterMode = false
+	e.advancedEditing = false
+	e.advancedEditFlag = ""
+	e.advancedEditVal = ""
 	e.schemaError = ""
 	e.submitError = ""
 	return e

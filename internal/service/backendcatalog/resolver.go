@@ -2,6 +2,7 @@ package backendcatalog
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/llamabin"
@@ -49,7 +50,7 @@ func (r *resolver) Resolve(profile domain.Profile) (ResolvedBackend, error) {
 		return ResolvedBackend{}, fmt.Errorf("%w: %s", ErrBackendNotFound, backendID)
 	}
 
-	executablePath, err := llamabin.Resolve(backend.Executable)
+	executablePath, err := resolveExecutable(backend)
 	if err != nil {
 		return ResolvedBackend{}, err
 	}
@@ -79,6 +80,53 @@ func findBackend(backends []domain.Backend, id string) (domain.Backend, bool) {
 		}
 	}
 	return domain.Backend{}, false
+}
+
+// resolveExecutable resolves a backend's executable, applying SGLang-specific
+// fallback logic (python ↔ python3) when the first token is not found.
+// For compound commands (e.g. "python -m sglang.launch_server"), the fallback
+// preserves the remaining tokens so the returned string is still a valid
+// command line (e.g. "python3 -m sglang.launch_server").
+func resolveExecutable(backend domain.Backend) (string, error) {
+	path, err := llamabin.Resolve(backend.Executable)
+	if err == nil {
+		return path, nil
+	}
+	if backend.Kind == domain.BackendKindSGLang {
+		first, rest := splitCommand(backend.Executable)
+		if first == "" {
+			return "", err
+		}
+		var fallback string
+		switch first {
+		case "python":
+			fallback = "python3"
+		case "python3":
+			fallback = "python"
+		default:
+			return "", err
+		}
+		if fbPath, err2 := llamabin.Resolve(fallback); err2 == nil {
+			if rest != "" {
+				return fbPath + " " + rest, nil
+			}
+			return fbPath, nil
+		}
+	}
+	return "", err
+}
+
+// splitCommand separates the first executable token from the rest of a
+// command string using basic whitespace splitting.
+func splitCommand(raw string) (string, string) {
+	fields := strings.Fields(raw)
+	if len(fields) == 0 {
+		return "", ""
+	}
+	if len(fields) == 1 {
+		return fields[0], ""
+	}
+	return fields[0], strings.Join(fields[1:], " ")
 }
 
 func schemaStoreRef(ref string) string {

@@ -2243,7 +2243,7 @@ No `Update`, antes do switch de KeyMsg existente, capturar `?` e (quando help ab
 			m.helpOpen = true
 			return m, nil
 		}
-		// ... resto do switch atual (q, 1-4, tab, etc)
+		// ... resto do switch atual (q, 1-5, tab, etc)
 	}
 ```
 

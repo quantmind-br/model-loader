@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -184,21 +185,61 @@ func applyExistenceRules(p domain.Profile, rep Report) Report {
 	if p.Model == "" {
 		return rep
 	}
-	if _, err := os.Stat(p.Model); err != nil {
-		if os.IsNotExist(err) {
-			return appendIssue(rep, FieldIssue{
-				Field:    "model",
-				Message:  "model file does not exist",
-				Severity: SeverityError,
-			})
-		}
+	_, err := os.Stat(p.Model)
+	if err == nil {
+		return rep
+	}
+	// File does not exist locally. Only skip the error for
+	// HuggingFace-style repo IDs (e.g. "meta-llama/Llama-3-8B")
+	// so that sglang and other HF-capable backends can use them.
+	// Local paths that happen to match the heuristic but exist
+	// are caught by the os.Stat success path above.
+	if looksLikeHFRepo(p.Model) {
+		return rep
+	}
+	if os.IsNotExist(err) {
 		return appendIssue(rep, FieldIssue{
 			Field:    "model",
-			Message:  "model path stat failed: " + err.Error(),
+			Message:  "model file does not exist",
 			Severity: SeverityError,
 		})
 	}
-	return rep
+	return appendIssue(rep, FieldIssue{
+		Field:    "model",
+		Message:  "model path stat failed: " + err.Error(),
+		Severity: SeverityError,
+	})
+}
+
+// knownModelExtensions are file suffixes that indicate a local model file,
+// not a HuggingFace repository ID.
+var knownModelExtensions = map[string]bool{
+	".gguf":        true,
+	".bin":         true,
+	".safetensors": true,
+	".pt":          true,
+	".pth":         true,
+	".onnx":        true,
+	".ckpt":        true,
+	".ggml":        true,
+}
+
+// looksLikeHFRepo reports whether a model path looks like a HuggingFace
+// repository ID (e.g. "org/model-name") rather than a local filesystem path.
+// It rejects absolute paths, home-relative paths, and paths with known model
+// file extensions, but accepts dotted repo IDs like "Qwen/Qwen2.5-7B".
+func looksLikeHFRepo(path string) bool {
+	if filepath.IsAbs(path) {
+		return false
+	}
+	if strings.HasPrefix(path, ".") || strings.HasPrefix(path, "~/") {
+		return false
+	}
+	if knownModelExtensions[filepath.Ext(path)] {
+		return false // "models/foo.gguf" is a file, not a HF repo
+	}
+	parts := strings.Split(path, "/")
+	return len(parts) == 2 && parts[0] != "" && parts[1] != ""
 }
 
 

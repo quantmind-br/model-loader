@@ -8,7 +8,7 @@ const HelpMarkdown = `# model-loader — Keybindings
 
 ## Global
 
-- ` + "`1`" + `–` + "`4`" + ` — switch directly to a tab
+- ` + "`1`" + `–` + "`5`" + ` — switch directly to a tab
 - ` + "`Tab`" + ` — next tab     ` + "`Shift+Tab`" + ` — previous tab
 - ` + "`?`" + ` — toggle this help
 - ` + "`q`" + ` / ` + "`Ctrl+C`" + ` — quit (background instances survive)
@@ -43,6 +43,15 @@ _Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or
 - ` + "`R`" + ` — rescan all configured paths
 - ` + "`/`" + ` — filter
 - ` + "`enter`" + ` — actions: use in new profile / existing profile / reveal path
+
+## Backends tab
+
+- ` + "`n`" + ` — new backend
+- ` + "`enter`" + ` / ` + "`e`" + ` — edit selected backend
+- ` + "`x`" + ` — delete selected backend
+- ` + "`D`" + ` — set selected backend as default
+- ` + "`R`" + ` — refresh selected backend schema
+- ` + "`/`" + ` — filter
 `
 
 // RenderHelp retorna o markdown HelpMarkdown renderizado via glamour.

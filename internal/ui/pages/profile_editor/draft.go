@@ -47,6 +47,11 @@ type Draft struct {
 	CacheTypeK  string
 	CacheTypeV  string
 	IsNew       bool
+	// Args holds generic schema-backed flag values edited in the Advanced
+	// tab. Keys are flag long names; values are typed per domain.FlagSpec.
+	// Essentials fields (ngl, ctx-size, etc.) take precedence and overwrite
+	// matching keys here during ApplyToWithSchema.
+	Args map[string]any
 }
 
 // ToProfile maps the editor draft to a domain.Profile. Always sets
@@ -56,32 +61,71 @@ func (d Draft) ToProfile() domain.Profile {
 	return d.ApplyTo(domain.Profile{})
 }
 
+// ToProfileWithSchema maps the draft to a domain.Profile using schema-aware
+// filtering so only flags known by the backend are included.
+func (d Draft) ToProfileWithSchema(schema domain.FlagSchema) domain.Profile {
+	return d.ApplyToWithSchema(domain.Profile{}, schema)
+}
+
 // ApplyTo maps the editor draft onto base, preserving caller-owned fields
 // that the editor does not track while overwriting editor-tracked fields.
 func (d Draft) ApplyTo(base domain.Profile) domain.Profile {
+	return d.ApplyToWithSchema(base, domain.FlagSchema{})
+}
+
+// ApplyToWithSchema maps the editor draft onto base, filtering args to only
+// include flags known by the provided schema. When schema is empty (no flags),
+// it falls back to the legacy behaviour of including all draft fields.
+// Existing base.Args that are valid in the schema are preserved, then
+// Draft.Args overlays them, and finally Essentials fields take precedence.
+func (d Draft) ApplyToWithSchema(base domain.Profile, schema domain.FlagSchema) domain.Profile {
 	ngl, _ := strconv.Atoi(d.NGL)
 	ctx, _ := strconv.Atoi(d.CtxSize)
 	port, _ := strconv.Atoi(d.Port)
-	args := map[string]any{
-		"ngl":      float64(ngl),
-		"ctx-size": float64(ctx),
-		"port":     float64(port),
+	args := map[string]any{}
+
+	// include adds a flag only when the schema knows it or when no schema
+	// is available (fallback for backward compatibility).
+	include := func(key string, val any) {
+		if len(schema.Flags) == 0 {
+			args[key] = val
+			return
+		}
+		if _, ok := schema.Lookup(key); ok {
+			args[key] = val
+		}
 	}
+
+	// 1. Preserve existing base args that are valid in the schema.
+	for k, v := range base.Args {
+		include(k, v)
+	}
+
+	// 2. Overlay generic draft args (edited in Advanced tab).
+	for k, v := range d.Args {
+		include(k, v)
+	}
+
+	// 3. Overlay hardcoded Essentials fields (they take precedence).
+	include("port", float64(port))
+	include("ngl", float64(ngl))
+	include("ctx-size", float64(ctx))
 	if d.FlashAttn != "" {
-		args["flash-attn"] = d.FlashAttn
+		include("flash-attn", d.FlashAttn)
 	}
 	if v, err := strconv.Atoi(d.BatchSize); err == nil {
-		args["batch-size"] = float64(v)
+		include("batch-size", float64(v))
 	}
 	if v, err := strconv.Atoi(d.UBatchSize); err == nil {
-		args["ubatch-size"] = float64(v)
+		include("ubatch-size", float64(v))
 	}
 	if d.CacheTypeK != "" {
-		args["cache-type-k"] = d.CacheTypeK
+		include("cache-type-k", d.CacheTypeK)
 	}
 	if d.CacheTypeV != "" {
-		args["cache-type-v"] = d.CacheTypeV
+		include("cache-type-v", d.CacheTypeV)
 	}
+
 	out := base
 	out.ID = d.ID
 	out.Name = d.Name
@@ -226,23 +270,26 @@ func toOptions(values []string) []huh.Option[string] {
 	return out
 }
 
-func newAdvancedTable(schema domain.FlagSchema, width, height int) table.Model {
-	helpWidth := width - 24 - 8 - 12 - 8
+func newAdvancedTable(schema domain.FlagSchema, args map[string]any, width, height int) table.Model {
+	flagWidth := 22
+	typeWidth := 8
+	valWidth := 14
+	helpWidth := width - flagWidth - typeWidth - valWidth - 16
 	if helpWidth < 16 {
 		helpWidth = 16
 	}
 	cols := []table.Column{
-		{Title: "Flag", Width: 24},
-		{Title: "Type", Width: 8},
-		{Title: "Default", Width: 12},
+		{Title: "Flag", Width: flagWidth},
+		{Title: "Type", Width: typeWidth},
+		{Title: "Value", Width: valWidth},
 		{Title: "Help", Width: helpWidth},
 	}
-	rows := schemaRows(schema)
+	rows := schemaRows(schema, args)
 	t := table.New(table.WithColumns(cols), table.WithRows(rows), table.WithFocused(true), table.WithHeight(height))
 	return t
 }
 
-func schemaRows(schema domain.FlagSchema) []table.Row {
+func schemaRows(schema domain.FlagSchema, args map[string]any) []table.Row {
 	names := make([]string, 0, len(schema.Flags))
 	for k := range schema.Flags {
 		names = append(names, k)
@@ -250,11 +297,20 @@ func schemaRows(schema domain.FlagSchema) []table.Row {
 	sort.Strings(names)
 	rows := make([]table.Row, 0, len(names))
 	for _, name := range names {
+		// model-path is edited via the Essentials "Model path" field,
+		// so skip it from the Advanced table to avoid duplication.
+		if name == "model-path" {
+			continue
+		}
 		spec := schema.Flags[name]
+		val := ""
+		if args != nil {
+			val = ArgString(args[name])
+		}
 		rows = append(rows, table.Row{
 			spec.Long,
 			typeLabel(spec.Type),
-			fmt.Sprintf("%v", spec.Default),
+			val,
 			truncate(spec.HelpText, 80),
 		})
 	}
@@ -286,4 +342,44 @@ func truncate(s string, max int) string {
 // filterRows returns rows whose Flag column contains q (case-insensitive).
 func filterRows(all []table.Row, q string) []table.Row {
 	return filter.ContainsFold(all, q, func(r table.Row) string { return r[0] })
+}
+
+// parseFlagValue converts a raw string entered in the Advanced tab into the
+// correct Go type for the given flag according to the schema.
+func parseFlagValue(raw string, schema domain.FlagSchema, flag string) (any, error) {
+	spec, ok := schema.Lookup(flag)
+	if !ok {
+		return raw, nil
+	}
+	switch spec.Type {
+	case domain.FlagTypeBool:
+		if raw == "true" || raw == "1" || raw == "on" {
+			return true, nil
+		}
+		if raw == "false" || raw == "0" || raw == "off" {
+			return false, nil
+		}
+		return nil, fmt.Errorf("expected bool (true/false/on/off/1/0), got %q", raw)
+	case domain.FlagTypeInt:
+		v, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, fmt.Errorf("expected int, got %q", raw)
+		}
+		return float64(v), nil
+	case domain.FlagTypeFloat:
+		v, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			return nil, fmt.Errorf("expected float, got %q", raw)
+		}
+		return v, nil
+	case domain.FlagTypeEnum:
+		for _, ev := range spec.EnumValues {
+			if ev == raw {
+				return raw, nil
+			}
+		}
+		return nil, fmt.Errorf("expected one of %v, got %q", spec.EnumValues, raw)
+	default:
+		return raw, nil
+	}
 }

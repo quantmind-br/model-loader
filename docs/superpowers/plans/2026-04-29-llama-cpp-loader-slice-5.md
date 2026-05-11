@@ -18,7 +18,7 @@
 - `TailLogs` retorna `(io.ReadCloser, error)` — o log file aberto em modo somente-leitura. Cabe ao consumidor (Monitor) tail via `fsnotify`.
 - Tokens/s parsing: regex sobre logs (`prompt eval time = ... ms / ... tokens, ... tokens per second`); req/s via diff de `slot.n_decoded` agregado entre tickers `/slots`.
 - Restart `r`: `manager.Kill(pid)` + `manager.Launch(profile, mode)` reusando o profile da instância. Novo PID, sub anterior cancelada.
-- Tab order final: `1 Profiles | 2 Launcher | 3 Models | 4 Monitor`. (Slice 4 atual coloca Monitor como tab 4 placeholder; aqui substitui pelo real.)
+- Tab order final: `1 Launcher | 2 Profiles | 3 Monitor | 4 Models | 5 Backends`. (Slice 4 atual coloca Monitor como tab 3 placeholder; aqui substitui pelo real.)
 
 **Spec deviation notes:**
 1. Spec § 7.2 não detalha como sub-views filtram instância; assumimos "linha selecionada na top table = instância ativa para todas as sub-views" para simplificar.
@@ -2561,9 +2561,9 @@ ln -sf "$(pwd)/testdata/fake-llama-server.sh" /tmp/llama-server
 PATH="/tmp:$PATH" /tmp/model-loader
 ```
 
-Navegar para tab `2` (Launcher), selecionar profile, Enter. Confirmar:
+Navegar para tab `1` (Launcher), selecionar profile, Enter. Confirmar:
 - Status muda para "launching..." → "healthy".
-- Auto-switch para tab `4` (Monitor).
+- Auto-switch para tab `3` (Monitor).
 - Top table mostra a instância.
 - `Tab` cicla Logs → Slots → Métricas.
 - Sparkline aparece em Métricas (mesmo que vazia).

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 const DefaultName = "llama-server"
@@ -35,14 +36,102 @@ func Effective(profileOverride, globalDefault string) string {
 //   - empty → returns DefaultName (caller should validate this resolves via PATH)
 //   - bare name (no slash) → exec.LookPath; validates executable
 //   - absolute/relative path → os.Stat; validates exists, is file, is executable
+//   - command string with spaces (e.g. "python -m sglang.launch_server") →
+//     resolves the first word via PATH and returns the original string so the
+//     caller can split into command + prefix args.
 func Resolve(raw string) (string, error) {
 	if raw == "" {
 		return DefaultName, nil
 	}
-	if !containsSlash(raw) {
-		return resolveInPATH(raw)
+	first, rest := splitCommand(raw)
+	if first == "" {
+		first = raw
 	}
-	return resolvePath(raw)
+	if !containsSlash(first) {
+		resolved, err := resolveInPATH(first)
+		if err != nil {
+			return "", err
+		}
+		// If the input was a command string with args, return the raw form
+		// so the caller can reconstruct argv. Otherwise return the resolved path.
+		if rest != "" {
+			return raw, nil
+		}
+		return resolved, nil
+	}
+	if _, err := resolvePath(first); err != nil {
+		return "", err
+	}
+	return raw, nil
+}
+
+// splitCommand separates the first executable token from the rest of a
+// command string. Used for backends whose executable is not a single binary
+// (e.g. "python -m sglang.launch_server").
+func splitCommand(raw string) (string, string) {
+	tokens, err := splitCommandLine(raw)
+	if err != nil || len(tokens) == 0 {
+		return raw, ""
+	}
+	if len(tokens) == 1 {
+		return tokens[0], ""
+	}
+	return tokens[0], strings.Join(tokens[1:], " ")
+}
+
+// splitCommandLine performs basic shell-like tokenization.
+// Supports double quotes, single quotes, and backslash escapes.
+func splitCommandLine(raw string) ([]string, error) {
+	var tokens []string
+	var current strings.Builder
+	inDouble := false
+	inSingle := false
+	escaped := false
+
+	flush := func() {
+		if current.Len() > 0 {
+			tokens = append(tokens, current.String())
+			current.Reset()
+		}
+	}
+
+	for _, r := range raw {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			if inSingle {
+				current.WriteRune(r)
+			} else {
+				escaped = true
+			}
+			continue
+		}
+		if r == '"' && !inSingle {
+			inDouble = !inDouble
+			continue
+		}
+		if r == '\'' && !inDouble {
+			inSingle = !inSingle
+			continue
+		}
+		if (r == ' ' || r == '\t' || r == '\n' || r == '\r') && !inDouble && !inSingle {
+			flush()
+			continue
+		}
+		current.WriteRune(r)
+	}
+
+	if inDouble || inSingle {
+		return nil, fmt.Errorf("unbalanced quote in command: %q", raw)
+	}
+	if escaped {
+		return nil, fmt.Errorf("trailing backslash in command: %q", raw)
+	}
+	flush()
+	return tokens, nil
 }
 
 // Validate is a convenience that calls Resolve and only returns an error.
