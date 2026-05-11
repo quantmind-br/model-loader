@@ -1,6 +1,6 @@
 # Architecture — model-loader
 
-**Generated:** 2026-05-10  
+**Generated:** 2026-05-11  
 **Stack:** Go 1.26.2 + Charmbracelet bubbletea  
 **Pattern:** Event-driven TUI with domain-driven service layer
 
@@ -26,18 +26,25 @@ Configuration (`internal/config/`) sits adjacent to the layers and is loaded at 
 
 | Area | Symbols | Cohesion | Role |
 |------|---------|----------|------|
-| **Pages** | 41 | 0.98 | 5 TUI tabs (Launcher, Profiles, Monitor, Models, Backends) |
-| **Processmgr** | 29 | 0.90 | Spawn, kill, track, recover llama-server processes |
-| **Migration** | 27 | 0.80 | One-time legacy binary-path → backend-ID migration |
-| **Ui** | 19 | 0.81 | Root model, routing, key handling, boot blocker |
-| **Monitor** | 12 | 0.74 | Subscribe to logs, slots, health, GPU metrics |
-| **Profilestore** | 12 | 0.74 | CRUD + duplicate profiles as JSON files |
-| **Modelscanner** | 12 | 0.97 | Walk filesystem, parse GGUF headers, emit scan events |
-| **Components** | 11 | 0.84 | Reusable widgets: picker, modal, sparkline, statusbar |
-| **Llamahelp** | 9 | 0.95 | Parse `llama-server --help` into `FlagSchema` |
-| **Backendcatalog** | 9 | 0.72 | Multi-backend catalog + schema resolver |
+| **Pages** | 299 | 74% | 5 TUI tabs (Launcher, Profiles, Monitor, Models, Backends) |
+| **Processmgr** | 67 | 89% | Spawn, kill, track, recover llama-server processes |
+| **Ui** | 55 | 83% | Root model, routing, key handling, boot blocker |
+| **Components** | 53 | 80% | Reusable widgets: picker, modal, sparkline, statusbar |
+| **Monitor** | 46 | 88% | Subscribe to logs, slots, health, GPU metrics |
+| **Profile_editor** | 39 | 61% | Inline profile creation/editing with huh forms |
+| **Migration** | 38 | 76% | One-time legacy binary-path → backend-ID migration |
+| **Llamahelp** | 32 | 90% | Parse `llama-server --help` into `FlagSchema` |
+| **Modelscanner** | 31 | 91% | Walk filesystem, parse GGUF headers, emit scan events |
+| **Profilestore** | 27 | 71% | CRUD + duplicate profiles as JSON files |
+| **Backendcatalog** | 18 | 79% | Multi-backend catalog + schema resolver |
+| **Backendschema** | 14 | 82% | Schema generation manager per backend |
+| **Llamabin** | 11 | 88% | Binary resolution: PATH lookup, validation |
+| **Validator** | 10 | 92% | FlagSchema validation rules engine |
+| **Config** | 8 | 93% | Viper TOML loader, path expansion, defaults |
+| **Model-loader** | 8 | 44% | Entry point (`main.go`) |
+| **Theme** | 6 | 77% | Lipgloss styles, color palette |
 
-> Knowledge graph: 3,150 symbols, 10,224 relationships, 107 clusters, 273 flows (Go layer only; `llamacpp/` external forks excluded).
+> Knowledge graph: 3,601 symbols, 11,850 relationships, 125 clusters, 300 flows (Go layer only; `llamacpp/` external forks excluded).
 
 ---
 
@@ -51,8 +58,10 @@ graph TD
         Launcher["LauncherPage"]
         MonitorPg["MonitorPage"]
         ModelsPg["ModelsPage"]
-        Components["Components<br/>(picker, modal, sparkline)"]
-        Theme["Theme"]
+        BackendsPg["BackendsPage"]
+        ProfileEditor["ProfileEditor<br/>(inline huh forms)"]
+        Components["Components<br/>(picker, modal, sparkline, statusbar)"]
+        Theme["Theme<br/>(lipgloss palette)"]
     end
 
     subgraph "Service Layer"
@@ -78,6 +87,8 @@ graph TD
     Root --> Launcher
     Root --> MonitorPg
     Root --> ModelsPg
+    Root --> BackendsPg
+    Root --> ProfileEditor
     Root --> Components
     Root --> Theme
 
@@ -93,6 +104,10 @@ graph TD
 
     MonitorPg --> MonitorSvc
     ModelsPg --> ModelScanner
+    BackendsPg --> BackendCatalog
+    ProfileEditor --> ProfileStore
+    ProfileEditor --> Validator
+    ProfileEditor --> BackendCatalog
 
     ProcessMgr --> Domain
     MonitorSvc --> Domain
@@ -265,7 +280,7 @@ internal/domain/
 
 internal/service/
   backendcatalog/      # Catalog + schema store interfaces, resolver, default catalog
-  backendschema/       # Manager (CRUD), LlamaServerGenerator
+  backendschema/       # Manager (CRUD), LlamaServerGenerator, SGLang generator
   llamabin/            # Binary resolution: PATH lookup, validation
   llamahelp/           # --help parser (embedded + exec), flag type inference
   migration/           # Legacy binary path → backend ID migration
@@ -282,11 +297,14 @@ internal/ui/
     launcher.go        # Profile selection, validation, launch orchestration
     monitor.go         # Live instance monitoring: logs, slots, metrics
     models.go          # GGUF model browser with streaming scanner
+    backends.go        # Backend catalog browser and detail view
+    profile_editor/    # Inline profile creation/editing drafts
   components/
     picker.go          # Streaming model picker (bubbletea Model)
     modal.go           # Centered lipgloss box (render-only)
     sparkline.go       # ASCII sparkline (pure function)
     statusbar.go       # Level-based colored status (render-only)
+    help.go            # Contextual help panel
   theme/
     theme.go           # Lipgloss styles, color palette
 ```
