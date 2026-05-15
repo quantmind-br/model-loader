@@ -41,8 +41,14 @@ type item struct {
 	p domain.Profile
 }
 
-func (i item) Title() string       { return i.p.Name }
-func (i item) Description() string { return i.p.ID }
+func (i item) Title() string { return i.p.Name }
+func (i item) Description() string {
+	desc := i.p.ID
+	if i.p.Launch.BackendID != "" {
+		desc += " | backend: " + i.p.Launch.BackendID
+	}
+	return desc
+}
 func (i item) FilterValue() string { return i.p.Name + " " + i.p.ID }
 
 // corruptItem is a list row representing a profile JSON entry that failed

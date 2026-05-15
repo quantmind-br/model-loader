@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/service/validator"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
@@ -94,7 +95,7 @@ func TestProfilesPage_ValidationDetectsUbatchOverBatch(t *testing.T) {
 		IsNew:      true,
 	}
 	pr := d.ToProfile()
-	report := validator.New().Validate(pr, domain.FlagSchema{})
+	report := validator.New(log.Nop()).Validate(pr, domain.FlagSchema{})
 
 	found := false
 	for _, e := range report.Errors {

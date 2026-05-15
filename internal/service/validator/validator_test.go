@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/log"
 )
 
 func TestValidator_EmptySchemaProducesNoTypeIssues(t *testing.T) {
-	v := New()
+	v := New(log.Nop())
 	p := domain.Profile{
 		ID:    "x",
 		Name:  "X",
@@ -44,7 +45,7 @@ func TestValidator_TypeRule(t *testing.T) {
 		{"bool rejects string", map[string]any{"mlock": "yes"}, 1, "mlock"},
 		{"unknown flag is error", map[string]any{"unheard-of": 1}, 1, "unheard-of"},
 	}
-	v := New()
+	v := New(log.Nop())
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			p := domain.Profile{ID: "x", Args: tc.args}
@@ -65,7 +66,7 @@ func TestValidator_ModelExistence(t *testing.T) {
 	if err := os.WriteFile(existing, []byte("g"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	v := New()
+	v := New(log.Nop())
 	cases := []struct {
 		name     string
 		model    string
@@ -87,7 +88,7 @@ func TestValidator_ModelExistence(t *testing.T) {
 }
 
 func TestValidator_HFRepoIDNoExistenceError(t *testing.T) {
-	v := New()
+	v := New(log.Nop())
 	cases := []struct {
 		name    string
 		model   string
@@ -115,7 +116,7 @@ func TestValidator_ExistingLocalPathNotTreatedAsHFRepo(t *testing.T) {
 	if err := os.MkdirAll(existingDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	v := New()
+	v := New(log.Nop())
 	// A local path like "models/llama3" that exists should be validated
 	// as a local path, not treated as a HF repo ID.
 	p := domain.Profile{ID: "x", Model: existingDir}

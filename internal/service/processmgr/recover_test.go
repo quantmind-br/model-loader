@@ -43,7 +43,7 @@ func TestReconcile_KeepsLiveLlamaServer(t *testing.T) {
 	mgr, _ := newTestManager(t)
 	port := freePort(t)
 	p := domain.Profile{ID: "alive", Model: "/dev/null", Args: map[string]any{"port": float64(port)}}
-	inst, err := mgr.Launch(p, LaunchBackground)
+	inst, err := mgr.Launch(p, LaunchBackground, "")
 	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestReconcile_KeepsLiveLlamaServer(t *testing.T) {
 	// Wait for the fake server to actually serve /health — this guarantees
 	// the bash→python3 exec transition has completed and /proc/<pid>/comm
 	// reads "python3" deterministically.
-	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second); err != nil {
+	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second, ""); err != nil {
 		t.Fatalf("WaitHealthy: %v", err)
 	}
 	entries := []domain.RunningInstance{inst}
@@ -86,13 +86,13 @@ func TestReconcile_UsesInstanceBinaryPath(t *testing.T) {
 	mgr, _ := newTestManager(t)
 	port := freePort(t)
 	p := domain.Profile{ID: "instance-binary", Model: "/dev/null", Args: map[string]any{"port": float64(port)}}
-	inst, err := mgr.Launch(p, LaunchBackground)
+	inst, err := mgr.Launch(p, LaunchBackground, "")
 	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
 	defer mgr.Kill(inst.PID)
 
-	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second); err != nil {
+	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second, ""); err != nil {
 		t.Fatalf("WaitHealthy: %v", err)
 	}
 

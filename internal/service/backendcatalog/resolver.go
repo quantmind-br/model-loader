@@ -2,9 +2,11 @@ package backendcatalog
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/llamabin"
 )
 
@@ -23,17 +25,24 @@ type ResolvedBackend struct {
 type resolver struct {
 	store       Store
 	schemaStore SchemaStore
+	logger      *slog.Logger
 }
 
-// NewResolver returns a catalog-backed backend resolver.
-func NewResolver(store Store, schemaStore SchemaStore) *resolver {
-	return &resolver{store: store, schemaStore: schemaStore}
+// NewResolver returns a catalog-backed backend resolver. logger may be nil;
+// nil → log.Nop() (no-op handler).
+func NewResolver(store Store, schemaStore SchemaStore, logger *slog.Logger) *resolver {
+	if logger == nil {
+		logger = log.Nop()
+	}
+	return &resolver{store: store, schemaStore: schemaStore, logger: logger}
 }
 
 // Resolve selects a backend, resolves its executable, and loads its schema.
 func (r *resolver) Resolve(profile domain.Profile) (ResolvedBackend, error) {
 	catalog, err := r.store.Load()
 	if err != nil {
+		r.logger.Error("resolve_failed",
+			"step", "load_catalog", "profile_id", profile.ID, "err", err)
 		return ResolvedBackend{}, err
 	}
 
@@ -42,28 +51,47 @@ func (r *resolver) Resolve(profile domain.Profile) (ResolvedBackend, error) {
 		backendID = catalog.DefaultBackendID
 	}
 	if backendID == "" {
+		r.logger.Error("resolve_failed",
+			"step", "select_backend", "profile_id", profile.ID, "err", ErrNoBackendSelected)
 		return ResolvedBackend{}, ErrNoBackendSelected
 	}
 
 	backend, ok := findBackend(catalog.Backends, backendID)
 	if !ok {
-		return ResolvedBackend{}, fmt.Errorf("%w: %s", ErrBackendNotFound, backendID)
+		err := fmt.Errorf("%w: %s", ErrBackendNotFound, backendID)
+		r.logger.Error("resolve_failed",
+			"step", "select_backend", "profile_id", profile.ID,
+			"backend_id", backendID, "err", err)
+		return ResolvedBackend{}, err
 	}
 
 	executablePath, err := resolveExecutable(backend)
 	if err != nil {
+		r.logger.Error("resolve_failed",
+			"step", "resolve_executable", "profile_id", profile.ID,
+			"backend_id", backendID, "executable", backend.Executable, "err", err)
 		return ResolvedBackend{}, err
 	}
 
 	schema, err := r.schemaStore.Load(schemaStoreRef(backend.SchemaRef))
 	if err != nil {
-		return ResolvedBackend{}, fmt.Errorf("load schema: %w", err)
+		wrapped := fmt.Errorf("load schema: %w", err)
+		r.logger.Error("resolve_failed",
+			"step", "load_schema", "profile_id", profile.ID,
+			"backend_id", backendID, "schema_ref", backend.SchemaRef, "err", err)
+		return ResolvedBackend{}, wrapped
 	}
 	if schema.BackendID != "" && schema.BackendID != backend.ID {
-		return ResolvedBackend{}, fmt.Errorf("schema/backend mismatch: schema has backend_id=%q, expected %q", schema.BackendID, backend.ID)
+		err := fmt.Errorf("schema/backend mismatch: schema has backend_id=%q, expected %q", schema.BackendID, backend.ID)
+		r.logger.Error("resolve_failed",
+			"step", "load_schema", "profile_id", profile.ID, "err", err)
+		return ResolvedBackend{}, err
 	}
 	if backend.Kind != "" && schema.BackendKind != "" && schema.BackendKind != backend.Kind {
-		return ResolvedBackend{}, fmt.Errorf("schema/backend kind mismatch: schema has kind=%q, expected %q", schema.BackendKind, backend.Kind)
+		err := fmt.Errorf("schema/backend kind mismatch: schema has kind=%q, expected %q", schema.BackendKind, backend.Kind)
+		r.logger.Error("resolve_failed",
+			"step", "load_schema", "profile_id", profile.ID, "err", err)
+		return ResolvedBackend{}, err
 	}
 
 	return ResolvedBackend{

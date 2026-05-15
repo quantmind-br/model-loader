@@ -51,7 +51,7 @@ func TestManager_LaunchBackground_WaitsHealthyAndPersists(t *testing.T) {
 		Model: "/dev/null",
 		Args:  map[string]any{"port": float64(port)},
 	}
-	inst, err := mgr.Launch(p, LaunchBackground)
+	inst, err := mgr.Launch(p, LaunchBackground, "")
 	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestManager_LaunchBackground_WaitsHealthyAndPersists(t *testing.T) {
 		t.Fatalf("inst = %+v", inst)
 	}
 
-	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second); err != nil {
+	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second, ""); err != nil {
 		t.Fatalf("WaitHealthy: %v", err)
 	}
 
@@ -94,7 +94,7 @@ func TestManager_LaunchBackground_ProfileOverrideUsesEffectiveBinary(t *testing.
 		Model: "/dev/null",
 		Args:  map[string]any{"port": float64(port)},
 	}
-	inst, err := mgr.Launch(p, LaunchBackground)
+	inst, err := mgr.Launch(p, LaunchBackground, "")
 	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestManager_LaunchBackground_ProfileOverrideUsesEffectiveBinary(t *testing.
 	if inst.BinaryPath != overrideBinary {
 		t.Fatalf("BinaryPath = %q, want %q", inst.BinaryPath, overrideBinary)
 	}
-	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second); err != nil {
+	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second, ""); err != nil {
 		t.Fatalf("WaitHealthy: %v", err)
 	}
 }
@@ -117,7 +117,7 @@ func TestManager_LaunchBackground_NoOverrideUsesDefaultBinary(t *testing.T) {
 		Model: "/dev/null",
 		Args:  map[string]any{"port": float64(port)},
 	}
-	inst, err := mgr.Launch(p, LaunchBackground)
+	inst, err := mgr.Launch(p, LaunchBackground, "")
 	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestManager_LaunchBackground_InvalidEffectiveBinary(t *testing.T) {
 		Model: "/dev/null",
 		Args:  map[string]any{"port": float64(port)},
 	}
-	_, err := mgr.Launch(p, LaunchBackground)
+	_, err := mgr.Launch(p, LaunchBackground, "")
 	if err == nil {
 		t.Fatal("expected invalid binary error, got nil")
 	}
@@ -159,7 +159,7 @@ func TestManager_Launch_ModelMissing(t *testing.T) {
 		Model: "/nonexistent/path/to/model.gguf",
 		Args:  map[string]any{"port": float64(port)},
 	}
-	_, err := mgr.Launch(p, LaunchBackground)
+	_, err := mgr.Launch(p, LaunchBackground, "")
 	if err == nil {
 		t.Fatal("expected ErrModelNotFound, got nil")
 	}
@@ -183,7 +183,7 @@ func TestManager_LaunchBackground_PortBusy(t *testing.T) {
 		Model: "/dev/null",
 		Args:  map[string]any{"port": float64(port)},
 	}
-	_, err = mgr.Launch(p, LaunchBackground)
+	_, err = mgr.Launch(p, LaunchBackground, "")
 	if err == nil {
 		t.Fatal("expected ErrPortBusy, got nil")
 	}
@@ -195,7 +195,7 @@ func TestManager_LaunchBackground_PortBusy(t *testing.T) {
 func TestManager_WaitHealthy_TimesOut(t *testing.T) {
 	mgr, _ := newTestManager(t)
 	port := freePort(t)
-	err := mgr.WaitHealthy(99999, port, 300*time.Millisecond)
+	err := mgr.WaitHealthy(99999, port, 300*time.Millisecond, "")
 	if err == nil {
 		t.Fatal("expected timeout error, got nil")
 	}
@@ -224,13 +224,13 @@ func TestManager_Launch_NotifiesLastUsedSink(t *testing.T) {
 	})
 	port := freePort(t)
 	p := domain.Profile{ID: "tracked", Model: "/dev/null", Args: map[string]any{"port": float64(port)}}
-	inst, err := mgr.Launch(p, LaunchBackground)
+	inst, err := mgr.Launch(p, LaunchBackground, "")
 	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
 	defer mgr.Kill(inst.PID)
 
-	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second); err != nil {
+	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second, ""); err != nil {
 		t.Fatalf("WaitHealthy: %v", err)
 	}
 	if len(spy.calls) != 1 || spy.calls[0] != "tracked" {
@@ -247,13 +247,13 @@ func TestTailLogs_HappyPath(t *testing.T) {
 		Model: "/dev/null",
 		Args:  map[string]any{"port": float64(port)},
 	}
-	inst, err := mgr.Launch(p, LaunchBackground)
+	inst, err := mgr.Launch(p, LaunchBackground, "")
 	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
 	defer mgr.Kill(inst.PID)
 
-	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second); err != nil {
+	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second, ""); err != nil {
 		t.Fatalf("WaitHealthy: %v", err)
 	}
 
@@ -286,7 +286,7 @@ func TestManager_ResolverError(t *testing.T) {
 	mgr := New(cfg)
 	port := freePort(t)
 	p := domain.Profile{ID: "fail", Model: "/dev/null", Args: map[string]any{"port": float64(port)}}
-	_, err := mgr.Launch(p, LaunchBackground)
+	_, err := mgr.Launch(p, LaunchBackground, "")
 	if err == nil {
 		t.Fatal("expected error for resolver failure, got nil")
 	}
@@ -301,14 +301,14 @@ func TestManager_Foreground_OnlyOneAllowed(t *testing.T) {
 	port2 := freePort(t)
 
 	p1 := domain.Profile{ID: "fg1", Model: "/dev/null", Args: map[string]any{"port": float64(port1)}}
-	inst1, err := mgr.Launch(p1, LaunchForeground)
+	inst1, err := mgr.Launch(p1, LaunchForeground, "")
 	if err != nil {
 		t.Fatalf("first foreground Launch: %v", err)
 	}
 	defer mgr.Kill(inst1.PID)
 
 	p2 := domain.Profile{ID: "fg2", Model: "/dev/null", Args: map[string]any{"port": float64(port2)}}
-	_, err = mgr.Launch(p2, LaunchForeground)
+	_, err = mgr.Launch(p2, LaunchForeground, "")
 	if err == nil {
 		t.Fatal("expected ErrForegroundBusy, got nil")
 	}
@@ -319,7 +319,7 @@ func TestManager_Foreground_OnlyOneAllowed(t *testing.T) {
 	// background launch alongside fg1 must still succeed
 	port3 := freePort(t)
 	p3 := domain.Profile{ID: "bg1", Model: "/dev/null", Args: map[string]any{"port": float64(port3)}}
-	inst3, err := mgr.Launch(p3, LaunchBackground)
+	inst3, err := mgr.Launch(p3, LaunchBackground, "")
 	if err != nil {
 		t.Fatalf("background launch alongside fg: %v", err)
 	}

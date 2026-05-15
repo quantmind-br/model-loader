@@ -12,16 +12,24 @@ import (
 
 // AppConfig is the in-memory representation of the user config.
 type AppConfig struct {
-	Paths  PathsConfig  `mapstructure:"paths"`
-	Models ModelsConfig `mapstructure:"models"`
-	UI     UIConfig     `mapstructure:"ui"`
+	Paths   PathsConfig   `mapstructure:"paths"`
+	Models  ModelsConfig  `mapstructure:"models"`
+	UI      UIConfig      `mapstructure:"ui"`
+	Logging LoggingConfig `mapstructure:"logging"`
+}
+
+// LoggingConfig controls the model-loader app logger (not the per-instance
+// llama-server log file). Level values: "debug" | "info" | "warn" | "error".
+// Unknown values fall back to "info" via log.ResolveLevel.
+type LoggingConfig struct {
+	Level string `mapstructure:"level"`
 }
 
 type PathsConfig struct {
-	ProfilesDir         string `mapstructure:"profiles_dir"`
-	LogDir              string `mapstructure:"log_dir"`
-	StateDir            string `mapstructure:"state_dir"`
-	BackendsDir         string `mapstructure:"backends_dir"`
+	ProfilesDir           string `mapstructure:"profiles_dir"`
+	LogDir                string `mapstructure:"log_dir"`
+	StateDir              string `mapstructure:"state_dir"`
+	BackendsDir           string `mapstructure:"backends_dir"`
 	LlamaServerBinaryPath string `mapstructure:"llama_server_binary_path"`
 }
 
@@ -122,4 +130,5 @@ func applyDefaults(v *viper.Viper) {
 	})
 	v.SetDefault("ui.default_tab", "launcher")
 	v.SetDefault("ui.keybindings", "default")
+	v.SetDefault("logging.level", "info")
 }

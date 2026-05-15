@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/validator"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
@@ -58,6 +59,7 @@ type Editor struct {
 
 	openSnapshot  Draft
 	lastBackendID string
+	backendKind   domain.BackendKind
 	schemaError   string
 	submitError   string
 
@@ -82,7 +84,7 @@ func New(schema domain.FlagSchema) Editor {
 	tbl := newAdvancedTable(schema, nil, 100, 12)
 	return Editor{
 		schema:      schema,
-		validator:   validator.New(),
+		validator:   validator.New(log.Nop()),
 		advanced:    tbl,
 		advancedAll: tbl.Rows(),
 	}
@@ -123,7 +125,7 @@ func (e Editor) Open(d Draft) (Editor, tea.Cmd) {
 	e.openSnapshot = dp
 	e.lastBackendID = dp.BackendID
 	e = e.loadSchemaForDraft()
-	e.form = buildForm(e.draft, e.schema, e.backendOptions)
+	e.form = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
 	e.active = true
 	e.subTab = subTabEssentials
 	e.advancedFilter = ""
@@ -147,7 +149,7 @@ func (e Editor) SetModelPath(path string) (Editor, tea.Cmd) {
 		return e, nil
 	}
 	e.draft.Model = path
-	e.form = buildForm(e.draft, e.schema, e.backendOptions)
+	e.form = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
 	return e, e.form.Init()
 }
 
@@ -179,7 +181,7 @@ func (e Editor) View() string {
 	} else {
 		body = e.advanced.View()
 	}
-		report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema)
+	report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema)
 	var lines []string
 	if e.schemaError != "" {
 		lines = append(lines, theme.Error.Render("✗ schema: "+e.schemaError))
@@ -370,13 +372,13 @@ func (e Editor) forwardToForm(msg tea.Msg) (Editor, tea.Cmd) {
 	if e.form != nil && e.form.State == huh.StateCompleted {
 		if e.schemaError != "" {
 			e.submitError = "Cannot save: " + e.schemaError
-			e.form = buildForm(e.draft, e.schema, e.backendOptions)
+			e.form = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
 			return e, tea.Batch(cmd, e.form.Init())
 		}
-	report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema)
+		report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema)
 		if report.HasBlockingErrors() {
 			e.submitError = fmt.Sprintf("Cannot save: %d validation errors", len(report.Errors))
-			e.form = buildForm(e.draft, e.schema, e.backendOptions)
+			e.form = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
 			return e, tea.Batch(cmd, e.form.Init())
 		}
 		committed := *e.draft
@@ -400,7 +402,8 @@ func (e Editor) reloadSchema() Editor {
 	}
 	e.schemaError = ""
 	e.schema = schema.ToFlagSchema()
-	e.form = buildForm(e.draft, e.schema, e.backendOptions)
+	e.backendKind = backend.Kind
+	e.form = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
 	var args map[string]any
 	if e.draft != nil {
 		args = e.draft.Args
@@ -427,6 +430,7 @@ func (e Editor) loadSchemaForDraft() Editor {
 	}
 	e.schemaError = ""
 	e.schema = schema.ToFlagSchema()
+	e.backendKind = backend.Kind
 	var args map[string]any
 	if e.draft != nil {
 		args = e.draft.Args
@@ -437,7 +441,6 @@ func (e Editor) loadSchemaForDraft() Editor {
 	if e.advancedFilter != "" {
 		e.advanced.SetRows(filterRows(e.advancedAll, e.advancedFilter))
 	}
-	_ = backend
 	return e
 }
 

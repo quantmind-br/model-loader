@@ -96,3 +96,14 @@ keybindings = "default"
 		t.Errorf("SearchPaths = %v, want [/tmp/m]", cfg.Models.SearchPaths)
 	}
 }
+
+func TestLoad_DefaultLoggingLevelIsInfo(t *testing.T) {
+	dir := t.TempDir()
+	cfg, err := LoadFrom(filepath.Join(dir, "config.toml"))
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	if cfg.Logging.Level != "info" {
+		t.Errorf("default logging.level = %q, want %q", cfg.Logging.Level, "info")
+	}
+}

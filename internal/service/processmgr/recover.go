@@ -27,10 +27,12 @@ import (
 func (m *fsManager) Reconcile() error {
 	loaded, err := loadRegistry(m.registryPath)
 	if err != nil {
+		m.logger.Error("reconcile_failed", "step", "load", "err", err)
 		return err
 	}
 	survivors := make([]domain.RunningInstance, 0, len(loaded))
 	tracked := make(map[int]domain.RunningInstance, len(loaded))
+	var dropped int
 	for _, ri := range loaded {
 		binary := ri.BinaryPath
 		if binary == "" {
@@ -40,16 +42,28 @@ func (m *fsManager) Reconcile() error {
 		// extract the executable token before taking basename.
 		exeToken := exeFromBinaryPath(binary)
 		if !pidAliveAndNameMatches(ri.PID, filepath.Base(exeToken)) {
-			continue
+			if !pidAliveAndNameMatches(ri.PID, filepath.Base(m.defaultBinary)) {
+				m.logger.Info("reconcile_dropped",
+					"pid", ri.PID, "profile_id", ri.ProfileID,
+					"reason", "pid_or_comm_mismatch")
+				dropped++
+				continue
+			}
 		}
 		// For compound commands, also verify the cmdline contains the expected
 		// module/prefix args to avoid recovering an unrelated process.
 		if exeToken != binary {
 			cmdlineToken := strings.TrimSpace(binary[len(exeToken):])
 			if cmdlineToken != "" && !pidAliveAndCmdlineContains(ri.PID, cmdlineToken) {
+				m.logger.Info("reconcile_dropped",
+					"pid", ri.PID, "profile_id", ri.ProfileID,
+					"reason", "cmdline_mismatch")
+				dropped++
 				continue
 			}
 		}
+		m.logger.Info("reconcile_kept",
+			"pid", ri.PID, "profile_id", ri.ProfileID, "binary", binary)
 		survivors = append(survivors, ri)
 		tracked[ri.PID] = ri
 	}
@@ -59,8 +73,11 @@ func (m *fsManager) Reconcile() error {
 	m.mu.Unlock()
 
 	if err := saveRegistry(m.registryPath, survivors); err != nil {
+		m.logger.Error("reconcile_failed", "step", "save", "err", err)
 		return fmt.Errorf("rewrite registry: %w", err)
 	}
+	m.logger.Info("reconcile_done",
+		"kept", len(survivors), "dropped", dropped, "total", len(loaded))
 	return nil
 }
 
@@ -109,5 +126,3 @@ func pidAliveAndCmdlineContains(pid int, token string) bool {
 	cmdline := strings.Join(strings.Split(string(cmdlineBytes), "\x00"), " ")
 	return strings.Contains(cmdline, token)
 }
-
-

@@ -22,13 +22,13 @@ type fakeProcMgr struct {
 	insts []domain.RunningInstance
 }
 
-func (f *fakeProcMgr) Launch(p domain.Profile, m processmgr.LaunchMode) (domain.RunningInstance, error) {
+func (f *fakeProcMgr) Launch(p domain.Profile, m processmgr.LaunchMode, _ string) (domain.RunningInstance, error) {
 	return domain.RunningInstance{}, nil
 }
-func (f *fakeProcMgr) Kill(pid int) error                               { return nil }
-func (f *fakeProcMgr) List() []domain.RunningInstance                   { return f.insts }
-func (f *fakeProcMgr) WaitHealthy(pid, port int, t time.Duration) error { return nil }
-func (f *fakeProcMgr) TailLogs(pid int) (io.ReadCloser, error)          { return nil, nil }
+func (f *fakeProcMgr) Kill(pid int) error                                         { return nil }
+func (f *fakeProcMgr) List() []domain.RunningInstance                             { return f.insts }
+func (f *fakeProcMgr) WaitHealthy(pid, port int, t time.Duration, _ string) error { return nil }
+func (f *fakeProcMgr) TailLogs(pid int) (io.ReadCloser, error)                    { return nil, nil }
 
 type fakeMonMgr struct{}
 
@@ -580,7 +580,7 @@ func (r *restartTrackingMgr) Kill(pid int) error             { r.killedPID = pid
 func (r *restartTrackingMgr) TailLogs(_ int) (io.ReadCloser, error) {
 	return nil, processmgr.ErrUnknownPID
 }
-func (r *restartTrackingMgr) Launch(p domain.Profile, mode processmgr.LaunchMode) (domain.RunningInstance, error) {
+func (r *restartTrackingMgr) Launch(p domain.Profile, mode processmgr.LaunchMode, _ string) (domain.RunningInstance, error) {
 	r.launchedID = p.ID
 	r.launchMode = mode
 	return domain.RunningInstance{ProfileID: p.ID, PID: r.newPID, Port: r.newPort, Background: true}, nil

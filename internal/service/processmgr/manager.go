@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,19 +19,24 @@ import (
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/log"
 )
 
 // fsManager is the default Manager implementation backed by os/exec.
 type fsManager struct {
-	resolver     func(domain.Profile) (string, error)
+	resolver      func(domain.Profile) (string, error)
 	defaultBinary string
-	logDir       string
-	registryPath string
-	sink         LastUsedSink
+	logDir        string
+	registryPath  string
+	sink          LastUsedSink
+	logger        *slog.Logger
+	waitFunc      func(*exec.Cmd) error
 
-	mu           sync.Mutex
-	tracked      map[int]domain.RunningInstance
-	fgPID        int
+	mu        sync.Mutex
+	tracked   map[int]domain.RunningInstance
+	exitInfos map[int]ExitInfo
+	fgPID     int
+
 	livenessStop func()
 }
 
@@ -40,23 +47,51 @@ type Config struct {
 	LogDir        string
 	RegistryPath  string
 	LastUsedSink  LastUsedSink
+	// Logger receives lifecycle events. nil → log.Nop().
+	Logger *slog.Logger
+	// WaitFunc replaces (*exec.Cmd).Wait. Optional test seam for future
+	// scenarios that want to bypass the kernel wait syscall. Production and
+	// current tests use the real (*exec.Cmd).Wait — see AGENTS.md
+	// "Wait goroutine lifecycle". nil → (*exec.Cmd).Wait.
+	WaitFunc func(*exec.Cmd) error
 }
 
-// New constructs a Manager.
+// New constructs a Manager. nil-tolerant for Logger and WaitFunc.
 func New(cfg Config) *fsManager {
+	if cfg.Logger == nil {
+		cfg.Logger = log.Nop()
+	}
+	if cfg.WaitFunc == nil {
+		cfg.WaitFunc = (*exec.Cmd).Wait
+	}
 	m := &fsManager{
 		resolver:      cfg.Resolver,
 		defaultBinary: cfg.DefaultBinary,
 		logDir:        cfg.LogDir,
 		registryPath:  cfg.RegistryPath,
 		sink:          cfg.LastUsedSink,
+		logger:        cfg.Logger,
+		waitFunc:      cfg.WaitFunc,
 		tracked:       map[int]domain.RunningInstance{},
+		exitInfos:     map[int]ExitInfo{},
 	}
 	if m.defaultBinary == "" {
 		m.defaultBinary = "llama-server"
 	}
 	m.livenessStop = m.startLiveness()
 	return m
+}
+
+// GetExitInfo returns the captured exit cause for pid. Returns (zero, false)
+// when the process is still alive, has never been tracked by this Manager,
+// or its enrichment record was purged by a subsequent Launch reusing the
+// same PID. The Wait enrichment goroutine populates the entry on process
+// exit; Kill / Launch clear stale entries to prevent PID-reuse bleed-through.
+func (m *fsManager) GetExitInfo(pid int) (ExitInfo, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ei, ok := m.exitInfos[pid]
+	return ei, ok
 }
 
 // Close stops the liveness ticker. Idempotent.
@@ -70,7 +105,8 @@ func (m *fsManager) Close() error {
 // Launch spawns llama-server with the args derived from p. mode chooses
 // between background (detached, log-to-file) and foreground (stdout/stderr
 // inherit; only one allowed at a time — covered in Task 6).
-func (m *fsManager) Launch(p domain.Profile, mode LaunchMode) (domain.RunningInstance, error) {
+func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) (domain.RunningInstance, error) {
+
 	if p.Model == "" {
 		return domain.RunningInstance{}, ErrModelNotFound
 	}
@@ -94,7 +130,7 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode) (domain.RunningIns
 		return domain.RunningInstance{}, err
 	}
 	if mode == LaunchForeground {
-		return m.launchForeground(p, port)
+		return m.launchForeground(p, port, attemptID)
 	}
 
 	if err := os.MkdirAll(m.logDir, 0o755); err != nil {
@@ -114,7 +150,7 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode) (domain.RunningIns
 		return domain.RunningInstance{}, fmt.Errorf("open log: %w", err)
 	}
 
-	profileArgs, err := BuildArgsForBackend(p, p.Launch.ResolvedBackendKind)
+	profileArgs, err := BuildArgsForBackend(p, p.Launch.ResolvedBackendKind, resolvedBinary)
 	if err != nil {
 		_ = logF.Close()
 		return domain.RunningInstance{}, fmt.Errorf("build args: %w", err)
@@ -142,11 +178,20 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode) (domain.RunningIns
 
 	m.mu.Lock()
 	m.tracked[inst.PID] = inst
+	// Clear any stale ExitInfo from a previous PID-reuse cycle so
+	// LauncherPage.handleLaunchErr cannot enrich a future timeout with
+	// data from a long-dead process that happened to share this PID.
+	delete(m.exitInfos, inst.PID)
 	all := snapshotLocked(m.tracked)
 	m.mu.Unlock()
 
-	// Reap zombie automatically so Kill's signal-0 poll terminates quickly.
-	go func() { _ = cmd.Wait() }()
+	m.logger.Info("launch_started",
+		"pid", inst.PID, "port", inst.Port,
+		"profile_id", p.ID, "attempt_id", attemptID,
+		"mode", "background", "binary", resolvedBinary)
+
+	// Wait-enrichment goroutine. See AGENTS.md "Wait goroutine lifecycle".
+	go m.waitEnrichment(cmd, inst.PID, logPath, attemptID)
 
 	if err := saveRegistry(m.registryPath, all); err != nil {
 		return inst, fmt.Errorf("instance started (pid %d) but registry save failed: %w", inst.PID, err)
@@ -156,7 +201,9 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode) (domain.RunningIns
 
 // WaitHealthy polls GET http://127.0.0.1:<port>/health with capped exponential
 // backoff (100ms, 200ms, 400ms, ..., max 1s) until 200 OK or timeout.
-func (m *fsManager) WaitHealthy(pid int, port int, timeout time.Duration) error {
+func (m *fsManager) WaitHealthy(pid int, port int, timeout time.Duration, attemptID string) error {
+	lg := m.logger.With("pid", pid, "port", port, "attempt_id", attemptID)
+	lg.Info("healthcheck_start", "timeout", timeout)
 	deadline := time.Now().Add(timeout)
 	delay := 100 * time.Millisecond
 	const maxDelay = time.Second
@@ -176,6 +223,7 @@ func (m *fsManager) WaitHealthy(pid int, port int, timeout time.Duration) error 
 						_ = m.sink.MarkLastUsed(inst.ProfileID, time.Now().UTC())
 					}
 				}
+				lg.Info("healthcheck_ok")
 				return nil
 			}
 		}
@@ -187,7 +235,84 @@ func (m *fsManager) WaitHealthy(pid int, port int, timeout time.Duration) error 
 			}
 		}
 	}
+	lg.Warn("healthcheck_timeout")
 	return fmt.Errorf("port %d: %w", port, ErrHealthCheckTimeout)
+}
+
+// waitEnrichment is the body of both cmd.Wait reaper goroutines. Runs
+// OUTSIDE m.mu for wait + tail-read, then acquires the lock only to
+// mutate m.tracked and m.exitInfos. See AGENTS.md "Wait goroutine
+// lifecycle" for the full concurrency contract.
+func (m *fsManager) waitEnrichment(cmd *exec.Cmd, pid int, logPath string, attemptID string) {
+	defer func() {
+		if r := recover(); r != nil {
+			m.logger.Error("wait_goroutine_panic",
+				"pid", pid, "attempt_id", attemptID,
+				"panic", r, "stack", string(debug.Stack()))
+		}
+	}()
+
+	waitErr := m.waitFunc(cmd)
+	exitCode, sig, reason := extractExit(waitErr, cmd.ProcessState)
+	tail := readStderrTail(logPath, stderrTailLines)
+
+	m.mu.Lock()
+	cur, ok := m.tracked[pid]
+	if !ok {
+		m.mu.Unlock()
+		m.logger.Debug("wait_exited_after_untrack",
+			"pid", pid, "attempt_id", attemptID, "exit_reason", reason)
+		return
+	}
+	if !cur.Crashed {
+		now := time.Now().UTC()
+		cur.ExitedAt = &now
+		cur.Crashed = true
+	}
+	cur.ExitCode = exitCode
+	cur.ExitSignal = sig
+	cur.ExitReason = reason
+	cur.StderrTail = tail
+	m.tracked[pid] = cur
+	m.exitInfos[pid] = ExitInfo{
+		ExitCode:   exitCode,
+		ExitSignal: sig,
+		ExitReason: reason,
+		StderrTail: tail,
+	}
+	if m.fgPID == pid {
+		m.fgPID = 0
+	}
+	snap := snapshotLocked(m.tracked)
+	m.mu.Unlock()
+
+	// 5th out-of-lock saveRegistry callsite. See AGENTS.md.
+	_ = saveRegistry(m.registryPath, snap)
+
+	m.logger.Info("process_exited",
+		"pid", pid, "attempt_id", attemptID,
+		"exit_reason", reason,
+		"stderr_tail_lines", len(tail))
+}
+
+// extractExit interprets the *exec.Cmd.Wait error + ProcessState into a
+// (code, signal, reason) triple. Linux-only assumption via syscall.WaitStatus
+// is acceptable because recover.go is already Linux-only (uses /proc).
+// The , ok guard makes the assertion fail gracefully on other platforms.
+func extractExit(waitErr error, ps *os.ProcessState) (*int, string, string) {
+	if ps == nil {
+		return nil, "", "unknown"
+	}
+	if ws, ok := ps.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+		sig := ws.Signal()
+		return nil, sig.String(), "signal:" + sig.String()
+	}
+	code := ps.ExitCode()
+	if code < 0 {
+		return nil, "", "unknown"
+	}
+	_ = waitErr
+	return &code, "", fmt.Sprintf("exit:%d", code)
 }
 
 // Kill sends SIGTERM to pid (10s grace) then SIGKILL if still alive. Removes
@@ -219,6 +344,7 @@ func (m *fsManager) Kill(pid int) error {
 
 	m.mu.Lock()
 	delete(m.tracked, pid)
+	delete(m.exitInfos, pid) // drop stale enrichment so GetExitInfo returns ok=false
 	if m.fgPID == pid {
 		m.fgPID = 0
 	}
@@ -306,7 +432,7 @@ func checkPortFree(port int) error {
 // not redirected (the caller — the LauncherPage — owns the streaming),
 // and the process is NOT detached via Setsid: it remains in the TUI's
 // process group so Ctrl+C from the TUI propagates if desired.
-func (m *fsManager) launchForeground(p domain.Profile, port int) (domain.RunningInstance, error) {
+func (m *fsManager) launchForeground(p domain.Profile, port int, attemptID string) (domain.RunningInstance, error) {
 	resolvedBinary := p.Launch.ResolvedExecutable
 	if resolvedBinary == "" {
 		var err error
@@ -324,7 +450,7 @@ func (m *fsManager) launchForeground(p domain.Profile, port int) (domain.Running
 	m.fgPID = -1 // sentinel: launching in progress
 	m.mu.Unlock()
 
-	profileArgs, err := BuildArgsForBackend(p, p.Launch.ResolvedBackendKind)
+	profileArgs, err := BuildArgsForBackend(p, p.Launch.ResolvedBackendKind, resolvedBinary)
 	if err != nil {
 		return domain.RunningInstance{}, fmt.Errorf("build args: %w", err)
 	}
@@ -337,7 +463,6 @@ func (m *fsManager) launchForeground(p domain.Profile, port int) (domain.Running
 		m.mu.Unlock()
 		return domain.RunningInstance{}, fmt.Errorf("start process (fg): %w", err)
 	}
-	go func() { _ = cmd.Wait() }()
 
 	inst := domain.RunningInstance{
 		ProfileID:  p.ID,
@@ -351,9 +476,19 @@ func (m *fsManager) launchForeground(p domain.Profile, port int) (domain.Running
 
 	m.mu.Lock()
 	m.tracked[inst.PID] = inst
-	m.fgPID = inst.PID // replaces -1 sentinel
+	delete(m.exitInfos, inst.PID) // see Launch background comment above
+	m.fgPID = inst.PID            // replaces -1 sentinel
 	all := snapshotLocked(m.tracked)
 	m.mu.Unlock()
+
+	m.logger.Info("launch_started",
+		"pid", inst.PID, "port", inst.Port,
+		"profile_id", p.ID, "attempt_id", attemptID,
+		"mode", "foreground", "binary", resolvedBinary)
+
+	// MOVED from pre-Start to here (post-insert) so the waitEnrichment
+	// body's re-read of m.tracked[inst.PID] sees a populated entry.
+	go m.waitEnrichment(cmd, inst.PID, "", attemptID)
 
 	if err := saveRegistry(m.registryPath, all); err != nil {
 		return inst, fmt.Errorf("fg started but registry save failed: %w", err)

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/llamabin"
 )
 
@@ -24,7 +25,7 @@ func TestResolver_ResolveExistingBackend(t *testing.T) {
 		t.Fatalf("Save schema: %v", err)
 	}
 
-	resolved, err := NewResolver(catalogStore, schemaStore).Resolve(domain.Profile{})
+	resolved, err := NewResolver(catalogStore, schemaStore, log.Nop()).Resolve(domain.Profile{})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -62,7 +63,7 @@ func TestResolver_ProfileBackendOverridesDefault(t *testing.T) {
 		t.Fatalf("Save schema: %v", err)
 	}
 
-	resolved, err := NewResolver(catalogStore, schemaStore).Resolve(domain.Profile{
+	resolved, err := NewResolver(catalogStore, schemaStore, log.Nop()).Resolve(domain.Profile{
 		Launch: domain.LaunchConfig{BackendID: "profile"},
 	})
 	if err != nil {
@@ -133,7 +134,7 @@ func TestResolver_Errors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			catalogStore, schemaStore, profile := tt.setup(t, dir)
-			_, err := NewResolver(catalogStore, schemaStore).Resolve(profile)
+			_, err := NewResolver(catalogStore, schemaStore, log.Nop()).Resolve(profile)
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("err = %v, want %v", err, tt.wantErr)
 			}
@@ -172,7 +173,7 @@ func TestResolver_SGLangFallsBackToPython3(t *testing.T) {
 		t.Fatalf("Save schema: %v", err)
 	}
 
-	resolved, err := NewResolver(catalogStore, schemaStore).Resolve(domain.Profile{})
+	resolved, err := NewResolver(catalogStore, schemaStore, log.Nop()).Resolve(domain.Profile{})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}

@@ -23,12 +23,25 @@ const (
 
 // Manager owns the lifecycle of llama-server processes.
 type Manager interface {
-	Launch(p domain.Profile, mode LaunchMode) (domain.RunningInstance, error)
+	// Launch spawns the configured backend. attemptID is the correlation ID
+	// emitted by the calling page (LauncherPage.launchProfileCmd or
+	// MonitorPage.restartCmd) and threaded into every log event the manager
+	// emits for this PID. Empty attemptID is permitted but breaks grep-ability.
+	Launch(p domain.Profile, mode LaunchMode, attemptID string) (domain.RunningInstance, error)
 	Kill(pid int) error
 	List() []domain.RunningInstance
-	WaitHealthy(pid, port int, timeout time.Duration) error
+	// WaitHealthy polls the /health endpoint until 200 OK or timeout.
+	// attemptID matches the one passed to Launch so the two log streams
+	// can be correlated by grep attempt_id=...
+	WaitHealthy(pid, port int, timeout time.Duration, attemptID string) error
 	TailLogs(pid int) (io.ReadCloser, error)
 	Close() error
+	// GetExitInfo returns the captured exit cause for pid if the Wait
+	// goroutine has populated it. Returns (zero, false) when the process is
+	// still alive or when Wait has not yet observed the exit (TOCTOU window
+	// around the 30s WaitHealthy timeout). Best-effort — callers must fall
+	// back to a generic message when ok=false.
+	GetExitInfo(pid int) (ExitInfo, bool)
 }
 
 // LastUsedSink is a minimal callback to update Profile.Meta.LastUsedAt.

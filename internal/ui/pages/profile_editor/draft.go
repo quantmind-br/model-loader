@@ -172,7 +172,7 @@ func FlashAttnToString(v any) string {
 	}
 }
 
-func buildForm(d *Draft, schema domain.FlagSchema, backendOpts []huh.Option[string]) *huh.Form {
+func buildForm(d *Draft, schema domain.FlagSchema, backendOpts []huh.Option[string], kind domain.BackendKind) *huh.Form {
 	cacheOpts := selectOptions(schema, "cache-type-k", []string{"f16", "q8_0", "q4_0"})
 	groups := []*huh.Group{
 		huh.NewGroup(
@@ -193,16 +193,22 @@ func buildForm(d *Draft, schema domain.FlagSchema, backendOpts []huh.Option[stri
 				Value(&d.BackendID),
 		)
 	}
-	groups = append(groups, huh.NewGroup(
-		huh.NewInput().Title(labelWithHelp(schema, "n-gpu-layers", "ngl (gpu layers)")).Value(&d.NGL).Validate(intRange(-1, 9999, false)),
-		huh.NewInput().Title(labelWithHelp(schema, "ctx-size", "ctx-size")).Value(&d.CtxSize).Validate(intRange(0, 1024*1024, false)),
-		huh.NewInput().Title(labelWithHelp(schema, "batch-size", "batch-size")).Value(&d.BatchSize).Validate(intRange(0, 1024*1024, true)),
-		huh.NewInput().Title(labelWithHelp(schema, "ubatch-size", "ubatch-size")).Value(&d.UBatchSize).Validate(intRange(0, 1024*1024, true)),
-		huh.NewInput().Title(labelWithHelp(schema, "port", "port")).Value(&d.Port).Validate(portValidator()),
-		huh.NewSelect[string]().Title(labelWithHelp(schema, "flash-attn", "flash-attn")).Options(toOptions(selectOptions(schema, "flash-attn", []string{"on", "off", "auto"}))...).Value(&d.FlashAttn),
-		huh.NewSelect[string]().Title("cache-type-k").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeK),
-		huh.NewSelect[string]().Title("cache-type-v").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeV),
-	))
+	if kind == domain.BackendKindLlamaServer || kind == "" {
+		groups = append(groups, huh.NewGroup(
+			huh.NewInput().Title(labelWithHelp(schema, "n-gpu-layers", "ngl (gpu layers)")).Value(&d.NGL).Validate(intRange(-1, 9999, false)),
+			huh.NewInput().Title(labelWithHelp(schema, "ctx-size", "ctx-size")).Value(&d.CtxSize).Validate(intRange(0, 1024*1024, false)),
+			huh.NewInput().Title(labelWithHelp(schema, "batch-size", "batch-size")).Value(&d.BatchSize).Validate(intRange(0, 1024*1024, true)),
+			huh.NewInput().Title(labelWithHelp(schema, "ubatch-size", "ubatch-size")).Value(&d.UBatchSize).Validate(intRange(0, 1024*1024, true)),
+			huh.NewInput().Title(labelWithHelp(schema, "port", "port")).Value(&d.Port).Validate(portValidator()),
+			huh.NewSelect[string]().Title(labelWithHelp(schema, "flash-attn", "flash-attn")).Options(toOptions(selectOptions(schema, "flash-attn", []string{"on", "off", "auto"}))...).Value(&d.FlashAttn),
+			huh.NewSelect[string]().Title("cache-type-k").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeK),
+			huh.NewSelect[string]().Title("cache-type-v").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeV),
+		))
+	} else {
+		groups = append(groups, huh.NewGroup(
+			huh.NewInput().Title(labelWithHelp(schema, "port", "port")).Value(&d.Port).Validate(portValidator()),
+		))
+	}
 	return huh.NewForm(groups...).WithShowHelp(true)
 }
 

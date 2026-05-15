@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
@@ -48,7 +49,7 @@ func listenCmd(ch <-chan monitor.MonitorEvent) tea.Cmd {
 type procMgrIface interface {
 	List() []domain.RunningInstance
 	Kill(pid int) error
-	Launch(domain.Profile, processmgr.LaunchMode) (domain.RunningInstance, error)
+	Launch(domain.Profile, processmgr.LaunchMode, string) (domain.RunningInstance, error)
 	TailLogs(pid int) (io.ReadCloser, error)
 }
 
@@ -101,9 +102,9 @@ func (s *subState) Apply(ev monitor.MonitorEvent, paused bool) {
 type MonitorPage struct {
 	pm                 procMgrIface
 	mm                 monitor.Manager
-	ps                 profileStoreIface // injected for `r` real restart (slice 6 / Task 4)
+	ps                 profileStoreIface    // injected for `r` real restart (slice 6 / Task 4)
 	resolver           backendResolverIface // injected to resolve backend kind on restart
-	pendingSelectPID   int                // set by MonitorSelectPIDMsg, consumed after the next refresh
+	pendingSelectPID   int                  // set by MonitorSelectPIDMsg, consumed after the next refresh
 	tbl                table.Model
 	subs               map[int]*subState
 	chans              map[int]<-chan monitor.MonitorEvent
@@ -438,7 +439,7 @@ func restartCmd(pm procMgrIface, pid int, prof domain.Profile, bg bool) tea.Cmd 
 		if !bg {
 			mode = processmgr.LaunchForeground
 		}
-		if _, err := pm.Launch(prof, mode); err != nil {
+		if _, err := pm.Launch(prof, mode, log.NewAttemptID()); err != nil {
 			return restartResultMsg{pid: pid, err: fmt.Errorf("launch: %w", err)}
 		}
 		return restartResultMsg{pid: pid}

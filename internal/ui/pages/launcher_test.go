@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
@@ -47,9 +48,13 @@ type fakeManager struct {
 	launched []domain.Profile
 	mode     processmgr.LaunchMode
 	nextErr  error
+	// exitInfos lets Phase 5 tests stub the Wait-enrichment path keyed by
+	// pid. Default nil → every GetExitInfo returns ok=false (current
+	// behavior for all existing test cases).
+	exitInfos map[int]processmgr.ExitInfo
 }
 
-func (f *fakeManager) Launch(p domain.Profile, mode processmgr.LaunchMode) (domain.RunningInstance, error) {
+func (f *fakeManager) Launch(p domain.Profile, mode processmgr.LaunchMode, _ string) (domain.RunningInstance, error) {
 	if f.nextErr != nil {
 		err := f.nextErr
 		f.nextErr = nil
@@ -59,11 +64,18 @@ func (f *fakeManager) Launch(p domain.Profile, mode processmgr.LaunchMode) (doma
 	f.mode = mode
 	return domain.RunningInstance{ProfileID: p.ID, PID: 4242, Port: 8080, Background: mode == processmgr.LaunchBackground}, nil
 }
-func (f *fakeManager) Kill(pid int) error                          { return nil }
-func (f *fakeManager) List() []domain.RunningInstance              { return nil }
-func (f *fakeManager) WaitHealthy(_, _ int, _ time.Duration) error { return nil }
-func (f *fakeManager) TailLogs(_ int) (io.ReadCloser, error)       { return nil, processmgr.ErrUnknownPID }
-func (f *fakeManager) Close() error                                { return nil }
+func (f *fakeManager) Kill(pid int) error                                    { return nil }
+func (f *fakeManager) List() []domain.RunningInstance                        { return nil }
+func (f *fakeManager) WaitHealthy(_, _ int, _ time.Duration, _ string) error { return nil }
+func (f *fakeManager) TailLogs(_ int) (io.ReadCloser, error)                 { return nil, processmgr.ErrUnknownPID }
+func (f *fakeManager) Close() error                                          { return nil }
+func (f *fakeManager) GetExitInfo(pid int) (processmgr.ExitInfo, bool) {
+	if f.exitInfos == nil {
+		return processmgr.ExitInfo{}, false
+	}
+	ei, ok := f.exitInfos[pid]
+	return ei, ok
+}
 
 type mockResolver struct{}
 
@@ -131,7 +143,7 @@ func TestLauncherPage_ValidationBlocksLaunch(t *testing.T) {
 		},
 	}
 	mgr := &fakeManager{}
-	page := NewLauncherPage(store, mgr, validator.New())
+	page := NewLauncherPage(store, mgr, validator.New(log.Nop()))
 	model, _ := page.Update(LauncherProfilesLoadedMsg{Profiles: []domain.Profile{bad}})
 	page = model.(LauncherPage)
 
@@ -476,5 +488,74 @@ func TestLauncherPage_HintsListPageKeys(t *testing.T) {
 		if !strings.Contains(hints, want) {
 			t.Errorf("Hints missing %q; got %q", want, hints)
 		}
+	}
+}
+
+func TestLauncherPage_HandleLaunchErrEnrichesViaGetExitInfo(t *testing.T) {
+	code := 1
+	fake := &fakeManager{
+		exitInfos: map[int]processmgr.ExitInfo{
+			4242: {
+				ExitCode:   &code,
+				ExitReason: "exit:1",
+				StderrTail: []string{
+					"loading model ...",
+					"CUDA error: out of memory at /llama.cpp/ggml-cuda.cu:1234",
+				},
+			},
+		},
+	}
+	p := NewLauncherPage(nil, fake, validator.New(log.Nop())).WithLogger(log.Nop())
+	p.waitingPID = 4242
+	next, _ := p.handleLaunchErr(launchErrMsg{
+		err: fmt.Errorf("pid 4242 not healthy: %w", processmgr.ErrHealthCheckTimeout),
+	})
+	lp := next.(LauncherPage)
+	if !strings.Contains(lp.status, "(exit 1)") {
+		t.Errorf("expected '(exit 1)' in status, got %q", lp.status)
+	}
+	if !strings.Contains(lp.status, "CUDA error: out of memory") {
+		t.Errorf("expected stderr tail substring in status, got %q", lp.status)
+	}
+	if strings.Contains(lp.status, "\n") {
+		t.Errorf("status must stay single-line, got %q", lp.status)
+	}
+	if lp.waitingPID != 0 {
+		t.Errorf("expected waitingPID cleared, got %d", lp.waitingPID)
+	}
+}
+
+func TestLauncherPage_HandleLaunchErrFallsBackWhenNoExitInfo(t *testing.T) {
+	fake := &fakeManager{} // exitInfos nil → always ok=false
+	p := NewLauncherPage(nil, fake, validator.New(log.Nop())).WithLogger(log.Nop())
+	p.waitingPID = 9999
+	next, _ := p.handleLaunchErr(launchErrMsg{
+		err: fmt.Errorf("pid 9999 not healthy: %w", processmgr.ErrHealthCheckTimeout),
+	})
+	lp := next.(LauncherPage)
+	if !strings.Contains(lp.status, "did not become healthy within timeout") {
+		t.Errorf("expected bare ErrHealthCheckTimeout message, got %q", lp.status)
+	}
+	if strings.Contains(lp.status, "exit") || strings.Contains(lp.status, "signal") {
+		t.Errorf("expected no enrichment when GetExitInfo returns false, got %q", lp.status)
+	}
+}
+
+func TestTruncRunes_MultiByte(t *testing.T) {
+	s := "日本語テスト" // 6 runes, 18 bytes
+	if got := truncRunes(s, 3); got != "日本…" {
+		t.Errorf("got %q want %q", got, "日本…")
+	}
+	if got := truncRunes(s, 10); got != s {
+		t.Errorf("got %q want %q (passthrough)", got, s)
+	}
+	if got := truncRunes("", 5); got != "" {
+		t.Errorf("got %q want empty", got)
+	}
+	if got := truncRunes("abc", 1); got != "…" {
+		t.Errorf("got %q want %q", got, "…")
+	}
+	if got := truncRunes("abc", 0); got != "" {
+		t.Errorf("got %q want empty", got)
 	}
 }

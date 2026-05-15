@@ -3,6 +3,7 @@ package pages
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
@@ -26,6 +28,7 @@ type LauncherPage struct {
 	manager   processmgr.Manager
 	validator validator.Validator
 	resolver  backendcatalog.Resolver
+	logger    *slog.Logger
 
 	profiles []domain.Profile
 	plist    list.Model
@@ -65,7 +68,56 @@ func NewLauncherPage(store profilestore.Store, manager processmgr.Manager, val v
 		plist:      l,
 		background: true,
 		spin:       sp,
+		logger:     log.Nop(),
 	}
+}
+
+// WithLogger injects the application logger. Mirrors SetBackendResolver's
+// value-receiver builder shape. Pages constructed without WithLogger keep
+// the log.Nop() default — nil-safe by construction.
+func (p LauncherPage) WithLogger(lg *slog.Logger) LauncherPage {
+	if lg != nil {
+		p.logger = lg
+	}
+	return p
+}
+
+// enrichWithExit appends the captured exit cause to a friendlyLaunchError
+// base message. Output stays single-line. Last non-empty StderrTail line
+// is truncated to 80 RUNES via truncRunes (NOT byte-based truncate).
+func enrichWithExit(base string, exit processmgr.ExitInfo) string {
+	parts := []string{base}
+	switch {
+	case exit.ExitSignal != "":
+		parts = append(parts, "(signal: "+exit.ExitSignal+")")
+	case exit.ExitCode != nil:
+		parts = append(parts, fmt.Sprintf("(exit %d)", *exit.ExitCode))
+	}
+	if last := lastNonEmpty(exit.StderrTail); last != "" {
+		parts = append(parts, "— last: "+truncRunes(last, 80))
+	}
+	if len(parts) == 1 {
+		return base
+	}
+	return strings.Join(parts, " ")
+}
+
+// lastNonEmpty returns the last non-empty (post-trim) element of s.
+func lastNonEmpty(s []string) string {
+	for i := len(s) - 1; i >= 0; i-- {
+		if strings.TrimSpace(s[i]) != "" {
+			return s[i]
+		}
+	}
+	return ""
+}
+
+// modeString produces a stable label for log events.
+func modeString(mode processmgr.LaunchMode) string {
+	if mode == processmgr.LaunchForeground {
+		return "foreground"
+	}
+	return "background"
 }
 
 // friendlyLaunchError translates sentinel manager errors into actionable
@@ -106,7 +158,8 @@ type LaunchProfileMsg struct {
 
 // launchedMsg is emitted after a successful Launch + WaitHealthy.
 type launchedMsg struct {
-	inst domain.RunningInstance
+	inst      domain.RunningInstance
+	attemptID string
 }
 
 // launchErrMsg is emitted when validation or Launch itself fails.
@@ -122,7 +175,11 @@ type profileItem struct {
 
 func (i profileItem) Title() string { return i.p.Name }
 func (i profileItem) Description() string {
-	return fmt.Sprintf("%s | port %v", i.p.ID, i.p.Args["port"])
+	desc := fmt.Sprintf("%s | port %v", i.p.ID, i.p.Args["port"])
+	if i.p.Launch.BackendID != "" {
+		desc += " | backend: " + i.p.Launch.BackendID
+	}
+	return desc
 }
 func (i profileItem) FilterValue() string { return i.p.Name }
 
@@ -196,8 +253,9 @@ func (p LauncherPage) handleLaunched(msg launchedMsg) (tea.Model, tea.Cmd) {
 	mgr := p.manager
 	port := msg.inst.Port
 	pid := msg.inst.PID
+	attemptID := msg.attemptID
 	waitCmd := func() tea.Msg {
-		if err := mgr.WaitHealthy(pid, port, 30*time.Second); err != nil {
+		if err := mgr.WaitHealthy(pid, port, 30*time.Second, attemptID); err != nil {
 			return launchErrMsg{err: fmt.Errorf("pid %d not healthy: %w", pid, err)}
 		}
 		return healthyMsg{pid: pid}
@@ -213,8 +271,17 @@ func (p LauncherPage) handleHealthy(msg healthyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (p LauncherPage) handleLaunchErr(msg launchErrMsg) (tea.Model, tea.Cmd) {
+	// Capture waitingPID BEFORE clearing so GetExitInfo can look up the
+	// captured exit cause for enrichment.
+	pid := p.waitingPID
 	p.waitingPID = 0
-	p, fc := p.withStatus(friendlyLaunchError(msg.err))
+	base := friendlyLaunchError(msg.err)
+	if pid != 0 && p.manager != nil {
+		if exit, ok := p.manager.GetExitInfo(pid); ok {
+			base = enrichWithExit(base, exit)
+		}
+	}
+	p, fc := p.withStatus(base)
 	return p, fc
 }
 
@@ -379,17 +446,24 @@ func (p LauncherPage) launchProfileCmd(selected domain.Profile) tea.Cmd {
 	val := p.validator
 	mgr := p.manager
 	res := p.resolver
+	lg := p.logger
+	attemptID := log.NewAttemptID()
 	mode := processmgr.LaunchBackground
 	if !p.background {
 		mode = processmgr.LaunchForeground
 	}
 	return func() tea.Msg {
+		evt := lg.With("attempt_id", attemptID, "profile_id", selected.ID)
+		evt.Info("launch_pipeline_start", "mode", modeString(mode))
+
 		if res == nil {
+			evt.Error("launch_pipeline_failed", "step", "resolver_unwired")
 			return launchErrMsg{err: fmt.Errorf("no backend resolver configured")}
 		}
 
 		rb, err := res.Resolve(selected)
 		if err != nil {
+			evt.Error("launch_pipeline_failed", "step", "resolve", "err", err)
 			return launchErrMsg{err: fmt.Errorf("resolve backend: %w", err)}
 		}
 		activeSchema := rb.Schema.ToFlagSchema()
@@ -397,16 +471,19 @@ func (p LauncherPage) launchProfileCmd(selected domain.Profile) tea.Cmd {
 		if val != nil {
 			rep := val.Validate(selected, activeSchema)
 			if rep.HasBlockingErrors() {
+				evt.Error("launch_pipeline_failed",
+					"step", "validate", "err_count", len(rep.Errors))
 				return launchErrMsg{err: fmt.Errorf("validation failed: %d errors", len(rep.Errors))}
 			}
 		}
 		selected.Launch.ResolvedExecutable = rb.ExecutablePath
 		selected.Launch.ResolvedBackendKind = rb.Backend.Kind
-		inst, err := mgr.Launch(selected, mode)
+		inst, err := mgr.Launch(selected, mode, attemptID)
 		if err != nil {
+			evt.Error("launch_pipeline_failed", "step", "spawn", "err", err)
 			return launchErrMsg{err: err}
 		}
-		return launchedMsg{inst: inst}
+		return launchedMsg{inst: inst, attemptID: attemptID}
 	}
 }
 
