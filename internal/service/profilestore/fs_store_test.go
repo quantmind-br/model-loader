@@ -57,6 +57,31 @@ func TestFSStore_SaveAndGet(t *testing.T) {
 	}
 }
 
+func TestFSStore_SaveAndGet_PreservesEnv(t *testing.T) {
+	s, _ := newStore(t)
+	p := sampleProfile("with-env", "WithEnv")
+	p.Launch.Env = []domain.EnvVar{
+		{Key: "GGML_CUDA_FORCE_CUBLAS_COMPUTE_16F", Value: "1"},
+		{Key: "CUDA_VISIBLE_DEVICES", Value: "0,1"},
+	}
+	if err := s.Save(p); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := s.Get("with-env")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(got.Launch.Env) != 2 {
+		t.Fatalf("Env len = %d, want 2", len(got.Launch.Env))
+	}
+	if got.Launch.Env[0].Key != "GGML_CUDA_FORCE_CUBLAS_COMPUTE_16F" || got.Launch.Env[0].Value != "1" {
+		t.Errorf("Env[0] = %+v", got.Launch.Env[0])
+	}
+	if got.Launch.Env[1].Key != "CUDA_VISIBLE_DEVICES" || got.Launch.Env[1].Value != "0,1" {
+		t.Errorf("Env[1] = %+v", got.Launch.Env[1])
+	}
+}
+
 func TestFSStore_GetNotFound(t *testing.T) {
 	s, _ := newStore(t)
 	_, err := s.Get("missing")

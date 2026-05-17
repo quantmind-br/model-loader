@@ -17,20 +17,27 @@ import (
 	"github.com/quantmind-br/model-loader/internal/ui/internal/filter"
 )
 
-// subTab selects between the Essentials huh form and the Advanced
-// flag-reference table inside the editor.
+// subTab selects between the Essentials huh form, the Advanced
+// flag-reference table, and the Environment variable list inside the editor.
 type subTab int
 
 const (
 	subTabEssentials subTab = iota
 	subTabAdvanced
+	subTabEnvironment
 )
 
 func (s subTab) String() string {
-	if s == subTabEssentials {
+	switch s {
+	case subTabEssentials:
 		return "Essentials"
+	case subTabAdvanced:
+		return "Advanced"
+	case subTabEnvironment:
+		return "Environment"
+	default:
+		return "?"
 	}
-	return "Advanced"
 }
 
 type Draft struct {
@@ -54,6 +61,9 @@ type Draft struct {
 	// Essentials fields (ngl, ctx-size, etc.) take precedence and overwrite
 	// matching keys here during ApplyToWithSchema.
 	Args map[string]any
+	// Env mirrors Profile.Launch.Env in editor-friendly form. Slice preserves
+	// insertion order as shown in the Environment sub-tab.
+	Env []domain.EnvVar
 }
 
 // ParseTags converts a comma-separated editor string to the trimmed
@@ -164,6 +174,11 @@ func (d Draft) ApplyToWithSchema(base domain.Profile, schema domain.FlagSchema) 
 	out.Args = args
 	out.Launch.DefaultBackground = true
 	out.Launch.BackendID = d.BackendID
+	if len(d.Env) > 0 {
+		out.Launch.Env = append([]domain.EnvVar(nil), d.Env...)
+	} else {
+		out.Launch.Env = nil
+	}
 	return out
 }
 
@@ -306,6 +321,23 @@ func toOptions(values []string) []huh.Option[string] {
 		out = append(out, huh.NewOption(v, v))
 	}
 	return out
+}
+
+func newEnvTable(envs []domain.EnvVar) table.Model {
+	cols := []table.Column{
+		{Title: "KEY", Width: 32},
+		{Title: "VALUE", Width: 60},
+	}
+	rows := make([]table.Row, 0, len(envs))
+	for _, ev := range envs {
+		rows = append(rows, table.Row{ev.Key, ev.Value})
+	}
+	return table.New(
+		table.WithColumns(cols),
+		table.WithRows(rows),
+		table.WithFocused(true),
+		table.WithHeight(12),
+	)
 }
 
 func newAdvancedTable(schema domain.FlagSchema, args map[string]any, width, height int) table.Model {

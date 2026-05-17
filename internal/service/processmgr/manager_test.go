@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -106,6 +107,71 @@ func TestManager_LaunchBackground_ProfileOverrideUsesEffectiveBinary(t *testing.
 	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second, ""); err != nil {
 		t.Fatalf("WaitHealthy: %v", err)
 	}
+}
+
+func TestApplyProfileEnv(t *testing.T) {
+	t.Run("EmptyReturnsNil", func(t *testing.T) {
+		if got := applyProfileEnv(nil); got != nil {
+			t.Errorf("nil input → %v, want nil", got)
+		}
+		if got := applyProfileEnv([]domain.EnvVar{}); got != nil {
+			t.Errorf("empty slice → %v, want nil", got)
+		}
+	})
+	t.Run("AppendsNewKey", func(t *testing.T) {
+		got := applyProfileEnv([]domain.EnvVar{{Key: "MODELLOADER_TEST_NEW", Value: "yes"}})
+		if !envContains(got, "MODELLOADER_TEST_NEW=yes") {
+			t.Errorf("missing MODELLOADER_TEST_NEW=yes; got %v", got)
+		}
+	})
+	t.Run("OverridesExistingKey", func(t *testing.T) {
+		t.Setenv("MODELLOADER_TEST_OVERRIDE", "old")
+		got := applyProfileEnv([]domain.EnvVar{{Key: "MODELLOADER_TEST_OVERRIDE", Value: "new"}})
+		if !envContains(got, "MODELLOADER_TEST_OVERRIDE=new") {
+			t.Errorf("override failed; got %v", got)
+		}
+		if envContains(got, "MODELLOADER_TEST_OVERRIDE=old") {
+			t.Errorf("stale old value still present: %v", got)
+		}
+	})
+	t.Run("LastValueWinsOnDuplicates", func(t *testing.T) {
+		got := applyProfileEnv([]domain.EnvVar{
+			{Key: "MODELLOADER_DUP", Value: "a"},
+			{Key: "MODELLOADER_DUP", Value: "b"},
+			{Key: "MODELLOADER_DUP", Value: "c"},
+		})
+		if !envContains(got, "MODELLOADER_DUP=c") {
+			t.Errorf("want MODELLOADER_DUP=c; got %v", got)
+		}
+		if envContains(got, "MODELLOADER_DUP=a") || envContains(got, "MODELLOADER_DUP=b") {
+			t.Errorf("earlier duplicates not overwritten: %v", got)
+		}
+	})
+	t.Run("SkipsEmptyKey", func(t *testing.T) {
+		got := applyProfileEnv([]domain.EnvVar{
+			{Key: "", Value: "ignored"},
+			{Key: "MODELLOADER_KEEP", Value: "ok"},
+		})
+		for _, kv := range got {
+			if strings.HasPrefix(kv, "=") {
+				t.Errorf("found empty-key entry: %q", kv)
+			}
+		}
+		if !envContains(got, "MODELLOADER_KEEP=ok") {
+			t.Errorf("non-empty key dropped; got %v", got)
+		}
+	})
+	t.Run("InheritsBaseEnv", func(t *testing.T) {
+		t.Setenv("MODELLOADER_INHERIT", "preserved")
+		got := applyProfileEnv([]domain.EnvVar{{Key: "MODELLOADER_ADDED", Value: "extra"}})
+		if !envContains(got, "MODELLOADER_INHERIT=preserved") {
+			t.Errorf("inherited env dropped; got %v", got)
+		}
+	})
+}
+
+func envContains(env []string, want string) bool {
+	return slices.Contains(env, want)
 }
 
 func TestManager_LaunchBackground_NoOverrideUsesDefaultBinary(t *testing.T) {

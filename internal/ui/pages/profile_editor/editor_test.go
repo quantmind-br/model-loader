@@ -890,3 +890,181 @@ func TestDraft_ApplyToTagsRoundTripsExisting(t *testing.T) {
 		t.Fatalf("Tags = %v, want %v (Draft.Tags should overwrite base.Tags)", out.Tags, want)
 	}
 }
+
+func TestDraft_ApplyToPersistsEnv(t *testing.T) {
+	d := Draft{
+		ID: "x", Name: "X", Port: "8080",
+		Env: []domain.EnvVar{
+			{Key: "GGML_CUDA_FORCE_CUBLAS_COMPUTE_16F", Value: "1"},
+			{Key: "CUDA_VISIBLE_DEVICES", Value: "0"},
+		},
+	}
+	out := d.ApplyTo(domain.Profile{})
+	if len(out.Launch.Env) != 2 {
+		t.Fatalf("Env len = %d, want 2", len(out.Launch.Env))
+	}
+	if !reflect.DeepEqual(out.Launch.Env, d.Env) {
+		t.Errorf("Env = %+v, want %+v", out.Launch.Env, d.Env)
+	}
+	// Defensive copy: mutating Draft.Env must not affect Profile.
+	d.Env[0].Value = "mutated"
+	if out.Launch.Env[0].Value != "1" {
+		t.Errorf("aliasing leak: Profile.Launch.Env[0].Value = %q after Draft mutation", out.Launch.Env[0].Value)
+	}
+}
+
+func TestDraft_ApplyToEmptyEnvYieldsNil(t *testing.T) {
+	d := Draft{ID: "x", Name: "X", Port: "8080"}
+	out := d.ApplyTo(domain.Profile{})
+	if out.Launch.Env != nil {
+		t.Errorf("Env = %v, want nil for empty Draft.Env", out.Launch.Env)
+	}
+}
+
+// envEditorOpen opens an editor on the Environment sub-tab with the given
+// pre-populated env vars. Returns the editor in the Environment sub-tab,
+// not editing, ready to receive Env key events.
+func envEditorOpen(t *testing.T, envs []domain.EnvVar) Editor {
+	t.Helper()
+	e := New(domain.FlagSchema{})
+	d := Draft{Name: "X"}
+	if envs != nil {
+		d.Env = append([]domain.EnvVar(nil), envs...)
+	}
+	e, _ = e.Open(d)
+	// ctrl+t twice: Essentials -> Advanced -> Environment.
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	if e.subTab != subTabEnvironment {
+		t.Fatalf("subTab = %v after 2x ctrl+t, want subTabEnvironment", e.subTab)
+	}
+	return e
+}
+
+// typeRunes feeds each rune in s one at a time through Update.
+func typeRunes(t *testing.T, e Editor, s string) Editor {
+	t.Helper()
+	for _, r := range s {
+		e, _ = e.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	return e
+}
+
+func TestEditor_CtrlTCyclesThreeTabs(t *testing.T) {
+	e := New(domain.FlagSchema{})
+	e, _ = e.Open(Draft{Name: "X"})
+	if e.subTab != subTabEssentials {
+		t.Fatalf("initial = %v, want Essentials", e.subTab)
+	}
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	if e.subTab != subTabAdvanced {
+		t.Errorf("after 1x ctrl+t = %v, want Advanced", e.subTab)
+	}
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	if e.subTab != subTabEnvironment {
+		t.Errorf("after 2x ctrl+t = %v, want Environment", e.subTab)
+	}
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	if e.subTab != subTabEssentials {
+		t.Errorf("after 3x ctrl+t = %v, want Essentials", e.subTab)
+	}
+}
+
+func TestEditor_EnvTab_AddRow(t *testing.T) {
+	e := envEditorOpen(t, nil)
+	// 'n' to start adding a new row.
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if !e.envEditing {
+		t.Fatal("'n' should enter envEditing")
+	}
+	if e.envEditIndex != -1 {
+		t.Errorf("envEditIndex = %d, want -1 (new row)", e.envEditIndex)
+	}
+	// Type KEY, tab to value, type VALUE, enter to commit.
+	e = typeRunes(t, e, "FOO")
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if e.envEditField != envFieldValue {
+		t.Fatal("tab should switch to value field")
+	}
+	e = typeRunes(t, e, "1")
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if e.envEditing {
+		t.Fatal("enter should commit and exit editing")
+	}
+	if got := e.CurrentDraft().Env; len(got) != 1 || got[0].Key != "FOO" || got[0].Value != "1" {
+		t.Errorf("Env = %+v, want [{FOO 1}]", got)
+	}
+	if e.envSubmitError != "" {
+		t.Errorf("envSubmitError = %q, want empty", e.envSubmitError)
+	}
+}
+
+func TestEditor_EnvTab_RejectsInvalidKey(t *testing.T) {
+	e := envEditorOpen(t, nil)
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	e = typeRunes(t, e, "123BAD")
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyTab})
+	e = typeRunes(t, e, "x")
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !e.envEditing {
+		t.Error("invalid key should keep editor in editing mode")
+	}
+	if e.envSubmitError == "" {
+		t.Error("envSubmitError should be set on invalid key")
+	}
+	if got := e.CurrentDraft().Env; len(got) != 0 {
+		t.Errorf("Env = %+v, want empty (rejected)", got)
+	}
+}
+
+func TestEditor_EnvTab_RejectsDuplicateKey(t *testing.T) {
+	e := envEditorOpen(t, []domain.EnvVar{{Key: "FOO", Value: "1"}})
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	e = typeRunes(t, e, "FOO")
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyTab})
+	e = typeRunes(t, e, "2")
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !e.envEditing {
+		t.Error("duplicate key should keep editor in editing mode")
+	}
+	if !strings.Contains(strings.ToLower(e.envSubmitError), "duplicate") {
+		t.Errorf("envSubmitError = %q, want it to mention duplicate", e.envSubmitError)
+	}
+	if got := e.CurrentDraft().Env; len(got) != 1 || got[0].Value != "1" {
+		t.Errorf("Env = %+v, original entry should be untouched", got)
+	}
+}
+
+func TestEditor_EnvTab_DeleteRow(t *testing.T) {
+	e := envEditorOpen(t, []domain.EnvVar{
+		{Key: "FOO", Value: "1"},
+		{Key: "BAR", Value: "2"},
+	})
+	// Cursor starts at 0; 'd' removes FOO.
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	got := e.CurrentDraft().Env
+	if len(got) != 1 || got[0].Key != "BAR" {
+		t.Errorf("Env = %+v, want [{BAR 2}]", got)
+	}
+}
+
+func TestEditor_EnvTab_EditExistingRow(t *testing.T) {
+	e := envEditorOpen(t, []domain.EnvVar{{Key: "FOO", Value: "old"}})
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !e.envEditing || e.envEditIndex != 0 {
+		t.Fatalf("enter should edit row 0; envEditing=%v envEditIndex=%d", e.envEditing, e.envEditIndex)
+	}
+	if e.envEditValue != "old" {
+		t.Errorf("envEditValue = %q, want %q (hydrated)", e.envEditValue, "old")
+	}
+	// Field starts on value (most common edit). Clear "old" and type "new".
+	for range "old" {
+		e, _ = e.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	}
+	e = typeRunes(t, e, "new")
+	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	got := e.CurrentDraft().Env
+	if len(got) != 1 || got[0].Key != "FOO" || got[0].Value != "new" {
+		t.Errorf("Env = %+v, want [{FOO new}]", got)
+	}
+}

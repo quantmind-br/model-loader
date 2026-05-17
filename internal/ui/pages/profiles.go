@@ -552,6 +552,7 @@ func (p ProfilesPage) startEditSelected() (tea.Model, tea.Cmd) {
 		FlashAttn:   profile_editor.FlashAttnToString(pr.Args["flash-attn"]),
 		CacheTypeK:  profile_editor.ArgString(pr.Args["cache-type-k"]),
 		CacheTypeV:  profile_editor.ArgString(pr.Args["cache-type-v"]),
+		Env:         append([]domain.EnvVar(nil), pr.Launch.Env...),
 	}
 	// Copy remaining args not mapped to hardcoded Essentials fields into
 	// the generic Args map so the Advanced tab can edit them.
