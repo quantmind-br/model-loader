@@ -33,6 +33,7 @@ type FileItem struct {
 	Selected  bool
 }
 
+// HFFileListMsg carries the async file-listing response back into Update.
 type HFFileListMsg struct {
 	Files []FileItem
 	Err   error
@@ -157,7 +158,7 @@ func (p *HFFilePicker) View() string {
 		if f.Selected {
 			checked = "[x]"
 		}
-		size := humanizeBytes(f.Size)
+		size := humanBytes(f.Size)
 		b.WriteString(fmt.Sprintf("%s %s %s (%s)\n", cursor, checked, f.RFilename, size))
 	}
 
@@ -204,15 +205,4 @@ func (p *HFFilePicker) IsSnapshot() bool {
 	return p.isSnapshot
 }
 
-func humanizeBytes(b int64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := int64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
-}
+

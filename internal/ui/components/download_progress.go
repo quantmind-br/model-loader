@@ -22,6 +22,7 @@ type DownloadState struct {
 	Err    string
 }
 
+// DownloadCancelMsg is emitted when the user requests cancellation of a download.
 type DownloadCancelMsg struct {
 	ID string
 }
