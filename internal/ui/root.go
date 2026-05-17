@@ -77,6 +77,13 @@ type HintProvider interface {
 	Hints() string
 }
 
+// HelpContextProvider is the optional contract a page implements to
+// supply richer markdown context for the help modal. When absent the
+// root falls back to HintProvider.Hints().
+type HelpContextProvider interface {
+	HelpContext() string
+}
+
 // globalHints is the prefix shown in every status bar line.
 const globalHints = "[1-6] tabs  [tab] next  [q] quit" + components.HelpToken
 
@@ -350,7 +357,13 @@ func (m RootModel) View() string {
 		return components.Modal(m.bootBlocker.title, m.bootBlocker.body+"\n\nPress q to quit.", m.width, m.height)
 	}
 	if m.helpOpen {
-		body, err := components.RenderHelp(m.width - 8) // padding
+		activeContext := ""
+		if h, ok := m.pages[m.active].(HelpContextProvider); ok {
+			activeContext = h.HelpContext()
+		} else if h, ok := m.pages[m.active].(HintProvider); ok {
+			activeContext = h.Hints()
+		}
+		body, err := components.RenderContextualHelp(m.width-8, activeContext)
 		if err != nil {
 			body = components.HelpMarkdown // fallback raw
 		}

@@ -29,7 +29,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 │   │   └── vllmhelp/      # Embedded schema for vLLM
 │   └── ui/
 │       ├── components/    # Help, Modal, Picker, Sparkline, Statusbar
-│       ├── pages/         # 5 tabs + profile_editor sub-package
+│       ├── pages/         # 6 tabs + profile_editor sub-package
 │       │   └── profile_editor/  # huh-based profile editing
 │       └── theme/
 ├── testdata/              # Golden test fixtures (help-v7376.txt, .golden.json)
@@ -48,7 +48,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 | Profile CRUD | internal/service/profilestore/ | FS-based |
 | Flag validation | internal/service/validator/ | |
 | GPU monitoring | internal/service/monitor/ | nvidia-smi |
-| TUI pages | internal/ui/pages/ | 5 tabs + profile_editor sub-package |
+| TUI pages | internal/ui/pages/ | 6 tabs + profile_editor sub-package |
 | Profile editing | internal/ui/pages/profile_editor/ | huh forms, draft state machine |
 | Config | internal/config/ | Viper TOML at ~/.config/model-loader/ |
 | Logging | internal/log/ | file-only slog, rotate-by-session |
@@ -63,7 +63,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 - DO NOT run `llama-server` manually while TUI is managing instances
 - DO NOT edit `testdata/help-v7376.golden.json` directly — regenerate via golden test update
 - DO NOT assume process cleanup on TUI exit — processes are intentionally orphaned
-- DO NOT intercept printable runes (`q`, `1-5`, `?`, letters, digits) globally in `internal/ui/root.go` without first checking `activePageCapturesInput()`. Only `ctrl+c` may bypass this gate. Pages with active huh forms / pickers / inline modals must implement `InputCapture.IsCapturingInput() bool` returning `true` while in those states. Otherwise the global shortcut steals the keystroke from the editable field and the user can't type that character.
+- DO NOT intercept printable runes (`q`, `1-6`, `?`, letters, digits) globally in `internal/ui/root.go` without first checking `activePageCapturesInput()`. Only `ctrl+c` may bypass this gate. Pages with active huh forms / pickers / inline modals must implement `InputCapture.IsCapturingInput() bool` returning `true` while in those states. Otherwise the global shortcut steals the keystroke from the editable field and the user can't type that character.
 
 ## TUI INPUT ROUTING RULES
 - **Global shortcut gate**: every shortcut in `RootModel.Update` that consumes a printable rune MUST be wrapped in `if !m.activePageCapturesInput() { ... }`. Exception: `ctrl+c` is unconditional escape.
@@ -72,7 +72,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 - **Tests**: any new global shortcut MUST have a paired test using the `capturingPage` test double in `internal/ui/root_test.go` proving the key is forwarded (not consumed) when the active page captures input.
 
 ## UNIQUE STYLES
-- Charmbracelet TUI with 5-tab model (tea.Program)
+- Charmbracelet TUI with 6-tab model (tea.Program)
 - Viper config with mapstructure tags
 - Domain-driven service layer under internal/service/
 - Embedded fallback schema for llama-server --help (parses at runtime if binary present)

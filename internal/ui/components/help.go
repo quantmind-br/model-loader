@@ -8,7 +8,7 @@ const HelpMarkdown = `# model-loader — Keybindings
 
 ## Global
 
-- ` + "`1`" + `–` + "`5`" + ` — switch directly to a tab
+- ` + "`1`" + `–` + "`6`" + ` — switch directly to a tab
 - ` + "`Tab`" + ` — next tab     ` + "`Shift+Tab`" + ` — previous tab
 - ` + "`?`" + ` — toggle this help
 - ` + "`q`" + ` / ` + "`Ctrl+C`" + ` — quit (background instances survive)
@@ -21,6 +21,7 @@ _Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or
 - ` + "`x`" + ` — delete         ` + "`enter`" + ` — edit / submit Save
 - ` + "`esc`" + ` — cancel editing (prompts to discard unsaved changes)
 - ` + "`L`" + ` — launch directly from selected profile
+- ` + "`e`" + ` — export all profiles to JSON bundle
 - ` + "`ctrl+t`" + ` — toggle Essentials / Advanced sub-tab while editing
 - ` + "`/`" + ` — filter
 
@@ -51,14 +52,32 @@ _Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or
 - ` + "`x`" + ` — delete selected backend
 - ` + "`D`" + ` — set selected backend as default
 - ` + "`R`" + ` — refresh selected backend schema
+- ` + "`P`" + ` — probe selected backend (latency / version)
 - ` + "`/`" + ` — filter
+
+## Server tab
+
+- ` + "`s`" + ` — start HTTP proxy listener
+- ` + "`x`" + ` — stop listener
+- ` + "`r`" + ` — refresh status
 `
 
 // RenderHelp retorna o markdown HelpMarkdown renderizado via glamour.
 // width informa ao renderer o tamanho da viewport em colunas (afeta wrap).
 func RenderHelp(width int) (string, error) {
+	return RenderContextualHelp(width, "")
+}
+
+// RenderContextualHelp renders HelpMarkdown plus an optional active-page
+// context section. activeContext is appended as a "Current Page" heading
+// when non-empty.
+func RenderContextualHelp(width int, activeContext string) (string, error) {
 	if width <= 0 {
 		width = 80
+	}
+	content := HelpMarkdown
+	if activeContext != "" {
+		content += "\n## Current Page\n\n" + activeContext + "\n"
 	}
 	r, err := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
@@ -67,5 +86,5 @@ func RenderHelp(width int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return r.Render(HelpMarkdown)
+	return r.Render(content)
 }

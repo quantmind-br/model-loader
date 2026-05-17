@@ -67,10 +67,10 @@ huh.NewOption("Reveal path", "reveal"),
 ### B6 — Status-bar global não exibe `[?] help`
 **Onde:** `internal/ui/root.go:74`:
 ```go
-status: components.StatusBar{Hints: "[1-5] tabs  [tab] next  [q] quit"},
+status: components.StatusBar{Hints: "[1-6] tabs  [tab] next  [q] quit"},
 ```
 Commit recente *“feat(ui): consistent footer hints across all pages, including [?] help”* não atualizou o root. As páginas mostram `[?] help` no rodapé interno, mas o `StatusBar` global nunca menciona `?`.
-**Fix:** mudar hint para `[1-5] tabs  [tab] next  [?] help  [q] quit`.
+**Fix:** mudar hint para `[1-6] tabs  [tab] next  [?] help  [q] quit`.
 
 ### B7 — Hint do detail-pane em Profiles omite `[L]`
 **Onde:** `internal/ui/pages/profiles.go:276`.

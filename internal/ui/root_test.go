@@ -216,6 +216,41 @@ func TestRoot_HelpToggle(t *testing.T) {
 	}
 }
 
+func TestRoot_HelpModalShowsPageContext(t *testing.T) {
+	r := NewRoot(TabProfiles).
+		WithProfilesPage(hintingPage{name: "P"}).
+		WithLauncherPage(pages.Placeholder{TabName: "L"}).
+		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithModelsPage(pages.Placeholder{TabName: "Md"})
+	r.width = 120
+	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	rm := updated.(RootModel)
+	view := rm.View()
+	if !strings.Contains(view, "[x] do-x") {
+		t.Errorf("help modal missing page context; view:\n%s", view)
+	}
+}
+
+func TestRoot_HelpModalSwitchesContextOnTabChange(t *testing.T) {
+	r := NewRoot(TabProfiles).
+		WithProfilesPage(hintingPage{name: "P"}).
+		WithLauncherPage(hintingPage{name: "L"}).
+		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithModelsPage(pages.Placeholder{TabName: "Md"})
+	r.width = 120
+	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	rm := updated.(RootModel)
+	if !strings.Contains(rm.View(), "[x] do-x") {
+		t.Fatal("help missing profiles context")
+	}
+	updated, _ = rm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	rm = updated.(RootModel)
+	view := rm.View()
+	if !strings.Contains(view, "[x] do-x") {
+		t.Errorf("help missing launcher context after tab switch; view:\n%s", view)
+	}
+}
+
 func TestRoot_HelpSwallowsTabSwitch(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
@@ -476,6 +511,23 @@ func TestRoot_StatusBarIncludesActivePageHints(t *testing.T) {
 	}
 	if !strings.Contains(view, "[?] help") {
 		t.Errorf("global help token missing after tab switch; view:\n%s", view)
+	}
+}
+
+func TestRoot_NumberFourSwitchesToModels(t *testing.T) {
+	tm := teatest.NewTestModel(t, NewRoot(TabProfiles), teatest.WithInitialTermSize(120, 30))
+	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'4'}})
+
+	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
+		return strings.Contains(string(out), "Models")
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+
+	if err := tm.Quit(); err != nil {
+		t.Fatalf("Quit returned err: %v", err)
 	}
 }
 

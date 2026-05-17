@@ -8,7 +8,7 @@
 
 ## Overview
 
-model-loader is a terminal UI for managing `llama-server` profiles and processes. It is built as a single Go binary with a 5-tab bubbletea application (`tea.Program`) backed by a domain-driven service layer.
+model-loader is a terminal UI for managing `llama-server` profiles and processes. It is built as a single Go binary with a 6-tab bubbletea application (`tea.Program`) backed by a domain-driven service layer.
 
 The architecture separates concerns into three layers:
 
