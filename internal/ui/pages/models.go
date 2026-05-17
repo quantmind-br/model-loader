@@ -27,6 +27,20 @@ import (
 // (which may be unavailable on CI without a display server).
 var clipboardWriter = clipboard.WriteAll
 
+type hfSearcherAdapter struct{ client *hfhub.Client }
+
+func (a hfSearcherAdapter) Search(ctx context.Context, query string, limit int) ([]components.SearchResult, error) {
+	raw, err := a.client.Search(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]components.SearchResult, len(raw))
+	for i, r := range raw {
+		out[i] = components.SearchResult(r)
+	}
+	return out, nil
+}
+
 // pathStatus tracks per-root scan progress shown above the table.
 type pathStatus struct {
 	state string // "scanning" | "scanned" | "error"
@@ -296,6 +310,15 @@ func (p ModelsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		p.width, p.height = msg.Width, msg.Height
 		p.table.SetHeight(msg.Height - 8)
+		if p.hfSearch != nil {
+			p.hfSearch.SetSize(msg.Width, msg.Height)
+		}
+		if p.hfFilePicker != nil {
+			p.hfFilePicker.SetSize(msg.Width, msg.Height)
+		}
+		if p.downloads != nil {
+			p.downloads.SetWidth(msg.Width)
+		}
 		return p, nil
 	case components.FlashClearMsg:
 		p.flash, _ = p.flash.Update(msg)
@@ -539,6 +562,15 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	}
+	if p.hfSearch != nil && p.hfSearch.IsActive() {
+		return p, p.hfSearch.Update(msg)
+	}
+	if p.hfFilePicker != nil && p.hfFilePicker.IsActive() {
+		return p, p.hfFilePicker.Update(msg)
+	}
+	if p.downloads != nil && p.downloads.IsFocusVisible() {
+		return p, p.downloads.Update(msg)
+	}
 
 	switch {
 	case key.Matches(msg, p.keys.Filter):
@@ -559,6 +591,15 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return next, cmd
 	case key.Matches(msg, p.keys.Enter):
 		return p.openActionMenuForSelection()
+	case msg.String() == "s":
+		if !p.filterMode && p.hfClient != nil {
+			p.hfSearch = components.NewHFSearchPicker(hfSearcherAdapter{client: p.hfClient}, p.width, p.height)
+			return p, p.hfSearch.Init()
+		}
+	case msg.String() == "x":
+		if p.downloads != nil && p.downloads.IsVisible() {
+			return p, p.downloads.Update(msg)
+		}
 	}
 
 	t, cmd := p.table.Update(msg)
@@ -614,11 +655,26 @@ func (p ModelsPage) View() string {
 		filterLine = theme.Subtitle.Render(fmt.Sprintf("filter: %q", p.filter))
 	}
 	footer := p.flash.View()
+	var content string
 	if len(p.files) == 0 && (len(p.paths) == 0 || p.hasScannedRoot()) {
 		emptyMsg := theme.Subtitle.Render("(no .gguf files in configured search paths — edit ~/.config/model-loader/config.toml or press [R] to rescan)")
-		return lipgloss.JoinVertical(lipgloss.Left, header, statusLine, emptyMsg, filterLine, footer)
+		content = lipgloss.JoinVertical(lipgloss.Left, header, statusLine, emptyMsg, filterLine, footer)
+	} else {
+		content = lipgloss.JoinVertical(lipgloss.Left, header, statusLine, p.table.View(), filterLine, footer)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, header, statusLine, p.table.View(), filterLine, footer)
+	if p.hfSearch != nil && p.hfSearch.IsActive() {
+		content = p.hfSearch.View()
+	}
+	if p.hfFilePicker != nil && p.hfFilePicker.IsActive() {
+		content = p.hfFilePicker.View()
+	}
+	if p.downloads != nil && p.downloads.IsVisible() {
+		progressView := p.downloads.View()
+		if progressView != "" {
+			content = content + "\n" + progressView
+		}
+	}
+	return content
 }
 
 // isScanning reports whether any configured root is still being scanned.
