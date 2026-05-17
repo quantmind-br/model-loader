@@ -18,6 +18,7 @@ var ErrManagerClosed = errors.New("download manager closed")
 type Manager struct {
 	httpClient    *http.Client
 	maxConcurrent int
+	userAgent     string
 	mu            sync.Mutex
 	states        map[ID]*State
 	queue         []ID
@@ -42,6 +43,12 @@ func NewManager(httpClient *http.Client, maxConcurrent int) *Manager {
 		states:        make(map[ID]*State),
 		active:        make(map[ID]context.CancelFunc),
 	}
+}
+
+// WithUserAgent sets the User-Agent header for all download requests.
+func (m *Manager) WithUserAgent(ua string) *Manager {
+	m.userAgent = ua
+	return m
 }
 
 // Start enqueues a new download described by spec.
@@ -182,6 +189,9 @@ func (m *Manager) download(ctx context.Context, state *State) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, state.Spec.URL, nil)
 	if err != nil {
 		return err
+	}
+	if m.userAgent != "" {
+		req.Header.Set("User-Agent", m.userAgent)
 	}
 	resp, err := m.httpClient.Do(req)
 	if err != nil {

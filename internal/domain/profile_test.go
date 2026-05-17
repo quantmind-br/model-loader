@@ -61,6 +61,69 @@ func TestProfile_JSONRoundtrip(t *testing.T) {
 	}
 }
 
+func TestProfile_JSONRoundtrip_WithEnv(t *testing.T) {
+	original := Profile{
+		SchemaVersion: SchemaVersion,
+		ID:            "qwen",
+		Name:          "Qwen",
+		Model:         "/m.gguf",
+		Args:          map[string]any{"port": float64(8080)},
+		Launch: LaunchConfig{
+			DefaultBackground: true,
+			Env: []EnvVar{
+				{Key: "GGML_CUDA_FORCE_CUBLAS_COMPUTE_16F", Value: "1"},
+				{Key: "CUDA_VISIBLE_DEVICES", Value: "0,1"},
+			},
+		},
+	}
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded Profile
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(decoded.Launch.Env) != 2 {
+		t.Fatalf("Env len = %d, want 2", len(decoded.Launch.Env))
+	}
+	if decoded.Launch.Env[0].Key != "GGML_CUDA_FORCE_CUBLAS_COMPUTE_16F" || decoded.Launch.Env[0].Value != "1" {
+		t.Errorf("Env[0] = %+v", decoded.Launch.Env[0])
+	}
+	if decoded.Launch.Env[1].Key != "CUDA_VISIBLE_DEVICES" || decoded.Launch.Env[1].Value != "0,1" {
+		t.Errorf("Env[1] = %+v", decoded.Launch.Env[1])
+	}
+}
+
+func TestProfile_JSONRoundtrip_EmptyEnvOmitted(t *testing.T) {
+	p := Profile{
+		SchemaVersion: SchemaVersion,
+		ID:            "no-env",
+		Name:          "No Env",
+		Model:         "/m.gguf",
+		Args:          map[string]any{"port": float64(8080)},
+		Launch:        LaunchConfig{},
+	}
+	data, err := json.Marshal(p)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if bytes := string(data); bytes != "" && bytes[0] != 0 {
+		if got := string(data); contains(got, `"env"`) {
+			t.Errorf("expected no \"env\" key when Env is nil, got: %s", got)
+		}
+	}
+}
+
+func contains(s, sub string) bool {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}
+
 func TestSlugify(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"Qwen Coder 32B", "qwen-coder-32b"},

@@ -53,7 +53,7 @@ func runTUI() int {
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	hfClient := hfhub.NewClient(httpClient, "model-loader/dev")
-	dlManager := downloadmgr.NewManager(httpClient, 3)
+	dlManager := downloadmgr.NewManager(httpClient, 3).WithUserAgent("model-loader/dev")
 	defer dlManager.Close()
 
 	scanner := modelscanner.New()

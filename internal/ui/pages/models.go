@@ -581,7 +581,7 @@ func (p ModelsPage) startSelectedDownloads() (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 			continue
 		}
-		url := fmt.Sprintf("%s/%s/resolve/main/%s", hfhub.DefaultBaseURL, repoID, file)
+		url := p.hfClient.DownloadURL(repoID, file)
 		_, err = p.dlManager.Start(downloadmgr.Spec{
 			RepoID:     repoID,
 			Filename:   file,

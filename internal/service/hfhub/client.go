@@ -44,6 +44,14 @@ func NewClient(httpClient *http.Client, userAgent string) *Client {
 	}
 }
 
+// BaseURL returns the client's runtime base URL (respects HF_BASE_URL).
+func (c *Client) BaseURL() string { return c.baseURL }
+
+// DownloadURL builds a direct download URL for a file in a repo.
+func (c *Client) DownloadURL(repoID, filename string) string {
+	return c.baseURL + "/" + repoID + "/resolve/main/" + filename
+}
+
 // searchResultDTO is the wire shape returned by /api/models?search=…&full=true.
 type searchResultDTO struct {
 	ID           string   `json:"id"`
