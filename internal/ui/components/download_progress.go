@@ -22,7 +22,7 @@ type DownloadState struct {
 	Err    string
 }
 
-type downloadCancelMsg struct {
+type DownloadCancelMsg struct {
 	ID string
 }
 
@@ -70,7 +70,7 @@ func (p *DownloadProgress) Update(msg tea.Msg) tea.Cmd {
 					state := snap[p.focusIndex]
 					if state.Status == "active" {
 						return func() tea.Msg {
-							return downloadCancelMsg{ID: state.ID}
+							return DownloadCancelMsg{ID: state.ID}
 						}
 					}
 				}

@@ -33,10 +33,12 @@ type FileItem struct {
 	Selected  bool
 }
 
-type hfFileListMsg struct {
-	files []FileItem
-	err   error
+type HFFileListMsg struct {
+	Files []FileItem
+	Err   error
 }
+
+type hfFileListMsg = HFFileListMsg
 
 // HFFilePicker is an overlay for selecting files from a Hugging Face repo.
 type HFFilePicker struct {
@@ -70,7 +72,7 @@ func (p *HFFilePicker) Init() tea.Cmd {
 	return func() tea.Msg {
 		info, err := p.lister.RepoInfo(context.Background(), p.repoID)
 		if err != nil {
-			return hfFileListMsg{err: err}
+			return hfFileListMsg{Err: err}
 		}
 		files := make([]FileItem, 0, len(info.Siblings))
 		for _, s := range info.Siblings {
@@ -79,7 +81,7 @@ func (p *HFFilePicker) Init() tea.Cmd {
 				Size:      s.Size,
 			})
 		}
-		return hfFileListMsg{files: files}
+		return hfFileListMsg{Files: files}
 	}
 }
 
@@ -107,18 +109,18 @@ func (p *HFFilePicker) Update(msg tea.Msg) tea.Cmd {
 		}
 	case hfFileListMsg:
 		p.loading = false
-		if msg.err != nil {
-			p.err = msg.err
+		if msg.Err != nil {
+			p.err = msg.Err
 			return nil
 		}
 		if p.isSnapshot {
-			p.files = msg.files
+			p.files = msg.Files
 			for i := range p.files {
 				p.files[i].Selected = true
 			}
 		} else {
-			filtered := make([]FileItem, 0, len(msg.files))
-			for _, f := range msg.files {
+			filtered := make([]FileItem, 0, len(msg.Files))
+			for _, f := range msg.Files {
 				if strings.HasSuffix(f.RFilename, ".gguf") {
 					filtered = append(filtered, f)
 				}
@@ -195,6 +197,11 @@ func (p *HFFilePicker) SetSize(w, h int) {
 // IsActive reports whether the picker is open.
 func (p *HFFilePicker) IsActive() bool {
 	return p.active
+}
+
+// IsSnapshot reports whether picker will download whole repository snapshot.
+func (p *HFFilePicker) IsSnapshot() bool {
+	return p.isSnapshot
 }
 
 func humanizeBytes(b int64) string {

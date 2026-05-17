@@ -3,6 +3,7 @@ package pages
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -39,6 +40,69 @@ func (a hfSearcherAdapter) Search(ctx context.Context, query string, limit int) 
 		out[i] = components.SearchResult(r)
 	}
 	return out, nil
+}
+
+type hfFileListerAdapter struct{ client *hfhub.Client }
+
+func (a hfFileListerAdapter) RepoInfo(ctx context.Context, repoID string) (*components.RepoInfo, error) {
+	info, err := a.client.RepoInfo(ctx, repoID)
+	if err != nil {
+		return nil, err
+	}
+	out := &components.RepoInfo{
+		ID:       info.ID,
+		Tags:     append([]string(nil), info.Tags...),
+		Siblings: make([]components.Sibling, len(info.Siblings)),
+	}
+	for i, s := range info.Siblings {
+		out.Siblings[i] = components.Sibling(s)
+	}
+	return out, nil
+}
+
+type downloadSnapshotAdapter struct{ manager *downloadmgr.Manager }
+
+func (a downloadSnapshotAdapter) Snapshot() []components.DownloadState {
+	if a.manager == nil {
+		return nil
+	}
+	raw := a.manager.Snapshot()
+	out := make([]components.DownloadState, 0, len(raw))
+	for _, st := range raw {
+		out = append(out, components.DownloadState{
+			ID:     string(st.ID),
+			Name:   st.Spec.Filename,
+			Status: downloadStatusLabel(st.Status),
+			Bytes:  st.Bytes,
+			Total:  st.Total,
+			Err:    downloadErrString(st.Err),
+		})
+	}
+	return out
+}
+
+func downloadStatusLabel(status downloadmgr.Status) string {
+	switch status {
+	case downloadmgr.StatusQueued:
+		return "queued"
+	case downloadmgr.StatusActive:
+		return "active"
+	case downloadmgr.StatusCompleted:
+		return "completed"
+	case downloadmgr.StatusFailed:
+		return "failed"
+	case downloadmgr.StatusCancelled:
+		return "cancelled"
+	default:
+		return "unknown"
+	}
+}
+
+func downloadErrString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 // pathStatus tracks per-root scan progress shown above the table.
@@ -171,6 +235,7 @@ func (p ModelsPage) WithDownloadManager(m *downloadmgr.Manager) ModelsPage {
 	p.dlManager = m
 	if m != nil {
 		p.downloadEvents = m.Subscribe()
+		p.downloads = components.NewDownloadProgress(downloadSnapshotAdapter{manager: m}, p.width)
 	}
 	return p
 }
@@ -226,22 +291,30 @@ type downloadEventMsg struct {
 // matches ModelsPage.searchEpoch at request time; stale responses from
 // abandoned debounce windows are discarded by epoch comparison.
 type hfSearchResultMsg struct {
-	epoch   int
-	results []components.ResultItem
-	err     error
+	Epoch   int
+	Results []components.ResultItem
+	Err     error
 }
 
 // hfFileListMsg delivers the file siblings returned by RepoInfo for the
 // pendingRepoID — consumed by the file picker overlay (T15).
 type hfFileListMsg struct {
-	files []components.FileItem
-	err   error
+	Files []components.FileItem
+	Err   error
 }
 
 // downloadCancelMsg requests cancellation of a download by ID. Emitted
 // by the progress footer (T15 wires the Manager.Cancel call).
 type downloadCancelMsg struct {
 	id string
+}
+
+func (msg hfSearchResultMsg) componentMsg() components.HFSearchResultMsg {
+	return components.HFSearchResultMsg(msg)
+}
+
+func (msg hfFileListMsg) componentMsg() components.HFFileListMsg {
+	return components.HFFileListMsg(msg)
 }
 
 func (p ModelsPage) Init() tea.Cmd {
@@ -306,6 +379,14 @@ func waitForScanEvent(ch <-chan domain.ScanEvent, scanID int) tea.Cmd {
 }
 
 func (p ModelsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if p.downloadEvents != nil {
+		select {
+		case ev := <-p.downloadEvents:
+			return p, func() tea.Msg { return downloadEventMsg{event: ev} }
+		default:
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		p.width, p.height = msg.Width, msg.Height
@@ -350,6 +431,38 @@ func (p ModelsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case modelsReloadMsg:
 		next, cmd := p.beginRescan(false)
 		return next, cmd
+	case downloadEventMsg:
+		return p.handleDownloadEvent(msg.event)
+	case components.HFSearchResultMsg:
+		if p.hfSearch != nil && p.hfSearch.IsActive() {
+			return p, p.hfSearch.Update(msg)
+		}
+		return p, nil
+	case hfSearchResultMsg:
+		if p.hfSearch != nil && p.hfSearch.IsActive() {
+			return p, p.hfSearch.Update(msg.componentMsg())
+		}
+		return p, nil
+	case components.HFFileListMsg:
+		if p.hfFilePicker != nil && p.hfFilePicker.IsActive() {
+			return p, p.hfFilePicker.Update(msg)
+		}
+		return p, nil
+	case hfFileListMsg:
+		if p.hfFilePicker != nil && p.hfFilePicker.IsActive() {
+			return p, p.hfFilePicker.Update(msg.componentMsg())
+		}
+		return p, nil
+	case components.DownloadCancelMsg:
+		if p.dlManager != nil {
+			_ = p.dlManager.Cancel(downloadmgr.ID(msg.ID))
+		}
+		return p, nil
+	case downloadCancelMsg:
+		if p.dlManager != nil {
+			_ = p.dlManager.Cancel(downloadmgr.ID(msg.id))
+		}
+		return p, nil
 	case components.ProfilePickedMsg:
 		return p.handleProfilePicked(msg)
 	case components.ProfilePickerCancelledMsg:
@@ -392,6 +505,104 @@ func (p ModelsPage) handleProfilePicked(msg components.ProfilePickedMsg) (tea.Mo
 	}
 	p, fc := p.withFlash("updated " + msg.ID)
 	return p, fc
+}
+
+func (p ModelsPage) handleDownloadEvent(ev downloadmgr.Event) (tea.Model, tea.Cmd) {
+	if p.downloads == nil && p.dlManager != nil {
+		p.downloads = components.NewDownloadProgress(downloadSnapshotAdapter{manager: p.dlManager}, p.width)
+	}
+	switch ev.State.Status {
+	case downloadmgr.StatusCompleted:
+		p, fc := p.withFlash("downloaded: " + ev.State.Spec.Filename)
+		next, scanCmd := p.beginRescan(false)
+		return next, tea.Batch(fc, scanCmd)
+	case downloadmgr.StatusFailed:
+		msg := "download failed"
+		if ev.State.Err != nil {
+			msg += ": " + ev.State.Err.Error()
+		}
+		return p.withFlash(msg)
+	default:
+		return p, nil
+	}
+}
+
+func (p ModelsPage) openHFFilePicker(item components.ResultItem) (tea.Model, tea.Cmd) {
+	if p.hfClient == nil {
+		return p.withFlash("HF client not wired")
+	}
+	isSnapshot := !item.HasGGUFTag()
+	p.pendingRepoID = item.ModelID
+	p.hfFilePicker = components.NewHFFilePicker(
+		hfFileListerAdapter{client: p.hfClient},
+		item.ModelID,
+		isSnapshot,
+		p.width,
+		p.height,
+	)
+	p.hfSearch = nil
+	return p, p.hfFilePicker.Init()
+}
+
+func (p ModelsPage) startSelectedDownloads() (tea.Model, tea.Cmd) {
+	if p.hfFilePicker == nil {
+		return p, nil
+	}
+	if p.dlManager == nil {
+		p.hfFilePicker = nil
+		p.pendingRepoID = ""
+		return p.withFlash("download manager not wired")
+	}
+	if len(p.paths) == 0 {
+		p.hfFilePicker = nil
+		p.pendingRepoID = ""
+		return p.withFlash(downloadmgr.ErrNoSearchPath.Error())
+	}
+
+	files := p.hfFilePicker.SelectedFiles()
+	isSnapshot := p.hfFilePicker.IsSnapshot()
+	p.hfFilePicker = nil
+	repoID := p.pendingRepoID
+	p.pendingRepoID = ""
+
+	started := 0
+	var cmds []tea.Cmd
+	for _, file := range files {
+		destDir, destFile, err := downloadmgr.ResolveDest(p.paths[0], repoID, file, isSnapshot)
+		if errors.Is(err, downloadmgr.ErrAlreadyExists) {
+			var cmd tea.Cmd
+			p.flash, cmd = p.flash.Set("already exists: " + file)
+			cmds = append(cmds, cmd)
+			continue
+		}
+		if err != nil {
+			var cmd tea.Cmd
+			p.flash, cmd = p.flash.Set(err.Error())
+			cmds = append(cmds, cmd)
+			continue
+		}
+		url := fmt.Sprintf("%s/%s/resolve/main/%s", hfhub.DefaultBaseURL, repoID, file)
+		_, err = p.dlManager.Start(downloadmgr.Spec{
+			RepoID:     repoID,
+			Filename:   file,
+			URL:        url,
+			DestDir:    destDir,
+			DestFile:   destFile,
+			IsSnapshot: isSnapshot,
+		})
+		if err != nil {
+			var cmd tea.Cmd
+			p.flash, cmd = p.flash.Set(err.Error())
+			cmds = append(cmds, cmd)
+			continue
+		}
+		started++
+	}
+
+	p.downloads = components.NewDownloadProgress(downloadSnapshotAdapter{manager: p.dlManager}, p.width)
+	p, fc := p.withFlash(fmt.Sprintf("starting %d download(s)", started))
+	cmds = append(cmds, fc)
+	return p, tea.Batch(cmds...)
 }
 
 // updateActionMenu owns the inline action selector while it is on
@@ -563,9 +774,19 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	if p.hfSearch != nil && p.hfSearch.IsActive() {
+		if key.Matches(msg, p.keys.Enter) {
+			item, ok := p.hfSearch.Selected()
+			if !ok {
+				return p, nil
+			}
+			return p.openHFFilePicker(item)
+		}
 		return p, p.hfSearch.Update(msg)
 	}
 	if p.hfFilePicker != nil && p.hfFilePicker.IsActive() {
+		if key.Matches(msg, p.keys.Enter) {
+			return p.startSelectedDownloads()
+		}
 		return p, p.hfFilePicker.Update(msg)
 	}
 	if p.downloads != nil && p.downloads.IsFocusVisible() {

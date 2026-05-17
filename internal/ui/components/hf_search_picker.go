@@ -20,15 +20,15 @@ type HFSearcher interface {
 // SearchResult mirrors hfhub.SearchResult so the component package does not
 // need to import internal/service/hfhub.
 type SearchResult struct {
-	ID            string
-	Author        string
-	ModelID       string
-	Tags          []string
-	Downloads     int
-	Likes         int
-	LastModified  time.Time
-	LibraryName   string
-	PipelineTag   string
+	ID           string
+	Author       string
+	ModelID      string
+	Tags         []string
+	Downloads    int
+	Likes        int
+	LastModified time.Time
+	LibraryName  string
+	PipelineTag  string
 }
 
 // ResultItem is the local representation used by the picker.
@@ -37,26 +37,28 @@ type ResultItem struct {
 	Index int
 }
 
-// hfSearchResultMsg carries the async search response back into Update.
-type hfSearchResultMsg struct {
-	epoch   int
-	results []ResultItem
-	err     error
+// HFSearchResultMsg carries the async search response back into Update.
+type HFSearchResultMsg struct {
+	Epoch   int
+	Results []ResultItem
+	Err     error
 }
+
+type hfSearchResultMsg = HFSearchResultMsg
 
 // HFSearchPicker is an overlay for searching Hugging Face models.
 type HFSearchPicker struct {
-	searcher HFSearcher
-	query    string
-	results  []ResultItem
-	cursor   int
-	ggufOnly bool
-	width    int
-	height   int
+	searcher  HFSearcher
+	query     string
+	results   []ResultItem
+	cursor    int
+	ggufOnly  bool
+	width     int
+	height    int
 	searching bool
-	err      error
-	active   bool
-	epoch    int
+	err       error
+	active    bool
+	epoch     int
 }
 
 // NewHFSearchPicker creates a new search picker.
@@ -83,18 +85,18 @@ func (p *HFSearchPicker) Update(msg tea.Msg) tea.Cmd {
 	case tea.KeyMsg:
 		return p.handleKey(msg)
 	case hfSearchResultMsg:
-		if msg.epoch != p.epoch {
+		if msg.Epoch != p.epoch {
 			return nil
 		}
 		p.searching = false
-		if msg.err != nil {
-			p.err = msg.err
+		if msg.Err != nil {
+			p.err = msg.Err
 			p.results = nil
 			p.cursor = 0
 			return nil
 		}
 		p.err = nil
-		p.results = p.filterResults(msg.results)
+		p.results = p.filterResults(msg.Results)
 		p.cursor = 0
 		return nil
 	}
@@ -150,19 +152,19 @@ func (p *HFSearchPicker) debounceSearch() tea.Cmd {
 	epoch := p.epoch
 	return tea.Tick(300*time.Millisecond, func(t time.Time) tea.Msg {
 		if p.searcher == nil {
-			return hfSearchResultMsg{epoch: epoch, results: nil, err: nil}
+			return hfSearchResultMsg{Epoch: epoch, Results: nil, Err: nil}
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		raw, err := p.searcher.Search(ctx, p.query, 20)
 		if err != nil {
-			return hfSearchResultMsg{epoch: epoch, err: err}
+			return hfSearchResultMsg{Epoch: epoch, Err: err}
 		}
 		results := make([]ResultItem, len(raw))
 		for i, r := range raw {
 			results[i] = ResultItem{SearchResult: r, Index: i}
 		}
-		return hfSearchResultMsg{epoch: epoch, results: results}
+		return hfSearchResultMsg{Epoch: epoch, Results: results}
 	})
 }
 
@@ -243,6 +245,11 @@ func (p *HFSearchPicker) Selected() (ResultItem, bool) {
 		return p.results[p.cursor], true
 	}
 	return ResultItem{}, false
+}
+
+// HasGGUFTag reports whether the selected search result is tagged with "gguf".
+func (i ResultItem) HasGGUFTag() bool {
+	return hasGGUFTag(i.Tags)
 }
 
 // SetSize updates the picker dimensions.
