@@ -1,4 +1,5 @@
-// Command model-loader launches the TUI for managing LLM server profiles.
+// Command model-loader launches the TUI for managing LLM server profiles,
+// or runs the headless HTTP proxy via `model-loader serve`.
 package main
 
 import (
@@ -7,140 +8,104 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/quantmind-br/model-loader/internal/config"
 	"github.com/quantmind-br/model-loader/internal/domain"
-	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/backendschema"
-	"github.com/quantmind-br/model-loader/internal/service/migration"
+	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/modelscanner"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
-	"github.com/quantmind-br/model-loader/internal/service/processmgr"
-	"github.com/quantmind-br/model-loader/internal/service/profilestore"
-	"github.com/quantmind-br/model-loader/internal/service/validator"
 	"github.com/quantmind-br/model-loader/internal/ui"
 	"github.com/quantmind-br/model-loader/internal/ui/pages"
 )
 
 func main() {
+	// Dispatch on the first positional argument. We strip the subcommand
+	// from os.Args so the downstream flag.Parse only sees flags, which
+	// keeps `model-loader serve --log-level=debug` working.
+	if len(os.Args) > 1 && os.Args[1] == "serve" {
+		os.Args = append(os.Args[:1], os.Args[2:]...)
+		os.Exit(runServe())
+	}
+	os.Exit(runTUI())
+}
+
+func runTUI() int {
 	cliLevel := flag.String("log-level", "", "override log level (debug|info|warn|error); also reads $MODEL_LOADER_LOG_LEVEL and config logging.level")
 	flag.Parse()
 
-	cfg, err := config.Load()
+	cfg, logger, closeLog, svc, err := bootstrap(*cliLevel)
 	if err != nil {
-		// Chicken-and-egg: logger not yet built, so the config-load error
-		// can only go to stderr. This is the documented exception.
-		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Build the file-sink logger. Precedence (highest first):
-	//   1. --log-level CLI flag
-	//   2. $MODEL_LOADER_LOG_LEVEL env var
-	//   3. cfg.Logging.Level (config TOML)
-	//   4. "info" default
-	level := log.ResolveLevel(*cliLevel, os.Getenv("MODEL_LOADER_LOG_LEVEL"), cfg.Logging.Level)
-	logger, closeLog, err := log.New(log.Config{
-		Dir:   cfg.Paths.LogDir,
-		Level: level,
-	})
-	if err != nil {
-		// Hard-fail per plan §6 — the debug logging system MUST be available
-		// once boot has progressed past config.Load. Silent fallback to Nop()
-		// would defeat the whole point of the feature.
-		fmt.Fprintf(os.Stderr, "log init error: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 	defer closeLog()
-	logger.Info("app_start",
-		"log_dir", cfg.Paths.LogDir,
-		"state_dir", cfg.Paths.StateDir,
-		"level", level.String())
-
-	store, err := profilestore.NewFSStore(cfg.Paths.ProfilesDir)
-	if err != nil {
-		logger.Error("boot_failed", "step", "profile_store", "err", err)
-		fmt.Fprintf(os.Stderr, "profile store: %v\n", err)
-		os.Exit(1)
-	}
-
-	catalogStore := backendcatalog.NewFSStore(cfg.Paths.BackendsDir)
-	schemaStore := backendcatalog.NewFSSchemaStore(cfg.Paths.BackendsDir)
-
-	schemaManager := backendschema.NewManager(catalogStore, schemaStore)
-	schemaManager.Register(domain.BackendKindLlamaServer, backendschema.NewLlamaServerGenerator(schemaStore))
-	schemaManager.Register(domain.BackendKindSGLang, backendschema.NewSGLangGenerator(schemaStore))
-	schemaManager.Register(domain.BackendKindVLLM, backendschema.NewVLLMGenerator(schemaStore))
-
-	migrator := migration.NewService(cfg, store, catalogStore, schemaStore, schemaManager)
-	migReport, err := migrator.Run(context.Background())
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "migration: %v\n", err)
-		logger.Error("migration_failed", "err", err)
-	}
-	for _, w := range migReport.Warnings {
-		fmt.Fprintf(os.Stderr, "migration warning: %s\n", w)
-		logger.Warn("migration_warning", "msg", w)
-	}
-
-	resolver := backendcatalog.NewResolver(catalogStore, schemaStore, logger)
-
-	defaultSchema := ensureDefaultCatalog(catalogStore, schemaStore, schemaManager, cfg.Paths.LlamaServerBinaryPath, logger)
-
-	mgr := processmgr.New(processmgr.Config{
-		Resolver:     buildResolver(resolver),
-		LogDir:       cfg.Paths.LogDir,
-		RegistryPath: filepath.Join(cfg.Paths.StateDir, "instances.json"),
-		HistoryPath:  filepath.Join(cfg.Paths.StateDir, "instances-history.json"),
-		LastUsedSink: store,
-		Logger:       logger,
-	})
-	defer mgr.Close()
-	if err := mgr.Reconcile(); err != nil {
-		logger.Error("reconcile_failed", "err", err)
-		fmt.Fprintf(os.Stderr, "instance recovery: %v\n", err)
-	}
+	defer svc.mgr.Close()
 
 	scanner := modelscanner.New()
-	val := validator.New(logger)
-
 	exportDir := resolveExportDir(cfg.Paths.StateDir, logger)
 
-	profilesPage := pages.NewProfilesPage(store, defaultSchema).
+	proxy := httpproxy.New(httpproxy.Config{
+		Host:                cfg.Serve.Host,
+		Port:                cfg.Serve.Port,
+		HealthCheckTimeout:  120 * time.Second,
+		MaxBodyBuffer:       8 << 20,
+		ShutdownGracePeriod: 10 * time.Second,
+	}, httpproxy.Deps{
+		ProfileStore: svc.store,
+		ProcessMgr:   svc.mgr,
+		Logger:       logger,
+	})
+
+	profilesPage := pages.NewProfilesPage(svc.store, svc.defaultSchema).
 		WithModelScanner(scanner, cfg.Models.SearchPaths).
-		WithBackendCatalog(catalogStore, schemaStore).
+		WithBackendCatalog(svc.catalogStore, svc.schemaStore).
 		WithExportDir(exportDir)
-	modelsPage := pages.NewModelsPage(scanner, cfg.Models.SearchPaths).WithProfileStore(store)
-	launcherPage := pages.NewLauncherPage(store, mgr, val).
-		SetBackendResolver(resolver).
+	modelsPage := pages.NewModelsPage(scanner, cfg.Models.SearchPaths).WithProfileStore(svc.store)
+	launcherPage := pages.NewLauncherPage(svc.store, svc.mgr, svc.val).
+		SetBackendResolver(svc.resolver).
 		WithLogger(logger)
 
 	mon := monitor.New(monitor.Config{NvidiaSMIPath: "nvidia-smi"})
-	monitorPage := pages.NewMonitorPage(mgr, mon, store).
-		SetBackendResolver(resolver)
-	prober := backendcatalog.NewProber(catalogStore, backendcatalog.ProbeConfig{Timeout: 10 * time.Second})
-	backendsPage := pages.NewBackendsPage(schemaManager).WithProber(prober)
+	monitorPage := pages.NewMonitorPage(svc.mgr, mon, svc.store).
+		SetBackendResolver(svc.resolver)
+	prober := backendcatalog.NewProber(svc.catalogStore, backendcatalog.ProbeConfig{Timeout: 10 * time.Second})
+	backendsPage := pages.NewBackendsPage(svc.schemaManager).WithProber(prober)
+	serverPage := pages.NewServerPage(proxy)
 
 	root := ui.NewRoot(parseTab(cfg.UI.DefaultTab)).
 		WithProfilesPage(profilesPage).
 		WithModelsPage(modelsPage).
 		WithLauncherPage(launcherPage).
 		WithMonitorPage(monitorPage).
-		WithBackendsPage(backendsPage)
+		WithBackendsPage(backendsPage).
+		WithServerPage(serverPage)
 
 	prog := tea.NewProgram(root, tea.WithAltScreen())
 	if _, err := prog.Run(); err != nil {
 		logger.Error("tui_error", "err", err)
 		fmt.Fprintf(os.Stderr, "tui error: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
-	logger.Info("app_exit", "residual_instances", len(mgr.List()))
-	if running := mgr.List(); len(running) > 0 {
+
+	// Stop the proxy (if user started it from the TUI) BEFORE we check
+	// for residual instances, so a proxy-managed backend doesn't show up
+	// as an orphan in the warning.
+	if st := proxy.Status(); st.Running {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if stopErr := proxy.Stop(ctx); stopErr != nil {
+			logger.Error("proxy_shutdown_failed", "err", stopErr)
+		}
+		cancel()
+	}
+
+	logger.Info("app_exit", "residual_instances", len(svc.mgr.List()))
+	if running := svc.mgr.List(); len(running) > 0 {
 		fmt.Fprintf(os.Stderr, "%d background instance(s) still running:\n", len(running))
 		logger.Warn("orphan_background_instances", "count", len(running))
 		for _, ri := range running {
@@ -151,6 +116,57 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Restart the TUI to manage them.")
 		logger.Warn("orphan_remediation_hint", "hint", "Restart the TUI to manage them.")
 	}
+	return 0
+}
+
+func runServe() int {
+	cliLevel := flag.String("log-level", "", "override log level (debug|info|warn|error); also reads $MODEL_LOADER_LOG_LEVEL and config logging.level")
+	flag.Parse()
+
+	cfg, logger, closeLog, svc, err := bootstrap(*cliLevel)
+	if err != nil {
+		return 1
+	}
+	defer closeLog()
+	defer svc.mgr.Close()
+
+	ctx, stop := signal.NotifyContext(context.Background(),
+		syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	srv := httpproxy.New(httpproxy.Config{
+		Host:                cfg.Serve.Host,
+		Port:                cfg.Serve.Port,
+		HealthCheckTimeout:  120 * time.Second,
+		MaxBodyBuffer:       8 << 20,
+		ShutdownGracePeriod: 10 * time.Second,
+	}, httpproxy.Deps{
+		ProfileStore: svc.store,
+		ProcessMgr:   svc.mgr,
+		Logger:       logger,
+	})
+
+	if err := srv.Start(ctx); err != nil {
+		logger.Error("serve_start_failed", "err", err)
+		fmt.Fprintf(os.Stderr, "start: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Listening on %s:%d (logs: %s)\n",
+		cfg.Serve.Host, cfg.Serve.Port, cfg.Paths.LogDir)
+	logger.Info("serve_listening",
+		"host", cfg.Serve.Host, "port", cfg.Serve.Port)
+
+	<-ctx.Done()
+	logger.Info("serve_signal_received")
+
+	shCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Stop(shCtx); err != nil {
+		logger.Error("serve_stop_failed", "err", err)
+		fmt.Fprintf(os.Stderr, "stop: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 // resolveExportDir returns the directory ProfilesPage writes JSON export
@@ -229,6 +245,8 @@ func parseTab(name string) ui.Tab {
 		return ui.TabModels
 	case "backends":
 		return ui.TabBackends
+	case "server":
+		return ui.TabServer
 	default:
 		return ui.TabLauncher
 	}

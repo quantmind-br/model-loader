@@ -21,7 +21,12 @@ const (
 	TabMonitor
 	TabModels
 	TabBackends
+	TabServer
 )
+
+// tabCount is the number of top-level tabs. Single source of truth for
+// keybinding ranges, modulo math, and array sizing.
+const tabCount = 6
 
 func (t Tab) Title() string {
 	switch t {
@@ -35,6 +40,8 @@ func (t Tab) Title() string {
 		return "Models"
 	case TabBackends:
 		return "Backends"
+	case TabServer:
+		return "Server"
 	default:
 		return "?"
 	}
@@ -71,7 +78,7 @@ type HintProvider interface {
 }
 
 // globalHints is the prefix shown in every status bar line.
-const globalHints = "[1-5] tabs  [tab] next  [q] quit" + components.HelpToken
+const globalHints = "[1-6] tabs  [tab] next  [q] quit" + components.HelpToken
 
 // bootBlocker carrega o conteúdo de um modal bloqueante exibido sobre toda a UI.
 type bootBlocker struct {
@@ -81,7 +88,7 @@ type bootBlocker struct {
 
 // RootModel is the top-level tea.Model.
 type RootModel struct {
-	pages       [5]tea.Model
+	pages       [tabCount]tea.Model
 	active      Tab
 	status      components.StatusBar
 	width       int
@@ -94,12 +101,13 @@ type RootModel struct {
 // Slice 0 swaps the Launcher slot with the real implementation in main.go.
 func NewRoot(initial Tab) RootModel {
 	return RootModel{
-		pages: [5]tea.Model{
+		pages: [tabCount]tea.Model{
 			pages.Placeholder{TabName: TabLauncher.Title()},
 			pages.Placeholder{TabName: TabProfiles.Title()},
 			pages.Placeholder{TabName: TabMonitor.Title()},
 			pages.Placeholder{TabName: TabModels.Title()},
 			pages.Placeholder{TabName: TabBackends.Title()},
+			pages.Placeholder{TabName: TabServer.Title()},
 		},
 		active: initial,
 		status: components.StatusBar{Hints: globalHints},
@@ -134,6 +142,12 @@ func (m RootModel) WithMonitorPage(p tea.Model) RootModel {
 // WithBackendsPage replaces the placeholder Backends tab with a real model.
 func (m RootModel) WithBackendsPage(p tea.Model) RootModel {
 	m.pages[TabBackends] = p
+	return m
+}
+
+// WithServerPage replaces the placeholder Server tab with a real model.
+func (m RootModel) WithServerPage(p tea.Model) RootModel {
+	m.pages[TabServer] = p
 	return m
 }
 
@@ -259,10 +273,12 @@ func (m RootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.activate(TabModels)
 		case "5":
 			return m.activate(TabBackends)
+		case "6":
+			return m.activate(TabServer)
 		case "tab":
-			return m.activate((m.active + 1) % 5)
+			return m.activate((m.active + 1) % tabCount)
 		case "shift+tab":
-			return m.activate((m.active + 4) % 5)
+			return m.activate((m.active + tabCount - 1) % tabCount)
 		}
 	}
 	updated, cmd := m.forwardToActivePage(msg)
@@ -381,8 +397,8 @@ func (m RootModel) activePageCapturesInput() bool {
 
 func (m RootModel) renderTabs() string {
 	sep := theme.Subtitle.Render(" │ ")
-	parts := make([]string, 0, 8)
-	for i := Tab(0); i < 5; i++ {
+	parts := make([]string, 0, 2*tabCount)
+	for i := Tab(0); i < tabCount; i++ {
 		if i > 0 {
 			parts = append(parts, sep)
 		}

@@ -507,7 +507,7 @@ func TestRoot_TabCyclesThroughBackends(t *testing.T) {
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return strings.Contains(string(out), "Launcher")
+		return strings.Contains(string(out), "Server")
 	}, teatest.WithDuration(2*time.Second))
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
@@ -516,13 +516,29 @@ func TestRoot_TabCyclesThroughBackends(t *testing.T) {
 	}
 }
 
-func TestRoot_ShiftTabFromLauncherGoesToBackends(t *testing.T) {
+func TestRoot_ShiftTabFromLauncherGoesToServer(t *testing.T) {
 	tm := teatest.NewTestModel(t, NewRoot(TabLauncher), teatest.WithInitialTermSize(120, 30))
 	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyShiftTab})
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return strings.Contains(string(out), "Backends")
+		return strings.Contains(string(out), "Server")
+	}, teatest.WithDuration(2*time.Second))
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if err := tm.Quit(); err != nil {
+		t.Fatalf("Quit returned err: %v", err)
+	}
+}
+
+func TestRoot_ServerTabSwitchByNumber(t *testing.T) {
+	tm := teatest.NewTestModel(t, NewRoot(TabLauncher), teatest.WithInitialTermSize(120, 30))
+	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'6'}})
+
+	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
+		return strings.Contains(string(out), "Server")
 	}, teatest.WithDuration(2*time.Second))
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
@@ -561,6 +577,26 @@ func TestRoot_NumberFiveSwallowedWhilePageCapturesInput(t *testing.T) {
 	}
 	if len(cap.keys) != 1 || cap.keys[0] != "5" {
 		t.Errorf("page did not receive '5'; keys=%v", cap.keys)
+	}
+}
+
+func TestRoot_NumberSixSwallowedWhilePageCapturesInput(t *testing.T) {
+	cap := &capturingPage{captured: true}
+	r := NewRoot(TabServer).
+		WithProfilesPage(pages.Placeholder{TabName: "P"}).
+		WithLauncherPage(pages.Placeholder{TabName: "L"}).
+		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithModelsPage(pages.Placeholder{TabName: "Md"}).
+		WithBackendsPage(pages.Placeholder{TabName: "B"}).
+		WithServerPage(cap)
+
+	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'6'}})
+	rm := updated.(RootModel)
+	if rm.active != TabServer {
+		t.Errorf("active = %v, want still TabServer (page captures input)", rm.active)
+	}
+	if len(cap.keys) != 1 || cap.keys[0] != "6" {
+		t.Errorf("page did not receive '6'; keys=%v", cap.keys)
 	}
 }
 

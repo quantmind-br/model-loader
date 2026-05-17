@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-04-29
-**Commit:** 5699349
+**Generated:** 2026-05-17
+**Commit:** 30d00b9
 **Branch:** main
 
 ## OVERVIEW
@@ -14,16 +14,23 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 ├── internal/
 │   ├── config/             # Viper TOML loader
 │   ├── domain/             # Profile, Instance, Model, FlagSchema
+│   ├── log/                # slog wiring + rotation
 │   ├── service/
+│   │   ├── backendcatalog/ # Multi-backend catalog + resolver
+│   │   ├── backendschema/  # Schema generation orchestrator
 │   │   ├── llamahelp/      # --help parser + embedded schema
+│   │   ├── llamabin/       # Binary path resolver
 │   │   ├── modelscanner/   # GGUF model scanning
 │   │   ├── monitor/       # GPU metrics via nvidia-smi
 │   │   ├── processmgr/    # Process lifecycle + instance recovery
 │   │   ├── profilestore/  # Profile persistence (FS)
-│   │   └── validator/     # Flag validation rules
+│   │   ├── sglanghelp/    # Embedded schema for sglang
+│   │   ├── validator/     # Flag validation rules
+│   │   └── vllmhelp/      # Embedded schema for vLLM
 │   └── ui/
 │       ├── components/    # Help, Modal, Picker, Sparkline, Statusbar
-│       ├── pages/         # Profiles, Models, Launcher, Monitor
+│       ├── pages/         # 5 tabs + profile_editor sub-package
+│       │   └── profile_editor/  # huh-based profile editing
 │       └── theme/
 ├── testdata/              # Golden test fixtures (help-v7376.txt, .golden.json)
 ├── docs/superpowers/      # Design specs
@@ -34,13 +41,17 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 | Task | Location | Notes |
 |------|----------|-------|
 | llama-server --help parsing | internal/service/llamahelp/ | embedded schema pinned to v7376 |
+| Multi-backend catalog | internal/service/backendcatalog/ | catalog.json + schema resolver |
+| Schema generation | internal/service/backendschema/ | orchestrates AddBackend for all kinds |
 | GGUF model metadata | internal/service/modelscanner/gguf.go | |
 | Process lifecycle | internal/service/processmgr/ | survives TUI exit, recovers from instances.json |
 | Profile CRUD | internal/service/profilestore/ | FS-based |
 | Flag validation | internal/service/validator/ | |
 | GPU monitoring | internal/service/monitor/ | nvidia-smi |
-| TUI pages | internal/ui/pages/ | 5 tabs: launcher/profiles/monitor/models/backends |
+| TUI pages | internal/ui/pages/ | 5 tabs + profile_editor sub-package |
+| Profile editing | internal/ui/pages/profile_editor/ | huh forms, draft state machine |
 | Config | internal/config/ | Viper TOML at ~/.config/model-loader/ |
+| Logging | internal/log/ | file-only slog, rotate-by-session |
 
 ## CONVENTIONS
 - **Tests**: Golden tests in `testdata/` — update via `go test ./... -update`
@@ -85,7 +96,7 @@ go test ./... -update  # Update golden test fixtures
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **model-loader** (3667 symbols, 12753 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **model-loader** (3986 symbols, 14069 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

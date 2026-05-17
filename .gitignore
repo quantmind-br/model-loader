@@ -45,6 +45,10 @@ thoughts/
 .claw/
 .pi/
 
+# Agent instruction files
+AGENTS.md
+prompt-*.md
+
 # Design artifact files
 IDEATION_*.md
 PRD_*.md

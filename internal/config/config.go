@@ -16,6 +16,14 @@ type AppConfig struct {
 	Models  ModelsConfig  `mapstructure:"models"`
 	UI      UIConfig      `mapstructure:"ui"`
 	Logging LoggingConfig `mapstructure:"logging"`
+	Serve   ServeConfig   `mapstructure:"serve"`
+}
+
+// ServeConfig controls the headless HTTP proxy server exposed by
+// `model-loader serve` and by the Server tab in the TUI.
+type ServeConfig struct {
+	Host string `mapstructure:"host"`
+	Port int    `mapstructure:"port"`
 }
 
 // LoggingConfig controls the model-loader app logger (not the per-instance
@@ -131,4 +139,6 @@ func applyDefaults(v *viper.Viper) {
 	v.SetDefault("ui.default_tab", "launcher")
 	v.SetDefault("ui.keybindings", "default")
 	v.SetDefault("logging.level", "info")
+	v.SetDefault("serve.host", "127.0.0.1")
+	v.SetDefault("serve.port", 4321)
 }

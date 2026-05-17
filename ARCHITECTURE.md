@@ -1,6 +1,6 @@
 # Architecture — model-loader
 
-**Generated:** 2026-05-16  
+**Generated:** 2026-05-17  
 **Stack:** Go 1.26.2 + Charmbracelet bubbletea  
 **Pattern:** Event-driven TUI with domain-driven service layer
 
@@ -45,7 +45,7 @@ Configuration (`internal/config/`) sits adjacent to the layers and is loaded at 
 | **Migration** | — | — | One-time legacy binary-path → backend-ID migration |
 | **Model-loader** | — | — | Entry point (`main.go`) |
 
-> Knowledge graph: **3,667 symbols, 12,753 relationships, 131 communities, 300 processes** (Go layer only; `llamacpp/` external forks excluded).
+> Knowledge graph: **3,986 symbols, 14,069 relationships, 141 communities, 300 processes** (Go layer only; `llamacpp/` external forks excluded).
 
 ---
 
@@ -312,177 +312,131 @@ Invokes the backend binary with `--help`, parses output into structured `FlagSpe
 |------|--------|------|
 | 1 | `run` | `internal/service/monitor/gpu.go` |
 | 2 | `pollOnce` | `internal/service/monitor/gpu.go` |
-| 3 | `emit` | `internal/service/monitor/gpu.go` |
-| 4 | `MonitorEvent` | `internal/service/monitor/monitor.go` |
+| 3 | `nvidiaSMI` | `internal/service/monitor/gpu.go` |
+| 4 | `pollLoop` | `internal/service/monitor/subscribe.go` |
+| 5 | `pollSlots` | `internal/service/monitor/slots.go` |
+| 6 | `sendEvent` | `internal/service/monitor/subscribe.go` |
 
-**Type:** Intra-community · 4 steps  
-Background poller runs `nvidia-smi` at intervals, parses GPU utilization and memory metrics, and emits typed `MonitorEvent` messages for the Monitor page sparklines.
-
----
-
-## Data Flow Summary
-
-| Flow | Entry | Services | Output |
-|------|-------|----------|--------|
-| Boot | `main.go` | Config → Stores → Migration → ProcessMgr.Reconcile | TUI running |
-| Launch | `LauncherPage` | Validator → BackendCatalog → ProcessMgr | llama-server process |
-| Monitor | `MonitorPage` | Monitor.Subscribe → 6 goroutines | Live logs/slots/GPU/metrics |
-| Scan | `ModelsPage` | ModelScanner.Scan → channel | Table of `.gguf` files |
-| Schema | `ProfilesPage` | BackendSchema → LlamaHelp → SchemaStore | `schemas/<id>.json` |
+**Type:** Cross-community · 6 steps  
+Polls `nvidia-smi` for GPU VRAM, polls `/slots` and `/health` endpoints, aggregates rolling metrics, and pushes unified `MonitorEvent` values on a shared channel.
 
 ---
 
-## File Organization
+## File Map
 
 ```
-cmd/model-loader/
-  main.go              # Boot sequence: config → stores → migration → TUI
+cmd/model-loader/main.go          # Entry point: wire dependencies, boot TUI
 
 internal/config/
-  config.go            # Viper TOML loader, path expansion, defaults
+  config.go                       # Viper TOML loader + defaults
 
 internal/domain/
-  profile.go           # Profile, LaunchConfig, ProfileMeta, Slugify
-  backend.go           # Backend, BackendCatalog, BackendKind, BackendMeta
-  flag_schema.go       # FlagSchema, FlagSpec, FlagType, Lookup
-  instance.go          # Instance (running process snapshot)
-  model.go             # ModelFile (GGUF metadata holder)
-  backend_schema.go    # BackendValidationSchema, SchemaSource, conversion
+  profile.go                      # Profile, LaunchConfig, ProfileMeta
+  backend.go                      # Backend, BackendCatalog, BackendKind
+  instance.go                     # RunningInstance, ExitedInstance, LogLine
+  model.go                        # ModelFile, ScanEvent
+  flag_schema.go                  # FlagSchema, FlagSpec
 
-internal/service/
-  backendcatalog/      # Catalog + schema store interfaces, resolver, default catalog
-  backendschema/       # Manager (CRUD), LlamaServerGenerator, SGLang generator
-  llamabin/            # Binary resolution: PATH lookup, validation
-  llamahelp/           # --help parser (embedded + exec), flag type inference
-  migration/           # Legacy binary path → backend ID migration
-  modelscanner/        # Filesystem walk + GGUF binary parsing
-  monitor/             # Subscribe with 6 goroutines, event fan-in
-  processmgr/          # Launch, kill, list, health check, log tail, recovery
-  profilestore/        # JSON CRUD per profile, atomic writes, port deconflict
-  validator/           # FlagSchema validation: type, extra-args, existence
+internal/service/processmgr/
+  processmgr.go                   # Manager interface + sentinel errors
+  manager.go                      # Launch, Kill, List, WaitHealthy
+  recover.go                      # Reconcile orphaned instances at boot
+  registry.go                     # Persist running instances to instances.json
+  args.go                         # BuildArgs, canonicalFlag
+  exit_info.go                    # Capture stderr tail for error diagnosis
+  history.go                      # Persisted exit history
+  liveness.go                     # TCP health check
+
+internal/service/monitor/
+  monitor.go                      # Event types + Manager interface
+  subscribe.go                    # Subscribe: 6-goroutine event pump
+  logs.go                         # fsnotify log tailer
+  slots.go                        # GET /health + GET /slots poller
+  gpu.go                          # nvidia-smi parser
+  metrics.go                      # Rolling window aggregator
+  ring.go                         # Fixed-capacity log line buffer
+
+internal/service/profilestore/
+  store.go                        # Store interface
+  fs_store.go                     # JSON persistence with atomic writes
+
+internal/service/backendcatalog/
+  store.go                        # Store + SchemaStore interfaces
+  fs_store.go                     # Catalog + schema JSON persistence
+  resolver.go                     # Resolve profile → backend + executable + schema
+  default.go                      # DefaultCatalog for first-run
+
+internal/service/backendschema/
+  manager.go                      # CRUD backend + schema generation orchestration
+  generator.go                    # Generator interface
+  embedded_generator.go           # llama.cpp embedded schema generator
+  sglang_generator.go             # sglang schema generator
+  vllm_generator.go               # vLLM schema generator
+
+internal/service/llamahelp/
+  llamahelp.go                    # Parser interface
+  parser.go                       # Text regex parser for --help output
+  exec_parser.go                  # Invokes real binary
+  embedded.go                     # Compile-time fallback schema
+
+internal/service/llamabin/
+  resolver.go                     # Resolve executable path (PATH lookup)
+
+internal/service/modelscanner/
+  modelscanner.go                 # Scanner interface
+  scanner.go                      # Walk + event emission
+  gguf.go                         # Binary GGUF header parser
+  quant.go                        # Quantization regex from filename
+
+internal/service/validator/
+  validator.go                    # Validator interface
+  rules.go                        # FlagSchema validation rules
+
+internal/service/migration/
+  migration.go                    # Legacy binary-path → backend-ID migration
 
 internal/ui/
-  root.go              # RootModel: tab routing, global shortcuts, boot blocker
-  pages/
-    profiles.go        # Profile CRUD master-detail with huh forms
-    launcher.go        # Profile selection, validation, launch orchestration
-    monitor.go         # Live instance monitoring: logs, slots, metrics
-    models.go          # GGUF model browser with streaming scanner
-    backends.go        # Backend catalog browser and detail view
-    profile_editor/    # Inline profile creation/editing drafts
-  components/
-    picker.go          # Streaming model picker (bubbletea Model)
-    modal.go           # Centered lipgloss box (render-only)
-    sparkline.go       # ASCII sparkline (pure function)
-    statusbar.go       # Level-based colored status (render-only)
-    help.go            # Contextual help panel
-  theme/
-    theme.go           # Lipgloss styles, color palette
+  root.go                         # RootModel: tab routing, key handling, boot blocker
+  theme/theme.go                  # Lipgloss palette
+
+internal/ui/pages/
+  launcher.go                     # Tab 1: profile selection + launch
+  profiles.go                     # Tab 2: profile CRUD master list
+  profile_editor/
+    editor.go                       # Inline huh form for profile editing
+    draft.go                        # Draft profile state machine
+  monitor.go                      # Tab 3: live GPU/logs/slots per instance
+  models.go                       # Tab 4: GGUF model browser
+  backends.go                     # Tab 5: backend catalog management
+  messages.go                     # Cross-tab tea.Msg definitions
+
+internal/ui/components/
+  picker.go                       # File/model picker widget
+  modal.go                        # Confirmation modal
+  confirm.go                      # Yes/no dialog
+  flash.go                        # Ephemeral status flash
+  help.go                         # Help overlay
+  sparkline.go                    # Mini line chart
+  statusbar.go                    # Bottom bar with hints
+  profile_picker.go               # Profile-specific picker
 ```
 
 ---
 
-## Cross-Cutting Concerns
+## Design Decisions
 
-- **Instance Recovery:** Background `llama-server` processes survive TUI exit. `processmgr.Reconcile()` at boot restores the in-memory registry from `instances.json` by checking live PIDs and dropping zombies.
-- **Golden Tests:** `llamahelp` and other packages use golden file fixtures in `testdata/`. Update with `go test ./... -update`. Never edit `.golden.json` by hand.
-- **TUI Input Gate:** Global shortcuts in `RootModel.Update` that consume printable runes MUST check `activePageCapturesInput()`. Pages with `huh` forms / pickers / modals implement `InputCapture.IsCapturingInput() bool` returning `true`.
-- **Editable Schema Protection:** If `schema.source.editable == true`, `LlamaServerGenerator.Generate()` skips regeneration to preserve user edits.
+1. **Background processes survive TUI exit.** `ProcessMgr` uses `Setsid` + `instances.json` so users can close the TUI without killing their model server. `Reconcile()` restores the registry at next boot.
 
----
+2. **Domain layer has zero external dependencies.** Every service depends only on `internal/domain` and stdlib, keeping the dependency graph shallow and testable.
 
-## Anti-Patterns (Architecture Level)
+3. **Schema is generated before catalog save.** `BackendSchema.Manager.AddBackend` generates the schema JSON first, then updates the catalog. This prevents broken catalog entries from invalid binaries.
 
-1. **Do not run `llama-server` manually** while the TUI is managing instances — the registry will desync.
-2. **Do not add `internal/service/` imports to `internal/ui/components/`** — redeclare minimal interfaces locally to keep the UI layer decoupled.
-3. **Do not block the Monitor event channel** — it uses non-blocking sends; blocking consumers will silently drop events.
-4. **Do not leave a ModelScanner channel undrained** — the walk goroutine leaks.
-5. **Do not create backends without generating schemas first** — `AddBackend` generates schema before catalog save.
+4. **Non-blocking monitor events.** All 6 monitor goroutines drop events on backpressure. The unified channel is buffered (256) but consumers must not block.
+
+5. **Atomic profile writes.** `FSStore.Save` uses temp-file + rename to prevent corrupt profiles on crash.
+
+6. **Input capture contract.** Pages with active huh forms / pickers implement `InputCapture.IsCapturingInput()` so the root model does not steal printable keystrokes (e.g., typing `q` in a text field).
 
 ---
 
-## Knowledge Graph Cross-Community Analysis
-
-Heaviest interaction edges between distinct functional areas (extracted from `CALLS` relationships across community boundaries):
-
-| Caller | Callee | Calls | Meaning |
-|--------|--------|-------|---------|
-| Pages | Profilestore | 12 | Profile list/load/save from TUI pages |
-| Pages | Backendschema | 11 | Schema-driven UI rendering |
-| Backendschema | Profilestore | 11 | Profile-backend linkage |
-| Backendcatalog | Backendschema | 7 | Schema generation after probing |
-| Backendschema | Processmgr | 4 | Process args need schema awareness |
-| Processmgr | Validator | 2 | Pre-launch flag validation |
-| Monitor | Pages | 3 | GPU metrics displayed in Monitor tab |
-| Migration | Pages | 4 | Migration triggers UI refresh |
-| Ui | Profilestore | 3 | Root model loads profiles for status |
-| Backendschema | Backendcatalog | 4 | Schema stores reference catalog entries |
-
-### Top 5 Cross-Community Execution Traces (Fresh Index)
-
-The following are the highest-priority cross-community process traces from the current knowledge graph index.
-
-**Trace A — Backend Probing: `Probe → SplitCommandLine`** (7 steps)
-
-| Step | Symbol | File |
-|------|--------|------|
-| 1 | `Probe` | `internal/service/backendcatalog/probe.go` |
-| 2 | `probeOne` | `internal/service/backendcatalog/probe.go` |
-| 3 | `resolveExecutable` | `internal/service/backendcatalog/resolver.go` |
-| 4 | `ResolveCommandWithPythonFallback` | `internal/service/llamabin/resolver.go` |
-| 5 | `Resolve` | `internal/service/llamabin/resolver.go` |
-| 6 | `splitCommand` | `internal/service/llamabin/resolver.go` |
-| 7 | `splitCommandLine` | `internal/service/llamabin/resolver.go` |
-
-**Trace B — Backend Validation: `Probe → CheckExecutable`** (7 steps)
-
-| Step | Symbol | File |
-|------|--------|------|
-| 1 | `Probe` | `internal/service/backendcatalog/probe.go` |
-| 2 | `probeOne` | `internal/service/backendcatalog/probe.go` |
-| 3 | `resolveExecutable` | `internal/service/backendcatalog/resolver.go` |
-| 4 | `ResolveCommandWithPythonFallback` | `internal/service/llamabin/resolver.go` |
-| 5 | `Resolve` | `internal/service/llamabin/resolver.go` |
-| 6 | `resolveInPATH` | `internal/service/llamabin/resolver.go` |
-| 7 | `checkExecutable` | `internal/service/llamabin/resolver.go` |
-
-**Trace C — Single Backend Probe: `ProbeOne → CheckExecutable`** (6 steps)
-
-| Step | Symbol | File |
-|------|--------|------|
-| 1 | `probeOne` | `internal/service/backendcatalog/probe.go` |
-| 2 | `resolveExecutable` | `internal/service/backendcatalog/resolver.go` |
-| 3 | `ResolveCommandWithPythonFallback` | `internal/service/llamabin/resolver.go` |
-| 4 | `Resolve` | `internal/service/llamabin/resolver.go` |
-| 5 | `resolvePath` | `internal/service/llamabin/resolver.go` |
-| 6 | `checkExecutable` | `internal/service/llamabin/resolver.go` |
-
-**Trace D — Launch Pipeline (Flags): `Launch → CanonicalFlag`** (5 steps)
-
-| Step | Symbol | File |
-|------|--------|------|
-| 1 | `Launch` | `internal/service/processmgr/manager.go` |
-| 2 | `launchForeground` | `internal/service/processmgr/manager.go` |
-| 3 | `BuildArgsForBackend` | `internal/service/processmgr/args.go` |
-| 4 | `buildLlamaArgs` | `internal/service/processmgr/args.go` |
-| 5 | `CanonicalFlag` | `internal/domain/flags.go` |
-
-**Trace E — Launch Pipeline (Formatting): `Launch → FormatFloat`** (5 steps)
-
-| Step | Symbol | File |
-|------|--------|------|
-| 1 | `Launch` | `internal/service/processmgr/manager.go` |
-| 2 | `launchForeground` | `internal/service/processmgr/manager.go` |
-| 3 | `BuildArgsForBackend` | `internal/service/processmgr/args.go` |
-| 4 | `buildLlamaArgs` | `internal/service/processmgr/args.go` |
-| 5 | `formatFloat` | `internal/service/processmgr/args.go` |
-
----
-
-## Re-generating
-
-```bash
-npx gitnexus analyze --force    # reindex this repo
-```
-
-The graph is current as of commit `9a6bc64` on branch `main` (indexed 2026-05-16).
+*Document generated via GitNexus knowledge graph analysis.*
