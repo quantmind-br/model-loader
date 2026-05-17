@@ -125,7 +125,7 @@ func (p *HFSearchPicker) handleKey(msg tea.KeyMsg) tea.Cmd {
 			p.cursor++
 		}
 		return nil
-	case "g":
+	case "ctrl+g":
 		p.ggufOnly = !p.ggufOnly
 		p.cursor = 0
 		return nil
@@ -229,9 +229,9 @@ func (p *HFSearchPicker) View() string {
 		parts = append(parts, theme.Subtitle.Render("No results"))
 	}
 
-	hint := "[↑↓] move  [enter] select  [esc] close  [g] toggle GGUF-only"
+	hint := "[↑↓] move  [enter] select  [esc] close  [ctrl+g] toggle GGUF-only"
 	if p.ggufOnly {
-		hint = "[↑↓] move  [enter] select  [esc] close  [g] toggle GGUF-only (ON)"
+		hint = "[↑↓] move  [enter] select  [esc] close  [ctrl+g] toggle GGUF-only (ON)"
 	}
 	parts = append(parts, theme.Subtitle.Render(hint))
 

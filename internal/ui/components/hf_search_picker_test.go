@@ -76,19 +76,19 @@ func TestHFSearchPicker_UpDownMovesCursor(t *testing.T) {
 	}
 }
 
-func TestHFSearchPicker_GTogglesGGUFOnly(t *testing.T) {
+func TestHFSearchPicker_CtrlGTogglesGGUFOnly(t *testing.T) {
 	p := NewHFSearchPicker(&fakeSearcher{}, 80, 24)
 	p.Init()
 	if p.ggufOnly {
 		t.Fatal("ggufOnly should default false")
 	}
-	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	p.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
 	if !p.ggufOnly {
-		t.Error("ggufOnly should be true after first 'g'")
+		t.Error("ggufOnly should be true after first ctrl+g")
 	}
-	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	p.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
 	if p.ggufOnly {
-		t.Error("ggufOnly should be false after second 'g'")
+		t.Error("ggufOnly should be false after second ctrl+g")
 	}
 }
 
@@ -102,6 +102,21 @@ func TestHFSearchPicker_PrintableRuneAppendsToQuery(t *testing.T) {
 	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
 	if p.query != "llama" {
 		t.Errorf("query = %q, want %q", p.query, "llama")
+	}
+}
+
+func TestHFSearchPicker_RuneGAppendsToQueryAndDoesNotToggle(t *testing.T) {
+	p := NewHFSearchPicker(&fakeSearcher{}, 80, 24)
+	p.Init()
+	if p.ggufOnly {
+		t.Fatal("ggufOnly should default false")
+	}
+	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	if p.query != "g" {
+		t.Errorf("query = %q, want %q", p.query, "g")
+	}
+	if p.ggufOnly {
+		t.Error("ggufOnly should still be false after typing 'g'")
 	}
 }
 

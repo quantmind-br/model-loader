@@ -138,6 +138,42 @@ func TestScanner_EmitsProgressAndDone(t *testing.T) {
 	}
 }
 
+func TestScanner_FollowsSymlinkRoot(t *testing.T) {
+	realDir := t.TempDir()
+	writeGGUFFile(t, filepath.Join(realDir, "Qwen", "Qwen-7B-Q4_K_M.gguf"), 7_000_000_000)
+	writeGGUFFile(t, filepath.Join(realDir, "unsloth", "Llama-3-8B-Q5_K_M.gguf"), 8_000_000_000)
+
+	linkParent := t.TempDir()
+	linkPath := filepath.Join(linkParent, "models")
+	if err := os.Symlink(realDir, linkPath); err != nil {
+		t.Skipf("symlink unsupported on this platform: %v", err)
+	}
+
+	s := New()
+	ch, err := s.Scan(context.Background(), []string{linkPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := collect(ch)
+
+	var files []*domain.ModelFile
+	errEvents := 0
+	for _, e := range events {
+		switch e.Type {
+		case domain.ScanEventFile:
+			files = append(files, e.File)
+		case domain.ScanEventError:
+			errEvents++
+		}
+	}
+	if errEvents != 0 {
+		t.Fatalf("unexpected error events: %#v", events)
+	}
+	if len(files) != 2 {
+		t.Fatalf("got %d files, want 2 via symlink root: %#v", len(files), events)
+	}
+}
+
 func TestScanner_ErrorOnMissingRoot(t *testing.T) {
 	s := New()
 	ch, err := s.Scan(context.Background(), []string{"/definitely/does/not/exist/xyz"})

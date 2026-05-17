@@ -625,3 +625,136 @@ func TestModelsPage_HintsWhilePickerActive(t *testing.T) {
 		}
 	}
 }
+
+func TestModelsPage_DeleteOptionInActionMenu(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.files = []domain.ModelFile{{Path: "/m/foo.gguf", Name: "foo.gguf"}}
+	page.refreshRows()
+
+	updated, _ := page.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	mp := updated.(ModelsPage)
+	if mp.action == nil {
+		t.Fatal("expected action menu to open")
+	}
+	found := false
+	for _, opt := range mp.action.options {
+		if opt.value == "delete" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("action menu missing 'delete' option; got %v", mp.action.options)
+	}
+}
+
+func TestModelsPage_DeleteRemovesFileAndRow(t *testing.T) {
+	prev := fileRemover
+	fileRemover = func(string) error { return nil }
+	t.Cleanup(func() { fileRemover = prev })
+
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.files = []domain.ModelFile{
+		{Path: "/m/foo.gguf", Name: "foo.gguf"},
+		{Path: "/m/bar.gguf", Name: "bar.gguf"},
+	}
+	page.refreshRows()
+
+	updated, _ := page.commitRootAction("delete", "/m/foo.gguf")
+	mp := updated.(ModelsPage)
+	if mp.action != nil {
+		t.Error("expected action menu cleared")
+	}
+	if !mp.deleteConfirm.Active() {
+		t.Fatal("expected delete confirm to be active")
+	}
+
+	updated2, _ := mp.Update(modelDeleteConfirmedMsg{path: "/m/foo.gguf"})
+	mp2 := updated2.(ModelsPage)
+
+	if len(mp2.files) != 1 {
+		t.Fatalf("files = %d, want 1", len(mp2.files))
+	}
+	if mp2.files[0].Name != "bar.gguf" {
+		t.Errorf("remaining file = %q, want bar.gguf", mp2.files[0].Name)
+	}
+	if len(mp2.table.Rows()) != 1 {
+		t.Errorf("rows = %d, want 1", len(mp2.table.Rows()))
+	}
+	if !strings.Contains(mp2.flash.Message(), "deleted") {
+		t.Errorf("flash = %q, want 'deleted ...'", mp2.flash.Message())
+	}
+}
+
+func TestModelsPage_DeleteCancelKeepsFile(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.files = []domain.ModelFile{{Path: "/m/foo.gguf", Name: "foo.gguf"}}
+	page.refreshRows()
+
+	updated, _ := page.commitRootAction("delete", "/m/foo.gguf")
+	mp := updated.(ModelsPage)
+
+	updated2, _ := mp.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	mp2 := updated2.(ModelsPage)
+
+	if mp2.deleteConfirm.Active() {
+		t.Error("expected delete confirm to be inactive after cancel")
+	}
+	if len(mp2.files) != 1 {
+		t.Errorf("files = %d, want 1 (must not remove on cancel)", len(mp2.files))
+	}
+	if !strings.Contains(mp2.flash.Message(), "cancelled") {
+		t.Errorf("flash = %q, want 'cancelled'", mp2.flash.Message())
+	}
+}
+
+func TestModelsPage_DeleteErrorShowsFlash(t *testing.T) {
+	prev := fileRemover
+	fileRemover = func(string) error { return errors.New("permission denied") }
+	t.Cleanup(func() { fileRemover = prev })
+
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.files = []domain.ModelFile{{Path: "/m/foo.gguf", Name: "foo.gguf"}}
+
+	updated, _ := page.Update(modelDeleteConfirmedMsg{path: "/m/foo.gguf"})
+	mp := updated.(ModelsPage)
+
+	if len(mp.files) != 1 {
+		t.Errorf("files = %d, want 1 (must not remove on error)", len(mp.files))
+	}
+	if !strings.Contains(mp.flash.Message(), "delete failed") {
+		t.Errorf("flash = %q, want 'delete failed: ...'", mp.flash.Message())
+	}
+}
+
+func TestModelsPage_IsCapturingInputDuringDeleteConfirm(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, nil)
+	page.deleteConfirm = components.NewConfirm("Delete?", "path", nil, "", "")
+	if !page.IsCapturingInput() {
+		t.Error("expected IsCapturingInput=true when deleteConfirm is active")
+	}
+}
+
+func TestModelsPage_ViewRendersDeleteConfirmWhenActive(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.deleteConfirm = components.NewConfirm("Delete foo.gguf?", "path", nil, "", "")
+	cmd := page.deleteConfirm.Init()
+	if cmd != nil {
+		cmd()
+	}
+	out := page.View()
+	if !strings.Contains(out, "Delete foo.gguf?") {
+		t.Errorf("expected confirm title in view; got:\n%s", out)
+	}
+}
+
+func TestModelsPage_HintsWhileDeleteConfirmActive(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, nil)
+	page.deleteConfirm = components.NewConfirm("Delete?", "path", nil, "", "")
+	hints := page.Hints()
+	for _, want := range []string{"[enter]", "[esc]"} {
+		if !strings.Contains(hints, want) {
+			t.Errorf("delete confirm hints missing %q; got %q", want, hints)
+		}
+	}
+}

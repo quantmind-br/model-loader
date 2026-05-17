@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -27,6 +28,8 @@ import (
 // clipboardWriter is overridable in tests to bypass the system clipboard
 // (which may be unavailable on CI without a display server).
 var clipboardWriter = clipboard.WriteAll
+
+var fileRemover = os.Remove
 
 type hfSearcherAdapter struct{ client *hfhub.Client }
 
@@ -151,7 +154,8 @@ type ModelsPage struct {
 	filterMode bool
 	flash      components.Flash
 
-	action *actionMenu
+	action        *actionMenu
+	deleteConfirm components.Confirm
 
 	profilePicker           *components.ProfilePicker
 	profilePickerTargetPath string
@@ -245,7 +249,7 @@ func (p ModelsPage) WithDownloadManager(m *downloadmgr.Manager) ModelsPage {
 // filter input is open so cursor navigation does not leak into tab
 // cycling and printable characters are not stolen by global shortcuts.
 func (p ModelsPage) IsCapturingInput() bool {
-	return p.action != nil || p.filterMode || p.profilePicker != nil ||
+	return p.action != nil || p.deleteConfirm.Active() || p.filterMode || p.profilePicker != nil ||
 		(p.hfSearch != nil && p.hfSearch.IsActive()) ||
 		(p.hfFilePicker != nil && p.hfFilePicker.IsActive()) ||
 		(p.downloads != nil && p.downloads.IsFocusVisible())
@@ -469,11 +473,16 @@ func (p ModelsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.profilePicker = nil
 		p.profilePickerTargetPath = ""
 		return p, nil
+	case modelDeleteConfirmedMsg:
+		return p.performDelete(msg.path)
 	case tea.KeyMsg:
 		if p.profilePicker != nil {
 			np, cmd := p.profilePicker.Update(msg)
 			p.profilePicker = &np
 			return p, cmd
+		}
+		if p.deleteConfirm.Active() {
+			return p.updateDeleteConfirm(msg)
 		}
 		if p.action != nil {
 			return p.updateActionMenu(msg)
@@ -605,6 +614,17 @@ func (p ModelsPage) startSelectedDownloads() (tea.Model, tea.Cmd) {
 	return p, tea.Batch(cmds...)
 }
 
+func (p ModelsPage) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "esc" {
+		p.deleteConfirm = components.Confirm{}
+		p, fc := p.withFlash("delete cancelled")
+		return p, fc
+	}
+	var cmd tea.Cmd
+	p.deleteConfirm, cmd = p.deleteConfirm.Update(msg)
+	return p, cmd
+}
+
 // updateActionMenu owns the inline action selector while it is on
 // screen. Up/Down move the cursor, Enter commits the highlighted option,
 // Esc cancels.
@@ -663,9 +683,43 @@ func (p ModelsPage) commitRootAction(choice, path string) (tea.Model, tea.Cmd) {
 		p.profilePicker = &picker
 		p.profilePickerTargetPath = path
 		return p, nil
+	case "delete":
+		p.action = nil
+		selectedName := path
+		if idx := strings.LastIndex(path, "/"); idx >= 0 {
+			selectedName = path[idx+1:]
+		}
+		p.deleteConfirm = components.NewConfirm(
+			"Delete "+selectedName+" from disk?",
+			path,
+			func(payload any) tea.Cmd {
+				ppath, _ := payload.(string)
+				return func() tea.Msg { return modelDeleteConfirmedMsg{path: ppath} }
+			},
+			"Delete",
+			"Cancel",
+		)
+		return p, p.deleteConfirm.Init()
 	}
 	p.action = nil
 	return p, nil
+}
+
+func (p ModelsPage) performDelete(path string) (tea.Model, tea.Cmd) {
+	if err := fileRemover(path); err != nil {
+		p, fc := p.withFlash("delete failed: " + err.Error())
+		return p, fc
+	}
+	filtered := p.files[:0]
+	for _, f := range p.files {
+		if f.Path != path {
+			filtered = append(filtered, f)
+		}
+	}
+	p.files = filtered
+	p.refreshRows()
+	p, fc := p.withFlash("deleted " + path)
+	return p, fc
 }
 
 func (p ModelsPage) handleScanEvent(evt domain.ScanEvent) (tea.Model, tea.Cmd) {
@@ -853,6 +907,7 @@ func (p ModelsPage) openActionMenuForSelection() (tea.Model, tea.Cmd) {
 		opts = append(opts, actionOption{label: "Use in existing profile", value: "existing"})
 	}
 	opts = append(opts, actionOption{label: "Copy path to clipboard", value: "reveal"})
+	opts = append(opts, actionOption{label: "Delete file", value: "delete"})
 	p.action = &actionMenu{
 		title:      "Action for " + selected.Name,
 		options:    opts,
@@ -865,6 +920,9 @@ func (p ModelsPage) openActionMenuForSelection() (tea.Model, tea.Cmd) {
 func (p ModelsPage) View() string {
 	if p.profilePicker != nil {
 		return p.profilePicker.View()
+	}
+	if p.deleteConfirm.Active() {
+		return p.deleteConfirm.View()
 	}
 	if p.action != nil {
 		return p.renderActionMenu()
@@ -926,6 +984,9 @@ func (p ModelsPage) hasScannedRoot() bool {
 func (p ModelsPage) Hints() string {
 	if p.profilePicker != nil {
 		return "[↑↓] move  [enter] select  [esc] cancel"
+	}
+	if p.deleteConfirm.Active() {
+		return "[enter] confirm  [esc] cancel"
 	}
 	if p.action != nil {
 		return "[↑↓] move  [enter] select  [esc] cancel"
@@ -1003,6 +1064,8 @@ func truncFront(s string, n int) string {
 	}
 	return "…" + s[len(s)-(n-1):]
 }
+
+type modelDeleteConfirmedMsg struct{ path string }
 
 // UseInNewProfileMsg requests creating a new profile pre-filled with Path.
 // Root catches this message, switches to the Profiles tab, and forwards

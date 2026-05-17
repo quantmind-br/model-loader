@@ -38,8 +38,16 @@ func (s *fsScanner) Scan(ctx context.Context, paths []string) (<-chan domain.Sca
 }
 
 func (s *fsScanner) scanRoot(ctx context.Context, root string, ch chan<- domain.ScanEvent) {
+	// filepath.WalkDir uses Lstat on the root, so when the configured path is a
+	// symlink to a directory it is treated as a non-directory and the walk
+	// stops immediately. Resolve symlinks up front so the scan descends into
+	// the target tree.
+	walkRoot := root
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		walkRoot = resolved
+	}
 	count := 0
-	walkErr := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+	walkErr := filepath.WalkDir(walkRoot, func(p string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
