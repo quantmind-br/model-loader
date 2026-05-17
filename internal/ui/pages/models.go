@@ -712,7 +712,11 @@ func (p ModelsPage) Hints() string {
 	if p.filterMode {
 		return "[type] filter  [esc] clear"
 	}
-	return "[/] filter  [R] rescan  [enter] actions  [esc] clear"
+	hints := "[/] filter  [R] rescan  [s] search HF  [enter] actions  [esc] clear"
+	if p.downloads != nil && p.downloads.IsVisible() {
+		hints += "  [x] cancel dl"
+	}
+	return hints
 }
 
 // renderActionMenu draws the inline modal-ish overlay used for both the
