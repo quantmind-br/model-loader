@@ -418,9 +418,8 @@ func (m *fsManager) List() []domain.RunningInstance {
 	return snapshotLocked(m.tracked)
 }
 
-// TailLogs opens the on-disk log file for a tracked background instance and
-// returns it as an io.ReadCloser. Foreground instances (LogPath=="") return
-// ErrUnknownPID — they have no log file. Caller closes.
+// TailLogs opens the on-disk log file for a tracked instance and returns it
+// as an io.ReadCloser. Caller closes.
 func (m *fsManager) TailLogs(pid int) (io.ReadCloser, error) {
 	logPath := m.logPathForPID(pid)
 	if logPath == "" {
@@ -487,9 +486,9 @@ func checkPortFree(port int) error {
 }
 
 // launchForeground spawns a single foreground instance. Stdout/Stderr are
-// not redirected (the caller — the LauncherPage — owns the streaming),
-// and the process is NOT detached via Setsid: it remains in the TUI's
-// process group so Ctrl+C from the TUI propagates if desired.
+// redirected to a log file so the monitor can tail them, and the process
+// is NOT detached via Setsid: it remains in the TUI's process group so
+// Ctrl+C from the TUI propagates if desired.
 func (m *fsManager) launchForeground(p domain.Profile, port int, attemptID string) (domain.RunningInstance, error) {
 	resolvedBinary := p.Launch.ResolvedExecutable
 	if resolvedBinary == "" {
@@ -508,25 +507,38 @@ func (m *fsManager) launchForeground(p domain.Profile, port int, attemptID strin
 	m.fgPID = -1 // sentinel: launching in progress
 	m.mu.Unlock()
 
+	if err := os.MkdirAll(m.logDir, 0o755); err != nil {
+		return domain.RunningInstance{}, fmt.Errorf("mkdir log dir: %w", err)
+	}
+	logPath := filepath.Join(m.logDir, fmt.Sprintf("%s-%d.log", p.ID, port))
+	logF, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return domain.RunningInstance{}, fmt.Errorf("open log: %w", err)
+	}
+
 	profileArgs, err := BuildArgsForBackend(p, p.Launch.ResolvedBackendKind, resolvedBinary)
 	if err != nil {
+		_ = logF.Close()
 		return domain.RunningInstance{}, fmt.Errorf("build args: %w", err)
 	}
 	cmd := makeCommand(resolvedBinary, profileArgs)
-	// Inherit stdout/stderr — caller drains via TailLogs in slice 5.
+	cmd.Stdout = logF
+	cmd.Stderr = logF
 	if err := cmd.Start(); err != nil {
+		_ = logF.Close()
 		// Roll back sentinel so future calls can proceed.
 		m.mu.Lock()
 		m.fgPID = 0
 		m.mu.Unlock()
 		return domain.RunningInstance{}, fmt.Errorf("start process (fg): %w", err)
 	}
+	_ = logF.Close() // child inherited its own fd; drop ours
 
 	inst := domain.RunningInstance{
 		ProfileID:  p.ID,
 		PID:        cmd.Process.Pid,
 		Port:       port,
-		LogPath:    "", // no log file for foreground
+		LogPath:    logPath,
 		BinaryPath: resolvedBinary,
 		StartedAt:  time.Now().UTC(),
 		Background: false,
@@ -547,7 +559,7 @@ func (m *fsManager) launchForeground(p domain.Profile, port int, attemptID strin
 
 	// MOVED from pre-Start to here (post-insert) so the waitEnrichment
 	// body's re-read of m.tracked[inst.PID] sees a populated entry.
-	go m.waitEnrichment(cmd, inst.PID, "", attemptID)
+	go m.waitEnrichment(cmd, inst.PID, logPath, attemptID)
 
 	if err := saveRegistry(m.registryPath, all); err != nil {
 		return inst, fmt.Errorf("fg started but registry save failed: %w", err)

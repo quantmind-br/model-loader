@@ -76,6 +76,7 @@ type subState struct {
 	gpu    monitor.GPUStats
 	health monitor.HealthStatus
 	mets   monitor.Metrics
+	subErr string
 }
 
 // Apply mutates the subState according to the concrete type carried by ev.Data.
@@ -526,20 +527,23 @@ func (p *MonitorPage) clampCursor(rowCount int) {
 }
 
 // ensureSubscriptions starts a subscription for each non-crashed instance
-// that doesn't already have one, returning a listenCmd per new subscription.
+// that doesn't already have a healthy one, returning a listenCmd per new
+// subscription. Existing subscriptions with errors are retried.
 func (p *MonitorPage) ensureSubscriptions(insts []domain.RunningInstance) []tea.Cmd {
 	var cmds []tea.Cmd
 	for _, ri := range insts {
 		if ri.Crashed {
 			continue
 		}
-		if _, ok := p.subs[ri.PID]; ok {
+		if st, ok := p.subs[ri.PID]; ok && st.subErr == "" {
 			continue
 		}
 		ch, cancel, err := p.mm.Subscribe(ri.PID, ri.Port, ri.LogPath)
 		if err != nil {
+			p.subs[ri.PID] = &subState{cancel: func() error { return nil }, subErr: err.Error()}
 			continue
 		}
+		delete(p.subs, ri.PID)
 		p.subs[ri.PID] = &subState{cancel: cancel}
 		p.chans[ri.PID] = ch
 		cmds = append(cmds, listenCmd(ch))
@@ -611,6 +615,9 @@ func (p *MonitorPage) renderSubViewBody() string {
 	}
 	switch p.subView {
 	case SubViewLogs:
+		if st.subErr != "" {
+			return theme.Error.Render("Logs unavailable: " + st.subErr)
+		}
 		start := len(st.logs) - 10
 		if start < 0 {
 			start = 0
