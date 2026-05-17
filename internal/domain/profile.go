@@ -25,22 +25,11 @@ type Profile struct {
 	Meta          ProfileMeta       `json:"meta"`
 }
 
-// EnvVar is a single KEY=VALUE pair applied to the backend process at launch.
-// Keys must match [A-Za-z_][A-Za-z0-9_]*. Values are used literally.
-type EnvVar struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
 // LaunchConfig holds per-profile launcher defaults.
 type LaunchConfig struct {
 	DefaultBackground bool   `json:"defaultBackground"`
 	LogFilePath       string `json:"logFilePath,omitempty"`
 	BackendID         string `json:"backendId,omitempty"`
-
-	// Env are KEY=VALUE pairs overlaid on the inherited TUI environment
-	// when launching the backend. Last value wins on duplicate keys.
-	Env []EnvVar `json:"env,omitempty"`
 
 	// Legacy field kept for read-only migration. Not written after migration.
 	LlamaServerBinaryPath string `json:"llamaServerBinaryPath,omitempty"`

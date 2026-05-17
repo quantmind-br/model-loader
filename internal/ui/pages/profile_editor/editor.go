@@ -3,7 +3,6 @@ package profile_editor
 import (
 	"fmt"
 	"reflect"
-	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -75,30 +74,8 @@ type Editor struct {
 	advancedEditFlag string
 	advancedEditVal  string
 
-	// Environment sub-tab state. Mirrors the advanced* fields above.
-	envTable       table.Model
-	envEditing     bool
-	envEditKey     string
-	envEditValue   string
-	envEditIndex   int // -1 = adding new row; >=0 = editing existing
-	envEditField   envField
-	envSubmitError string
-
 	discardConfirm components.Confirm
 }
-
-// envField selects which of (key, value) the user is typing into while
-// editing an environment row inline.
-type envField int
-
-const (
-	envFieldKey envField = iota
-	envFieldValue
-)
-
-// envKeyRE matches a POSIX-shell identifier: leading letter or underscore,
-// then letters/digits/underscores. Applied to every env Key on submit.
-var envKeyRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // New constructs an idle Editor wired to the given flag schema. The
 // schema seeds the advanced flag-reference table and labels Essentials
@@ -154,13 +131,6 @@ func (e Editor) Open(d Draft) (Editor, tea.Cmd) {
 	e.advancedFilter = ""
 	e.filterMode = false
 	e.advanced.SetRows(e.advancedAll)
-	e.envTable = newEnvTable(e.draft.Env)
-	e.envEditing = false
-	e.envEditKey = ""
-	e.envEditValue = ""
-	e.envEditIndex = -1
-	e.envEditField = envFieldKey
-	e.envSubmitError = ""
 	e.discardConfirm = components.Confirm{}
 	return e, e.form.Init()
 }
@@ -214,14 +184,11 @@ func (e Editor) View() string {
 		header += " " + theme.Warn.Render("(unsaved changes)")
 	}
 	var body string
-	switch {
-	case e.subTab == subTabEssentials:
+	if e.subTab == subTabEssentials {
 		body = e.form.View()
-	case e.subTab == subTabEnvironment:
-		body = e.renderEnvBody()
-	case e.advancedEditing:
+	} else if e.advancedEditing {
 		body = theme.Subtitle.Render(fmt.Sprintf("Editing --%s: %s_", e.advancedEditFlag, e.advancedEditVal))
-	default:
+	} else {
 		body = e.advanced.View()
 	}
 	report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema)
@@ -231,9 +198,6 @@ func (e Editor) View() string {
 	}
 	if e.submitError != "" {
 		lines = append(lines, theme.Error.Render("✗ "+e.submitError))
-	}
-	if e.envSubmitError != "" {
-		lines = append(lines, theme.Error.Render("✗ "+e.envSubmitError))
 	}
 	for _, er := range report.Errors {
 		lines = append(lines, theme.Error.Render("✗ "+er.Field+": "+er.Message))
@@ -306,14 +270,15 @@ func (e Editor) handleKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 		return e, emitCancelled
 	}
 	if key.Matches(msg, tabKey) {
-		e.subTab = (e.subTab + 1) % 3
+		if e.subTab == subTabEssentials {
+			e.subTab = subTabAdvanced
+		} else {
+			e.subTab = subTabEssentials
+		}
 		return e, nil
 	}
 	if e.subTab == subTabAdvanced {
 		return e.handleAdvancedKey(msg)
-	}
-	if e.subTab == subTabEnvironment {
-		return e.handleEnvKey(msg)
 	}
 	e.submitError = ""
 	return e.forwardToForm(msg)
@@ -398,144 +363,6 @@ func (e Editor) handleAdvancedKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 	}
 	t, cmd := e.advanced.Update(msg)
 	e.advanced = t
-	return e, cmd
-}
-
-func (e Editor) renderEnvBody() string {
-	if e.envEditing {
-		marker := "_"
-		keyDisp := e.envEditKey
-		valDisp := e.envEditValue
-		if e.envEditField == envFieldKey {
-			keyDisp += marker
-		} else {
-			valDisp += marker
-		}
-		mode := "Editing env var:"
-		if e.envEditIndex < 0 {
-			mode = "Adding env var:"
-		}
-		return theme.Subtitle.Render(fmt.Sprintf(
-			"%s\n  KEY:   %s\n  VALUE: %s\n  tab: switch field   enter: save   esc: cancel",
-			mode, keyDisp, valDisp,
-		))
-	}
-	hint := "n: new   enter: edit   d: delete   ctrl+t: switch tab"
-	if e.draft != nil && len(e.draft.Env) == 0 {
-		hint = "(no env vars)   n: new   ctrl+t: switch tab"
-	}
-	return e.envTable.View() + "\n" + theme.Subtitle.Render(hint)
-}
-
-func (e Editor) handleEnvKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
-	if e.envEditing {
-		switch msg.String() {
-		case "esc":
-			e.envEditing = false
-			e.envEditKey = ""
-			e.envEditValue = ""
-			e.envEditIndex = -1
-			e.envEditField = envFieldKey
-			e.envSubmitError = ""
-			return e, nil
-		case "tab", "shift+tab":
-			if e.envEditField == envFieldKey {
-				e.envEditField = envFieldValue
-			} else {
-				e.envEditField = envFieldKey
-			}
-			return e, nil
-		case "enter":
-			if e.draft == nil {
-				return e, nil
-			}
-			key := strings.TrimSpace(e.envEditKey)
-			if !envKeyRE.MatchString(key) {
-				e.envSubmitError = fmt.Sprintf("Invalid env key %q: must match [A-Za-z_][A-Za-z0-9_]*", e.envEditKey)
-				return e, nil
-			}
-			for i, ev := range e.draft.Env {
-				if ev.Key == key && i != e.envEditIndex {
-					e.envSubmitError = fmt.Sprintf("Duplicate env key %q", key)
-					return e, nil
-				}
-			}
-			nev := domain.EnvVar{Key: key, Value: e.envEditValue}
-			if e.envEditIndex < 0 {
-				e.draft.Env = append(e.draft.Env, nev)
-			} else if e.envEditIndex < len(e.draft.Env) {
-				e.draft.Env[e.envEditIndex] = nev
-			}
-			e.envTable = newEnvTable(e.draft.Env)
-			e.envEditing = false
-			e.envEditKey = ""
-			e.envEditValue = ""
-			e.envEditIndex = -1
-			e.envEditField = envFieldKey
-			e.envSubmitError = ""
-			return e, nil
-		case "backspace":
-			if e.envEditField == envFieldKey && len(e.envEditKey) > 0 {
-				e.envEditKey = e.envEditKey[:len(e.envEditKey)-1]
-			} else if e.envEditField == envFieldValue && len(e.envEditValue) > 0 {
-				e.envEditValue = e.envEditValue[:len(e.envEditValue)-1]
-			}
-			return e, nil
-		}
-		if len(msg.Runes) == 1 && msg.Runes[0] >= 32 {
-			if e.envEditField == envFieldKey {
-				e.envEditKey += string(msg.Runes)
-			} else {
-				e.envEditValue += string(msg.Runes)
-			}
-			return e, nil
-		}
-		return e, nil
-	}
-
-	switch msg.String() {
-	case "n":
-		e.envEditing = true
-		e.envEditIndex = -1
-		e.envEditKey = ""
-		e.envEditValue = ""
-		e.envEditField = envFieldKey
-		e.envSubmitError = ""
-		return e, nil
-	case "enter":
-		if e.draft == nil || len(e.draft.Env) == 0 {
-			return e, nil
-		}
-		row := e.envTable.SelectedRow()
-		if len(row) < 2 {
-			return e, nil
-		}
-		idx := e.envTable.Cursor()
-		if idx < 0 || idx >= len(e.draft.Env) {
-			return e, nil
-		}
-		e.envEditing = true
-		e.envEditIndex = idx
-		e.envEditKey = e.draft.Env[idx].Key
-		e.envEditValue = e.draft.Env[idx].Value
-		e.envEditField = envFieldValue
-		e.envSubmitError = ""
-		return e, nil
-	case "d":
-		if e.draft == nil || len(e.draft.Env) == 0 {
-			return e, nil
-		}
-		idx := e.envTable.Cursor()
-		if idx < 0 || idx >= len(e.draft.Env) {
-			return e, nil
-		}
-		e.draft.Env = append(e.draft.Env[:idx], e.draft.Env[idx+1:]...)
-		e.envTable = newEnvTable(e.draft.Env)
-		e.envSubmitError = ""
-		return e, nil
-	}
-	t, cmd := e.envTable.Update(msg)
-	e.envTable = t
 	return e, cmd
 }
 
@@ -674,12 +501,6 @@ func (e Editor) close() Editor {
 	e.advancedEditing = false
 	e.advancedEditFlag = ""
 	e.advancedEditVal = ""
-	e.envEditing = false
-	e.envEditKey = ""
-	e.envEditValue = ""
-	e.envEditIndex = -1
-	e.envEditField = envFieldKey
-	e.envSubmitError = ""
 	e.schemaError = ""
 	e.submitError = ""
 	return e

@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -195,9 +194,6 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 	cmd.Stdout = logF
 	cmd.Stderr = logF
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	if env := applyProfileEnv(p.Launch.Env); env != nil {
-		cmd.Env = env
-	}
 
 	if err := cmd.Start(); err != nil {
 		_ = logF.Close()
@@ -528,9 +524,6 @@ func (m *fsManager) launchForeground(p domain.Profile, port int, attemptID strin
 	cmd := makeCommand(resolvedBinary, profileArgs)
 	cmd.Stdout = logF
 	cmd.Stderr = logF
-	if env := applyProfileEnv(p.Launch.Env); env != nil {
-		cmd.Env = env
-	}
 	if err := cmd.Start(); err != nil {
 		_ = logF.Close()
 		// Roll back sentinel so future calls can proceed.
@@ -572,39 +565,6 @@ func (m *fsManager) launchForeground(p domain.Profile, port int, attemptID strin
 		return inst, fmt.Errorf("fg started but registry save failed: %w", err)
 	}
 	return inst, nil
-}
-
-// applyProfileEnv overlays profile env vars on the inherited process env.
-// Returns nil when envs is empty so callers leave cmd.Env nil — Go then
-// inherits os.Environ() implicitly, preserving legacy behavior bit-for-bit
-// for profiles without env vars. On a non-empty input the inherited env is
-// snapshot at launch time and each EnvVar overrides any existing key or is
-// appended otherwise. Last value wins on intra-profile duplicates.
-func applyProfileEnv(envs []domain.EnvVar) []string {
-	if len(envs) == 0 {
-		return nil
-	}
-	base := os.Environ()
-	idx := make(map[string]int, len(base))
-	for i, kv := range base {
-		if eq := strings.IndexByte(kv, '='); eq > 0 {
-			idx[kv[:eq]] = i
-		}
-	}
-	out := append([]string(nil), base...)
-	for _, ev := range envs {
-		if ev.Key == "" {
-			continue
-		}
-		kv := ev.Key + "=" + ev.Value
-		if i, ok := idx[ev.Key]; ok {
-			out[i] = kv
-		} else {
-			idx[ev.Key] = len(out)
-			out = append(out, kv)
-		}
-	}
-	return out
 }
 
 // makeCommand builds an exec.Command from a possibly compound command string
