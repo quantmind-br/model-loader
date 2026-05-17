@@ -34,6 +34,32 @@ func TestModal_NoSizePassesThrough(t *testing.T) {
 	}
 }
 
+func TestModal_TitleDistinctFromBody(t *testing.T) {
+	out := Modal("Title", "Body", 0, 0)
+	if !strings.Contains(out, "Title") {
+		t.Errorf("missing title in output:\n%s", out)
+	}
+	if !strings.Contains(out, "Body") {
+		t.Errorf("missing body in output:\n%s", out)
+	}
+	if theme.NoColor() {
+		return
+	}
+	if !strings.Contains(out, "\x1b[") {
+		return
+	}
+	if !containsUnderlineSGR(out) {
+		t.Error("expected underline on title")
+	}
+}
+
+func TestModal_SmallTerminalClamping(t *testing.T) {
+	out := Modal("T", "B", 3, 3)
+	if !strings.Contains(out, "T") {
+		t.Errorf("missing title in small terminal output:\n%s", out)
+	}
+}
+
 func TestModal_NoBackgroundEscape(t *testing.T) {
 	// modalBox no longer hardcodes a background color — the terminal bg
 	// shows through. Verify there is no ANSI background escape (\x1b[4X).
@@ -70,6 +96,13 @@ func TestModal_NoColorStripsForeground(t *testing.T) {
 	if strings.Contains(out, "\x1b[38;") || strings.Contains(out, "\x1b[48;") {
 		t.Errorf("modal output contains 256/truecolor SGR under NO_COLOR:\n%q", out)
 	}
+}
+
+func containsUnderlineSGR(s string) bool {
+	return strings.Contains(s, "\x1b[4m") ||
+		strings.Contains(s, "\x1b[4;") ||
+		strings.Contains(s, ";4;") ||
+		strings.Contains(s, ";4m")
 }
 
 // itoa avoids strconv import for a tiny fixed-range conversion.

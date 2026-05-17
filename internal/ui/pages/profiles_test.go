@@ -443,7 +443,7 @@ func TestProfilesPage_HintsVaryByMode(t *testing.T) {
 	}
 	page.picker.active = false
 
-	page.deleteConfirm = components.NewConfirm("Delete?", "id", nil)
+	page.deleteConfirm = components.NewConfirm("Delete?", "id", nil, "", "")
 	if !strings.Contains(page.Hints(), "[enter] confirm") {
 		t.Errorf("confirm Hints missing [enter] confirm; got %q", page.Hints())
 	}
@@ -467,7 +467,7 @@ func TestProfilesPage_IsCapturingInputDuringEditAndPicker(t *testing.T) {
 		t.Errorf("picker page should capture input")
 	}
 	page.picker.active = false
-	page.deleteConfirm = components.NewConfirm("Delete?", "id", nil)
+	page.deleteConfirm = components.NewConfirm("Delete?", "id", nil, "", "")
 	if !page.IsCapturingInput() {
 		t.Errorf("deleteConfirm page should capture input")
 	}

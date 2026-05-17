@@ -350,6 +350,9 @@ func (p LauncherPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		return p, loadProfilesCmd(p.store)
 	case "enter":
+		if p.waitingPID != 0 {
+			return p, nil
+		}
 		it, ok := p.plist.SelectedItem().(profileItem)
 		if !ok || p.manager == nil {
 			return p, nil
@@ -387,6 +390,8 @@ func (p LauncherPage) askConfirmKill(pid int) (tea.Model, tea.Cmd) {
 			id, _ := payload.(int)
 			return func() tea.Msg { return launcherKillConfirmedMsg{pid: id} }
 		},
+		"Kill",
+		"Cancel",
 	)
 	return p, p.killConfirm.Init()
 }
@@ -490,7 +495,7 @@ func (p LauncherPage) launchProfileCmd(selected domain.Profile) tea.Cmd {
 
 func (p LauncherPage) View() string {
 	if p.killConfirm.Active() {
-		return p.killConfirm.View()
+		return components.Modal("Kill Process", p.killConfirm.View(), p.width, p.height)
 	}
 	if p.loadErr != nil {
 		return theme.Subtitle.Render(fmt.Sprintf("load profiles: %v", p.loadErr))
@@ -533,14 +538,7 @@ func (p LauncherPage) renderProfileDetail() string {
 		rightContent = theme.Subtitle.Render("No profile selected")
 	}
 
-	leftW := p.width / 2
-	rightW := p.width/2 - 2
-	if leftW < 20 {
-		leftW = 20
-	}
-	if rightW < 20 {
-		rightW = 20
-	}
+	leftW, rightW := theme.SplitTwoPanes(p.width)
 	left := theme.Pane.Width(leftW).Render(p.plist.View())
 	right := theme.Pane.Width(rightW).Render(rightContent)
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
@@ -550,7 +548,7 @@ func (p LauncherPage) renderProfileDetail() string {
 // the "Running: (none)" placeholder when no instances are tracked.
 func (p LauncherPage) renderRunningList() string {
 	if len(p.running) == 0 {
-		return "Running: (none)"
+		return theme.Subtitle.Render("Running: (none) — press [enter] to launch selected profile")
 	}
 	lines := []string{theme.Subtitle.Render("Running")}
 	for _, ri := range p.running {

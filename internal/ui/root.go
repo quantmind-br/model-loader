@@ -229,7 +229,7 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	for i, p := range m.pages {
 		updated, cmd := p.Update(tea.WindowSizeMsg{
 			Width:  msg.Width,
-			Height: msg.Height - 2,
+			Height: theme.BodyHeight(msg.Height),
 		})
 		m.pages[i] = updated
 		if cmd != nil {

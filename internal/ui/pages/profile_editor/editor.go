@@ -163,6 +163,13 @@ func (e Editor) CurrentDraft() Draft {
 	return *e.draft
 }
 
+func (e Editor) Dirty() bool {
+	if !e.active || e.draft == nil {
+		return false
+	}
+	return !reflect.DeepEqual(*e.draft, e.openSnapshot)
+}
+
 // View renders the editor: discard confirm if open, else header +
 // (form|advanced table) + filter line + validator footer.
 func (e Editor) View() string {
@@ -173,6 +180,9 @@ func (e Editor) View() string {
 		return ""
 	}
 	header := theme.Title.Render(fmt.Sprintf("Editor — [%s]   ctrl+t to switch  ctrl+p to pick model", e.subTab))
+	if e.Dirty() {
+		header += " " + theme.Warn.Render("(unsaved changes)")
+	}
 	var body string
 	if e.subTab == subTabEssentials {
 		body = e.form.View()
@@ -197,7 +207,7 @@ func (e Editor) View() string {
 	}
 	filterLine := ""
 	if e.subTab == subTabAdvanced {
-		filterLine = theme.Subtitle.Render(fmt.Sprintf("filter: %q", e.advancedFilter))
+		filterLine = theme.Subtitle.Render(fmt.Sprintf("filter: %q  (type to filter, esc to clear, enter to edit flag)", e.advancedFilter))
 	}
 	footer := strings.Join(lines, "\n")
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, filterLine, footer)
@@ -247,7 +257,7 @@ func (e Editor) updateDiscardConfirm(msg tea.Msg) (Editor, tea.Cmd) {
 func (e Editor) askDiscard() (Editor, tea.Cmd) {
 	e.discardConfirm = components.NewConfirm("Discard unsaved changes?", nil, func(_ any) tea.Cmd {
 		return emitDiscardYes
-	})
+	}, "Discard", "Keep")
 	return e, e.discardConfirm.Init()
 }
 

@@ -74,10 +74,13 @@ type BackendsPage struct {
 	formMode formMode
 	draft    *backendDraft
 
-	deleteConfirm components.Confirm
+	deleteConfirm  components.Confirm
 	refreshConfirm components.Confirm
 
 	flash components.Flash
+
+	pendingRefresh bool
+	pendingProbe   bool
 
 	defaultBackendID string
 
@@ -205,6 +208,7 @@ func (p BackendsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if p.refreshConfirm.Active() {
 		if msg.String() == "esc" {
 			p.refreshConfirm = components.Confirm{}
+			p.pendingRefresh = false
 			p, fc := p.withFlash("refresh cancelled")
 			return p, fc
 		}
@@ -253,8 +257,15 @@ func (p BackendsPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, p.keys.Default):
 		return p.setDefaultSelected()
 	case key.Matches(msg, p.keys.Refresh):
+		if p.pendingRefresh {
+			return p, nil
+		}
+		p.pendingRefresh = true
 		return p.askRefreshSelected()
 	case key.Matches(msg, p.keys.Probe):
+		if p.pendingProbe {
+			return p, nil
+		}
 		return p.askProbeAll()
 	}
 	updated, cmd := p.list.Update(msg)
@@ -267,22 +278,26 @@ func (p BackendsPage) View() string {
 		return components.Modal("Backend", p.form.View(), p.width, p.height)
 	}
 	if p.refreshConfirm.Active() {
-		return components.Modal("Confirm", p.refreshConfirm.View(), p.width, p.height)
+		return components.Modal("Refresh Schema", p.refreshConfirm.View(), p.width, p.height)
 	}
 	if p.deleteConfirm.Active() {
-		return components.Modal("Confirm", p.deleteConfirm.View(), p.width, p.height)
+		return components.Modal("Delete Backend", p.deleteConfirm.View(), p.width, p.height)
 	}
 
-	leftWidth := p.width / 3
-	rightWidth := (p.width * 2 / 3) - 2
-	if leftWidth <= 0 {
-		leftWidth = 40
+	leftWidth, rightWidth := theme.SplitTwoPanes(p.width)
+	leftContent := p.list.View()
+	if len(p.list.Items()) == 0 {
+		leftContent = theme.Subtitle.Render("No backends yet. Press [n] to add one.")
 	}
-	if rightWidth <= 0 {
-		rightWidth = 80
+	left := theme.Pane.Width(leftWidth).Render(leftContent)
+	rightContent := p.detailView()
+	if p.pendingRefresh {
+		rightContent = theme.Subtitle.Render("Refreshing schema…") + "\n" + rightContent
 	}
-	left := theme.Pane.Width(leftWidth).Render(p.list.View())
-	right := theme.Pane.Width(rightWidth).Render(p.detailView())
+	if p.pendingProbe {
+		rightContent = theme.Subtitle.Render("Probing backends…") + "\n" + rightContent
+	}
+	right := theme.Pane.Width(rightWidth).Render(rightContent)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 
 	if v := p.flash.View(); v != "" {
@@ -488,6 +503,8 @@ func (p BackendsPage) askDeleteSelected() (tea.Model, tea.Cmd) {
 			id, _ := payload.(string)
 			return func() tea.Msg { return backendDeleteConfirmedMsg{id: id} }
 		},
+		"Delete",
+		"Cancel",
 	)
 	return p, p.deleteConfirm.Init()
 }
@@ -533,20 +550,25 @@ func (p BackendsPage) askRefreshSelected() (tea.Model, tea.Cmd) {
 			id, _ := payload.(string)
 			return func() tea.Msg { return backendRefreshConfirmedMsg{id: id} }
 		},
+		"Refresh",
+		"Cancel",
 	)
 	return p, p.refreshConfirm.Init()
 }
 
 func (p BackendsPage) performRefresh(id string) (tea.Model, tea.Cmd) {
 	if p.manager == nil {
+		p.pendingRefresh = false
 		p, fc := p.withFlash("backend manager not available")
 		return p, fc
 	}
 	p.refreshConfirm = components.Confirm{}
 	if err := p.manager.RefreshSchema(id); err != nil {
+		p.pendingRefresh = false
 		p, fc := p.withFlash("refresh schema failed: " + err.Error())
 		return p, fc
 	}
+	p.pendingRefresh = false
 	p, fc := p.withFlash("schema refreshed " + id)
 	return p, fc
 }
@@ -556,10 +578,12 @@ func (p BackendsPage) askProbeAll() (tea.Model, tea.Cmd) {
 		p, fc := p.withFlash("prober not available")
 		return p, fc
 	}
+	p.pendingProbe = true
 	p.probeEpoch++
 	p.probeResults = make(map[string]backendProbeResult)
 	ch, err := p.prober.Probe(context.Background())
 	if err != nil {
+		p.pendingProbe = false
 		p, fc := p.withFlash("probe failed: " + err.Error())
 		return p, fc
 	}
@@ -586,6 +610,7 @@ func (p BackendsPage) handleProbeEvent(m probeEventMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.event.Done {
 		p.probeCh = nil
+		p.pendingProbe = false
 		p, fc := p.withFlash("probe complete")
 		return p, fc
 	}

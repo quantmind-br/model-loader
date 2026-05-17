@@ -35,14 +35,14 @@ type modelPickerOverlay struct {
 // discard-confirm) lives in a profile_editor.Editor sub-model. The page
 // keeps only master-list, delete-confirm, picker overlay, status flash.
 type ProfilesPage struct {
-	store          profilestore.Store
-	schema         domain.FlagSchema
-	catalogStore   backendcatalog.Store
-	schemaStore    backendcatalog.SchemaStore
-	list     list.Model
-	listKeys profilesKeyMap
-	width    int
-	height   int
+	store        profilestore.Store
+	schema       domain.FlagSchema
+	catalogStore backendcatalog.Store
+	schemaStore  backendcatalog.SchemaStore
+	list         list.Model
+	listKeys     profilesKeyMap
+	width        int
+	height       int
 
 	editor        profile_editor.Editor
 	deleteConfirm components.Confirm
@@ -604,6 +604,8 @@ func (p ProfilesPage) askDeleteSelected() (tea.Model, tea.Cmd) {
 			pid, _ := payload.(string)
 			return func() tea.Msg { return profileDeleteConfirmedMsg{id: pid} }
 		},
+		"Delete",
+		"Cancel",
 	)
 	return p, p.deleteConfirm.Init()
 }

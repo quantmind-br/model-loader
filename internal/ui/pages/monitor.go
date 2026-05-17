@@ -117,7 +117,7 @@ type MonitorPage struct {
 	periodicTickActive bool
 	width              int
 	height             int
-	flash              string
+	flash              components.Flash
 	pauseFlash         string
 	restartConfirm     components.Confirm
 	killConfirm        components.Confirm
@@ -166,6 +166,7 @@ func NewMonitorPage(pm procMgrIface, mm monitor.Manager, ps profileStoreIface) *
 		tbl:   t,
 		subs:  map[int]*subState{},
 		chans: map[int]<-chan monitor.MonitorEvent{},
+		flash: components.NewFlash("monitor"),
 	}
 }
 
@@ -230,6 +231,9 @@ func (p *MonitorPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.handleRestartConfirmed(m)
 	case monitorEventMsg:
 		return p.handleMonitorEvent(m)
+	case components.FlashClearMsg:
+		p.flash, _ = p.flash.Update(m)
+		return p, nil
 	}
 	return p, p.forwardToConfirms(msg)
 }
@@ -282,10 +286,11 @@ func (p *MonitorPage) handleInstancesRefreshed(m monitorInstancesRefreshedMsg) (
 }
 
 func (p *MonitorPage) handleRestartResult(m restartResultMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 	if m.err != nil {
-		p.flash = fmt.Sprintf("restart: pid %d failed: %v", m.pid, m.err)
+		p.flash, cmd = p.flash.Set(fmt.Sprintf("restart: pid %d failed: %v", m.pid, m.err))
 	}
-	return p, tea.Batch(p.refreshInstancesCmd(), p.forwardToConfirms(m))
+	return p, tea.Batch(p.refreshInstancesCmd(), p.forwardToConfirms(m), cmd)
 }
 
 func (p *MonitorPage) handleSelectPID(m MonitorSelectPIDMsg) (tea.Model, tea.Cmd) {
@@ -367,6 +372,8 @@ func (p *MonitorPage) askConfirmKill(pid int) tea.Cmd {
 			id, _ := payload.(int)
 			return func() tea.Msg { return monitorKillConfirmedMsg{pid: id} }
 		},
+		"Kill",
+		"Cancel",
 	)
 	return p.killConfirm.Init()
 }
@@ -404,18 +411,19 @@ func (p *MonitorPage) askConfirmRestart(pid int) tea.Cmd {
 			break
 		}
 	}
+	var cmd tea.Cmd
 	if inst == nil {
-		p.flash = fmt.Sprintf("restart: pid %d not found", pid)
-		return nil
+		p.flash, cmd = p.flash.Set(fmt.Sprintf("restart: pid %d not found", pid))
+		return cmd
 	}
 	if p.ps == nil {
-		p.flash = "restart: profile store not available"
-		return nil
+		p.flash, cmd = p.flash.Set("restart: profile store not available")
+		return cmd
 	}
 	prof, err := p.ps.Get(inst.ProfileID)
 	if err != nil {
-		p.flash = fmt.Sprintf("restart: profile %q not found", inst.ProfileID)
-		return nil
+		p.flash, cmd = p.flash.Set(fmt.Sprintf("restart: profile %q not found", inst.ProfileID))
+		return cmd
 	}
 	payload := restartPayload{pid: pid, profile: prof, background: inst.Background}
 	p.restartConfirm = components.NewConfirm(
@@ -427,6 +435,8 @@ func (p *MonitorPage) askConfirmRestart(pid int) tea.Cmd {
 				return monitorRestartConfirmedMsg{pid: rp.pid, profile: rp.profile, background: rp.background}
 			}
 		},
+		"Restart",
+		"Cancel",
 	)
 	return p.restartConfirm.Init()
 }
@@ -579,9 +589,9 @@ func (p *MonitorPage) View() string {
 		return p.restartConfirm.View()
 	}
 	if len(p.tbl.Rows()) == 0 {
-		header := lipgloss.NewStyle().Bold(true).Render("Running instances")
-		if p.flash != "" {
-			header = theme.Error.Render(p.flash) + "\n" + header
+		header := theme.Title.Render("Running instances")
+		if p.flash.Message() != "" {
+			header = p.flash.View() + "\n" + header
 		}
 		return header + "\n" + theme.Subtitle.Render("(no instances running — switch to Launcher [1] to start one)")
 	}
@@ -591,9 +601,9 @@ func (p *MonitorPage) View() string {
 // renderTable renders the bold "Running instances" header (prefixed with the
 // flash banner when set) followed by the bubbletea instances table.
 func (p *MonitorPage) renderTable() string {
-	header := lipgloss.NewStyle().Bold(true).Render("Running instances")
-	if p.flash != "" {
-		header = theme.Error.Render(p.flash) + "\n" + header
+	header := theme.Title.Render("Running instances")
+	if p.flash.Message() != "" {
+		header = p.flash.View() + "\n" + header
 	}
 	return header + "\n" + p.tbl.View()
 }
@@ -645,6 +655,9 @@ func (p *MonitorPage) renderSubViewBody() string {
 		}
 		return bottom
 	case SubViewMetrics:
+		if st == nil || st.subErr != "" {
+			return theme.Subtitle.Render("GPU metrics unavailable — check nvidia-smi or monitoring service")
+		}
 		if len(st.mets.TokensPerSec) == 0 && len(st.mets.RequestsPerSec) == 0 {
 			return "(no metrics yet — first sample arrives after the slots tick)"
 		}

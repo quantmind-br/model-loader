@@ -363,6 +363,89 @@ func TestBackendsPage_Probe(t *testing.T) {
 	}
 }
 
+func TestBackendsPage_RefreshPendingGuard(t *testing.T) {
+	p, mgr, _ := newBackendsPageHarness(t)
+	addBackendForPage(t, mgr, "Refresh Backend", "/bin/echo")
+	p = loadBackendsPage(t, p)
+
+	model, _ := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
+	p = model.(BackendsPage)
+
+	if !p.pendingRefresh {
+		t.Fatal("expected pendingRefresh true after first R")
+	}
+	if !p.refreshConfirm.Active() {
+		t.Fatal("expected refresh confirmation active")
+	}
+
+	model, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
+	p = model.(BackendsPage)
+
+	if !p.refreshConfirm.Active() {
+		t.Fatal("expected refresh confirmation still active")
+	}
+	if cmd != nil {
+		t.Fatal("expected no command while refresh pending")
+	}
+	if !p.pendingRefresh {
+		t.Fatal("expected pendingRefresh still true")
+	}
+}
+
+func TestBackendsPage_ProbePendingGuard(t *testing.T) {
+	p, mgr, _ := newBackendsPageHarness(t)
+	b := addBackendForPage(t, mgr, "Probe Backend", "/bin/echo")
+	p = loadBackendsPage(t, p)
+
+	prober := &fakeProber{
+		events: []backendcatalog.ProbeEvent{
+			{BackendID: b.ID, Status: backendcatalog.ProbeStatusOK, Detail: "v1.0.0"},
+		},
+	}
+	p = p.WithProber(prober)
+
+	model, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
+	p = model.(BackendsPage)
+	oldEpoch := p.probeEpoch
+
+	if !p.pendingProbe {
+		t.Fatal("expected pendingProbe true after first P")
+	}
+
+	// Process the first event so readNextProbeEvent is queued
+	msg := cmd()
+	model, cmd = p.Update(msg)
+	p = model.(BackendsPage)
+
+	// Press P again while probe is still in flight
+	model, cmd2 := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
+	p = model.(BackendsPage)
+
+	if p.probeEpoch != oldEpoch {
+		t.Fatal("expected probe epoch unchanged while pending")
+	}
+	if cmd2 != nil {
+		t.Fatal("expected no command while probe pending")
+	}
+	if !p.pendingProbe {
+		t.Fatal("expected pendingProbe still true")
+	}
+
+	// Drain remaining events to completion
+	for cmd != nil {
+		msg := cmd()
+		model, cmd = p.Update(msg)
+		p = model.(BackendsPage)
+		if m, ok := msg.(probeEventMsg); ok && m.event.Done {
+			break
+		}
+	}
+
+	if p.pendingProbe {
+		t.Fatal("expected pendingProbe false after probe complete")
+	}
+}
+
 func TestBackendsPage_ProbeStaleEpochIgnored(t *testing.T) {
 	p, mgr, _ := newBackendsPageHarness(t)
 	b := addBackendForPage(t, mgr, "Probe Backend", "/bin/echo")

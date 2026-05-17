@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
+	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
@@ -22,20 +23,28 @@ type HTTPProxyController interface {
 	Status() httpproxy.Status
 }
 
+type pendingAction string
+
+const (
+	pendingNone pendingAction = ""
+	pendingStart pendingAction = "start"
+	pendingStop  pendingAction = "stop"
+)
+
 // ServerPage renders the HTTP proxy status and lets the user toggle the
 // listener on/off without leaving the TUI.
 type ServerPage struct {
-	srv      HTTPProxyController
-	status   httpproxy.Status
-	flash    string
-	flashErr bool
-	width    int
-	height   int
+	srv     HTTPProxyController
+	status  httpproxy.Status
+	flash   components.Flash
+	pending pendingAction
+	width   int
+	height  int
 }
 
 // NewServerPage constructs the Server tab page wired to srv.
 func NewServerPage(srv HTTPProxyController) *ServerPage {
-	return &ServerPage{srv: srv}
+	return &ServerPage{srv: srv, flash: components.NewFlash("server")}
 }
 
 type serverTickMsg struct{}
@@ -54,6 +63,7 @@ func (p *ServerPage) tick() tea.Cmd {
 }
 
 func (p *ServerPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
 		p.width, p.height = m.Width, m.Height
@@ -63,22 +73,33 @@ func (p *ServerPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			p.status = p.srv.Status()
 		}
 		return p, p.tick()
+	case components.FlashClearMsg:
+		p.flash, _ = p.flash.Update(m)
+		return p, nil
 	case serverActionResultMsg:
-		p.flashErr = m.err != nil
+		p.pending = pendingNone
+		msg := m.action + " ok"
 		if m.err != nil {
-			p.flash = fmt.Sprintf("%s failed: %v", m.action, m.err)
-		} else {
-			p.flash = fmt.Sprintf("%s ok", m.action)
+			msg = fmt.Sprintf("%s failed: %v", m.action, m.err)
 		}
+		p.flash, cmd = p.flash.Set(msg)
 		if p.srv != nil {
 			p.status = p.srv.Status()
 		}
-		return p, nil
+		return p, cmd
 	case tea.KeyMsg:
 		switch m.String() {
 		case "s":
+			if p.pending != pendingNone {
+				return p, nil
+			}
+			p.pending = pendingStart
 			return p, p.startCmd()
 		case "x":
+			if p.pending != pendingNone {
+				return p, nil
+			}
+			p.pending = pendingStop
 			return p, p.stopCmd()
 		case "r":
 			if p.srv != nil {
@@ -162,13 +183,27 @@ func (p *ServerPage) View() string {
 		b.WriteString("\n")
 	}
 
-	if p.flash != "" {
+	if p.pending != pendingNone {
 		b.WriteString("\n")
-		if p.flashErr {
-			b.WriteString(theme.Error.Render(p.flash))
-		} else {
-			b.WriteString(theme.OK.Render(p.flash))
+		text := "Starting…"
+		if p.pending == pendingStop {
+			text = "Stopping…"
 		}
+		b.WriteString(theme.Subtitle.Render(text))
+		b.WriteString("\n")
+	} else if p.srv == nil {
+		b.WriteString("\n")
+		b.WriteString(theme.Subtitle.Render("Server not configured"))
+		b.WriteString("\n")
+	} else if !p.status.Running {
+		b.WriteString("\n")
+		b.WriteString(theme.Subtitle.Render("Press [s] to start the HTTP proxy"))
+		b.WriteString("\n")
+	}
+
+	if v := p.flash.View(); v != "" {
+		b.WriteString("\n")
+		b.WriteString(v)
 		b.WriteString("\n")
 	}
 

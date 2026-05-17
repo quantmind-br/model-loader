@@ -2,6 +2,7 @@ package pages
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -85,7 +86,7 @@ func TestServerPage_StartFailureShowsFlash(t *testing.T) {
 	p := NewServerPage(f)
 	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
 	p.Update(serverActionResultMsg{action: "start", err: context.DeadlineExceeded})
-	if p.flash == "" {
+	if p.flash.Message() == "" {
 		t.Error("expected flash message after start failure")
 	}
 }
@@ -95,7 +96,7 @@ func TestServerPage_StopFailureShowsFlash(t *testing.T) {
 	p := NewServerPage(f)
 	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	p.Update(serverActionResultMsg{action: "stop", err: context.Canceled})
-	if p.flash == "" {
+	if p.flash.Message() == "" {
 		t.Error("expected flash message after stop failure")
 	}
 }
@@ -103,7 +104,71 @@ func TestServerPage_StopFailureShowsFlash(t *testing.T) {
 func TestServerPage_NilProxy(t *testing.T) {
 	p := NewServerPage(nil)
 	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	_ = p.flash
+	_ = p.flash.Message()
+}
+
+func TestServerPage_PendingStartIgnoresDuplicate(t *testing.T) {
+	f := &fakeHTTPProxy{}
+	p := NewServerPage(f)
+	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	if p.pending != pendingStart {
+		t.Fatalf("pending = %q, want start", p.pending)
+	}
+	updated, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	if cmd != nil {
+		t.Error("duplicate s key must not return a command while pending")
+	}
+	up := updated.(*ServerPage)
+	if up.pending != pendingStart {
+		t.Errorf("pending changed on duplicate key; got %q", up.pending)
+	}
+}
+
+func TestServerPage_PendingStopIgnoresDuplicate(t *testing.T) {
+	f := &fakeHTTPProxy{status: httpproxy.Status{Running: true}}
+	p := NewServerPage(f)
+	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if p.pending != pendingStop {
+		t.Fatalf("pending = %q, want stop", p.pending)
+	}
+	updated, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if cmd != nil {
+		t.Error("duplicate x key must not return a command while pending")
+	}
+	up := updated.(*ServerPage)
+	if up.pending != pendingStop {
+		t.Errorf("pending changed on duplicate key; got %q", up.pending)
+	}
+}
+
+func TestServerPage_PendingClearedAfterResult(t *testing.T) {
+	f := &fakeHTTPProxy{}
+	p := NewServerPage(f)
+	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	if p.pending != pendingStart {
+		t.Fatalf("pending = %q, want start", p.pending)
+	}
+	p.Update(serverActionResultMsg{action: "start"})
+	if p.pending != pendingNone {
+		t.Errorf("pending = %q, want none after result", p.pending)
+	}
+}
+
+func TestServerPage_ViewShowsNotConfigured(t *testing.T) {
+	p := NewServerPage(nil)
+	v := p.View()
+	if !strings.Contains(v, "not configured") {
+		t.Errorf("View = %q, want 'not configured' text", v)
+	}
+}
+
+func TestServerPage_ViewShowsStartHintWhenStopped(t *testing.T) {
+	f := &fakeHTTPProxy{status: httpproxy.Status{Running: false}}
+	p := NewServerPage(f)
+	v := p.View()
+	if !strings.Contains(v, "Press [s] to start") {
+		t.Errorf("View = %q, want 'Press [s] to start' hint", v)
+	}
 }
 
 func TestServerPage_TickUpdatesStatus(t *testing.T) {

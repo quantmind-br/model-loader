@@ -24,9 +24,10 @@ func modalTitleStyle() lipgloss.Style {
 	s := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(theme.ColorAccent).
+		Underline(true).
 		Margin(0, 0, 1, 0)
 	if theme.NoColor() {
-		s = s.UnsetForeground().UnsetBackground()
+		s = s.UnsetForeground().UnsetBackground().Underline(false)
 	}
 	return s
 }
@@ -39,6 +40,13 @@ func Modal(title, body string, width, height int) string {
 	box := modalBoxStyle().Render(modalTitleStyle().Render(title) + "\n" + body)
 	if width <= 0 || height <= 0 {
 		return box
+	}
+	// Clamp to reasonable minimums so the modal doesn't collapse on tiny terminals.
+	if width < 20 {
+		width = 20
+	}
+	if height < 5 {
+		height = 5
 	}
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box)
 }

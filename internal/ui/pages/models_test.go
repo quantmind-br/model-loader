@@ -382,9 +382,35 @@ func TestModelsPage_Reload(t *testing.T) {
 	}
 }
 
+func TestModelsPage_RescanGuard(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.scanID = 2
+	// Simulate an in-progress scan: statusMap shows "scanning".
+	page.statusMap["/m"] = pathStatus{state: "scanning"}
+
+	updated, _ := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
+	mp := updated.(ModelsPage)
+
+	if mp.scanID != 2 {
+		t.Errorf("scanID = %d, want 2 (must NOT bump while scanning)", mp.scanID)
+	}
+	if mp.statusMap["/m"].state != "scanning" {
+		t.Errorf("status state = %q, want scanning", mp.statusMap["/m"].state)
+	}
+	// cmd may be a flash clear timer — that's fine; the point is scanID didn't bump.
+	if mp.scanID != 2 {
+		t.Errorf("scanID = %d, want 2 (must NOT bump while scanning)", mp.scanID)
+	}
+	if !strings.Contains(mp.flash.Message(), "already in progress") {
+		t.Errorf("flash = %q, want 'already in progress'", mp.flash.Message())
+	}
+}
+
 func TestModelsPage_RescanKeyShowsFlash(t *testing.T) {
 	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
 	page.scanID = 2
+	// Mark root scanned so the rescan guard allows a fresh scan.
+	page.statusMap["/m"] = pathStatus{state: "scanned"}
 
 	updated, cmd := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
 	if cmd == nil {

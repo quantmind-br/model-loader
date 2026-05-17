@@ -67,7 +67,7 @@ func RebuildStyles() {
 	Pane = lipgloss.NewStyle().
 		Border(Border).
 		BorderForeground(ColorDim).
-		Padding(0, 1)
+		Padding(PanePaddingY, PanePaddingX)
 
 	if NoColor() {
 		Title = Title.UnsetForeground().UnsetBackground()

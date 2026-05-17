@@ -253,6 +253,37 @@ func TestEditor_SetModelPathUpdatesDraft(t *testing.T) {
 	}
 }
 
+func TestEditor_Dirty(t *testing.T) {
+	e := New(domain.FlagSchema{})
+	e, _ = e.Open(cleanDraft())
+	if e.Dirty() {
+		t.Error("freshly opened editor should not be dirty")
+	}
+
+	e.draft.Name = "Mutated"
+	if !e.Dirty() {
+		t.Error("editor should be dirty after mutation")
+	}
+
+	e.draft.Name = cleanDraft().Name
+	if e.Dirty() {
+		t.Error("editor should not be dirty after reverting mutation")
+	}
+}
+
+func TestEditor_ViewShowsUnsavedIndicator(t *testing.T) {
+	e := New(domain.FlagSchema{})
+	e, _ = e.Open(cleanDraft())
+	if strings.Contains(e.View(), "unsaved changes") {
+		t.Error("clean editor view should not show unsaved indicator")
+	}
+
+	e.draft.Name = "Mutated"
+	if !strings.Contains(e.View(), "unsaved changes") {
+		t.Error("dirty editor view should show unsaved indicator")
+	}
+}
+
 func TestEditor_SetModelPathInactiveNoOp(t *testing.T) {
 	e := New(domain.FlagSchema{})
 	e, cmd := e.SetModelPath("/x.gguf")

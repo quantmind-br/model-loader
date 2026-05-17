@@ -521,8 +521,8 @@ func TestMonitorPage_RFlashWhenStoreNil(t *testing.T) {
 	if p.restartConfirm.Active() {
 		t.Fatal("nil store should not open confirm form")
 	}
-	if !strings.Contains(p.flash, "store not available") {
-		t.Errorf("expected flash about missing store; got %q", p.flash)
+	if !strings.Contains(p.flash.Message(), "store not available") {
+		t.Errorf("expected flash about missing store; got %q", p.flash.Message())
 	}
 }
 
@@ -539,8 +539,8 @@ func TestMonitorPage_RFlashWhenProfileMissing(t *testing.T) {
 	if p.restartConfirm.Active() {
 		t.Fatal("missing profile should not open confirm form")
 	}
-	if !strings.Contains(p.flash, "not found") {
-		t.Errorf("expected flash about missing profile; got %q", p.flash)
+	if !strings.Contains(p.flash.Message(), "not found") {
+		t.Errorf("expected flash about missing profile; got %q", p.flash.Message())
 	}
 }
 
@@ -551,8 +551,26 @@ func TestMonitorPage_RestartResultMsgSetsFlashOnError(t *testing.T) {
 	p.SetSize(120, 30)
 
 	p, _ = updateAs[*MonitorPage](p, restartResultMsg{pid: 42, err: errors.New("kill refused")})
-	if !strings.Contains(p.flash, "kill refused") {
-		t.Errorf("expected flash to contain error; got %q", p.flash)
+	if !strings.Contains(p.flash.Message(), "kill refused") {
+		t.Errorf("expected flash to contain error; got %q", p.flash.Message())
+	}
+}
+
+func TestMonitorPage_FlashAutoClear(t *testing.T) {
+	pm := &fakeProcMgr{}
+	mm := fakeMonMgr{}
+	p := NewMonitorPage(pm, mm, nil)
+	p.SetSize(120, 30)
+
+	p, _ = updateAs[*MonitorPage](p, restartResultMsg{pid: 42, err: errors.New("boom")})
+	if p.flash.Message() == "" {
+		t.Fatal("flash should be set after error")
+	}
+
+	at := p.flash.At()
+	p, _ = updateAs[*MonitorPage](p, components.FlashClearMsg{Tag: "monitor", At: at})
+	if p.flash.Message() != "" {
+		t.Errorf("flash should be cleared after FlashClearMsg; got %q", p.flash.Message())
 	}
 }
 

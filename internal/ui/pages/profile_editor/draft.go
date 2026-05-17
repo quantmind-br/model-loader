@@ -206,35 +206,35 @@ func buildForm(d *Draft, schema domain.FlagSchema, backendOpts []huh.Option[stri
 	cacheOpts := selectOptions(schema, "cache-type-k", []string{"f16", "q8_0", "q4_0"})
 	groups := []*huh.Group{
 		huh.NewGroup(
-			huh.NewInput().Title("Name").Value(&d.Name),
+			huh.NewInput().Title("Name").Description("Unique profile identifier").Value(&d.Name),
 			huh.NewInput().Title("Description").Value(&d.Description),
 			huh.NewInput().Title("Tags").Description("comma-separated").Value(&d.Tags),
-			huh.NewInput().Title("Model path (.gguf)").Value(&d.Model),
+			huh.NewInput().Title("Model path (.gguf)").Description("Path to the GGUF model file (ctrl+p to pick)").Value(&d.Model),
 		),
 	}
 	if len(backendOpts) > 0 {
 		groups[0] = huh.NewGroup(
-			huh.NewInput().Title("Name").Value(&d.Name),
+			huh.NewInput().Title("Name").Description("Unique profile identifier").Value(&d.Name),
 			huh.NewInput().Title("Description").Value(&d.Description),
 			huh.NewInput().Title("Tags").Description("comma-separated").Value(&d.Tags),
-			huh.NewInput().Title("Model path (.gguf)").Value(&d.Model),
+			huh.NewInput().Title("Model path (.gguf)").Description("Path to the GGUF model file (ctrl+p to pick)").Value(&d.Model),
 			huh.NewSelect[string]().
 				Title("Backend").
-				Description("Select the LLM server backend for this profile").
+				Description("Which backend engine to use").
 				Options(backendOpts...).
 				Value(&d.BackendID),
 		)
 	}
 	if kind == domain.BackendKindLlamaServer || kind == "" {
 		groups = append(groups, huh.NewGroup(
-			huh.NewInput().Title(labelWithHelp(schema, "n-gpu-layers", "ngl (gpu layers)")).Value(&d.NGL).Validate(intRange(-1, 9999, false)),
-			huh.NewInput().Title(labelWithHelp(schema, "ctx-size", "ctx-size")).Value(&d.CtxSize).Validate(intRange(0, 1024*1024, false)),
-			huh.NewInput().Title(labelWithHelp(schema, "batch-size", "batch-size")).Value(&d.BatchSize).Validate(intRange(0, 1024*1024, true)),
-			huh.NewInput().Title(labelWithHelp(schema, "ubatch-size", "ubatch-size")).Value(&d.UBatchSize).Validate(intRange(0, 1024*1024, true)),
-			huh.NewInput().Title(labelWithHelp(schema, "port", "port")).Value(&d.Port).Validate(portValidator()),
-			huh.NewSelect[string]().Title(labelWithHelp(schema, "flash-attn", "flash-attn")).Options(toOptions(selectOptions(schema, "flash-attn", []string{"on", "off", "auto"}))...).Value(&d.FlashAttn),
-			huh.NewSelect[string]().Title("cache-type-k").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeK),
-			huh.NewSelect[string]().Title("cache-type-v").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeV),
+			huh.NewInput().Title(labelWithHelp(schema, "n-gpu-layers", "ngl (gpu layers)")).Description("Number of GPU layers to offload").Value(&d.NGL).Validate(intRange(-1, 9999, false)),
+			huh.NewInput().Title(labelWithHelp(schema, "ctx-size", "ctx-size")).Description("Context window size in tokens").Value(&d.CtxSize).Validate(intRange(0, 1024*1024, false)),
+			huh.NewInput().Title(labelWithHelp(schema, "batch-size", "batch-size")).Description("Prompt processing batch size").Value(&d.BatchSize).Validate(intRange(0, 1024*1024, true)),
+			huh.NewInput().Title(labelWithHelp(schema, "ubatch-size", "ubatch-size")).Description("Physical batch size for split operations").Value(&d.UBatchSize).Validate(intRange(0, 1024*1024, true)),
+			huh.NewInput().Title(labelWithHelp(schema, "port", "port")).Description("Port to bind the inference server").Value(&d.Port).Validate(portValidator()),
+			huh.NewSelect[string]().Title(labelWithHelp(schema, "flash-attn", "flash-attn")).Description("Enable FlashAttention for faster inference").Options(toOptions(selectOptions(schema, "flash-attn", []string{"on", "off", "auto"}))...).Value(&d.FlashAttn),
+			huh.NewSelect[string]().Title("cache-type-k").Description("Key cache quantization type").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeK),
+			huh.NewSelect[string]().Title("cache-type-v").Description("Value cache quantization type").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeV),
 		))
 	} else {
 		groups = append(groups, huh.NewGroup(

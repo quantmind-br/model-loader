@@ -1,10 +1,13 @@
 package components
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // completeForm reaches into the wrapped *huh.Form and forces it to
@@ -23,7 +26,7 @@ func completeForm(c Confirm, answer bool) Confirm {
 }
 
 func TestConfirm_NewConfirmActive(t *testing.T) {
-	c := NewConfirm("really?", nil, nil)
+	c := NewConfirm("really?", nil, nil, "", "")
 	if !c.Active() {
 		t.Fatal("fresh Confirm should be Active()")
 	}
@@ -39,7 +42,7 @@ func TestConfirm_YesResolutionInvokesOnYes(t *testing.T) {
 		called = true
 		got = p.(payload)
 		return nil
-	})
+	}, "", "")
 
 	c = completeForm(c, true)
 	c, _ = c.Update(struct{}{}) // any msg drives the completion check
@@ -60,7 +63,7 @@ func TestConfirm_NoResolutionDoesNotInvoke(t *testing.T) {
 	c := NewConfirm("kill?", "x", func(_ any) tea.Cmd {
 		called = true
 		return nil
-	})
+	}, "", "")
 
 	c = completeForm(c, false)
 	c, _ = c.Update(struct{}{})
@@ -74,7 +77,7 @@ func TestConfirm_NoResolutionDoesNotInvoke(t *testing.T) {
 }
 
 func TestConfirm_NonKeyMsgIsForwarded(t *testing.T) {
-	c := NewConfirm("ok?", nil, nil)
+	c := NewConfirm("ok?", nil, nil, "", "")
 	// Stash form pointer so we can assert it received the msg by checking
 	// the returned form is the same instance (huh forms return themselves
 	// from Update unless they internally swap, which they don't for
@@ -95,7 +98,7 @@ func TestConfirm_NonKeyMsgIsForwarded(t *testing.T) {
 }
 
 func TestConfirm_ActiveAfterCompletion(t *testing.T) {
-	c := NewConfirm("ok?", nil, nil)
+	c := NewConfirm("ok?", nil, nil, "", "")
 	c = completeForm(c, false)
 	c, _ = c.Update(struct{}{})
 	if c.Active() {
@@ -104,10 +107,25 @@ func TestConfirm_ActiveAfterCompletion(t *testing.T) {
 }
 
 func TestConfirm_NilOnYesWithAffirmative(t *testing.T) {
-	c := NewConfirm("ok?", "payload", nil) // nil onYes
+	c := NewConfirm("ok?", "payload", nil, "", "") // nil onYes
 	c = completeForm(c, true)
 	c, _ = c.Update(struct{}{}) // must not panic
 	if c.Active() {
 		t.Error("Active() should return false after StateCompleted with nil onYes")
+	}
+}
+
+func TestConfirm_NoColorStripsForeground(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	theme.RebuildStyles()
+	t.Cleanup(func() {
+		t.Setenv("NO_COLOR", "")
+		theme.RebuildStyles()
+	})
+
+	c := NewConfirm("ok?", nil, nil, "", "")
+	out := c.View()
+	if strings.Contains(out, "\x1b[38;") || strings.Contains(out, "\x1b[48;") {
+		t.Errorf("confirm output contains color SGR under NO_COLOR: %q", out)
 	}
 }

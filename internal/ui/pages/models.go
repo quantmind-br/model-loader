@@ -490,6 +490,9 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return p, nil
 		}
 	case key.Matches(msg, p.keys.Rescan):
+		if p.isScanning() {
+			return p.withFlash("Scan already in progress")
+		}
 		next, cmd := p.beginRescan(true)
 		return next, cmd
 	case key.Matches(msg, p.keys.Enter):
@@ -550,10 +553,21 @@ func (p ModelsPage) View() string {
 	}
 	footer := p.flash.View()
 	if len(p.files) == 0 && (len(p.paths) == 0 || p.hasScannedRoot()) {
-		emptyMsg := theme.Subtitle.Render("(no .gguf files in configured search paths — edit ~/.config/model-loader/config.toml)")
+		emptyMsg := theme.Subtitle.Render("(no .gguf files in configured search paths — edit ~/.config/model-loader/config.toml or press [R] to rescan)")
 		return lipgloss.JoinVertical(lipgloss.Left, header, statusLine, emptyMsg, filterLine, footer)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, header, statusLine, p.table.View(), filterLine, footer)
+}
+
+// isScanning reports whether any configured root is still being scanned.
+// Used to guard duplicate manual rescans.
+func (p ModelsPage) isScanning() bool {
+	for _, st := range p.statusMap {
+		if st.state == "scanning" {
+			return true
+		}
+	}
+	return false
 }
 
 // hasScannedRoot reports whether at least one configured root has finished

@@ -23,14 +23,22 @@ type Confirm struct {
 
 // NewConfirm builds a yes/no dialog labelled with title. payload is passed
 // through to onYes when the user confirms; nil onYes is allowed (caller
-// polls Active() to detect completion).
-func NewConfirm(title string, payload any, onYes func(any) tea.Cmd) Confirm {
+// polls Active() to detect completion). Empty labels default to Yes/No.
+func NewConfirm(title string, payload any, onYes func(any) tea.Cmd, affirmative, negative string) Confirm {
 	answer := false
+	affirmativeLabel := affirmative
+	if affirmativeLabel == "" {
+		affirmativeLabel = "Yes"
+	}
+	negativeLabel := negative
+	if negativeLabel == "" {
+		negativeLabel = "No"
+	}
 	form := huh.NewForm(huh.NewGroup(
 		huh.NewConfirm().
 			Title(title).
-			Affirmative("Yes").
-			Negative("No").
+			Affirmative(affirmativeLabel).
+			Negative(negativeLabel).
 			Value(&answer),
 	)).WithShowHelp(false).WithShowErrors(false)
 	return Confirm{

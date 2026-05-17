@@ -88,6 +88,34 @@ func (m *mockResolver) Resolve(p domain.Profile) (backendcatalog.ResolvedBackend
 	}, nil
 }
 
+func TestLauncherPage_LaunchPendingGuard(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := profilestore.NewFSStore(dir)
+	_ = store.Save(domain.Profile{
+		ID: "alpha", Name: "Alpha", Model: "/m.gguf",
+		Args: map[string]any{"port": float64(8080)},
+	})
+
+	mgr := &fakeManager{}
+	page := NewLauncherPage(store, mgr, nil).SetBackendResolver(&mockResolver{})
+	model, _ := page.Update(LauncherProfilesLoadedMsg{Profiles: []domain.Profile{{
+		ID: "alpha", Name: "Alpha", Model: "/m.gguf",
+		Args: map[string]any{"port": float64(8080)},
+	}}})
+	page = model.(LauncherPage)
+
+	page.waitingPID = 4242
+
+	updated, cmd := page.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	page = updated.(LauncherPage)
+	if cmd != nil {
+		t.Fatal("enter while waitingPID != 0 should be blocked, got a cmd")
+	}
+	if len(mgr.launched) != 0 {
+		t.Errorf("manager.launched len = %d, want 0 (pending guard should block)", len(mgr.launched))
+	}
+}
+
 func TestLauncherPage_EnterLaunchesSelected(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := profilestore.NewFSStore(dir)
