@@ -2,6 +2,7 @@ package backendschema
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -88,6 +89,12 @@ func (m *Manager) AddBackend(ctx context.Context, name, executable string, kind 
 }
 
 // RefreshSchema re-generates the schema for an existing backend.
+//
+// Generators skip regeneration when an existing schema is marked editable,
+// to preserve manual edits during incidental re-runs (catalog ensure paths,
+// AddBackend retries, etc.). RefreshSchema is the explicit user-driven path,
+// so it deletes the existing schema first to force a fresh regeneration
+// from the backend's --help output. A missing schema is not an error.
 func (m *Manager) RefreshSchema(backendID string) error {
 	catalog, err := m.catalogStore.Load()
 	if err != nil {
@@ -102,6 +109,11 @@ func (m *Manager) RefreshSchema(backendID string) error {
 	g, ok := m.generators[backend.Kind]
 	if !ok {
 		return fmt.Errorf("no generator registered for kind: %s", backend.Kind)
+	}
+
+	ref := schemaStoreRef(backend.SchemaRef)
+	if err := m.schemaStore.Delete(ref); err != nil && !errors.Is(err, backendcatalog.ErrSchemaNotFound) {
+		return fmt.Errorf("delete schema: %w", err)
 	}
 
 	if _, err := g.Generate(backend); err != nil {

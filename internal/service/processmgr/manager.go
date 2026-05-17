@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -38,6 +37,12 @@ type fsManager struct {
 	fgPID     int
 
 	livenessStop func()
+
+	history        []domain.ExitedInstance
+	historyPath    string
+	historyLimit   int
+	historyRecorded map[int]struct{}
+	historySaveMu  sync.Mutex
 }
 
 // Config holds wiring for New.
@@ -54,6 +59,12 @@ type Config struct {
 	// current tests use the real (*exec.Cmd).Wait — see AGENTS.md
 	// "Wait goroutine lifecycle". nil → (*exec.Cmd).Wait.
 	WaitFunc func(*exec.Cmd) error
+	// HistoryPath is the path to the instances-history.json file. When empty,
+	// it defaults to filepath.Dir(RegistryPath) + "/instances-history.json".
+	HistoryPath string
+	// HistoryLimit caps the number of persisted exit-history entries.
+	// When zero or negative, it defaults to 50.
+	HistoryLimit int
 }
 
 // New constructs a Manager. nil-tolerant for Logger and WaitFunc.
@@ -65,19 +76,43 @@ func New(cfg Config) *fsManager {
 		cfg.WaitFunc = (*exec.Cmd).Wait
 	}
 	m := &fsManager{
-		resolver:      cfg.Resolver,
-		defaultBinary: cfg.DefaultBinary,
-		logDir:        cfg.LogDir,
-		registryPath:  cfg.RegistryPath,
-		sink:          cfg.LastUsedSink,
-		logger:        cfg.Logger,
-		waitFunc:      cfg.WaitFunc,
-		tracked:       map[int]domain.RunningInstance{},
-		exitInfos:     map[int]ExitInfo{},
+		resolver:        cfg.Resolver,
+		defaultBinary:   cfg.DefaultBinary,
+		logDir:          cfg.LogDir,
+		registryPath:    cfg.RegistryPath,
+		sink:            cfg.LastUsedSink,
+		logger:          cfg.Logger,
+		waitFunc:        cfg.WaitFunc,
+		tracked:         map[int]domain.RunningInstance{},
+		exitInfos:       map[int]ExitInfo{},
+		historyRecorded: map[int]struct{}{},
 	}
 	if m.defaultBinary == "" {
 		m.defaultBinary = "llama-server"
 	}
+
+	// Derive history path from registry path when not explicitly set.
+	m.historyPath = cfg.HistoryPath
+	if m.historyPath == "" && m.registryPath != "" {
+		m.historyPath = filepath.Join(filepath.Dir(m.registryPath), "instances-history.json")
+	}
+	m.historyLimit = cfg.HistoryLimit
+	if m.historyLimit <= 0 {
+		m.historyLimit = defaultHistoryLimit
+	}
+
+	if m.historyPath != "" {
+		h, err := loadHistory(m.historyPath)
+		if err != nil {
+			m.logger.Error("history_load_failed", "path", m.historyPath, "err", err)
+		} else if h != nil {
+			m.history = h
+			for _, e := range h {
+				m.historyRecorded[e.PID] = struct{}{}
+			}
+		}
+	}
+
 	m.livenessStop = m.startLiveness()
 	return m
 }
@@ -115,7 +150,7 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 		// Only skip the missing-file error for HuggingFace-style repo IDs.
 		// Local paths that exist are accepted above; local paths that
 		// don't exist AND don't look like a HF repo are rejected.
-		if !looksLikeHFRepo(p.Model) {
+		if !domain.LooksLikeHFRepo(p.Model) {
 			if errors.Is(err, fs.ErrNotExist) {
 				return domain.RunningInstance{}, fmt.Errorf("%w: %s", ErrModelNotFound, p.Model)
 			}
@@ -182,6 +217,8 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 	// LauncherPage.handleLaunchErr cannot enrich a future timeout with
 	// data from a long-dead process that happened to share this PID.
 	delete(m.exitInfos, inst.PID)
+	// Allow the same PID to be recorded again in history if it is reused.
+	delete(m.historyRecorded, inst.PID)
 	all := snapshotLocked(m.tracked)
 	m.mu.Unlock()
 
@@ -283,11 +320,16 @@ func (m *fsManager) waitEnrichment(cmd *exec.Cmd, pid int, logPath string, attem
 	if m.fgPID == pid {
 		m.fgPID = 0
 	}
+	now := time.Now().UTC()
+	appended := m.appendHistoryLocked(cur, reason, now)
 	snap := snapshotLocked(m.tracked)
 	m.mu.Unlock()
 
 	// 5th out-of-lock saveRegistry callsite. See AGENTS.md.
 	_ = saveRegistry(m.registryPath, snap)
+	if appended {
+		_ = m.persistHistory()
+	}
 
 	m.logger.Info("process_exited",
 		"pid", pid, "attempt_id", attemptID,
@@ -343,6 +385,16 @@ func (m *fsManager) Kill(pid int) error {
 	}
 
 	m.mu.Lock()
+	inst, ok := m.tracked[pid]
+	if ok {
+		now := time.Now().UTC()
+		inst.ExitedAt = &now
+		inst.Crashed = true
+		if inst.ExitReason == "" {
+			inst.ExitReason = "killed"
+		}
+		m.appendHistoryLocked(inst, inst.ExitReason, now)
+	}
 	delete(m.tracked, pid)
 	delete(m.exitInfos, pid) // drop stale enrichment so GetExitInfo returns ok=false
 	if m.fgPID == pid {
@@ -350,7 +402,13 @@ func (m *fsManager) Kill(pid int) error {
 	}
 	all := snapshotLocked(m.tracked)
 	m.mu.Unlock()
-	return saveRegistry(m.registryPath, all)
+	if err := saveRegistry(m.registryPath, all); err != nil {
+		return err
+	}
+	if ok {
+		_ = m.persistHistory()
+	}
+	return nil
 }
 
 // List returns a snapshot of the tracked instances. Order is not guaranteed.
@@ -477,6 +535,7 @@ func (m *fsManager) launchForeground(p domain.Profile, port int, attemptID strin
 	m.mu.Lock()
 	m.tracked[inst.PID] = inst
 	delete(m.exitInfos, inst.PID) // see Launch background comment above
+	delete(m.historyRecorded, inst.PID)
 	m.fgPID = inst.PID            // replaces -1 sentinel
 	all := snapshotLocked(m.tracked)
 	m.mu.Unlock()
@@ -512,32 +571,4 @@ func makeCommand(resolvedBinary string, profileArgs []string) *exec.Cmd {
 	return exec.Command(fields[0], all...)
 }
 
-// knownModelExtensions are file suffixes that indicate a local model file.
-var knownModelExtensions = map[string]bool{
-	".gguf":        true,
-	".bin":         true,
-	".safetensors": true,
-	".pt":          true,
-	".pth":         true,
-	".onnx":        true,
-	".ckpt":        true,
-	".ggml":        true,
-}
 
-// looksLikeHFRepo reports whether a model path looks like a HuggingFace
-// repository ID (e.g. "org/model-name") rather than a local filesystem path.
-// It rejects absolute paths, home-relative paths, and paths with known model
-// file extensions, but accepts dotted repo IDs like "Qwen/Qwen2.5-7B".
-func looksLikeHFRepo(path string) bool {
-	if filepath.IsAbs(path) {
-		return false
-	}
-	if strings.HasPrefix(path, ".") || strings.HasPrefix(path, "~/") {
-		return false
-	}
-	if knownModelExtensions[filepath.Ext(path)] {
-		return false // "models/foo.gguf" is a file, not a HF repo
-	}
-	parts := strings.Split(path, "/")
-	return len(parts) == 2 && parts[0] != "" && parts[1] != ""
-}

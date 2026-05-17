@@ -183,6 +183,47 @@ func TestResolver_SGLangFallsBackToPython3(t *testing.T) {
 	}
 }
 
+func TestResolver_VLLMFallsBackToPython3(t *testing.T) {
+	dir := t.TempDir()
+	catalogStore := NewFSStore(dir)
+	schemaStore := NewFSSchemaStore(dir)
+
+	// Only python3 exists, not python.
+	py3 := filepath.Join(dir, "python3")
+	if err := os.WriteFile(py3, []byte("#!/bin/sh\necho ok\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldPATH := os.Getenv("PATH")
+	os.Setenv("PATH", dir)
+	defer os.Setenv("PATH", oldPATH)
+
+	catalog := domain.BackendCatalog{
+		SchemaVersion:    catalogSchemaVersion,
+		DefaultBackendID: "vllm",
+		Backends: []domain.Backend{
+			{ID: "vllm", Name: "vLLM", Kind: domain.BackendKindVLLM, Executable: "python -m vllm.entrypoints.openai.api_server", SchemaRef: "schemas/vllm.json"},
+		},
+	}
+	if err := catalogStore.Save(catalog); err != nil {
+		t.Fatalf("Save catalog: %v", err)
+	}
+	schema := sampleSchema()
+	schema.BackendID = "vllm"
+	schema.BackendKind = domain.BackendKindVLLM
+	if err := schemaStore.Save("vllm.json", schema); err != nil {
+		t.Fatalf("Save schema: %v", err)
+	}
+
+	resolved, err := NewResolver(catalogStore, schemaStore, log.Nop()).Resolve(domain.Profile{})
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	want := py3 + " -m vllm.entrypoints.openai.api_server"
+	if resolved.ExecutablePath != want {
+		t.Errorf("ExecutablePath = %q, want %q", resolved.ExecutablePath, want)
+	}
+}
+
 func writeExecutable(t *testing.T, dir string) string {
 	t.Helper()
 	path := filepath.Join(dir, "llama-server")

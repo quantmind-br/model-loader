@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/internal/fsx"
 )
 
 const catalogSchemaVersion = 1
@@ -56,7 +57,7 @@ func (s *fsStore) Save(catalog domain.BackendCatalog) error {
 	if catalog.Backends == nil {
 		catalog.Backends = []domain.Backend{}
 	}
-	return writeJSONAtomic(s.catalogPath(), catalog)
+	return fsx.WriteJSONAtomic(s.catalogPath(), catalog)
 }
 
 // fsSchemaStore persists schemas under backendsDir/schemas.
@@ -118,24 +119,24 @@ func (s *fsSchemaStore) Save(ref string, schema domain.BackendValidationSchema) 
 	if schema.SchemaVersion == 0 {
 		schema.SchemaVersion = catalogSchemaVersion
 	}
-	return writeJSONAtomic(path, schema)
+	return fsx.WriteJSONAtomic(path, schema)
 }
 
-func writeJSONAtomic(path string, v any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("mkdir backend catalog dir: %w", err)
-	}
-	data, err := json.MarshalIndent(v, "", "  ")
+// Delete removes a backend validation schema by relative ref. Returns
+// ErrSchemaNotFound if the file does not exist so callers can treat it as a
+// soft-miss.
+func (s *fsSchemaStore) Delete(ref string) error {
+	path, err := s.schemaPath(ref)
 	if err != nil {
-		return fmt.Errorf("marshal backend catalog json: %w", err)
+		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return fmt.Errorf("write backend catalog tmp: %w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("rename backend catalog tmp: %w", err)
+	if err := os.Remove(path); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return ErrSchemaNotFound
+		}
+		return fmt.Errorf("remove backend schema: %w", err)
 	}
 	return nil
 }
+
+

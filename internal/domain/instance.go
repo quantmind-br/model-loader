@@ -28,6 +28,25 @@ type RunningInstance struct {
 	StderrTail []string `json:"stderrTail,omitempty"`
 }
 
+// ExitedInstance describes a process that has exited and been recorded in
+// the persistent exit-history file.
+type ExitedInstance struct {
+	ProfileID       string    `json:"profileId"`
+	PID             int       `json:"pid"`
+	Port            int       `json:"port"`
+	LogPath         string    `json:"logPath,omitempty"`
+	BinaryPath      string    `json:"binaryPath,omitempty"`
+	StartedAt       time.Time `json:"startedAt"`
+	ExitedAt        time.Time `json:"exitedAt"`
+	DurationSeconds int64     `json:"durationSeconds"`
+	Background      bool      `json:"background"`
+	Crashed         bool      `json:"crashed,omitempty"`
+	ExitCode        *int      `json:"exitCode,omitempty"`
+	ExitSignal      string    `json:"exitSignal,omitempty"`
+	ExitReason      string    `json:"exitReason,omitempty"`
+	StderrTail      []string  `json:"stderrTail,omitempty"`
+}
+
 // LogLine is a single line of llama-server output.
 type LogLine struct {
 	Timestamp time.Time

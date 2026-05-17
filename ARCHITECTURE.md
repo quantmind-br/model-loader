@@ -1,6 +1,6 @@
 # Architecture — model-loader
 
-**Generated:** 2026-05-11  
+**Generated:** 2026-05-16  
 **Stack:** Go 1.26.2 + Charmbracelet bubbletea  
 **Pattern:** Event-driven TUI with domain-driven service layer
 
@@ -26,25 +26,26 @@ Configuration (`internal/config/`) sits adjacent to the layers and is loaded at 
 
 | Area | Symbols | Cohesion | Role |
 |------|---------|----------|------|
-| **Pages** | 299 | 74% | 5 TUI tabs (Launcher, Profiles, Monitor, Models, Backends) |
-| **Processmgr** | 67 | 89% | Spawn, kill, track, recover llama-server processes |
-| **Ui** | 55 | 83% | Root model, routing, key handling, boot blocker |
-| **Components** | 53 | 80% | Reusable widgets: picker, modal, sparkline, statusbar |
-| **Monitor** | 46 | 88% | Subscribe to logs, slots, health, GPU metrics |
-| **Profile_editor** | 39 | 61% | Inline profile creation/editing with huh forms |
-| **Migration** | 38 | 76% | One-time legacy binary-path → backend-ID migration |
-| **Llamahelp** | 32 | 90% | Parse `llama-server --help` into `FlagSchema` |
-| **Modelscanner** | 31 | 91% | Walk filesystem, parse GGUF headers, emit scan events |
-| **Profilestore** | 27 | 71% | CRUD + duplicate profiles as JSON files |
-| **Backendcatalog** | 18 | 79% | Multi-backend catalog + schema resolver |
-| **Backendschema** | 14 | 82% | Schema generation manager per backend |
-| **Llamabin** | 11 | 88% | Binary resolution: PATH lookup, validation |
-| **Validator** | 10 | 92% | FlagSchema validation rules engine |
-| **Config** | 8 | 93% | Viper TOML loader, path expansion, defaults |
-| **Model-loader** | 8 | 44% | Entry point (`main.go`) |
-| **Theme** | 6 | 77% | Lipgloss styles, color palette |
+| **Pages** | 265 | 0.68 | 5 TUI tabs (Launcher, Profiles, Monitor, Models, Backends) |
+| **Processmgr** | 82 | 0.73 | Spawn, kill, track, recover llama-server processes |
+| **Backendschema** | 69 | 0.80 | Schema generation manager per backend |
+| **Components** | 64 | 0.76 | Reusable widgets: picker, modal, sparkline, statusbar |
+| **Profilestore** | 49 | 0.85 | CRUD + duplicate profiles as JSON files |
+| **Profile_editor** | 46 | 0.70 | Inline profile creation/editing with huh forms |
+| **Monitor** | 46 | 0.88 | Subscribe to logs, slots, health, GPU metrics |
+| **Ui** | 45 | 0.71 | Root model, routing, key handling, boot blocker |
+| **Modelscanner** | 32 | 0.88 | Walk filesystem, parse GGUF headers, emit scan events |
+| **Llamahelp** | 21 | 0.90 | Parse `llama-server --help` into `FlagSchema` |
+| **Backendcatalog** | 18 | 0.75 | Multi-backend catalog + schema resolver |
+| **Validator** | 11 | 0.90 | FlagSchema validation rules engine |
+| **Llamabin** | 10 | 0.90 | Binary resolution: PATH lookup, validation |
+| **Domain** | 8 | 0.61 | Core domain structs (Profile, Instance, Model, FlagSchema) |
+| **Theme** | 7 | 0.75 | Lipgloss styles, color palette |
+| **Config** | — | — | Viper TOML loader, path expansion, defaults |
+| **Migration** | — | — | One-time legacy binary-path → backend-ID migration |
+| **Model-loader** | — | — | Entry point (`main.go`) |
 
-> Knowledge graph: 3,601 symbols, 11,850 relationships, 125 clusters, 300 flows (Go layer only; `llamacpp/` external forks excluded).
+> Knowledge graph: **3,667 symbols, 12,753 relationships, 131 communities, 300 processes** (Go layer only; `llamacpp/` external forks excluded).
 
 ---
 
@@ -249,6 +250,76 @@ ProfilesPage → AddBackendMsg
 
 ---
 
+## Knowledge Graph Execution Traces
+
+The following step-by-step traces were extracted directly from the code knowledge graph (process nodes with `STEP_IN_PROCESS` relationships). They show the exact symbol-level call chains for the five most important cross-community flows.
+
+### Trace 1: App Boot — `Main → ApplyDefaults`
+
+| Step | Symbol | File |
+|------|--------|------|
+| 1 | `main` | `cmd/model-loader/main.go` |
+| 2 | `Load` | `internal/config/config.go` |
+| 3 | `LoadFrom` | `internal/config/config.go` |
+| 4 | `applyDefaults` | `internal/config/config.go` |
+
+**Type:** Cross-community · 4 steps  
+`main` builds the full dependency graph: `Config`, `BackendCatalog`, `BackendSchema`, `Migration`, `ModelScanner`, `Monitor`, `ProcessMgr`, `ProfileStore`, `Validator`, then starts the TUI.
+
+### Trace 2: Process Launch — `Launch → ReadStderrTail`
+
+| Step | Symbol | File |
+|------|--------|------|
+| 1 | `Launch` | `internal/service/processmgr/manager.go` |
+| 2 | `launchForeground` | `internal/service/processmgr/manager.go` |
+| 3 | `waitEnrichment` | `internal/service/processmgr/manager.go` |
+| 4 | `readStderrTail` | `internal/service/processmgr/exit_info.go` |
+
+**Type:** Cross-community · 4 steps  
+Builds CLI arguments, checks port availability, spawns the process, waits for health, captures stderr tail for error diagnosis, and persists the instance.
+
+### Trace 3: Model Scanning — `Scan → GgufHeader`
+
+| Step | Symbol | File |
+|------|--------|------|
+| 1 | `Scan` | `internal/service/modelscanner/scanner.go` |
+| 2 | `scanRoot` | `internal/service/modelscanner/scanner.go` |
+| 3 | `buildModelFile` | `internal/service/modelscanner/scanner.go` |
+| 4 | `readParamsFromFile` | `internal/service/modelscanner/scanner.go` |
+| 5 | `readGGUFParams` | `internal/service/modelscanner/gguf.go` |
+| 6 | `readGGUFHeader` | `internal/service/modelscanner/gguf.go` |
+| 7 | `ggufHeader` | `internal/service/modelscanner/gguf.go` |
+
+**Type:** Cross-community · 7 steps  
+Recursively walks directories, identifies `.gguf` files, reads binary headers and KV tensors to extract parameter count / quantization, then emits `ScanEvent` messages.
+
+### Trace 4: Schema Generation — `Generate → FlagSpec`
+
+| Step | Symbol | File |
+|------|--------|------|
+| 1 | `Generate` | `internal/service/backendschema/generator.go` |
+| 2 | `Parse` | `internal/service/llamahelp/exec_parser.go` |
+| 3 | `ParseHelp` | `internal/service/llamahelp/parser.go` |
+| 4 | `parseFlagLine` | `internal/service/llamahelp/parser.go` |
+| 5 | `FlagSpec` | `internal/domain/flag_schema.go` |
+
+**Type:** Cross-community · 5 steps  
+Invokes the backend binary with `--help`, parses output into structured `FlagSpec` objects, applies hard-coded overrides, and produces a `FlagSchema` consumed by the profile editor and validator.
+
+### Trace 5: GPU Monitoring — `Run → MonitorEvent`
+
+| Step | Symbol | File |
+|------|--------|------|
+| 1 | `run` | `internal/service/monitor/gpu.go` |
+| 2 | `pollOnce` | `internal/service/monitor/gpu.go` |
+| 3 | `emit` | `internal/service/monitor/gpu.go` |
+| 4 | `MonitorEvent` | `internal/service/monitor/monitor.go` |
+
+**Type:** Intra-community · 4 steps  
+Background poller runs `nvidia-smi` at intervals, parses GPU utilization and memory metrics, and emits typed `MonitorEvent` messages for the Monitor page sparklines.
+
+---
+
 ## Data Flow Summary
 
 | Flow | Entry | Services | Output |
@@ -330,10 +401,88 @@ internal/ui/
 
 ---
 
+## Knowledge Graph Cross-Community Analysis
+
+Heaviest interaction edges between distinct functional areas (extracted from `CALLS` relationships across community boundaries):
+
+| Caller | Callee | Calls | Meaning |
+|--------|--------|-------|---------|
+| Pages | Profilestore | 12 | Profile list/load/save from TUI pages |
+| Pages | Backendschema | 11 | Schema-driven UI rendering |
+| Backendschema | Profilestore | 11 | Profile-backend linkage |
+| Backendcatalog | Backendschema | 7 | Schema generation after probing |
+| Backendschema | Processmgr | 4 | Process args need schema awareness |
+| Processmgr | Validator | 2 | Pre-launch flag validation |
+| Monitor | Pages | 3 | GPU metrics displayed in Monitor tab |
+| Migration | Pages | 4 | Migration triggers UI refresh |
+| Ui | Profilestore | 3 | Root model loads profiles for status |
+| Backendschema | Backendcatalog | 4 | Schema stores reference catalog entries |
+
+### Top 5 Cross-Community Execution Traces (Fresh Index)
+
+The following are the highest-priority cross-community process traces from the current knowledge graph index.
+
+**Trace A — Backend Probing: `Probe → SplitCommandLine`** (7 steps)
+
+| Step | Symbol | File |
+|------|--------|------|
+| 1 | `Probe` | `internal/service/backendcatalog/probe.go` |
+| 2 | `probeOne` | `internal/service/backendcatalog/probe.go` |
+| 3 | `resolveExecutable` | `internal/service/backendcatalog/resolver.go` |
+| 4 | `ResolveCommandWithPythonFallback` | `internal/service/llamabin/resolver.go` |
+| 5 | `Resolve` | `internal/service/llamabin/resolver.go` |
+| 6 | `splitCommand` | `internal/service/llamabin/resolver.go` |
+| 7 | `splitCommandLine` | `internal/service/llamabin/resolver.go` |
+
+**Trace B — Backend Validation: `Probe → CheckExecutable`** (7 steps)
+
+| Step | Symbol | File |
+|------|--------|------|
+| 1 | `Probe` | `internal/service/backendcatalog/probe.go` |
+| 2 | `probeOne` | `internal/service/backendcatalog/probe.go` |
+| 3 | `resolveExecutable` | `internal/service/backendcatalog/resolver.go` |
+| 4 | `ResolveCommandWithPythonFallback` | `internal/service/llamabin/resolver.go` |
+| 5 | `Resolve` | `internal/service/llamabin/resolver.go` |
+| 6 | `resolveInPATH` | `internal/service/llamabin/resolver.go` |
+| 7 | `checkExecutable` | `internal/service/llamabin/resolver.go` |
+
+**Trace C — Single Backend Probe: `ProbeOne → CheckExecutable`** (6 steps)
+
+| Step | Symbol | File |
+|------|--------|------|
+| 1 | `probeOne` | `internal/service/backendcatalog/probe.go` |
+| 2 | `resolveExecutable` | `internal/service/backendcatalog/resolver.go` |
+| 3 | `ResolveCommandWithPythonFallback` | `internal/service/llamabin/resolver.go` |
+| 4 | `Resolve` | `internal/service/llamabin/resolver.go` |
+| 5 | `resolvePath` | `internal/service/llamabin/resolver.go` |
+| 6 | `checkExecutable` | `internal/service/llamabin/resolver.go` |
+
+**Trace D — Launch Pipeline (Flags): `Launch → CanonicalFlag`** (5 steps)
+
+| Step | Symbol | File |
+|------|--------|------|
+| 1 | `Launch` | `internal/service/processmgr/manager.go` |
+| 2 | `launchForeground` | `internal/service/processmgr/manager.go` |
+| 3 | `BuildArgsForBackend` | `internal/service/processmgr/args.go` |
+| 4 | `buildLlamaArgs` | `internal/service/processmgr/args.go` |
+| 5 | `CanonicalFlag` | `internal/domain/flags.go` |
+
+**Trace E — Launch Pipeline (Formatting): `Launch → FormatFloat`** (5 steps)
+
+| Step | Symbol | File |
+|------|--------|------|
+| 1 | `Launch` | `internal/service/processmgr/manager.go` |
+| 2 | `launchForeground` | `internal/service/processmgr/manager.go` |
+| 3 | `BuildArgsForBackend` | `internal/service/processmgr/args.go` |
+| 4 | `buildLlamaArgs` | `internal/service/processmgr/args.go` |
+| 5 | `formatFloat` | `internal/service/processmgr/args.go` |
+
+---
+
 ## Re-generating
 
 ```bash
 npx gitnexus analyze --force    # reindex this repo
 ```
 
-The graph is current as of the latest commit on branch `main`.
+The graph is current as of commit `9a6bc64` on branch `main` (indexed 2026-05-16).

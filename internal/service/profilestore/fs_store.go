@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/internal/fsx"
 )
 
 // FSStore persists profiles as one JSON file per profile under a directory.
@@ -104,18 +105,8 @@ func (s *FSStore) Save(p domain.Profile) error {
 	}
 	p.Meta.UpdatedAt = now
 
-	data, err := json.MarshalIndent(p, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal profile: %w", err)
-	}
-
-	tmp := s.path(p.ID) + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return fmt.Errorf("write tmp: %w", err)
-	}
-	if err := os.Rename(tmp, s.path(p.ID)); err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("rename: %w", err)
+	if err := fsx.WriteJSONAtomic(s.path(p.ID), p); err != nil {
+		return fmt.Errorf("save profile: %w", err)
 	}
 	return nil
 }

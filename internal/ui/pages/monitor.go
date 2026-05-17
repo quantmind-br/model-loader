@@ -26,6 +26,7 @@ const (
 	SubViewLogs SubViewKind = iota
 	SubViewSlots
 	SubViewMetrics
+	SubViewHistory
 )
 
 // monitorEventMsg wraps a monitor.MonitorEvent received from a per-instance
@@ -51,6 +52,7 @@ type procMgrIface interface {
 	Kill(pid int) error
 	Launch(domain.Profile, processmgr.LaunchMode, string) (domain.RunningInstance, error)
 	TailLogs(pid int) (io.ReadCloser, error)
+	History() []domain.ExitedInstance
 }
 
 // backendResolverIface is the subset of backendcatalog.Resolver that
@@ -109,6 +111,7 @@ type MonitorPage struct {
 	subs               map[int]*subState
 	chans              map[int]<-chan monitor.MonitorEvent
 	subView            SubViewKind
+	history            []domain.ExitedInstance
 	paused             bool
 	periodicTickActive bool
 	width              int
@@ -179,6 +182,14 @@ func (p *MonitorPage) refreshInstancesCmd() tea.Cmd {
 	return func() tea.Msg { return monitorInstancesRefreshedMsg{insts: p.pm.List()} }
 }
 
+// Reload implements the ui.Reloader contract so RootModel re-polls the
+// process manager when the user switches to the Monitor tab. Without
+// this, instances spawned/killed externally only surface on the next
+// 2s periodic tick.
+func (p *MonitorPage) Reload() tea.Cmd {
+	return p.refreshInstancesCmd()
+}
+
 func (p *MonitorPage) periodicTickCmd() tea.Cmd {
 	return tea.Tick(2*time.Second, func(_ time.Time) tea.Msg { return monitorPeriodicTickMsg{} })
 }
@@ -240,7 +251,7 @@ func (p *MonitorPage) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch {
 	case m.Type == tea.KeyRunes && len(m.Runes) == 1 && m.Runes[0] == 'v':
-		p.subView = (p.subView + 1) % 3
+		p.subView = (p.subView + 1) % 4
 	case m.Type == tea.KeyRunes && len(m.Runes) == 1 && m.Runes[0] == 'k':
 		if pid := p.selectedPID(); pid > 0 {
 			return p, p.askConfirmKill(pid)
@@ -260,6 +271,7 @@ func (p *MonitorPage) handleInstancesRefreshed(m monitorInstancesRefreshedMsg) (
 	if c := p.applyInstances(m.insts); c != nil {
 		cmds = append(cmds, c)
 	}
+	p.history = p.pm.History()
 	if p.pendingSelectPID != 0 {
 		p.selectRow(p.pendingSelectPID)
 		p.pendingSelectPID = 0
@@ -636,11 +648,38 @@ func (p *MonitorPage) renderSubViewBody() string {
 			fmt.Fprintf(&b, "VRAM    : %d/%d MB  util %.0f%%\n", st.gpu.VRAMUsedMB, st.gpu.VRAMTotalMB, st.gpu.Utilization)
 		}
 		return b.String()
+	case SubViewHistory:
+		return p.renderHistory()
 	}
 	return "no subscription"
 }
 
-// renderSubViewTabs draws the Logs / Slots / Metrics tab strip with the
+// renderHistory renders the exit-history rows for the History sub-view.
+func (p *MonitorPage) renderHistory() string {
+	if len(p.history) == 0 {
+		return "(no exit history yet)"
+	}
+	var b strings.Builder
+	b.WriteString("profile          │ pid  │ started            │ exited             │ duration │ reason          │ stderr\n")
+	for _, h := range p.history {
+		started := h.StartedAt.Format("2006-01-02 15:04:05")
+		exited := h.ExitedAt.Format("2006-01-02 15:04:05")
+		dur := humanDuration(time.Duration(h.DurationSeconds) * time.Second)
+		reason := h.ExitReason
+		if reason == "" {
+			reason = "—"
+		}
+		stderr := fmt.Sprintf("%d lines", len(h.StderrTail))
+		if len(h.StderrTail) == 0 {
+			stderr = "—"
+		}
+		fmt.Fprintf(&b, "%-16s │ %-4d │ %s │ %s │ %-8s │ %-15s │ %s\n",
+			h.ProfileID, h.PID, started, exited, dur, reason, stderr)
+	}
+	return b.String()
+}
+
+// renderSubViewTabs draws the Logs / Slots / Metrics / History tab strip with the
 // active sub-view styled via theme.TabActive. Cycled by the [v] key.
 func renderSubViewTabs(active SubViewKind) string {
 	render := func(k SubViewKind, label string) string {
@@ -655,6 +694,8 @@ func renderSubViewTabs(active SubViewKind) string {
 		render(SubViewSlots, "Slots"),
 		theme.Subtitle.Render(" │ "),
 		render(SubViewMetrics, "Metrics"),
+		theme.Subtitle.Render(" │ "),
+		render(SubViewHistory, "History"),
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 }

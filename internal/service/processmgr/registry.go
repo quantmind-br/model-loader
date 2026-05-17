@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/internal/fsx"
 )
 
 // registryFile is the on-disk shape of instances.json. Wrapping the slice in
@@ -37,21 +37,8 @@ func loadRegistry(path string) ([]domain.RunningInstance, error) {
 // saveRegistry writes the slice atomically to path. Parent dir is created
 // if absent.
 func saveRegistry(path string, insts []domain.RunningInstance) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("mkdir state dir: %w", err)
-	}
-	rf := registryFile{Instances: insts}
-	data, err := json.MarshalIndent(rf, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal registry: %w", err)
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return fmt.Errorf("write tmp: %w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("rename: %w", err)
+	if err := fsx.WriteJSONAtomic(path, registryFile{Instances: insts}); err != nil {
+		return fmt.Errorf("save registry: %w", err)
 	}
 	return nil
 }

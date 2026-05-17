@@ -134,6 +134,39 @@ func splitCommandLine(raw string) ([]string, error) {
 	return tokens, nil
 }
 
+// ResolveCommandWithPythonFallback resolves the raw command string.
+// If resolution fails and the first token is "python" or "python3",
+// it tries the alternate python binary as a fallback.
+// For compound commands (e.g. "python -m sglang.launch_server"), the
+// fallback preserves the remaining tokens.
+func ResolveCommandWithPythonFallback(raw string) (string, error) {
+	resolved, err := Resolve(raw)
+	if err == nil {
+		return resolved, nil
+	}
+	first, rest := splitCommand(raw)
+	if first == "" {
+		return "", err
+	}
+	var fallback string
+	switch first {
+	case "python":
+		fallback = "python3"
+	case "python3":
+		fallback = "python"
+	default:
+		return "", err
+	}
+	fbPath, err2 := Resolve(fallback)
+	if err2 != nil {
+		return "", err
+	}
+	if rest != "" {
+		return fbPath + " " + rest, nil
+	}
+	return fbPath, nil
+}
+
 // Validate is a convenience that calls Resolve and only returns an error.
 func Validate(raw string) error {
 	_, err := Resolve(raw)

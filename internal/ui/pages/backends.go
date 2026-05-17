@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/backendschema"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
@@ -46,7 +47,7 @@ func (i backendItem) FilterValue() string {
 }
 
 type backendsKeyMap struct {
-	New, Edit, Delete, Default, Refresh key.Binding
+	New, Edit, Delete, Default, Refresh, Probe key.Binding
 }
 
 func defaultBackendsKeys() backendsKeyMap {
@@ -56,6 +57,7 @@ func defaultBackendsKeys() backendsKeyMap {
 		Delete:  key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "del")),
 		Default: key.NewBinding(key.WithKeys("D"), key.WithHelp("D", "default")),
 		Refresh: key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "refresh schema")),
+		Probe:   key.NewBinding(key.WithKeys("P"), key.WithHelp("P", "probe")),
 	}
 }
 
@@ -73,11 +75,16 @@ type BackendsPage struct {
 	draft    *backendDraft
 
 	deleteConfirm components.Confirm
+	refreshConfirm components.Confirm
 
-	flash   string
-	flashAt time.Time
+	flash components.Flash
 
 	defaultBackendID string
+
+	prober       backendProberIface
+	probeEpoch   int
+	probeCh      <-chan backendcatalog.ProbeEvent
+	probeResults map[string]backendProbeResult
 }
 
 type backendsLoadedMsg struct {
@@ -87,6 +94,22 @@ type backendsLoadedMsg struct {
 }
 
 type backendDeleteConfirmedMsg struct{ id string }
+type backendRefreshConfirmedMsg struct{ id string }
+
+type backendProberIface interface {
+	Probe(context.Context) (<-chan backendcatalog.ProbeEvent, error)
+}
+
+type backendProbeResult struct {
+	status  backendcatalog.ProbeStatus
+	detail  string
+	latency time.Duration
+}
+
+type probeEventMsg struct {
+	event backendcatalog.ProbeEvent
+	epoch int
+}
 
 // NewBackendsPage constructs the page wired to a backendschema.Manager.
 func NewBackendsPage(manager *backendschema.Manager) BackendsPage {
@@ -95,12 +118,19 @@ func NewBackendsPage(manager *backendschema.Manager) BackendsPage {
 	l.Title = "Backends"
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
-
+	l.SetFilteringEnabled(false)
 	return BackendsPage{
 		manager: manager,
 		list:    l,
 		keys:    defaultBackendsKeys(),
+		flash:   components.NewFlash("backends"),
 	}
+}
+
+// WithProber wires a backend prober for health checks.
+func (p BackendsPage) WithProber(prober backendProberIface) BackendsPage {
+	p.prober = prober
+	return p
 }
 
 func (p BackendsPage) Init() tea.Cmd { return p.loadCmd() }
@@ -130,16 +160,17 @@ func (p BackendsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.width, p.height = m.Width, m.Height
 		p.list.SetSize(m.Width/3, m.Height-2)
 		return p, nil
-	case flashClearMsg:
-		if m.tag == "backends" && m.at.Equal(p.flashAt) {
-			p.flash = ""
-			p.flashAt = time.Time{}
-		}
+	case components.FlashClearMsg:
+		p.flash, _ = p.flash.Update(m)
 		return p, nil
 	case backendsLoadedMsg:
 		return p.handleLoaded(m)
 	case backendDeleteConfirmedMsg:
 		return p.performDelete(m.id)
+	case backendRefreshConfirmedMsg:
+		return p.performRefresh(m.id)
+	case probeEventMsg:
+		return p.handleProbeEvent(m)
 	case tea.KeyMsg:
 		return p.handleKey(m)
 	}
@@ -171,6 +202,16 @@ func (p BackendsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return p.forwardToForm(msg)
 	}
+	if p.refreshConfirm.Active() {
+		if msg.String() == "esc" {
+			p.refreshConfirm = components.Confirm{}
+			p, fc := p.withFlash("refresh cancelled")
+			return p, fc
+		}
+		var cmd tea.Cmd
+		p.refreshConfirm, cmd = p.refreshConfirm.Update(msg)
+		return p, cmd
+	}
 	if p.deleteConfirm.Active() {
 		if msg.String() == "esc" {
 			p.deleteConfirm = components.Confirm{}
@@ -187,6 +228,11 @@ func (p BackendsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (p BackendsPage) forwardNonKey(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if p.form != nil {
 		return p.forwardToForm(msg)
+	}
+	if p.refreshConfirm.Active() {
+		var cmd tea.Cmd
+		p.refreshConfirm, cmd = p.refreshConfirm.Update(msg)
+		return p, cmd
 	}
 	if p.deleteConfirm.Active() {
 		var cmd tea.Cmd
@@ -207,7 +253,9 @@ func (p BackendsPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, p.keys.Default):
 		return p.setDefaultSelected()
 	case key.Matches(msg, p.keys.Refresh):
-		return p.refreshSelected()
+		return p.askRefreshSelected()
+	case key.Matches(msg, p.keys.Probe):
+		return p.askProbeAll()
 	}
 	updated, cmd := p.list.Update(msg)
 	p.list = updated
@@ -217,6 +265,9 @@ func (p BackendsPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (p BackendsPage) View() string {
 	if p.form != nil {
 		return components.Modal("Backend", p.form.View(), p.width, p.height)
+	}
+	if p.refreshConfirm.Active() {
+		return components.Modal("Confirm", p.refreshConfirm.View(), p.width, p.height)
 	}
 	if p.deleteConfirm.Active() {
 		return components.Modal("Confirm", p.deleteConfirm.View(), p.width, p.height)
@@ -234,12 +285,8 @@ func (p BackendsPage) View() string {
 	right := theme.Pane.Width(rightWidth).Render(p.detailView())
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 
-	if p.flash != "" {
-		style := theme.Subtitle
-		if !p.flashAt.IsZero() && time.Since(p.flashAt) >= flashDimAfter {
-			style = style.Faint(true)
-		}
-		body = lipgloss.JoinVertical(lipgloss.Left, body, style.Render(p.flash))
+	if v := p.flash.View(); v != "" {
+		body = lipgloss.JoinVertical(lipgloss.Left, body, v)
 	}
 	return body
 }
@@ -264,8 +311,22 @@ func (p BackendsPage) detailView() string {
 	if desc == "" {
 		desc = "(none)"
 	}
+	probeLine := ""
+	if r, ok := p.probeResults[sel.ID]; ok {
+		statusStyle := theme.Subtitle
+		switch r.status {
+		case backendcatalog.ProbeStatusOK:
+			statusStyle = theme.OK
+		case backendcatalog.ProbeStatusErr:
+			statusStyle = theme.Error
+		}
+		probeLine = "\nProbe:       " + statusStyle.Render(string(r.status))
+		if r.latency > 0 {
+			probeLine += " (" + r.latency.String() + ")"
+		}
+	}
 	return fmt.Sprintf(
-		"%s%s\n%s\n\nID:          %s\nKind:        %s\nExecutable:  %s\nSchemaRef:   %s\nDescription: %s\nTags:        %s\nCreated:     %s\nUpdated:     %s",
+		"%s%s\n%s\n\nID:          %s\nKind:        %s\nExecutable:  %s\nSchemaRef:   %s\nDescription: %s\nTags:        %s\nCreated:     %s\nUpdated:     %s%s",
 		theme.Title.Render(sel.Name),
 		defaultMark,
 		theme.Subtitle.Render(string(sel.Kind)),
@@ -277,6 +338,7 @@ func (p BackendsPage) detailView() string {
 		tags,
 		formatBackendTime(sel.Meta.CreatedAt),
 		formatBackendTime(sel.Meta.UpdatedAt),
+		probeLine,
 	)
 }
 
@@ -284,21 +346,28 @@ func (p BackendsPage) Hints() string {
 	switch {
 	case p.form != nil:
 		return "[enter] submit  [esc] cancel"
+	case p.refreshConfirm.Active():
+		return "[←→] choose  [enter] confirm  [esc] cancel"
 	case p.deleteConfirm.Active():
 		return "[←→] choose  [enter] confirm  [esc] cancel"
 	default:
-		return "[enter/e] edit  [n] new  [x] del  [D] default  [R] refresh schema  [/] filter"
+		hints := "[enter/e] edit  [n] new  [x] del  [D] default  [R] refresh schema"
+		if p.prober != nil {
+			hints += "  [P] probe"
+		}
+		hints += "  [/] filter"
+		return hints
 	}
 }
 
 func (p BackendsPage) IsCapturingInput() bool {
-	return p.form != nil || p.deleteConfirm.Active()
+	return p.form != nil || p.refreshConfirm.Active() || p.deleteConfirm.Active()
 }
 
 func (p BackendsPage) withFlash(msg string) (BackendsPage, tea.Cmd) {
-	p.flash = msg
-	p.flashAt = time.Now()
-	return p, scheduleFlashClear("backends", p.flashAt)
+	var cmd tea.Cmd
+	p.flash, cmd = p.flash.Set(msg)
+	return p, cmd
 }
 
 func (p BackendsPage) startAdd() (tea.Model, tea.Cmd) {
@@ -452,17 +521,80 @@ func (p BackendsPage) setDefaultSelected() (tea.Model, tea.Cmd) {
 	return p, fc
 }
 
-func (p BackendsPage) refreshSelected() (tea.Model, tea.Cmd) {
+func (p BackendsPage) askRefreshSelected() (tea.Model, tea.Cmd) {
 	b, ok := p.selectedBackend()
 	if !ok {
 		return p, nil
 	}
-	if err := p.manager.RefreshSchema(b.ID); err != nil {
+	p.refreshConfirm = components.NewConfirm(
+		"Refresh schema for "+b.Name+"?",
+		b.ID,
+		func(payload any) tea.Cmd {
+			id, _ := payload.(string)
+			return func() tea.Msg { return backendRefreshConfirmedMsg{id: id} }
+		},
+	)
+	return p, p.refreshConfirm.Init()
+}
+
+func (p BackendsPage) performRefresh(id string) (tea.Model, tea.Cmd) {
+	if p.manager == nil {
+		p, fc := p.withFlash("backend manager not available")
+		return p, fc
+	}
+	p.refreshConfirm = components.Confirm{}
+	if err := p.manager.RefreshSchema(id); err != nil {
 		p, fc := p.withFlash("refresh schema failed: " + err.Error())
 		return p, fc
 	}
-	p, fc := p.withFlash("schema refreshed " + b.ID)
+	p, fc := p.withFlash("schema refreshed " + id)
 	return p, fc
+}
+
+func (p BackendsPage) askProbeAll() (tea.Model, tea.Cmd) {
+	if p.prober == nil {
+		p, fc := p.withFlash("prober not available")
+		return p, fc
+	}
+	p.probeEpoch++
+	p.probeResults = make(map[string]backendProbeResult)
+	ch, err := p.prober.Probe(context.Background())
+	if err != nil {
+		p, fc := p.withFlash("probe failed: " + err.Error())
+		return p, fc
+	}
+	p.probeCh = ch
+	return p, p.readNextProbeEvent(p.probeEpoch)
+}
+
+func (p BackendsPage) readNextProbeEvent(epoch int) tea.Cmd {
+	return func() tea.Msg {
+		if p.probeCh == nil {
+			return probeEventMsg{event: backendcatalog.ProbeEvent{Done: true}, epoch: epoch}
+		}
+		ev, ok := <-p.probeCh
+		if !ok {
+			return probeEventMsg{event: backendcatalog.ProbeEvent{Done: true}, epoch: epoch}
+		}
+		return probeEventMsg{event: ev, epoch: epoch}
+	}
+}
+
+func (p BackendsPage) handleProbeEvent(m probeEventMsg) (tea.Model, tea.Cmd) {
+	if m.epoch != p.probeEpoch {
+		return p, nil
+	}
+	if m.event.Done {
+		p.probeCh = nil
+		p, fc := p.withFlash("probe complete")
+		return p, fc
+	}
+	p.probeResults[m.event.BackendID] = backendProbeResult{
+		status:  m.event.Status,
+		detail:  m.event.Detail,
+		latency: m.event.Latency,
+	}
+	return p, p.readNextProbeEvent(p.probeEpoch)
 }
 
 func (p BackendsPage) selectedBackend() (domain.Backend, bool) {

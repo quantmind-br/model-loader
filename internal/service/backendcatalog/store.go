@@ -17,6 +17,7 @@ type Store interface {
 type SchemaStore interface {
 	Load(ref string) (domain.BackendValidationSchema, error)
 	Save(ref string, schema domain.BackendValidationSchema) error
+	Delete(ref string) error
 }
 
 var (

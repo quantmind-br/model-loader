@@ -10,24 +10,6 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
-// shortToLong maps user-friendly short-form flag keys stored in Profile.Args
-// to the canonical long-form llama-server accepts as `--<long>`. The UI
-// editor stores keys like "ngl" / "ctx-size" because they read better; but
-// llama-server only accepts the short form via the single-dash variant
-// (`-ngl`), not `--ngl`. Translating here keeps existing profiles on disk
-// working without a migration.
-var shortToLong = map[string]string{
-	"ngl": "n-gpu-layers",
-}
-
-// canonicalFlag returns the long-form name for a Profile.Args key.
-func canonicalFlag(key string) string {
-	if long, ok := shortToLong[key]; ok {
-		return long
-	}
-	return key
-}
-
 // BuildArgs converts a Profile into the CLI args slice used to spawn
 // llama-server. The argument order is deterministic: --model first, then
 // flags from p.Args sorted by key, then p.ExtraArgs verbatim.
@@ -65,7 +47,7 @@ func buildLlamaArgs(p domain.Profile) []string {
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		flag := "--" + canonicalFlag(k)
+		flag := "--" + domain.CanonicalFlag(k)
 		switch v := p.Args[k].(type) {
 		case bool:
 			if v {

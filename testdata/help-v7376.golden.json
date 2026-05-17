@@ -201,6 +201,18 @@
       "HelpText": "print source-able bash completion script for llama.cpp",
       "Group": "common"
     },
+    "cont-batching": {
+      "Long": "cont-batching",
+      "Short": "cb",
+      "Aliases": [
+        "no-cont-batching"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "whether to enable continuous batching (a.k.a dynamic batching)",
+      "Group": "example-specific"
+    },
     "context-shift": {
       "Long": "context-shift",
       "Short": "",
@@ -738,6 +750,18 @@
       "HelpText": "number of tokens to keep from the initial prompt (default: 0, -1 =",
       "Group": "common"
     },
+    "kv-offload": {
+      "Long": "kv-offload",
+      "Short": "kvo",
+      "Aliases": [
+        "no-kv-offload"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": "enabled",
+      "HelpText": "whether to enable KV cache offloading (default: enabled)",
+      "Group": "common"
+    },
     "kv-unified": {
       "Long": "kv-unified",
       "Short": "kvu",
@@ -978,6 +1002,19 @@
       "HelpText": "path to a multimodal projector file. see tools/mtmd/README.md",
       "Group": "example-specific"
     },
+    "mmproj-auto": {
+      "Long": "mmproj-auto",
+      "Short": "",
+      "Aliases": [
+        "no-mmproj",
+        "no-mmproj-auto"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "whether to use multimodal projector file (if available), useful when",
+      "Group": "example-specific"
+    },
     "mmproj-offload": {
       "Long": "mmproj-offload",
       "Short": "",
@@ -1038,6 +1075,18 @@
       "EnumValues": null,
       "Default": "unused",
       "HelpText": "vocoder model for audio generation (default: unused)",
+      "Group": "example-specific"
+    },
+    "models-autoload": {
+      "Long": "models-autoload",
+      "Short": "",
+      "Aliases": [
+        "no-models-autoload"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "for router server, whether to automatically load models (default:",
       "Group": "example-specific"
     },
     "models-dir": {
@@ -1122,6 +1171,16 @@
       "EnumValues": null,
       "Default": null,
       "HelpText": "bypass host buffer allowing extra buffers to be used",
+      "Group": "common"
+    },
+    "no-mmproj": {
+      "Long": "no-mmproj",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "example: unsloth/phi-4-GGUF:q4_k_m",
       "Group": "common"
     },
     "numa": {
@@ -1242,6 +1301,18 @@
       "EnumValues": null,
       "Default": 8080,
       "HelpText": "port to listen (default: 8080)",
+      "Group": "example-specific"
+    },
+    "prefill-assistant": {
+      "Long": "prefill-assistant",
+      "Short": "",
+      "Aliases": [
+        "no-prefill-assistant"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "whether to prefill the assistant's response if the last message is an",
       "Group": "example-specific"
     },
     "presence-penalty": {

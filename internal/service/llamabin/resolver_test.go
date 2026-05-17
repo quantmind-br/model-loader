@@ -144,3 +144,54 @@ func TestResolveCommandString(t *testing.T) {
 		t.Errorf("Resolve = %q, want %q", resolved, pythonBin)
 	}
 }
+
+func TestResolveCommandWithPythonFallback(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("PATH test skipped on windows")
+	}
+
+	tmp := t.TempDir()
+	oldPATH := os.Getenv("PATH")
+	os.Setenv("PATH", tmp)
+	defer os.Setenv("PATH", oldPATH)
+
+	// Only python3 exists.
+	py3 := filepath.Join(tmp, "python3")
+	if err := os.WriteFile(py3, []byte("#!/bin/sh"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Compound command: should fallback and preserve rest.
+	resolved, err := ResolveCommandWithPythonFallback("python -m sglang.launch_server")
+	if err != nil {
+		t.Fatalf("ResolveCommandWithPythonFallback error: %v", err)
+	}
+	want := py3 + " -m sglang.launch_server"
+	if resolved != want {
+		t.Errorf("ResolveCommandWithPythonFallback = %q, want %q", resolved, want)
+	}
+
+	// Simple bare name: should return resolved fallback path.
+	resolved, err = ResolveCommandWithPythonFallback("python")
+	if err != nil {
+		t.Fatalf("ResolveCommandWithPythonFallback error: %v", err)
+	}
+	if resolved != py3 {
+		t.Errorf("ResolveCommandWithPythonFallback = %q, want %q", resolved, py3)
+	}
+
+	// Non-python command: should fail.
+	_, err = ResolveCommandWithPythonFallback("missing-binary")
+	if !errors.Is(err, ErrBinaryNotFound) {
+		t.Errorf("expected ErrBinaryNotFound, got %v", err)
+	}
+
+	// python3 exists directly: should resolve without fallback.
+	resolved, err = ResolveCommandWithPythonFallback("python3 -m vllm.entrypoints.openai.api_server")
+	if err != nil {
+		t.Fatalf("ResolveCommandWithPythonFallback error: %v", err)
+	}
+	if resolved != "python3 -m vllm.entrypoints.openai.api_server" {
+		t.Errorf("ResolveCommandWithPythonFallback = %q, want raw command string", resolved)
+	}
+}

@@ -9,6 +9,7 @@ package pages
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -20,7 +21,7 @@ import (
 // profilesKeyMap groups the master-list / launcher key bindings used by
 // ProfilesPage. Defined here so profiles.go stays focused on dispatch.
 type profilesKeyMap struct {
-	New, Save, Duplicate, Delete, Edit, Cancel, Tab, Launch key.Binding
+	New, Save, Duplicate, Delete, Edit, Cancel, Tab, Launch, Export key.Binding
 }
 
 func defaultProfilesKeys() profilesKeyMap {
@@ -33,6 +34,7 @@ func defaultProfilesKeys() profilesKeyMap {
 		Cancel:    key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
 		Tab:       key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "tab editor")),
 		Launch:    key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "launch")),
+		Export:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "export")),
 	}
 }
 
@@ -49,7 +51,9 @@ func (i item) Description() string {
 	}
 	return desc
 }
-func (i item) FilterValue() string { return i.p.Name + " " + i.p.ID }
+func (i item) FilterValue() string {
+	return i.p.Name + " " + i.p.ID + " " + strings.Join(i.p.Tags, " ")
+}
 
 // corruptItem is a list row representing a profile JSON entry that failed
 // to parse. Edit/duplicate are no-ops; delete is allowed so the user can

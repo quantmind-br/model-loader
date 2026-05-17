@@ -42,6 +42,9 @@ type Manager interface {
 	// around the 30s WaitHealthy timeout). Best-effort — callers must fall
 	// back to a generic message when ok=false.
 	GetExitInfo(pid int) (ExitInfo, bool)
+	// History returns the persisted exit-history entries. The slice is a
+	// defensive copy; callers may mutate it freely.
+	History() []domain.ExitedInstance
 }
 
 // LastUsedSink is a minimal callback to update Profile.Meta.LastUsedAt.

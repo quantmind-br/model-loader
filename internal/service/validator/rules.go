@@ -4,27 +4,15 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
-var shortToLong = map[string]string{
-	"ngl": "n-gpu-layers",
-}
-
-func canonicalFlag(key string) string {
-	if long, ok := shortToLong[key]; ok {
-		return long
-	}
-	return key
-}
-
 func applyTypeRules(p domain.Profile, schema domain.FlagSchema, rep Report) Report {
 	for key, val := range p.Args {
-		canonical := canonicalFlag(key)
+		canonical := domain.CanonicalFlag(key)
 		spec, ok := schema.Lookup(canonical)
 		if !ok {
 			rep = appendIssue(rep, FieldIssue{
@@ -112,7 +100,7 @@ func applyExtraArgsRules(p domain.Profile, schema domain.FlagSchema, rep Report)
 			i++
 		}
 
-		canonical := canonicalFlag(flag)
+		canonical := domain.CanonicalFlag(flag)
 		spec, ok := schema.Lookup(canonical)
 		if !ok {
 			rep = appendIssue(rep, FieldIssue{
@@ -194,7 +182,7 @@ func applyExistenceRules(p domain.Profile, rep Report) Report {
 	// so that sglang and other HF-capable backends can use them.
 	// Local paths that happen to match the heuristic but exist
 	// are caught by the os.Stat success path above.
-	if looksLikeHFRepo(p.Model) {
+	if domain.LooksLikeHFRepo(p.Model) {
 		return rep
 	}
 	if os.IsNotExist(err) {
@@ -211,35 +199,5 @@ func applyExistenceRules(p domain.Profile, rep Report) Report {
 	})
 }
 
-// knownModelExtensions are file suffixes that indicate a local model file,
-// not a HuggingFace repository ID.
-var knownModelExtensions = map[string]bool{
-	".gguf":        true,
-	".bin":         true,
-	".safetensors": true,
-	".pt":          true,
-	".pth":         true,
-	".onnx":        true,
-	".ckpt":        true,
-	".ggml":        true,
-}
-
-// looksLikeHFRepo reports whether a model path looks like a HuggingFace
-// repository ID (e.g. "org/model-name") rather than a local filesystem path.
-// It rejects absolute paths, home-relative paths, and paths with known model
-// file extensions, but accepts dotted repo IDs like "Qwen/Qwen2.5-7B".
-func looksLikeHFRepo(path string) bool {
-	if filepath.IsAbs(path) {
-		return false
-	}
-	if strings.HasPrefix(path, ".") || strings.HasPrefix(path, "~/") {
-		return false
-	}
-	if knownModelExtensions[filepath.Ext(path)] {
-		return false // "models/foo.gguf" is a file, not a HF repo
-	}
-	parts := strings.Split(path, "/")
-	return len(parts) == 2 && parts[0] != "" && parts[1] != ""
-}
 
 

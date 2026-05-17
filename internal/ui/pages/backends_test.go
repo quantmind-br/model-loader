@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -208,8 +209,8 @@ func TestBackendsPage_DeleteBackendConfirm(t *testing.T) {
 	if _, err := mgr.GetBackend(b.ID); err == nil {
 		t.Fatal("backend still exists after delete")
 	}
-	if !strings.Contains(p.flash, "deleted") {
-		t.Fatalf("flash = %q", p.flash)
+	if !strings.Contains(p.flash.Message(), "deleted") {
+		t.Fatalf("flash = %q", p.flash.Message())
 	}
 }
 
@@ -225,12 +226,41 @@ func TestBackendsPage_SetDefaultBackend(t *testing.T) {
 	if p.defaultBackendID != b2.ID {
 		t.Fatalf("defaultBackendID = %q, want %q", p.defaultBackendID, b2.ID)
 	}
-	if !strings.Contains(p.flash, "default") {
-		t.Fatalf("flash = %q", p.flash)
+	if !strings.Contains(p.flash.Message(), "default") {
+		t.Fatalf("flash = %q", p.flash.Message())
 	}
 }
 
 func TestBackendsPage_RefreshSchema(t *testing.T) {
+	p, mgr, gen := newBackendsPageHarness(t)
+	b := addBackendForPage(t, mgr, "Refresh Backend", "/bin/echo")
+	p = loadBackendsPage(t, p)
+	before := gen.calls
+	model, _ := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
+	p = model.(BackendsPage)
+
+	if !p.refreshConfirm.Active() {
+		t.Fatal("expected refresh confirmation to be active")
+	}
+	if gen.calls != before {
+		t.Fatalf("generator calls = %d, want %d (no refresh yet)", gen.calls, before)
+	}
+
+	model, _ = p.Update(backendRefreshConfirmedMsg{id: b.ID})
+	p = model.(BackendsPage)
+
+	if gen.calls != before+1 {
+		t.Fatalf("generator calls = %d, want %d", gen.calls, before+1)
+	}
+	if !strings.Contains(p.flash.Message(), "schema refreshed") {
+		t.Fatalf("flash = %q", p.flash.Message())
+	}
+	if p.refreshConfirm.Active() {
+		t.Fatal("expected refresh confirmation to be cleared")
+	}
+}
+
+func TestBackendsPage_RefreshSchemaCancel(t *testing.T) {
 	p, mgr, gen := newBackendsPageHarness(t)
 	addBackendForPage(t, mgr, "Refresh Backend", "/bin/echo")
 	p = loadBackendsPage(t, p)
@@ -238,11 +268,21 @@ func TestBackendsPage_RefreshSchema(t *testing.T) {
 	model, _ := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
 	p = model.(BackendsPage)
 
-	if gen.calls != before+1 {
-		t.Fatalf("generator calls = %d, want %d", gen.calls, before+1)
+	if !p.refreshConfirm.Active() {
+		t.Fatal("expected refresh confirmation to be active")
 	}
-	if !strings.Contains(p.flash, "schema refreshed") {
-		t.Fatalf("flash = %q", p.flash)
+
+	model, _ = p.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	p = model.(BackendsPage)
+
+	if gen.calls != before {
+		t.Fatalf("generator calls = %d, want %d (no refresh after cancel)", gen.calls, before)
+	}
+	if !strings.Contains(p.flash.Message(), "refresh cancelled") {
+		t.Fatalf("flash = %q", p.flash.Message())
+	}
+	if p.refreshConfirm.Active() {
+		t.Fatal("expected refresh confirmation to be cleared after cancel")
 	}
 }
 
@@ -271,5 +311,105 @@ func TestBackendsPage_ForwardsNonKeyToActiveForm(t *testing.T) {
 	}
 	if p.form != old {
 		t.Fatal("form pointer changed unexpectedly")
+	}
+}
+
+type fakeProber struct {
+	events []backendcatalog.ProbeEvent
+}
+
+func (f *fakeProber) Probe(ctx context.Context) (<-chan backendcatalog.ProbeEvent, error) {
+	ch := make(chan backendcatalog.ProbeEvent, len(f.events)+1)
+	for _, ev := range f.events {
+		ch <- ev
+	}
+	ch <- backendcatalog.ProbeEvent{Done: true}
+	close(ch)
+	return ch, nil
+}
+
+func TestBackendsPage_Probe(t *testing.T) {
+	p, mgr, _ := newBackendsPageHarness(t)
+	b := addBackendForPage(t, mgr, "Probe Backend", "/bin/echo")
+	p = loadBackendsPage(t, p)
+
+	prober := &fakeProber{
+		events: []backendcatalog.ProbeEvent{
+			{BackendID: b.ID, Status: backendcatalog.ProbeStatusOK, Detail: "v1.0.0"},
+		},
+	}
+	p = p.WithProber(prober)
+
+	model, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
+	p = model.(BackendsPage)
+
+	for cmd != nil {
+		msg := cmd()
+		model, cmd = p.Update(msg)
+		p = model.(BackendsPage)
+		if m, ok := msg.(probeEventMsg); ok && m.event.Done {
+			break
+		}
+	}
+
+	if p.prober == nil {
+		t.Fatal("prober not wired")
+	}
+	if len(p.probeResults) != 1 {
+		t.Fatalf("probe results = %d, want 1", len(p.probeResults))
+	}
+	if p.probeResults[b.ID].status != backendcatalog.ProbeStatusOK {
+		t.Fatalf("status = %s, want OK", p.probeResults[b.ID].status)
+	}
+}
+
+func TestBackendsPage_ProbeStaleEpochIgnored(t *testing.T) {
+	p, mgr, _ := newBackendsPageHarness(t)
+	b := addBackendForPage(t, mgr, "Probe Backend", "/bin/echo")
+	p = loadBackendsPage(t, p)
+
+	prober := &fakeProber{
+		events: []backendcatalog.ProbeEvent{
+			{BackendID: b.ID, Status: backendcatalog.ProbeStatusOK, Detail: "v1"},
+		},
+	}
+	p = p.WithProber(prober)
+
+	model, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
+	p = model.(BackendsPage)
+	oldEpoch := p.probeEpoch
+
+	for cmd != nil {
+		msg := cmd()
+		model, cmd = p.Update(msg)
+		p = model.(BackendsPage)
+		if m, ok := msg.(probeEventMsg); ok && m.event.Done {
+			break
+		}
+	}
+
+	model, cmd = p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
+	p = model.(BackendsPage)
+	if p.probeEpoch == oldEpoch {
+		t.Fatal("expected new probe epoch")
+	}
+
+	for cmd != nil {
+		msg := cmd()
+		model, cmd = p.Update(msg)
+		p = model.(BackendsPage)
+		if m, ok := msg.(probeEventMsg); ok && m.event.Done {
+			break
+		}
+	}
+
+	stale := probeEventMsg{
+		event: backendcatalog.ProbeEvent{BackendID: b.ID, Status: backendcatalog.ProbeStatusErr},
+		epoch: oldEpoch,
+	}
+	model, _ = p.Update(stale)
+	p = model.(BackendsPage)
+	if p.probeResults[b.ID].status != backendcatalog.ProbeStatusOK {
+		t.Fatal("stale event should not overwrite current results")
 	}
 }

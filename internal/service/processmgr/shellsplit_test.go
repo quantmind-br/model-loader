@@ -3,6 +3,8 @@ package processmgr
 import (
 	"reflect"
 	"testing"
+
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func TestSplitCommandLine_Simple(t *testing.T) {
@@ -121,13 +123,13 @@ func TestMakeCommand_QuotedPath(t *testing.T) {
 }
 
 func TestLooksLikeHFRepo_DottedID(t *testing.T) {
-	if !looksLikeHFRepo("Qwen/Qwen2.5-7B-Instruct") {
+	if !domain.LooksLikeHFRepo("Qwen/Qwen2.5-7B-Instruct") {
 		t.Error("Qwen/Qwen2.5-7B-Instruct should look like HF repo")
 	}
-	if !looksLikeHFRepo("meta-llama/Llama-3.1-8B-Instruct") {
+	if !domain.LooksLikeHFRepo("meta-llama/Llama-3.1-8B-Instruct") {
 		t.Error("meta-llama/Llama-3.1-8B-Instruct should look like HF repo")
 	}
-	if looksLikeHFRepo("models/model.gguf") {
+	if domain.LooksLikeHFRepo("models/model.gguf") {
 		t.Error("models/model.gguf should NOT look like HF repo")
 	}
 }

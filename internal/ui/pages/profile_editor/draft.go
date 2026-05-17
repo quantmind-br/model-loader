@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/huh"
@@ -36,6 +37,7 @@ type Draft struct {
 	ID          string
 	Name        string
 	Description string
+	Tags        string
 	Model       string
 	BackendID   string
 	NGL         string
@@ -52,6 +54,33 @@ type Draft struct {
 	// Essentials fields (ngl, ctx-size, etc.) take precedence and overwrite
 	// matching keys here during ApplyToWithSchema.
 	Args map[string]any
+}
+
+// ParseTags converts a comma-separated editor string to the trimmed
+// []string form stored on domain.Profile.Tags. Empty and whitespace-only
+// entries are dropped; an empty input yields a nil slice so it round-trips
+// cleanly through `json:"tags,omitempty"`.
+func ParseTags(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// FormatTags renders a []string from domain.Profile.Tags as the
+// comma-separated form shown in the editor's Tags input.
+func FormatTags(tags []string) string {
+	return strings.Join(tags, ", ")
 }
 
 // ToProfile maps the editor draft to a domain.Profile. Always sets
@@ -130,6 +159,7 @@ func (d Draft) ApplyToWithSchema(base domain.Profile, schema domain.FlagSchema) 
 	out.ID = d.ID
 	out.Name = d.Name
 	out.Description = d.Description
+	out.Tags = ParseTags(d.Tags)
 	out.Model = d.Model
 	out.Args = args
 	out.Launch.DefaultBackground = true
@@ -178,6 +208,7 @@ func buildForm(d *Draft, schema domain.FlagSchema, backendOpts []huh.Option[stri
 		huh.NewGroup(
 			huh.NewInput().Title("Name").Value(&d.Name),
 			huh.NewInput().Title("Description").Value(&d.Description),
+			huh.NewInput().Title("Tags").Description("comma-separated").Value(&d.Tags),
 			huh.NewInput().Title("Model path (.gguf)").Value(&d.Model),
 		),
 	}
@@ -185,6 +216,7 @@ func buildForm(d *Draft, schema domain.FlagSchema, backendOpts []huh.Option[stri
 		groups[0] = huh.NewGroup(
 			huh.NewInput().Title("Name").Value(&d.Name),
 			huh.NewInput().Title("Description").Value(&d.Description),
+			huh.NewInput().Title("Tags").Description("comma-separated").Value(&d.Tags),
 			huh.NewInput().Title("Model path (.gguf)").Value(&d.Model),
 			huh.NewSelect[string]().
 				Title("Backend").

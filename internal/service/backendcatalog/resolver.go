@@ -3,7 +3,6 @@ package backendcatalog
 import (
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/log"
@@ -110,51 +109,17 @@ func findBackend(backends []domain.Backend, id string) (domain.Backend, bool) {
 	return domain.Backend{}, false
 }
 
-// resolveExecutable resolves a backend's executable, applying SGLang-specific
-// fallback logic (python ↔ python3) when the first token is not found.
-// For compound commands (e.g. "python -m sglang.launch_server"), the fallback
-// preserves the remaining tokens so the returned string is still a valid
-// command line (e.g. "python3 -m sglang.launch_server").
+// resolveExecutable resolves a backend's executable.
+// For Python-based backends (SGLang and VLLM), it applies python↔python3
+// fallback logic so compound commands like "python -m sglang.launch_server"
+// are preserved when falling back to python3.
 func resolveExecutable(backend domain.Backend) (string, error) {
-	path, err := llamabin.Resolve(backend.Executable)
-	if err == nil {
-		return path, nil
+	switch backend.Kind {
+	case domain.BackendKindSGLang, domain.BackendKindVLLM:
+		return llamabin.ResolveCommandWithPythonFallback(backend.Executable)
+	default:
+		return llamabin.Resolve(backend.Executable)
 	}
-	if backend.Kind == domain.BackendKindSGLang {
-		first, rest := splitCommand(backend.Executable)
-		if first == "" {
-			return "", err
-		}
-		var fallback string
-		switch first {
-		case "python":
-			fallback = "python3"
-		case "python3":
-			fallback = "python"
-		default:
-			return "", err
-		}
-		if fbPath, err2 := llamabin.Resolve(fallback); err2 == nil {
-			if rest != "" {
-				return fbPath + " " + rest, nil
-			}
-			return fbPath, nil
-		}
-	}
-	return "", err
-}
-
-// splitCommand separates the first executable token from the rest of a
-// command string using basic whitespace splitting.
-func splitCommand(raw string) (string, string) {
-	fields := strings.Fields(raw)
-	if len(fields) == 0 {
-		return "", ""
-	}
-	if len(fields) == 1 {
-		return fields[0], ""
-	}
-	return fields[0], strings.Join(fields[1:], " ")
 }
 
 func schemaStoreRef(ref string) string {

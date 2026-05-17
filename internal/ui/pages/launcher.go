@@ -36,6 +36,7 @@ type LauncherPage struct {
 	background bool
 	status     string
 	statusAt   time.Time
+	flash      components.Flash
 	running    []domain.RunningInstance
 
 	width, height int
@@ -69,6 +70,7 @@ func NewLauncherPage(store profilestore.Store, manager processmgr.Manager, val v
 		background: true,
 		spin:       sp,
 		logger:     log.Nop(),
+		flash:      components.NewFlash("launcher"),
 	}
 }
 
@@ -212,7 +214,7 @@ func (p LauncherPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.handleLaunchErr(m)
 	case spinner.TickMsg:
 		return p.handleSpinnerTick(m)
-	case flashClearMsg:
+	case components.FlashClearMsg:
 		return p.handleFlashClear(m)
 	case LaunchProfileMsg:
 		return p.handleLaunchProfile(m)
@@ -265,7 +267,7 @@ func (p LauncherPage) handleLaunched(msg launchedMsg) (tea.Model, tea.Cmd) {
 
 func (p LauncherPage) handleHealthy(msg healthyMsg) (tea.Model, tea.Cmd) {
 	p.waitingPID = 0
-	p, fc := p.withStatus(fmt.Sprintf("healthy pid=%d", msg.pid))
+	p, fc := p.withFlash(fmt.Sprintf("healthy pid=%d", msg.pid))
 	pid := msg.pid
 	return p, tea.Batch(fc, func() tea.Msg { return SwitchToMonitorMsg{PID: pid} })
 }
@@ -281,7 +283,7 @@ func (p LauncherPage) handleLaunchErr(msg launchErrMsg) (tea.Model, tea.Cmd) {
 			base = enrichWithExit(base, exit)
 		}
 	}
-	p, fc := p.withStatus(base)
+	p, fc := p.withFlash(base)
 	return p, fc
 }
 
@@ -294,22 +296,19 @@ func (p LauncherPage) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd
 	return p, cmd
 }
 
-func (p LauncherPage) handleFlashClear(msg flashClearMsg) (tea.Model, tea.Cmd) {
-	if msg.tag == "launcher" && msg.at.Equal(p.statusAt) {
-		p.status = ""
-		p.statusAt = time.Time{}
-	}
+func (p LauncherPage) handleFlashClear(msg components.FlashClearMsg) (tea.Model, tea.Cmd) {
+	p.flash, _ = p.flash.Update(msg)
 	return p, nil
 }
 
 func (p LauncherPage) handleLaunchProfile(msg LaunchProfileMsg) (tea.Model, tea.Cmd) {
 	if p.manager == nil {
-		p, fc := p.withStatus("launch failed: process manager unavailable")
+		p, fc := p.withFlash("launch failed: process manager unavailable")
 		return p, fc
 	}
 	selected, err := p.store.Get(msg.ID)
 	if err != nil {
-		p, fc := p.withStatus("launch failed: " + err.Error())
+		p, fc := p.withFlash("launch failed: " + err.Error())
 		return p, fc
 	}
 	// Refresh the in-memory list so the user sees the profile they
@@ -396,7 +395,7 @@ func (p LauncherPage) updateConfirmKill(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "esc" {
 		p.killConfirm = components.Confirm{}
 		var fc tea.Cmd
-		p, fc = p.withStatus("kill cancelled")
+		p, fc = p.withFlash("kill cancelled")
 		return p, fc
 	}
 	var cmd tea.Cmd
@@ -409,7 +408,7 @@ func (p LauncherPage) updateConfirmKill(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // on the page (the Confirm callback only emits a tea.Cmd).
 func (p LauncherPage) performKill(pid int) (LauncherPage, tea.Cmd) {
 	if err := p.manager.Kill(pid); err != nil {
-		return p.withStatus("error: " + err.Error())
+		return p.withFlash("error: " + err.Error())
 	}
 	out := p.running[:0]
 	for _, ri := range p.running {
@@ -418,7 +417,7 @@ func (p LauncherPage) performKill(pid int) (LauncherPage, tea.Cmd) {
 		}
 	}
 	p.running = out
-	return p.withStatus(fmt.Sprintf("killed pid=%d", pid))
+	return p.withFlash(fmt.Sprintf("killed pid=%d", pid))
 }
 
 // IsCapturingInput tells the root model when the page owns global keys —
@@ -428,15 +427,17 @@ func (p LauncherPage) IsCapturingInput() bool {
 	return p.killConfirm.Active()
 }
 
-// withStatus sets the terminal status message (post-launch outcome,
-// kill result, validation error) and schedules an auto-clear via
-// flashClearMsg. Use this for terminal states only — the in-flight
-// "waiting for /health…" message must NOT auto-clear or it would erase
-// itself before the health check returns.
-func (p LauncherPage) withStatus(msg string) (LauncherPage, tea.Cmd) {
-	p.status = msg
-	p.statusAt = time.Now()
-	return p, scheduleFlashClear("launcher", p.statusAt)
+// withFlash sets a terminal flash message (post-launch outcome, kill
+// result, validation error) via the embedded Flash widget and clears the
+// in-flight status so the spinner stops. The in-flight "waiting for
+// /health…" line uses `status` directly (no auto-clear); only terminal
+// outcomes flow through here.
+func (p LauncherPage) withFlash(msg string) (LauncherPage, tea.Cmd) {
+	p.status = ""
+	p.statusAt = time.Time{}
+	var cmd tea.Cmd
+	p.flash, cmd = p.flash.Set(msg)
+	return p, cmd
 }
 
 // launchProfileCmd validates the profile and starts the llama-server
@@ -494,7 +495,7 @@ func (p LauncherPage) View() string {
 	if p.loadErr != nil {
 		return theme.Subtitle.Render(fmt.Sprintf("load profiles: %v", p.loadErr))
 	}
-	if len(p.profiles) == 0 && p.status == "" {
+	if len(p.profiles) == 0 && p.status == "" && p.flash.Message() == "" {
 		return theme.Subtitle.Render("(no profiles yet — switch to Profiles [2] to create one)")
 	}
 
@@ -562,21 +563,18 @@ func (p LauncherPage) renderRunningList() string {
 	return strings.Join(lines, "\n")
 }
 
-// renderStatusLine renders the bottom status flash (with optional spinner) or
-// returns an empty string when there is no active status to show.
+// renderStatusLine renders the bottom line, preferring the in-flight
+// status (spinner + non-expiring message) when set, falling back to the
+// auto-clearing terminal flash. Empty string when neither is active.
 func (p LauncherPage) renderStatusLine() string {
-	if p.status == "" {
-		return ""
+	if p.status != "" {
+		statusLine := p.status
+		if p.waitingPID != 0 {
+			statusLine = p.spin.View() + " " + statusLine
+		}
+		return theme.Subtitle.Render(statusLine)
 	}
-	statusLine := p.status
-	if p.waitingPID != 0 {
-		statusLine = p.spin.View() + " " + statusLine
-	}
-	style := theme.Subtitle
-	if !p.statusAt.IsZero() && time.Since(p.statusAt) >= flashDimAfter {
-		style = style.Faint(true)
-	}
-	return style.Render(statusLine)
+	return p.flash.View()
 }
 
 // Hints implements ui.HintProvider for the Launcher tab.

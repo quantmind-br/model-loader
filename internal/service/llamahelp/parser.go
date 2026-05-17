@@ -17,14 +17,24 @@ var cacheTypeEnum = []string{"f32", "f16", "bf16", "q8_0", "q4_0", "q4_1", "iq4_
 
 // ParseHelp scans the full --help output and returns a FlagSchema.
 // Lines before the first section header are skipped (CUDA banner etc).
-// Continuation lines are ignored; only the first line of each flag is parsed.
+// When a flag's alias chunk fills the whole line (no description on the
+// same line), the next non-empty continuation line is used as the
+// description before parsing. Subsequent continuation lines are ignored.
 func ParseHelp(data []byte) (domain.FlagSchema, error) {
 	schema := domain.FlagSchema{Flags: make(map[string]domain.FlagSpec)}
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-	currentGroup := ""
+	var lines []string
 	for scanner.Scan() {
-		line := scanner.Text()
+		lines = append(lines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		return domain.FlagSchema{}, err
+	}
+
+	currentGroup := ""
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
 		if header := parseSectionHeader(line); header != "" {
 			currentGroup = header
 			continue
@@ -33,16 +43,42 @@ func ParseHelp(data []byte) (domain.FlagSchema, error) {
 			continue
 		}
 		spec, ok := parseFlagLine(line)
+		if !ok && isAliasOnlyLine(line) {
+			for j := i + 1; j < len(lines); j++ {
+				next := strings.TrimSpace(lines[j])
+				if next == "" {
+					continue
+				}
+				if strings.HasPrefix(next, "(env:") {
+					break
+				}
+				spec, ok = parseFlagLine(line + "  " + next)
+				break
+			}
+		}
 		if !ok {
 			continue
 		}
 		spec.Group = currentGroup
 		schema.Flags[spec.Long] = spec
 	}
-	if err := scanner.Err(); err != nil {
-		return domain.FlagSchema{}, err
-	}
 	return schema, nil
+}
+
+// isAliasOnlyLine reports whether the line consists of nothing but flag aliases
+// (every whitespace-delimited token starts with '-'). Used to detect help-text
+// entries whose description lives on a continuation line.
+func isAliasOnlyLine(line string) bool {
+	fields := strings.Fields(line)
+	if len(fields) == 0 {
+		return false
+	}
+	for _, f := range fields {
+		if !strings.HasPrefix(f, "-") {
+			return false
+		}
+	}
+	return true
 }
 
 var sectionHeaderRe = regexp.MustCompile(`^-{5}\s+(.+?)\s+params\s+-{5}$`)

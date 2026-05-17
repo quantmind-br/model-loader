@@ -40,6 +40,21 @@ llamacpp/**/build/
 # Personal scratch dirs
 thoughts/
 
+# Agent / IDE scratch dirs
+.agents/
+.claw/
+.pi/
+
+# Design artifact files
+IDEATION_*.md
+PRD_*.md
+
+# Backend submodules / clones
+/backends/
+
+# Local config files
+.gitnexusignore
+
 # Auto-generated agent skills
 .claude/skills/gitnexus/
 

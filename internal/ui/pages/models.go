@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/key"
@@ -17,6 +16,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/modelscanner"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/internal/filter"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
@@ -32,13 +32,13 @@ type pathStatus struct {
 	err   string
 }
 
-// actionOption is one row in the inline action selector overlays.
+// actionOption is one row in the inline action selector overlay.
 type actionOption struct{ label, value string }
 
 // actionMenu is the inline modal used for "what should we do with this
-// model file?" and the follow-up "which profile do we update?".
-// Replaces the earlier huh.NewForm wrapping a single Select that did not
-// reliably reach huh.StateCompleted on a single Enter press.
+// model file?". Replaces the earlier huh.NewForm wrapping a single
+// Select that did not reliably reach huh.StateCompleted on a single
+// Enter press.
 type actionMenu struct {
 	title      string
 	options    []actionOption
@@ -51,7 +51,6 @@ type actionStage int
 
 const (
 	actionStageRoot actionStage = iota
-	actionStagePickProfile
 )
 
 // ModelsPage browses GGUF files discovered by ModelScanner.
@@ -70,19 +69,20 @@ type ModelsPage struct {
 	height     int
 	filter     string
 	filterMode bool
-	flash      string
-	flashAt    time.Time
+	flash      components.Flash
 
 	action *actionMenu
+
+	profilePicker           *components.ProfilePicker
+	profilePickerTargetPath string
 
 	keys modelsKeyMap
 }
 
-// withFlash sets the flash message + stamp and returns the auto-clear Cmd.
 func (p ModelsPage) withFlash(msg string) (ModelsPage, tea.Cmd) {
-	p.flash = msg
-	p.flashAt = time.Now()
-	return p, scheduleFlashClear("models", p.flashAt)
+	var cmd tea.Cmd
+	p.flash, cmd = p.flash.Set(msg)
+	return p, cmd
 }
 
 type modelsKeyMap struct {
@@ -119,6 +119,7 @@ func NewModelsPage(scanner modelscanner.Scanner, paths []string) ModelsPage {
 		statusMap: statusMap,
 		table:     t,
 		keys:      defaultModelsKeys(),
+		flash:     components.NewFlash("models"),
 	}
 }
 
@@ -135,7 +136,7 @@ func (p ModelsPage) WithProfileStore(store profilestore.Store) ModelsPage {
 // filter input is open so cursor navigation does not leak into tab
 // cycling and printable characters are not stolen by global shortcuts.
 func (p ModelsPage) IsCapturingInput() bool {
-	return p.action != nil || p.filterMode
+	return p.action != nil || p.filterMode || p.profilePicker != nil
 }
 
 // scanStartedMsg delivers the channel + cancel handle from a fresh scan
@@ -162,8 +163,45 @@ type scanChannelClosedMsg struct {
 	scanID int
 }
 
+// modelsReloadMsg is dispatched by Reload() when the root activates this
+// tab. It triggers a silent rescan (no flash) so external filesystem
+// changes surface without requiring the user to press R.
+type modelsReloadMsg struct{}
+
 func (p ModelsPage) Init() tea.Cmd {
 	return startScanCmd(p.scanner, p.paths, p.scanID)
+}
+
+// Reload implements the ui.Reloader contract. RootModel calls this on
+// tab activation; we re-enter the rescan path through Update so the
+// state mutations happen in a single place (beginRescan).
+func (p ModelsPage) Reload() tea.Cmd {
+	return func() tea.Msg { return modelsReloadMsg{} }
+}
+
+// beginRescan cancels any in-flight scan, bumps the scan epoch, resets
+// per-root status to "scanning", and returns the page plus a Cmd that
+// kicks off a fresh scan. When showFlash is true a "rescan started"
+// message is shown — used for the manual R key, suppressed for the
+// silent reload-on-focus path.
+func (p ModelsPage) beginRescan(showFlash bool) (ModelsPage, tea.Cmd) {
+	if p.cancel != nil {
+		p.cancel()
+		p.cancel = nil
+	}
+	p.scanID++
+	p.files = nil
+	for _, root := range p.paths {
+		p.statusMap[root] = pathStatus{state: "scanning"}
+	}
+	p.refreshRows()
+	cmds := []tea.Cmd{startScanCmd(p.scanner, p.paths, p.scanID)}
+	if showFlash {
+		var fc tea.Cmd
+		p, fc = p.withFlash("rescan started")
+		cmds = append(cmds, fc)
+	}
+	return p, tea.Batch(cmds...)
 }
 
 // startScanCmd builds a Cmd that creates ctx+cancel, kicks off the
@@ -197,11 +235,8 @@ func (p ModelsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.width, p.height = msg.Width, msg.Height
 		p.table.SetHeight(msg.Height - 8)
 		return p, nil
-	case flashClearMsg:
-		if msg.tag == "models" && msg.at.Equal(p.flashAt) {
-			p.flash = ""
-			p.flashAt = time.Time{}
-		}
+	case components.FlashClearMsg:
+		p.flash, _ = p.flash.Update(msg)
 		return p, nil
 	case scanStartedMsg:
 		if msg.scanID != p.scanID {
@@ -227,13 +262,51 @@ func (p ModelsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return next, waitForScanEvent(msg.ch, msg.scanID)
 	case scanChannelClosedMsg:
 		return p, nil
+	case modelsReloadMsg:
+		next, cmd := p.beginRescan(false)
+		return next, cmd
+	case components.ProfilePickedMsg:
+		return p.handleProfilePicked(msg)
+	case components.ProfilePickerCancelledMsg:
+		p.profilePicker = nil
+		p.profilePickerTargetPath = ""
+		return p, nil
 	case tea.KeyMsg:
+		if p.profilePicker != nil {
+			np, cmd := p.profilePicker.Update(msg)
+			p.profilePicker = &np
+			return p, cmd
+		}
 		if p.action != nil {
 			return p.updateActionMenu(msg)
 		}
 		return p.handleKey(msg)
 	}
 	return p, nil
+}
+
+// handleProfilePicked applies the selected GGUF path to the chosen
+// existing profile and persists, then clears the picker state.
+func (p ModelsPage) handleProfilePicked(msg components.ProfilePickedMsg) (tea.Model, tea.Cmd) {
+	targetPath := p.profilePickerTargetPath
+	p.profilePicker = nil
+	p.profilePickerTargetPath = ""
+	if p.store == nil {
+		p, fc := p.withFlash("profile store not wired")
+		return p, fc
+	}
+	pr, err := p.store.Get(msg.ID)
+	if err != nil {
+		p, fc := p.withFlash("load profile: " + err.Error())
+		return p, fc
+	}
+	pr.Model = targetPath
+	if err := p.store.Save(pr); err != nil {
+		p, fc := p.withFlash("save profile: " + err.Error())
+		return p, fc
+	}
+	p, fc := p.withFlash("updated " + msg.ID)
+	return p, fc
 }
 
 // updateActionMenu owns the inline action selector while it is on
@@ -256,12 +329,7 @@ func (p ModelsPage) updateActionMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p, nil
 	case "enter":
 		opt := p.action.options[p.action.cursor]
-		switch p.action.stage {
-		case actionStageRoot:
-			return p.commitRootAction(opt.value, p.action.targetPath)
-		case actionStagePickProfile:
-			return p.commitProfileTarget(opt.value, p.action.targetPath)
-		}
+		return p.commitRootAction(opt.value, p.action.targetPath)
 	}
 	return p, nil
 }
@@ -281,58 +349,27 @@ func (p ModelsPage) commitRootAction(choice, path string) (tea.Model, tea.Cmd) {
 		p, fc := p.withFlash("path copied to clipboard")
 		return p, fc
 	case "existing":
+		p.action = nil
 		if p.store == nil {
-			p.action = nil
 			p, fc := p.withFlash("profile store not wired")
 			return p, fc
 		}
 		profiles, err := p.store.List()
 		if err != nil {
-			p.action = nil
 			p, fc := p.withFlash("load profiles: " + err.Error())
 			return p, fc
 		}
 		if len(profiles) == 0 {
-			p.action = nil
 			p, fc := p.withFlash("no existing profiles to update")
 			return p, fc
 		}
-		opts := make([]actionOption, 0, len(profiles))
-		for _, pr := range profiles {
-			opts = append(opts, actionOption{label: pr.Name + " (" + pr.ID + ")", value: pr.ID})
-		}
-		p.action = &actionMenu{
-			title:      "Update which profile?",
-			options:    opts,
-			targetPath: path,
-			stage:      actionStagePickProfile,
-		}
+		picker := components.NewProfilePicker(profiles)
+		p.profilePicker = &picker
+		p.profilePickerTargetPath = path
 		return p, nil
 	}
 	p.action = nil
 	return p, nil
-}
-
-// commitProfileTarget applies the selected GGUF path to the chosen
-// existing profile and persists.
-func (p ModelsPage) commitProfileTarget(profileID, path string) (tea.Model, tea.Cmd) {
-	p.action = nil
-	if p.store == nil {
-		p, fc := p.withFlash("profile store not wired")
-		return p, fc
-	}
-	pr, err := p.store.Get(profileID)
-	if err != nil {
-		p, fc := p.withFlash("load profile: " + err.Error())
-		return p, fc
-	}
-	pr.Model = path
-	if err := p.store.Save(pr); err != nil {
-		p, fc := p.withFlash("save profile: " + err.Error())
-		return p, fc
-	}
-	p, fc := p.withFlash("updated " + profileID)
-	return p, fc
 }
 
 func (p ModelsPage) handleScanEvent(evt domain.ScanEvent) (tea.Model, tea.Cmd) {
@@ -453,18 +490,8 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return p, nil
 		}
 	case key.Matches(msg, p.keys.Rescan):
-		if p.cancel != nil {
-			p.cancel()
-			p.cancel = nil
-		}
-		p.scanID++
-		p.files = nil
-		for _, root := range p.paths {
-			p.statusMap[root] = pathStatus{state: "scanning"}
-		}
-		p.refreshRows()
-		p, fc := p.withFlash("rescan started")
-		return p, tea.Batch(startScanCmd(p.scanner, p.paths, p.scanID), fc)
+		next, cmd := p.beginRescan(true)
+		return next, cmd
 	case key.Matches(msg, p.keys.Enter):
 		return p.openActionMenuForSelection()
 	}
@@ -509,6 +536,9 @@ func (p ModelsPage) openActionMenuForSelection() (tea.Model, tea.Cmd) {
 }
 
 func (p ModelsPage) View() string {
+	if p.profilePicker != nil {
+		return p.profilePicker.View()
+	}
 	if p.action != nil {
 		return p.renderActionMenu()
 	}
@@ -518,14 +548,7 @@ func (p ModelsPage) View() string {
 	if p.filterMode || p.filter != "" {
 		filterLine = theme.Subtitle.Render(fmt.Sprintf("filter: %q", p.filter))
 	}
-	footer := ""
-	if p.flash != "" {
-		style := theme.Subtitle
-		if !p.flashAt.IsZero() && time.Since(p.flashAt) >= flashDimAfter {
-			style = style.Faint(true)
-		}
-		footer = style.Render(p.flash)
-	}
+	footer := p.flash.View()
 	if len(p.files) == 0 && (len(p.paths) == 0 || p.hasScannedRoot()) {
 		emptyMsg := theme.Subtitle.Render("(no .gguf files in configured search paths — edit ~/.config/model-loader/config.toml)")
 		return lipgloss.JoinVertical(lipgloss.Left, header, statusLine, emptyMsg, filterLine, footer)
@@ -548,6 +571,9 @@ func (p ModelsPage) hasScannedRoot() bool {
 
 // Hints implements ui.HintProvider for the Models tab.
 func (p ModelsPage) Hints() string {
+	if p.profilePicker != nil {
+		return "[↑↓] move  [enter] select  [esc] cancel"
+	}
 	if p.action != nil {
 		return "[↑↓] move  [enter] select  [esc] cancel"
 	}

@@ -3,6 +3,8 @@ package pages
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -282,22 +284,22 @@ func TestProfilesPage_FlashAutoClear(t *testing.T) {
 	page := NewProfilesPage(store, domain.FlagSchema{})
 
 	page, _ = page.withFlash("hello")
-	if page.flash != "hello" {
-		t.Fatalf("flash = %q, want hello", page.flash)
+	if page.flash.Message() != "hello" {
+		t.Fatalf("flash = %q, want hello", page.flash.Message())
 	}
 
 	// Stale clear (mismatching at) should be ignored.
-	updated, _ := page.Update(flashClearMsg{tag: "profiles", at: time.Time{}})
+	updated, _ := page.Update(components.FlashClearMsg{Tag: "profiles", At: time.Time{}})
 	page = updated.(ProfilesPage)
-	if page.flash != "hello" {
-		t.Errorf("stale flashClearMsg erased current flash; flash=%q", page.flash)
+	if page.flash.Message() != "hello" {
+		t.Errorf("stale FlashClearMsg erased current flash; flash=%q", page.flash.Message())
 	}
 
 	// Matching clear erases.
-	updated, _ = page.Update(flashClearMsg{tag: "profiles", at: page.flashAt})
+	updated, _ = page.Update(components.FlashClearMsg{Tag: "profiles", At: page.flash.At()})
 	page = updated.(ProfilesPage)
-	if page.flash != "" {
-		t.Errorf("matching flashClearMsg should clear; flash=%q", page.flash)
+	if page.flash.Message() != "" {
+		t.Errorf("matching FlashClearMsg should clear; flash=%q", page.flash.Message())
 	}
 }
 
@@ -307,11 +309,11 @@ func TestProfilesPage_FlashRenamedClearTagIgnored(t *testing.T) {
 	page := NewProfilesPage(store, domain.FlagSchema{})
 	page, _ = page.withFlash("hello")
 
-	// flashClearMsg from another page must be ignored.
-	updated, _ := page.Update(flashClearMsg{tag: "models", at: page.flashAt})
+	// FlashClearMsg from another page must be ignored.
+	updated, _ := page.Update(components.FlashClearMsg{Tag: "models", At: page.flash.At()})
 	page = updated.(ProfilesPage)
-	if page.flash != "hello" {
-		t.Errorf("cross-tag flashClearMsg erased flash; flash=%q", page.flash)
+	if page.flash.Message() != "hello" {
+		t.Errorf("cross-tag FlashClearMsg erased flash; flash=%q", page.flash.Message())
 	}
 }
 
@@ -397,6 +399,9 @@ func TestProfilesPage_HintsIncludeLaunch(t *testing.T) {
 	hints := page.Hints()
 	if !strings.Contains(hints, "[L] launch") {
 		t.Errorf("list-mode Hints missing [L] launch; got %q", hints)
+	}
+	if !strings.Contains(hints, "[e] export") {
+		t.Errorf("list-mode Hints missing [e] export; got %q", hints)
 	}
 }
 
@@ -505,3 +510,179 @@ func TestProfilesPage_DiscardConfirmKeepsInputCaptured(t *testing.T) {
 // [?] help token is now owned by the global status bar (see
 // ui/root_test.go TestRoot_StatusBarMentionsHelp). Pages publish their
 // own hints via the HintProvider contract — see TestProfilesPage_Hints*.
+
+func TestProfilesPage_ItemFilterValueIncludesTags(t *testing.T) {
+	pr := domain.Profile{
+		ID:   "qwen",
+		Name: "Qwen Coder",
+		Tags: []string{"coding", "32b"},
+	}
+	fv := item{p: pr}.FilterValue()
+	for _, want := range []string{"Qwen Coder", "qwen", "coding", "32b"} {
+		if !strings.Contains(fv, want) {
+			t.Errorf("FilterValue %q missing %q", fv, want)
+		}
+	}
+}
+
+func TestProfilesPage_DetailViewRendersTags(t *testing.T) {
+	store := newFakeStoreWithDiagnostics([]domain.Profile{
+		{
+			ID:    "demo",
+			Name:  "Demo",
+			Model: "/m.gguf",
+			Tags:  []string{"coding", "32b"},
+			Args:  map[string]any{"port": float64(8080)},
+		},
+	}, nil)
+	page := NewProfilesPage(store, domain.FlagSchema{})
+	updated, _ := page.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	page = updated.(ProfilesPage)
+	updated, _ = page.Update(loadedMsg{profiles: store.ps})
+	page = updated.(ProfilesPage)
+
+	view := page.detailView()
+	if !strings.Contains(view, "Tags:") {
+		t.Fatalf("detailView missing Tags label; got:\n%s", view)
+	}
+	if !strings.Contains(view, "coding, 32b") {
+		t.Fatalf("detailView missing tag values; got:\n%s", view)
+	}
+}
+
+func TestProfilesPage_DetailViewRendersNoneWhenTagsEmpty(t *testing.T) {
+	store := newFakeStoreWithDiagnostics([]domain.Profile{
+		{ID: "demo", Name: "Demo", Model: "/m.gguf"},
+	}, nil)
+	page := NewProfilesPage(store, domain.FlagSchema{})
+	updated, _ := page.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	page = updated.(ProfilesPage)
+	updated, _ = page.Update(loadedMsg{profiles: store.ps})
+	page = updated.(ProfilesPage)
+
+	view := page.detailView()
+	if !strings.Contains(view, "Tags:    (none)") {
+		t.Fatalf("detailView missing Tags: (none); got:\n%s", view)
+	}
+}
+
+func TestProfilesPage_EditHydratesTags(t *testing.T) {
+	store := newFakeStoreWithDiagnostics([]domain.Profile{
+		{
+			ID:    "demo",
+			Name:  "Demo",
+			Model: "/m.gguf",
+			Tags:  []string{"coding", "32b"},
+			Args:  map[string]any{"port": float64(4321)},
+		},
+	}, nil)
+	page := NewProfilesPage(store, domain.FlagSchema{})
+	updated, _ := page.Update(loadedMsg{profiles: store.ps})
+	page = updated.(ProfilesPage)
+
+	updated, _ = page.startEditSelected()
+	page = updated.(ProfilesPage)
+
+	if !page.editor.Active() {
+		t.Fatal("startEditSelected should activate editor")
+	}
+	if got := page.editor.CurrentDraft().Tags; got != "coding, 32b" {
+		t.Fatalf("draft.Tags = %q, want %q", got, "coding, 32b")
+	}
+}
+
+func TestProfilesPage_ExportWithoutDirFlashesNotConfigured(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := profilestore.NewFSStore(dir)
+	page := NewProfilesPage(store, domain.FlagSchema{})
+
+	updated, _ := page.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	page = updated.(ProfilesPage)
+	updated, _ = page.Update(loadedMsg{profiles: nil})
+	page = updated.(ProfilesPage)
+
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	page = updated.(ProfilesPage)
+
+	if got := page.flash.Message(); got != "export directory not configured" {
+		t.Errorf("flash = %q, want %q", got, "export directory not configured")
+	}
+}
+
+func TestProfilesPage_ExportWritesBundleAndFlashesFilename(t *testing.T) {
+	storeDir := t.TempDir()
+	store, err := profilestore.NewFSStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(domain.Profile{
+		ID: "alpha", Name: "Alpha", Model: "/m.gguf",
+		Args: map[string]any{"port": float64(8080)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	exportDir := t.TempDir()
+	page := NewProfilesPage(store, domain.FlagSchema{}).WithExportDir(exportDir)
+	updated, _ := page.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	page = updated.(ProfilesPage)
+	updated, _ = page.Update(loadedMsg{profiles: []domain.Profile{{ID: "alpha", Name: "Alpha"}}})
+	page = updated.(ProfilesPage)
+
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	page = updated.(ProfilesPage)
+
+	flash := page.flash.Message()
+	if !strings.HasPrefix(flash, "exported to profiles-export-") {
+		t.Errorf("flash = %q, want prefix 'exported to profiles-export-'", flash)
+	}
+	if !strings.HasSuffix(flash, ".json") {
+		t.Errorf("flash = %q, want .json suffix", flash)
+	}
+
+	entries, err := os.ReadDir(exportDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("export dir entries = %d, want 1", len(entries))
+	}
+	raw, err := os.ReadFile(filepath.Join(exportDir, entries[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"schemaVersion"`) {
+		t.Errorf("export file missing schemaVersion: %s", string(raw))
+	}
+	if !strings.Contains(string(raw), `"exportedAt"`) {
+		t.Errorf("export file missing exportedAt: %s", string(raw))
+	}
+	if !strings.Contains(string(raw), `"profiles"`) {
+		t.Errorf("export file missing profiles: %s", string(raw))
+	}
+	if !strings.Contains(string(raw), `"id": "alpha"`) {
+		t.Errorf("export file missing alpha profile: %s", string(raw))
+	}
+}
+
+func TestProfilesPage_ExportFailureFlashesError(t *testing.T) {
+	store := newFakeStoreWithDiagnostics([]domain.Profile{{ID: "a", Name: "A"}}, nil)
+
+	exportDir := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(exportDir, []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	page := NewProfilesPage(store, domain.FlagSchema{}).WithExportDir(exportDir)
+	updated, _ := page.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	page = updated.(ProfilesPage)
+	updated, _ = page.Update(loadedMsg{profiles: store.ps})
+	page = updated.(ProfilesPage)
+
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	page = updated.(ProfilesPage)
+
+	if got := page.flash.Message(); !strings.HasPrefix(got, "export failed:") {
+		t.Errorf("flash = %q, want prefix 'export failed:'", got)
+	}
+}

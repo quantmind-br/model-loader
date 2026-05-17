@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -95,6 +96,7 @@ func main() {
 		Resolver:     buildResolver(resolver),
 		LogDir:       cfg.Paths.LogDir,
 		RegistryPath: filepath.Join(cfg.Paths.StateDir, "instances.json"),
+		HistoryPath:  filepath.Join(cfg.Paths.StateDir, "instances-history.json"),
 		LastUsedSink: store,
 		Logger:       logger,
 	})
@@ -107,9 +109,12 @@ func main() {
 	scanner := modelscanner.New()
 	val := validator.New(logger)
 
+	exportDir := resolveExportDir(cfg.Paths.StateDir, logger)
+
 	profilesPage := pages.NewProfilesPage(store, defaultSchema).
 		WithModelScanner(scanner, cfg.Models.SearchPaths).
-		WithBackendCatalog(catalogStore, schemaStore)
+		WithBackendCatalog(catalogStore, schemaStore).
+		WithExportDir(exportDir)
 	modelsPage := pages.NewModelsPage(scanner, cfg.Models.SearchPaths).WithProfileStore(store)
 	launcherPage := pages.NewLauncherPage(store, mgr, val).
 		SetBackendResolver(resolver).
@@ -118,7 +123,8 @@ func main() {
 	mon := monitor.New(monitor.Config{NvidiaSMIPath: "nvidia-smi"})
 	monitorPage := pages.NewMonitorPage(mgr, mon, store).
 		SetBackendResolver(resolver)
-	backendsPage := pages.NewBackendsPage(schemaManager)
+	prober := backendcatalog.NewProber(catalogStore, backendcatalog.ProbeConfig{Timeout: 10 * time.Second})
+	backendsPage := pages.NewBackendsPage(schemaManager).WithProber(prober)
 
 	root := ui.NewRoot(parseTab(cfg.UI.DefaultTab)).
 		WithProfilesPage(profilesPage).
@@ -145,6 +151,22 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Restart the TUI to manage them.")
 		logger.Warn("orphan_remediation_hint", "hint", "Restart the TUI to manage them.")
 	}
+}
+
+// resolveExportDir returns the directory ProfilesPage writes JSON export
+// bundles into. It lives under <state-dir>/exports and is created lazily.
+// On mkdir failure we log a warning and return "" so the [e] shortcut
+// degrades to a "not configured" flash instead of crashing boot.
+func resolveExportDir(stateDir string, logger *slog.Logger) string {
+	if stateDir == "" {
+		return ""
+	}
+	dir := filepath.Join(stateDir, "exports")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		logger.Warn("export_dir_unavailable", "dir", dir, "err", err)
+		return ""
+	}
+	return dir
 }
 
 func ensureDefaultCatalog(catalogStore backendcatalog.Store, schemaStore backendcatalog.SchemaStore, _ *backendschema.Manager, fallbackBinary string, logger *slog.Logger) domain.FlagSchema {

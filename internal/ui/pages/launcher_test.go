@@ -69,6 +69,7 @@ func (f *fakeManager) List() []domain.RunningInstance                        { r
 func (f *fakeManager) WaitHealthy(_, _ int, _ time.Duration, _ string) error { return nil }
 func (f *fakeManager) TailLogs(_ int) (io.ReadCloser, error)                 { return nil, processmgr.ErrUnknownPID }
 func (f *fakeManager) Close() error                                          { return nil }
+func (f *fakeManager) History() []domain.ExitedInstance { return nil }
 func (f *fakeManager) GetExitInfo(pid int) (processmgr.ExitInfo, bool) {
 	if f.exitInfos == nil {
 		return processmgr.ExitInfo{}, false
@@ -209,8 +210,8 @@ func TestLauncherPage_FinalizeAffirmativeRemovesInstance(t *testing.T) {
 	if len(page.running) != 0 {
 		t.Errorf("running len after kill = %d, want 0", len(page.running))
 	}
-	if !strings.Contains(page.status, "killed pid=4242") {
-		t.Errorf("status = %q, want killed pid=4242", page.status)
+	if !strings.Contains(page.flash.Message(), "killed pid=4242") {
+		t.Errorf("flash = %q, want killed pid=4242", page.flash.Message())
 	}
 }
 
@@ -384,7 +385,7 @@ func TestLauncherPage_HealthyEmitsSwitchToMonitor(t *testing.T) {
 // drainCmd recursively executes a tea.Cmd, returning every concrete tea.Msg
 // produced immediately. tea.BatchMsg is a slice of tea.Cmd, each of which may
 // itself emit messages or further batches. Each leaf cmd runs with a 50ms
-// timeout so delayed ticks (e.g. the 15s scheduleFlashClear) don't block the
+// timeout so delayed ticks (e.g. the 15s components.FlashLifetime tick) don't block the
 // test — those simply contribute no message.
 func drainCmd(cmd tea.Cmd) []tea.Msg {
 	if cmd == nil {
@@ -511,14 +512,14 @@ func TestLauncherPage_HandleLaunchErrEnrichesViaGetExitInfo(t *testing.T) {
 		err: fmt.Errorf("pid 4242 not healthy: %w", processmgr.ErrHealthCheckTimeout),
 	})
 	lp := next.(LauncherPage)
-	if !strings.Contains(lp.status, "(exit 1)") {
-		t.Errorf("expected '(exit 1)' in status, got %q", lp.status)
+	if !strings.Contains(lp.flash.Message(), "(exit 1)") {
+		t.Errorf("expected '(exit 1)' in flash, got %q", lp.flash.Message())
 	}
-	if !strings.Contains(lp.status, "CUDA error: out of memory") {
-		t.Errorf("expected stderr tail substring in status, got %q", lp.status)
+	if !strings.Contains(lp.flash.Message(), "CUDA error: out of memory") {
+		t.Errorf("expected stderr tail substring in flash, got %q", lp.flash.Message())
 	}
-	if strings.Contains(lp.status, "\n") {
-		t.Errorf("status must stay single-line, got %q", lp.status)
+	if strings.Contains(lp.flash.Message(), "\n") {
+		t.Errorf("flash must stay single-line, got %q", lp.flash.Message())
 	}
 	if lp.waitingPID != 0 {
 		t.Errorf("expected waitingPID cleared, got %d", lp.waitingPID)
@@ -533,11 +534,11 @@ func TestLauncherPage_HandleLaunchErrFallsBackWhenNoExitInfo(t *testing.T) {
 		err: fmt.Errorf("pid 9999 not healthy: %w", processmgr.ErrHealthCheckTimeout),
 	})
 	lp := next.(LauncherPage)
-	if !strings.Contains(lp.status, "did not become healthy within timeout") {
-		t.Errorf("expected bare ErrHealthCheckTimeout message, got %q", lp.status)
+	if !strings.Contains(lp.flash.Message(), "did not become healthy within timeout") {
+		t.Errorf("expected bare ErrHealthCheckTimeout message, got %q", lp.flash.Message())
 	}
-	if strings.Contains(lp.status, "exit") || strings.Contains(lp.status, "signal") {
-		t.Errorf("expected no enrichment when GetExitInfo returns false, got %q", lp.status)
+	if strings.Contains(lp.flash.Message(), "exit") || strings.Contains(lp.flash.Message(), "signal") {
+		t.Errorf("expected no enrichment when GetExitInfo returns false, got %q", lp.flash.Message())
 	}
 }
 

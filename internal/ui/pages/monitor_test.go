@@ -19,7 +19,8 @@ import (
 )
 
 type fakeProcMgr struct {
-	insts []domain.RunningInstance
+	insts   []domain.RunningInstance
+	history []domain.ExitedInstance
 }
 
 func (f *fakeProcMgr) Launch(p domain.Profile, m processmgr.LaunchMode, _ string) (domain.RunningInstance, error) {
@@ -29,6 +30,7 @@ func (f *fakeProcMgr) Kill(pid int) error                                       
 func (f *fakeProcMgr) List() []domain.RunningInstance                             { return f.insts }
 func (f *fakeProcMgr) WaitHealthy(pid, port int, t time.Duration, _ string) error { return nil }
 func (f *fakeProcMgr) TailLogs(pid int) (io.ReadCloser, error)                    { return nil, nil }
+func (f *fakeProcMgr) History() []domain.ExitedInstance                            { return f.history }
 
 type fakeMonMgr struct{}
 
@@ -585,6 +587,7 @@ func (r *restartTrackingMgr) Launch(p domain.Profile, mode processmgr.LaunchMode
 	r.launchMode = mode
 	return domain.RunningInstance{ProfileID: p.ID, PID: r.newPID, Port: r.newPort, Background: true}, nil
 }
+func (r *restartTrackingMgr) History() []domain.ExitedInstance { return nil }
 
 func TestMonitorPage_CrashedRowShowsMarker(t *testing.T) {
 	exit := time.Now().UTC()
@@ -779,7 +782,8 @@ func TestMonitorPage_SubViewTabsHighlightActive(t *testing.T) {
 	p.SetSize(120, 30)
 	p, _ = updateAs[*MonitorPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 
-	if got := renderSubViewTabs(SubViewLogs); got != theme.TabActive.Render("Logs")+theme.Subtitle.Render(" │ ")+theme.TabInactive.Render("Slots")+theme.Subtitle.Render(" │ ")+theme.TabInactive.Render("Metrics") {
+	wantTabs := theme.TabActive.Render("Logs") + theme.Subtitle.Render(" │ ") + theme.TabInactive.Render("Slots") + theme.Subtitle.Render(" │ ") + theme.TabInactive.Render("Metrics") + theme.Subtitle.Render(" │ ") + theme.TabInactive.Render("History")
+	if got := renderSubViewTabs(SubViewLogs); got != wantTabs {
 		t.Errorf("renderSubViewTabs(Logs) shape mismatch; got %q", got)
 	}
 
@@ -1147,5 +1151,108 @@ func TestMonitorPage_ApplyInstances_NoLeakOnAllCrashed(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&cancelCalled); got != 3 {
 		t.Fatalf("cancel called %d times, want 3 (one per crashed instance)", got)
+	}
+}
+
+func TestMonitorPage_Reload(t *testing.T) {
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{
+		{PID: 4242, Port: 9090, ProfileID: "p1", LogPath: "/tmp/x.log"},
+	}}
+	p := NewMonitorPage(pm, fakeMonMgr{}, nil)
+
+	cmd := p.Reload()
+	if cmd == nil {
+		t.Fatal("Reload returned nil cmd")
+	}
+	msg := cmd()
+	refreshed, ok := msg.(monitorInstancesRefreshedMsg)
+	if !ok {
+		t.Fatalf("Reload cmd produced %T, want monitorInstancesRefreshedMsg", msg)
+	}
+	if len(refreshed.insts) != 1 || refreshed.insts[0].PID != 4242 {
+		t.Fatalf("refreshed.insts = %+v, want one instance pid=4242", refreshed.insts)
+	}
+}
+
+func TestMonitorPage_HistorySubViewRendersRows(t *testing.T) {
+	pm := &fakeProcMgr{
+		insts: []domain.RunningInstance{{PID: 1, Port: 8080, LogPath: "/tmp/x.log"}},
+		history: []domain.ExitedInstance{
+			{ProfileID: "qwen", PID: 99, Port: 8080, StartedAt: time.Now().UTC().Add(-time.Hour), ExitedAt: time.Now().UTC(), DurationSeconds: 3600, ExitReason: "exit:0", StderrTail: []string{"err"}},
+		},
+	}
+	mm := &fakeMonMgr{}
+	p := NewMonitorPage(pm, mm, nil)
+	p.SetSize(120, 30)
+	p, _ = updateAs[*MonitorPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	// Cycle to History (3 presses: Logs→Slots→Metrics→History).
+	p, _ = updateAs[*MonitorPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	p, _ = updateAs[*MonitorPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	p, _ = updateAs[*MonitorPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+
+	v := p.View()
+	if !strings.Contains(v, "qwen") {
+		t.Fatalf("history view missing profile 'qwen':\n%s", v)
+	}
+	if !strings.Contains(v, "99") {
+		t.Fatalf("history view missing PID 99:\n%s", v)
+	}
+	if !strings.Contains(v, "exit:0") {
+		t.Fatalf("history view missing exit reason 'exit:0':\n%s", v)
+	}
+	if !strings.Contains(v, "1 lines") {
+		t.Fatalf("history view missing stderr-tail count '1 lines':\n%s", v)
+	}
+}
+
+func TestMonitorPage_HistorySubViewCyclesViaV(t *testing.T) {
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{{PID: 1, Port: 8080, LogPath: "/tmp/x.log"}}}
+	mm := &fakeMonMgr{}
+	p := NewMonitorPage(pm, mm, nil)
+	p.SetSize(120, 30)
+	p, _ = updateAs[*MonitorPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	// Initial: Logs.
+	if p.subView != SubViewLogs {
+		t.Fatalf("initial subView = %d, want SubViewLogs", p.subView)
+	}
+	// 1st v -> Slots.
+	p, _ = updateAs[*MonitorPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	if p.subView != SubViewSlots {
+		t.Fatalf("after 1st v subView = %d, want SubViewSlots", p.subView)
+	}
+	// 2nd v -> Metrics.
+	p, _ = updateAs[*MonitorPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	if p.subView != SubViewMetrics {
+		t.Fatalf("after 2nd v subView = %d, want SubViewMetrics", p.subView)
+	}
+	// 3rd v -> History.
+	p, _ = updateAs[*MonitorPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	if p.subView != SubViewHistory {
+		t.Fatalf("after 3rd v subView = %d, want SubViewHistory", p.subView)
+	}
+	// 4th v -> back to Logs.
+	p, _ = updateAs[*MonitorPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	if p.subView != SubViewLogs {
+		t.Fatalf("after 4th v subView = %d, want SubViewLogs", p.subView)
+	}
+}
+
+func TestMonitorPage_HistoryRefreshedOnInstanceRefresh(t *testing.T) {
+	pm := &fakeProcMgr{
+		insts:   []domain.RunningInstance{{PID: 1, Port: 8080, LogPath: "/tmp/x.log"}},
+		history: []domain.ExitedInstance{{ProfileID: "a", PID: 10}},
+	}
+	mm := &fakeMonMgr{}
+	p := NewMonitorPage(pm, mm, nil)
+	p, _ = updateAs[*MonitorPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+	if len(p.history) != 1 || p.history[0].PID != 10 {
+		t.Fatalf("history not refreshed; got %+v", p.history)
+	}
+	pm.history = append(pm.history, domain.ExitedInstance{ProfileID: "b", PID: 20})
+	p, _ = updateAs[*MonitorPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+	if len(p.history) != 2 || p.history[1].PID != 20 {
+		t.Fatalf("history not updated on second refresh; got %+v", p.history)
 	}
 }

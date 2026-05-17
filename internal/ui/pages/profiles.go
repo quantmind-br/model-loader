@@ -3,7 +3,7 @@ package pages
 
 import (
 	"fmt"
-	"time"
+	"path/filepath"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -47,11 +47,11 @@ type ProfilesPage struct {
 	editor        profile_editor.Editor
 	deleteConfirm components.Confirm
 
-	flash   string
-	flashAt time.Time
+	flash components.Flash
 
 	picker modelPickerOverlay
 
+	exportDir string
 }
 
 // NewProfilesPage constructs the page wired to a Store and FlagSchema.
@@ -68,6 +68,7 @@ func NewProfilesPage(store profilestore.Store, schema domain.FlagSchema) Profile
 		editor:   profile_editor.New(schema),
 		list:     l,
 		listKeys: defaultProfilesKeys(),
+		flash:    components.NewFlash("profiles"),
 	}
 }
 
@@ -82,6 +83,15 @@ func (p ProfilesPage) WithModelScanner(scanner components.ModelScanner, paths []
 func (p ProfilesPage) WithBackendCatalog(catalogStore backendcatalog.Store, schemaStore backendcatalog.SchemaStore) ProfilesPage {
 	p.catalogStore = catalogStore
 	p.schemaStore = schemaStore
+	return p
+}
+
+// WithExportDir enables the [e] export shortcut by configuring the
+// destination directory for profile-bundle JSON files. Empty dir disables
+// the shortcut at runtime (it flashes a "not configured" message instead
+// of writing).
+func (p ProfilesPage) WithExportDir(dir string) ProfilesPage {
+	p.exportDir = dir
 	return p
 }
 
@@ -111,7 +121,7 @@ func (p ProfilesPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
 		return p.handleResize(m)
-	case flashClearMsg:
+	case components.FlashClearMsg:
 		return p.handleFlashClear(m)
 	case loadedMsg:
 		return p.handleLoaded(m)
@@ -141,11 +151,8 @@ func (p ProfilesPage) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	return p, nil
 }
 
-func (p ProfilesPage) handleFlashClear(msg flashClearMsg) (tea.Model, tea.Cmd) {
-	if msg.tag == "profiles" && msg.at.Equal(p.flashAt) {
-		p.flash = ""
-		p.flashAt = time.Time{}
-	}
+func (p ProfilesPage) handleFlashClear(msg components.FlashClearMsg) (tea.Model, tea.Cmd) {
+	p.flash, _ = p.flash.Update(msg)
 	return p, nil
 }
 
@@ -318,12 +325,8 @@ func (p ProfilesPage) View() string {
 	right := theme.Pane.Width((p.width*2)/3 - 2).Render(p.detailView())
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 
-	if p.flash != "" {
-		style := theme.Subtitle
-		if !p.flashAt.IsZero() && time.Since(p.flashAt) >= flashDimAfter {
-			style = style.Faint(true)
-		}
-		body = lipgloss.JoinVertical(lipgloss.Left, body, style.Render(p.flash))
+	if v := p.flash.View(); v != "" {
+		body = lipgloss.JoinVertical(lipgloss.Left, body, v)
 	}
 	return body
 }
@@ -341,13 +344,18 @@ func (p ProfilesPage) detailView() string {
 	if backend == "" {
 		backend = "(default)"
 	}
+	tags := profile_editor.FormatTags(pr.Tags)
+	if tags == "" {
+		tags = "(none)"
+	}
 	return fmt.Sprintf(
-		"%s\n%s\n\nID:      %s\nModel:   %s\nBackend: %s\nArgs:    %v",
+		"%s\n%s\n\nID:      %s\nModel:   %s\nBackend: %s\nTags:    %s\nArgs:    %v",
 		theme.Title.Render(pr.Name),
 		theme.Subtitle.Render(pr.Description),
 		pr.ID,
 		pr.Model,
 		backend,
+		tags,
 		pr.Args,
 	)
 }
@@ -363,7 +371,7 @@ func (p ProfilesPage) Hints() string {
 	case p.editor.Active():
 		return "[ctrl+t] sub-tab  [ctrl+p] pick model  [esc] cancel"
 	default:
-		return "[enter] edit  [n] new  [d] dup  [x] del  [L] launch  [/] filter"
+		return "[enter] edit  [n] new  [d] dup  [x] del  [L] launch  [e] export  [/] filter"
 	}
 }
 
@@ -379,11 +387,28 @@ func (p ProfilesPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.askDeleteSelected()
 	case key.Matches(msg, p.listKeys.Launch):
 		return p.launchSelected()
+	case key.Matches(msg, p.listKeys.Export):
+		return p.exportProfiles()
 	}
 
 	updated, cmd := p.list.Update(msg)
 	p.list = updated
 	return p, cmd
+}
+
+func (p ProfilesPage) exportProfiles() (tea.Model, tea.Cmd) {
+	if p.exportDir == "" {
+		p, fc := p.withFlash("export directory not configured")
+		return p, fc
+	}
+	bundle, err := profilestore.ExportAll(p.store, p.exportDir)
+	if err != nil {
+		p, fc := p.withFlash("export failed: " + err.Error())
+		return p, fc
+	}
+	filename := filepath.Base(profilestore.ExportFilename(p.exportDir, bundle.ExportedAt))
+	p, fc := p.withFlash("exported to " + filename)
+	return p, fc
 }
 
 // launchSelected emits a LaunchProfileMsg for the currently selected
@@ -411,13 +436,10 @@ func (p ProfilesPage) Reload() tea.Cmd {
 	return p.loadCmd()
 }
 
-// withFlash sets the flash message, stamps the time, and returns the
-// page plus the Cmd that schedules the lifetime clear. Centralizing this
-// keeps every flash site honest about the timer.
 func (p ProfilesPage) withFlash(msg string) (ProfilesPage, tea.Cmd) {
-	p.flash = msg
-	p.flashAt = time.Now()
-	return p, scheduleFlashClear("profiles", p.flashAt)
+	var cmd tea.Cmd
+	p.flash, cmd = p.flash.Set(msg)
+	return p, cmd
 }
 
 func (p ProfilesPage) updatePicker(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -456,6 +478,7 @@ func (p ProfilesPage) performDelete(id string) (tea.Model, tea.Cmd) {
 func (p ProfilesPage) newDraftDefaults() profile_editor.Draft {
 	d := profile_editor.Draft{
 		Name:       "New Profile",
+		Tags:       "",
 		NGL:        "99",
 		CtxSize:    "8192",
 		BatchSize:  "2048",
@@ -518,6 +541,7 @@ func (p ProfilesPage) startEditSelected() (tea.Model, tea.Cmd) {
 		ID:          pr.ID,
 		Name:        pr.Name,
 		Description: pr.Description,
+		Tags:        profile_editor.FormatTags(pr.Tags),
 		Model:       pr.Model,
 		BackendID:   pr.Launch.BackendID,
 		NGL:         profile_editor.ArgString(pr.Args["ngl"]),

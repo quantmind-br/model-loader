@@ -789,3 +789,73 @@ func TestEditor_AdvancedEdit_RefreshesTableAfterSave(t *testing.T) {
 		t.Fatalf("expected Value column to show 42 after save, got %q", rows[0][2])
 	}
 }
+
+func TestParseTags(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		{"", nil},
+		{"   ", nil},
+		{",,", nil},
+		{"coding", []string{"coding"}},
+		{"coding, 32b", []string{"coding", "32b"}},
+		{"  coding ,  32b  ,  ", []string{"coding", "32b"}},
+		{"a,,b", []string{"a", "b"}},
+	}
+	for _, c := range cases {
+		got := ParseTags(c.in)
+		if !reflect.DeepEqual(got, c.want) {
+			t.Errorf("ParseTags(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
+func TestFormatTags(t *testing.T) {
+	cases := []struct {
+		in   []string
+		want string
+	}{
+		{nil, ""},
+		{[]string{}, ""},
+		{[]string{"coding"}, "coding"},
+		{[]string{"coding", "32b"}, "coding, 32b"},
+	}
+	for _, c := range cases {
+		if got := FormatTags(c.in); got != c.want {
+			t.Errorf("FormatTags(%v) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestDraft_ApplyToPersistsTags(t *testing.T) {
+	d := Draft{
+		ID:   "x",
+		Name: "X",
+		Tags: "coding, 32b, ",
+		Port: "4321",
+	}
+	out := d.ApplyTo(domain.Profile{})
+	want := []string{"coding", "32b"}
+	if !reflect.DeepEqual(out.Tags, want) {
+		t.Fatalf("Tags = %v, want %v", out.Tags, want)
+	}
+}
+
+func TestDraft_ApplyToEmptyTagsYieldsNil(t *testing.T) {
+	d := Draft{ID: "x", Name: "X", Tags: "   ", Port: "4321"}
+	out := d.ApplyTo(domain.Profile{})
+	if out.Tags != nil {
+		t.Fatalf("Tags = %v, want nil for whitespace-only input", out.Tags)
+	}
+}
+
+func TestDraft_ApplyToTagsRoundTripsExisting(t *testing.T) {
+	base := domain.Profile{Tags: []string{"stale"}}
+	d := Draft{ID: "x", Name: "X", Tags: FormatTags([]string{"fresh", "tag"}), Port: "4321"}
+	out := d.ApplyTo(base)
+	want := []string{"fresh", "tag"}
+	if !reflect.DeepEqual(out.Tags, want) {
+		t.Fatalf("Tags = %v, want %v (Draft.Tags should overwrite base.Tags)", out.Tags, want)
+	}
+}
