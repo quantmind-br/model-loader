@@ -14,6 +14,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/downloadmgr"
+	"github.com/quantmind-br/model-loader/internal/service/hfhub"
 	"github.com/quantmind-br/model-loader/internal/service/modelscanner"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
@@ -76,6 +78,16 @@ type ModelsPage struct {
 	profilePicker           *components.ProfilePicker
 	profilePickerTargetPath string
 
+	// Hugging Face integration. Wired by builders (T13); nil-safe until then.
+	hfClient       *hfhub.Client
+	dlManager      *downloadmgr.Manager
+	hfSearch       *components.HFSearchPicker
+	hfFilePicker   *components.HFFilePicker
+	downloads      *components.DownloadProgress
+	downloadEvents <-chan downloadmgr.Event
+	searchEpoch    int    // bumped per search keystroke for debounce
+	pendingRepoID  string // carried between RepoInfo lookup and file picker open
+
 	keys modelsKeyMap
 }
 
@@ -131,12 +143,33 @@ func (p ModelsPage) WithProfileStore(store profilestore.Store) ModelsPage {
 	return p
 }
 
+// WithHFClient injects a Hugging Face Hub client so the page can offer
+// remote model search ("s" key in T14). Without it, the HF entry points
+// stay disabled.
+func (p ModelsPage) WithHFClient(c *hfhub.Client) ModelsPage {
+	p.hfClient = c
+	return p
+}
+
+// WithDownloadManager injects the download manager and subscribes the
+// page to its event channel. Without it, download UI stays inert.
+func (p ModelsPage) WithDownloadManager(m *downloadmgr.Manager) ModelsPage {
+	p.dlManager = m
+	if m != nil {
+		p.downloadEvents = m.Subscribe()
+	}
+	return p
+}
+
 // IsCapturingInput tells the root model when the page owns global
 // keystrokes (Tab/Shift+Tab) — true while the inline action menu or
 // filter input is open so cursor navigation does not leak into tab
 // cycling and printable characters are not stolen by global shortcuts.
 func (p ModelsPage) IsCapturingInput() bool {
-	return p.action != nil || p.filterMode || p.profilePicker != nil
+	return p.action != nil || p.filterMode || p.profilePicker != nil ||
+		(p.hfSearch != nil && p.hfSearch.IsActive()) ||
+		(p.hfFilePicker != nil && p.hfFilePicker.IsActive()) ||
+		(p.downloads != nil && p.downloads.IsFocusVisible())
 }
 
 // scanStartedMsg delivers the channel + cancel handle from a fresh scan
@@ -167,6 +200,35 @@ type scanChannelClosedMsg struct {
 // tab. It triggers a silent rescan (no flash) so external filesystem
 // changes surface without requiring the user to press R.
 type modelsReloadMsg struct{}
+
+// downloadEventMsg lifts a downloadmgr.Event onto the Bubble Tea bus so
+// the page can react to lifecycle changes (queued → active → completed/
+// failed/cancelled). Read pump lives in T13/T15.
+type downloadEventMsg struct {
+	event downloadmgr.Event
+}
+
+// hfSearchResultMsg delivers the outcome of a HF Hub search. epoch
+// matches ModelsPage.searchEpoch at request time; stale responses from
+// abandoned debounce windows are discarded by epoch comparison.
+type hfSearchResultMsg struct {
+	epoch   int
+	results []components.ResultItem
+	err     error
+}
+
+// hfFileListMsg delivers the file siblings returned by RepoInfo for the
+// pendingRepoID — consumed by the file picker overlay (T15).
+type hfFileListMsg struct {
+	files []components.FileItem
+	err   error
+}
+
+// downloadCancelMsg requests cancellation of a download by ID. Emitted
+// by the progress footer (T15 wires the Manager.Cancel call).
+type downloadCancelMsg struct {
+	id string
+}
 
 func (p ModelsPage) Init() tea.Cmd {
 	return startScanCmd(p.scanner, p.paths, p.scanID)
