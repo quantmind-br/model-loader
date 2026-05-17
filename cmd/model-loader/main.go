@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -18,6 +19,8 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/backendschema"
+	"github.com/quantmind-br/model-loader/internal/service/downloadmgr"
+	"github.com/quantmind-br/model-loader/internal/service/hfhub"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/modelscanner"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
@@ -48,6 +51,11 @@ func runTUI() int {
 	defer closeLog()
 	defer svc.mgr.Close()
 
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	hfClient := hfhub.NewClient(httpClient, "model-loader/dev")
+	dlManager := downloadmgr.NewManager(httpClient, 3)
+	defer dlManager.Close()
+
 	scanner := modelscanner.New()
 	exportDir := resolveExportDir(cfg.Paths.StateDir, logger)
 
@@ -66,7 +74,10 @@ func runTUI() int {
 		WithModelScanner(scanner, cfg.Models.SearchPaths).
 		WithBackendCatalog(svc.catalogStore, svc.schemaStore).
 		WithExportDir(exportDir)
-	modelsPage := pages.NewModelsPage(scanner, cfg.Models.SearchPaths).WithProfileStore(svc.store)
+	modelsPage := pages.NewModelsPage(scanner, cfg.Models.SearchPaths).
+		WithProfileStore(svc.store).
+		WithHFClient(hfClient).
+		WithDownloadManager(dlManager)
 	launcherPage := pages.NewLauncherPage(svc.store, svc.mgr, svc.val).
 		SetBackendResolver(svc.resolver).
 		WithLogger(logger)
