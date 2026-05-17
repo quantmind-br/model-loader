@@ -21,6 +21,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/modelscanner"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
+	"github.com/quantmind-br/model-loader/internal/service/proxysupervisor"
 	"github.com/quantmind-br/model-loader/internal/ui"
 	"github.com/quantmind-br/model-loader/internal/ui/pages"
 )
@@ -50,17 +51,16 @@ func runTUI() int {
 	scanner := modelscanner.New()
 	exportDir := resolveExportDir(cfg.Paths.StateDir, logger)
 
-	proxy := httpproxy.New(httpproxy.Config{
-		Host:                cfg.Serve.Host,
-		Port:                cfg.Serve.Port,
-		HealthCheckTimeout:  120 * time.Second,
-		MaxBodyBuffer:       8 << 20,
-		ShutdownGracePeriod: 10 * time.Second,
-	}, httpproxy.Deps{
-		ProfileStore: svc.store,
-		ProcessMgr:   svc.mgr,
-		Logger:       logger,
+	supervisor := proxysupervisor.New(proxysupervisor.Config{
+		StatePath: filepath.Join(cfg.Paths.StateDir, "proxy-state.json"),
+		LogDir:    cfg.Paths.LogDir,
+		Host:      cfg.Serve.Host,
+		Port:      cfg.Serve.Port,
+		Logger:    logger,
 	})
+	if err := supervisor.Reconcile(); err != nil {
+		logger.Error("proxy_reconcile_failed", "err", err)
+	}
 
 	profilesPage := pages.NewProfilesPage(svc.store, svc.defaultSchema).
 		WithModelScanner(scanner, cfg.Models.SearchPaths).
@@ -76,7 +76,7 @@ func runTUI() int {
 		SetBackendResolver(svc.resolver)
 	prober := backendcatalog.NewProber(svc.catalogStore, backendcatalog.ProbeConfig{Timeout: 10 * time.Second})
 	backendsPage := pages.NewBackendsPage(svc.schemaManager).WithProber(prober)
-	serverPage := pages.NewServerPage(proxy)
+	serverPage := pages.NewServerPage(supervisor)
 
 	root := ui.NewRoot(parseTab(cfg.UI.DefaultTab)).
 		WithProfilesPage(profilesPage).
@@ -91,17 +91,6 @@ func runTUI() int {
 		logger.Error("tui_error", "err", err)
 		fmt.Fprintf(os.Stderr, "tui error: %v\n", err)
 		return 1
-	}
-
-	// Stop the proxy (if user started it from the TUI) BEFORE we check
-	// for residual instances, so a proxy-managed backend doesn't show up
-	// as an orphan in the warning.
-	if st := proxy.Status(); st.Running {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		if stopErr := proxy.Stop(ctx); stopErr != nil {
-			logger.Error("proxy_shutdown_failed", "err", stopErr)
-		}
-		cancel()
 	}
 
 	logger.Info("app_exit", "residual_instances", len(svc.mgr.List()))
@@ -121,6 +110,8 @@ func runTUI() int {
 
 func runServe() int {
 	cliLevel := flag.String("log-level", "", "override log level (debug|info|warn|error); also reads $MODEL_LOADER_LOG_LEVEL and config logging.level")
+	cliHost := flag.String("host", "", "override bind host")
+	cliPort := flag.Int("port", 0, "override bind port")
 	flag.Parse()
 
 	cfg, logger, closeLog, svc, err := bootstrap(*cliLevel)
@@ -129,6 +120,13 @@ func runServe() int {
 	}
 	defer closeLog()
 	defer svc.mgr.Close()
+
+	if *cliHost != "" {
+		cfg.Serve.Host = *cliHost
+	}
+	if *cliPort != 0 {
+		cfg.Serve.Port = *cliPort
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(),
 		syscall.SIGINT, syscall.SIGTERM)
