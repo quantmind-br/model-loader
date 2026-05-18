@@ -18,6 +18,33 @@ import (
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
+// drainCmd executes a tea.Cmd and flattens any BatchMsg recursively,
+// returning all leaf messages for assertions.
+func drainCmd(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	ch := make(chan tea.Msg, 1)
+	go func() { ch <- cmd() }()
+	var msg tea.Msg
+	select {
+	case msg = <-ch:
+	case <-time.After(50 * time.Millisecond):
+		return nil
+	}
+	if msg == nil {
+		return nil
+	}
+	if b, ok := msg.(tea.BatchMsg); ok {
+		var out []tea.Msg
+		for _, c := range b {
+			out = append(out, drainCmd(c)...)
+		}
+		return out
+	}
+	return []tea.Msg{msg}
+}
+
 type fakeProcMgr struct {
 	insts   []domain.RunningInstance
 	history []domain.ExitedInstance
@@ -788,8 +815,8 @@ func TestServerPage_EmptyStateHint(t *testing.T) {
 	if !strings.Contains(out, "No instances running") {
 		t.Errorf("empty Monitor view missing hint; got:\n%s", out)
 	}
-	if !strings.Contains(out, "Launcher [1]") {
-		t.Errorf("empty Monitor view should reference Launcher tab as [1]; got:\n%s", out)
+	if !strings.Contains(out, "Profiles [1]") {
+		t.Errorf("empty Monitor view should reference Profiles tab as [1]; got:\n%s", out)
 	}
 }
 

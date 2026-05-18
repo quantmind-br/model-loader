@@ -8,7 +8,7 @@ const HelpMarkdown = `# model-loader — Keybindings
 
 ## Global
 
-- ` + "`1`" + `–` + "`5`" + ` — switch directly to a tab
+- ` + "`1`" + `–` + "`4`" + ` — switch directly to a tab
 - ` + "`Tab`" + ` — next tab     ` + "`Shift+Tab`" + ` — previous tab
 - ` + "`?`" + ` — toggle this help
 - ` + "`q`" + ` / ` + "`Ctrl+C`" + ` — quit (background instances survive)
@@ -17,23 +17,19 @@ _Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or
 
 ## Profiles tab
 
+- ` + "`enter`" + ` — launch selected profile
+- ` + "`E`" + ` — edit selected profile
 - ` + "`n`" + ` — new profile     ` + "`d`" + ` — duplicate
-- ` + "`x`" + ` — delete         ` + "`enter`" + ` — edit / submit Save
-- ` + "`esc`" + ` — cancel editing (prompts to discard unsaved changes)
-- ` + "`L`" + ` — launch directly from selected profile
+- ` + "`x`" + ` — delete
+- ` + "`b`" + ` — toggle background/foreground (default background)
+- ` + "`k`" + ` — kill the most recent launched instance
+- ` + "`r`" + ` — refresh profile list
 - ` + "`p`" + ` — pin selected profile
 - ` + "`I`" + ` — import profiles from JSON bundle
 - ` + "`u`" + ` — undo last import
 - ` + "`e`" + ` — export all profiles to JSON bundle
 - ` + "`ctrl+t`" + ` — toggle Essentials / Advanced sub-tab while editing
 - ` + "`/`" + ` — filter
-
-## Launcher tab
-
-- ` + "`b`" + ` — toggle background/foreground (default background)
-- ` + "`enter`" + ` — launch selected profile
-- ` + "`k`" + ` — kill the most recent launched instance
-- ` + "`r`" + ` — refresh profile list
 
 ## Server tab
 

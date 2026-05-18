@@ -45,14 +45,14 @@ func TestRoot_TabSwitchByNumber(t *testing.T) {
 	}
 }
 
-func TestRoot_NumberOneSwitchesToLauncher(t *testing.T) {
+func TestRoot_NumberOneSwitchesToProfiles(t *testing.T) {
 	tm := teatest.NewTestModel(t, NewRoot(TabProfiles), teatest.WithInitialTermSize(120, 30))
 	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
 
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return strings.Contains(string(out), "1 Launcher")
+		return strings.Contains(string(out), "1 Profiles")
 	}, teatest.WithDuration(2*time.Second))
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
@@ -62,14 +62,14 @@ func TestRoot_NumberOneSwitchesToLauncher(t *testing.T) {
 	}
 }
 
-func TestRoot_NumberTwoSwitchesToProfiles(t *testing.T) {
-	tm := teatest.NewTestModel(t, NewRoot(TabLauncher), teatest.WithInitialTermSize(120, 30))
+func TestRoot_NumberTwoSwitchesToServer(t *testing.T) {
+	tm := teatest.NewTestModel(t, NewRoot(TabProfiles), teatest.WithInitialTermSize(120, 30))
 	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
 
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return strings.Contains(string(out), "2 Profiles")
+		return strings.Contains(string(out), "2 Server")
 	}, teatest.WithDuration(2*time.Second))
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
@@ -96,7 +96,7 @@ func TestRoot_UseInNewProfileSwitchesTab(t *testing.T) {
 	}
 }
 
-func TestRoot_TabSwitchToLauncherShowsPage(t *testing.T) {
+func TestRoot_TabSwitchToProfilesShowsPage(t *testing.T) {
 	dir := t.TempDir()
 	store, err := profilestore.NewFSStore(dir)
 	if err != nil {
@@ -110,7 +110,7 @@ func TestRoot_TabSwitchToLauncherShowsPage(t *testing.T) {
 	}
 
 	root := NewRoot(TabProfiles).
-		WithLauncherPage(pages.NewLauncherPage(store, nil, nil))
+		WithProfilesPage(pages.NewProfilesPage(store, domain.FlagSchema{}))
 
 	tm := teatest.NewTestModel(t, root, teatest.WithInitialTermSize(120, 30))
 	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
@@ -153,7 +153,6 @@ func TestRoot_ForwardsSwitchPIDToServer(t *testing.T) {
 	rec := &recordingServer{}
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(rec).
 		WithModelsPage(pages.Placeholder{TabName: "M"})
 	updated, _ := r.Update(pages.SwitchToServerMsg{PID: 4321})
@@ -195,7 +194,6 @@ func TestRoot_BootBlockerSwallowsKeysExceptQuit(t *testing.T) {
 func TestRoot_HelpToggle(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 	// Help closed by default.
@@ -219,7 +217,6 @@ func TestRoot_HelpToggle(t *testing.T) {
 func TestRoot_HelpModalShowsPageContext(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(hintingPage{name: "P"}).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 	r.width = 120
@@ -234,7 +231,6 @@ func TestRoot_HelpModalShowsPageContext(t *testing.T) {
 func TestRoot_HelpModalSwitchesContextOnTabChange(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(hintingPage{name: "P"}).
-		WithLauncherPage(hintingPage{name: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 	r.width = 120
@@ -254,7 +250,6 @@ func TestRoot_HelpModalSwitchesContextOnTabChange(t *testing.T) {
 func TestRoot_HelpSwallowsTabSwitch(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 	// Open help.
@@ -288,7 +283,6 @@ func TestRoot_TabPassesThroughWhenPageCapturesInput(t *testing.T) {
 	cap := &capturingPage{captured: true}
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(cap).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 
@@ -307,7 +301,6 @@ func TestRoot_QSwallowedWhilePageCapturesInput(t *testing.T) {
 	cap := &capturingPage{captured: true}
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(cap).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 
@@ -324,7 +317,6 @@ func TestRoot_NumberKeySwallowedWhilePageCapturesInput(t *testing.T) {
 	cap := &capturingPage{captured: true}
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(cap).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 
@@ -342,7 +334,6 @@ func TestRoot_QuestionMarkSwallowedWhilePageCapturesInput(t *testing.T) {
 	cap := &capturingPage{captured: true}
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(cap).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 
@@ -360,7 +351,6 @@ func TestRoot_CtrlCAlwaysQuitsEvenWhenCapturingInput(t *testing.T) {
 	cap := &capturingPage{captured: true}
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(cap).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 
@@ -372,17 +362,16 @@ func TestRoot_CtrlCAlwaysQuitsEvenWhenCapturingInput(t *testing.T) {
 
 func TestRoot_TabSwitchesWhenPageDoesNotCapture(t *testing.T) {
 	cap := &capturingPage{captured: false}
-	r := NewRoot(TabLauncher).
-		WithProfilesPage(pages.Placeholder{TabName: "P"}).
-		WithLauncherPage(cap).
+	r := NewRoot(TabProfiles).
+		WithProfilesPage(cap).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 
 	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyTab})
 	rm := updated.(RootModel)
 
-	if rm.active != TabProfiles {
-		t.Errorf("active = %v, want TabProfiles", rm.active)
+	if rm.active != TabServer {
+		t.Errorf("active = %v, want TabServer", rm.active)
 	}
 }
 
@@ -390,7 +379,6 @@ func TestRoot_ModelsFilterDoesNotLeakQ(t *testing.T) {
 	cap := &capturingPage{captured: true}
 	r := NewRoot(TabModels).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(cap)
 
@@ -407,7 +395,6 @@ func TestRoot_ModelsFilterDoesNotLeakQuestionMark(t *testing.T) {
 	cap := &capturingPage{captured: true}
 	r := NewRoot(TabModels).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(cap)
 
@@ -425,7 +412,6 @@ func TestRoot_ModelsFilterDoesNotLeakNumberKeys(t *testing.T) {
 	cap := &capturingPage{captured: true}
 	r := NewRoot(TabModels).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(cap)
 
@@ -443,19 +429,18 @@ func TestRoot_RoutesLaunchProfileMsg(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := profilestore.NewFSStore(dir)
 	r := NewRoot(TabProfiles).
-		WithLauncherPage(pages.NewLauncherPage(store, nil, nil))
+		WithProfilesPage(pages.NewProfilesPage(store, domain.FlagSchema{}))
 
 	updated, _ := r.Update(pages.LaunchProfileMsg{ID: "any"})
 	rm := updated.(RootModel)
-	if rm.active != TabLauncher {
-		t.Errorf("active = %v, want TabLauncher", rm.active)
+	if rm.active != TabProfiles {
+		t.Errorf("active = %v, want TabProfiles", rm.active)
 	}
 }
 
 func TestRoot_TabStripContainsSeparator(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 	r.width = 120
@@ -467,7 +452,6 @@ func TestRoot_TabStripContainsSeparator(t *testing.T) {
 func TestRoot_StatusBarMentionsHelp(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 	r.width = 120
@@ -487,8 +471,7 @@ func (h hintingPage) Hints() string                       { return "[x] do-x  [y
 
 func TestRoot_StatusBarIncludesActivePageHints(t *testing.T) {
 	r := NewRoot(TabProfiles).
-		WithProfilesPage(hintingPage{name: "P"}).
-		WithLauncherPage(pages.Placeholder{TabName: "L"})
+		WithProfilesPage(hintingPage{name: "P"})
 	r.width = 120
 	r.recomputeHints()
 
@@ -500,9 +483,9 @@ func TestRoot_StatusBarIncludesActivePageHints(t *testing.T) {
 		t.Errorf("global help token missing; view:\n%s", view)
 	}
 
-	// Switch tabs — placeholder Launcher does not implement HintProvider, so
+	// Switch tabs — placeholder Server does not implement HintProvider, so
 	// only globalHints should remain.
-	updated, _ := r.activate(TabLauncher)
+	updated, _ := r.activate(TabServer)
 	rl := updated.(RootModel)
 	rl.width = 120
 	view = rl.View()
@@ -559,7 +542,7 @@ func TestRoot_TabCyclesThroughBackends(t *testing.T) {
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return strings.Contains(string(out), "Launcher")
+		return strings.Contains(string(out), "Profiles")
 	}, teatest.WithDuration(2*time.Second))
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
@@ -568,8 +551,8 @@ func TestRoot_TabCyclesThroughBackends(t *testing.T) {
 	}
 }
 
-func TestRoot_ShiftTabFromLauncherGoesToBackends(t *testing.T) {
-	tm := teatest.NewTestModel(t, NewRoot(TabLauncher), teatest.WithInitialTermSize(120, 30))
+func TestRoot_ShiftTabFromProfilesGoesToBackends(t *testing.T) {
+	tm := teatest.NewTestModel(t, NewRoot(TabProfiles), teatest.WithInitialTermSize(120, 30))
 	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyShiftTab})
@@ -601,7 +584,6 @@ func TestRoot_NumberFiveSwallowedWhilePageCapturesInput(t *testing.T) {
 	cap := &capturingPage{captured: true}
 	r := NewRoot(TabBackends).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"}).
 		WithBackendsPage(cap)
@@ -620,7 +602,6 @@ func TestRoot_NumberThreeSwallowedWhilePageCapturesInput(t *testing.T) {
 	cap := &capturingPage{captured: true}
 	r := NewRoot(TabServer).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
-		WithLauncherPage(pages.Placeholder{TabName: "L"}).
 		WithServerPage(cap).
 		WithModelsPage(pages.Placeholder{TabName: "Md"}).
 		WithBackendsPage(pages.Placeholder{TabName: "B"})

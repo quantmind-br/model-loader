@@ -11,9 +11,8 @@ func TestHelpMarkdownCoversAllHints(t *testing.T) {
 		name  string
 		hints string
 	}{
-		{"Profiles", "[n] new  [d] duplicate  [x] delete  [enter] edit  [L] launch  [e] export  [p] pin  [I] import  [u] undo  [/] filter"},
+		{"Profiles", "[enter] launch  [E] edit  [n] new  [d] duplicate  [x] delete  [b] bg/fg  [k] kill  [r] refresh  [e] export  [p] pin  [I] import  [u] undo  [/] filter"},
 		{"Models", "[/] filter  [R] rescan  [s] search HF  [enter] actions  [i] info  [→/g] sizing"},
-		{"Launcher", "[b] toggle bg/fg  [enter] launch  [k] kill  [r] refresh"},
 		{"Server", "[v] cycle views  [Space] pause  [k] kill  [r] restart  [H] history  [s] start proxy  [x] stop proxy"},
 		{"Backends", "[enter/e] edit  [n] new  [x] del  [D] default  [R] refresh  [P] probe  [/] filter"},
 	}

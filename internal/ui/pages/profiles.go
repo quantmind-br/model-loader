@@ -2,22 +2,29 @@
 package pages
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/service/validator"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/pages/profile_editor"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
@@ -61,6 +68,21 @@ type ProfilesPage struct {
 	importPicker       filepicker.Model
 
 	exportDir string
+
+	// --- launcher fields ---
+	manager   processmgr.Manager
+	validator validator.Validator
+	resolver  backendcatalog.Resolver
+	logger    *slog.Logger
+
+	running        []domain.RunningInstance
+	bgMode         bool
+	launchStatus   string
+	launchStatusAt time.Time
+	launchWaitPID  int
+	launchSpinner  spinner.Model
+
+	killConfirm components.Confirm
 }
 
 // NewProfilesPage constructs the page wired to a Store and FlagSchema.
@@ -71,14 +93,41 @@ func NewProfilesPage(store profilestore.Store, schema domain.FlagSchema) Profile
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
 
+	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
 	return ProfilesPage{
-		store:    store,
-		schema:   schema,
-		editor:   profile_editor.New(schema),
-		list:     l,
-		listKeys: defaultProfilesKeys(),
-		flash:    components.NewFlash("profiles"),
+		store:         store,
+		schema:        schema,
+		editor:        profile_editor.New(schema),
+		list:          l,
+		listKeys:      defaultProfilesKeys(),
+		flash:         components.NewFlash("profiles"),
+		bgMode:        true,
+		launchSpinner: sp,
+		logger:        log.Nop(),
 	}
+}
+
+// WithProcessManager injects the process manager and validator for launching
+// profiles directly from this page.
+func (p ProfilesPage) WithProcessManager(mgr processmgr.Manager, val validator.Validator) ProfilesPage {
+	p.manager = mgr
+	p.validator = val
+	return p
+}
+
+// WithBackendResolver injects the backend resolver so the launcher can
+// validate against the correct schema and resolve the executable per profile.
+func (p ProfilesPage) WithBackendResolver(r backendcatalog.Resolver) ProfilesPage {
+	p.resolver = r
+	return p
+}
+
+// WithLogger injects the application logger.
+func (p ProfilesPage) WithLogger(lg *slog.Logger) ProfilesPage {
+	if lg != nil {
+		p.logger = lg
+	}
+	return p
 }
 
 // WithModelScanner enables the ctrl+p model picker overlay in the editor.
@@ -110,6 +159,24 @@ type loadedMsg struct {
 	diags    []profilestore.ListDiagnostic
 	err      error
 }
+
+// launchedMsg is emitted after a successful Launch + WaitHealthy.
+type launchedMsg struct {
+	inst      domain.RunningInstance
+	attemptID string
+}
+
+// launchErrMsg is emitted when validation or Launch itself fails.
+type launchErrMsg struct {
+	err error
+}
+
+type healthyMsg struct{ pid int }
+
+// profilesKillConfirmedMsg is emitted by killConfirm.onYes when the user
+// confirms a kill. The page handles it in Update so manager I/O and status
+// mutation stay on the UI thread.
+type profilesKillConfirmedMsg struct{ pid int }
 
 func (p ProfilesPage) Init() tea.Cmd {
 	return p.loadCmd()
@@ -154,6 +221,18 @@ func (p ProfilesPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.handleUndoDone(m)
 	case NavigateToSizingMsg:
 		return p.handleNavigateToSizing(m)
+	case launchedMsg:
+		return p.handleLaunched(m)
+	case healthyMsg:
+		return p.handleHealthy(m)
+	case launchErrMsg:
+		return p.handleLaunchErr(m)
+	case spinner.TickMsg:
+		return p.handleSpinnerTick(m)
+	case LaunchProfileMsg:
+		return p.handleLaunchProfile(m)
+	case profilesKillConfirmedMsg:
+		return p.handleKillConfirmed(m)
 	case tea.KeyMsg:
 		return p.handleKey(m)
 	}
@@ -163,7 +242,10 @@ func (p ProfilesPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (p ProfilesPage) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	p.width, p.height = msg.Width, msg.Height
 	listWidth := p.width / 3
-	listHeight := msg.Height
+	listHeight := msg.Height - 6
+	if listHeight < 3 {
+		listHeight = 3
+	}
 	p.list.SetSize(listWidth, listHeight)
 	return p, nil
 }
@@ -286,6 +368,9 @@ func (p ProfilesPage) handleEditorCommitted(msg profile_editor.EditorCommittedMs
 // confirm) > delete confirm > list nav. Picker is intercepted on ctrl+p
 // or while open before forwarding to the editor.
 func (p ProfilesPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if p.killConfirm.Active() {
+		return p.updateKillConfirm(msg)
+	}
 	if p.importPickerActive {
 		updated, cmd := p.importPicker.Update(msg)
 		p.importPicker = updated
@@ -367,14 +452,26 @@ func (p ProfilesPage) View() string {
 	divider := strings.Repeat(divLine+"\n", divH-1) + divLine
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
 
+	running := p.renderRunningList()
+	if running != "" {
+		body = lipgloss.JoinVertical(lipgloss.Left, body, "", running)
+	}
+
 	if v := p.flash.View(); v != "" {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, v)
 	}
+
+	if status := p.renderLaunchStatus(); status != "" {
+		body = lipgloss.JoinVertical(lipgloss.Left, body, status)
+	}
+
 	return body
 }
 
 func (p ProfilesPage) OverlayView() (string, int, int, bool) {
 	switch {
+	case p.killConfirm.Active():
+		return p.killConfirm.View(), p.width, p.height, true
 	case p.importPickerActive:
 		return p.importPicker.View(), p.width, p.height, true
 	case p.picker.active:
@@ -431,7 +528,7 @@ func (p ProfilesPage) Hints() string {
 	case p.editor.Active():
 		return "[ctrl+t] sub-tab  [ctrl+p] pick model  [esc] cancel"
 	default:
-		return "[enter] edit  [n] new  [d] dup  [x] del  [L] launch  [e] export  [p] pin  [I] import  [u] undo  [/] filter"
+		return "[enter] launch  [E] edit  [n] new  [d] dup  [x] del  [b] bg/fg  [k] kill  [r] refresh  [e] export  [p] pin  [I] import  [u] undo  [/] filter"
 	}
 }
 
@@ -447,6 +544,13 @@ func (p ProfilesPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.askDeleteSelected()
 	case key.Matches(msg, p.listKeys.Launch):
 		return p.launchSelected()
+	case key.Matches(msg, p.listKeys.BgToggle):
+		p.bgMode = !p.bgMode
+		return p, nil
+	case key.Matches(msg, p.listKeys.Kill):
+		return p.askKillMostRecent()
+	case key.Matches(msg, p.listKeys.Refresh):
+		return p, p.loadCmd()
 	case key.Matches(msg, p.listKeys.Export):
 		return p.exportProfiles()
 	case key.Matches(msg, p.listKeys.Pin):
@@ -609,23 +713,24 @@ func (p ProfilesPage) handleUndoDone(_ undoDoneMsg) (tea.Model, tea.Cmd) {
 	return p, tea.Batch(fc, p.loadCmd())
 }
 
-// launchSelected emits a LaunchProfileMsg for the currently selected
-// profile so the root model can switch to the Launcher tab and run it.
+// launchSelected starts the currently selected profile directly.
 func (p ProfilesPage) launchSelected() (tea.Model, tea.Cmd) {
+	if p.launchWaitPID != 0 {
+		return p, nil
+	}
 	if _, isCorrupt := p.list.SelectedItem().(corruptItem); isCorrupt {
 		p, fc := p.withFlashError("corrupt entry — fix the JSON file or delete it")
 		return p, fc
 	}
 	sel, ok := p.list.SelectedItem().(item)
-	if !ok {
+	if !ok || p.manager == nil {
 		return p, nil
 	}
-	id := sel.p.ID
-	return p, func() tea.Msg { return LaunchProfileMsg{ID: id} }
+	return p, p.launchProfileCmd(sel.p)
 }
 
 func (p ProfilesPage) IsCapturingInput() bool {
-	return p.editor.Active() || p.deleteConfirm.Active() || p.picker.active || p.conflictModal.Active() || p.undoModal.Active() || p.importPickerActive
+	return p.editor.Active() || p.deleteConfirm.Active() || p.picker.active || p.conflictModal.Active() || p.undoModal.Active() || p.importPickerActive || p.killConfirm.Active()
 }
 
 // Reload triggers a fresh load from the underlying store. Called by the
@@ -644,6 +749,225 @@ func (p ProfilesPage) withFlashError(msg string) (ProfilesPage, tea.Cmd) {
 	var cmd tea.Cmd
 	p.flash, cmd = p.flash.SetError(msg)
 	return p, cmd
+}
+
+func (p ProfilesPage) handleLaunched(msg launchedMsg) (tea.Model, tea.Cmd) {
+	p.running = append(p.running, msg.inst)
+	p.launchWaitPID = msg.inst.PID
+	p.launchStatus = fmt.Sprintf("pid=%d port=%d — waiting for /health…", msg.inst.PID, msg.inst.Port)
+	p.launchStatusAt = time.Time{}
+	mgr := p.manager
+	port := msg.inst.Port
+	pid := msg.inst.PID
+	attemptID := msg.attemptID
+	waitCmd := func() tea.Msg {
+		if err := mgr.WaitHealthy(pid, port, 30*time.Second, attemptID); err != nil {
+			return launchErrMsg{err: fmt.Errorf("pid %d not healthy: %w", pid, err)}
+		}
+		return healthyMsg{pid: pid}
+	}
+	return p, tea.Batch(p.launchSpinner.Tick, waitCmd)
+}
+
+func (p ProfilesPage) handleHealthy(msg healthyMsg) (tea.Model, tea.Cmd) {
+	p.launchWaitPID = 0
+	p, fc := p.withFlash(fmt.Sprintf("healthy pid=%d", msg.pid))
+	pid := msg.pid
+	return p, tea.Batch(fc, func() tea.Msg { return SwitchToServerMsg{PID: pid} })
+}
+
+func (p ProfilesPage) handleLaunchErr(msg launchErrMsg) (tea.Model, tea.Cmd) {
+	pid := p.launchWaitPID
+	p.launchWaitPID = 0
+	base := friendlyLaunchError(msg.err)
+	if pid != 0 && p.manager != nil {
+		if exit, ok := p.manager.GetExitInfo(pid); ok {
+			base = enrichWithExit(base, exit)
+		}
+	}
+	p, fc := p.withFlash(base)
+	return p, fc
+}
+
+func (p ProfilesPage) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
+	if p.launchWaitPID == 0 {
+		return p, nil
+	}
+	updated, cmd := p.launchSpinner.Update(msg)
+	p.launchSpinner = updated
+	return p, cmd
+}
+
+func (p ProfilesPage) handleLaunchProfile(msg LaunchProfileMsg) (tea.Model, tea.Cmd) {
+	if p.manager == nil {
+		p, fc := p.withFlashError("launch failed: process manager unavailable")
+		return p, fc
+	}
+	selected, err := p.store.Get(msg.ID)
+	if err != nil {
+		p, fc := p.withFlashError("launch failed: " + err.Error())
+		return p, fc
+	}
+	return p, p.launchProfileCmd(selected)
+}
+
+func (p ProfilesPage) handleKillConfirmed(msg profilesKillConfirmedMsg) (tea.Model, tea.Cmd) {
+	var fc tea.Cmd
+	p, fc = p.performKill(msg.pid)
+	return p, fc
+}
+
+func (p ProfilesPage) askKillMostRecent() (tea.Model, tea.Cmd) {
+	if len(p.running) == 0 || p.manager == nil {
+		return p, nil
+	}
+	pid := p.running[len(p.running)-1].PID
+	p.killConfirm = components.NewConfirm(
+		fmt.Sprintf("Kill pid=%d?", pid),
+		pid,
+		func(payload any) tea.Cmd {
+			id, _ := payload.(int)
+			return func() tea.Msg { return profilesKillConfirmedMsg{pid: id} }
+		},
+		"Kill",
+		"Cancel",
+	)
+	return p, p.killConfirm.Init()
+}
+
+func (p ProfilesPage) updateKillConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	p.killConfirm, cmd = p.killConfirm.Update(msg)
+	return p, cmd
+}
+
+func (p ProfilesPage) performKill(pid int) (ProfilesPage, tea.Cmd) {
+	if err := p.manager.Kill(pid); err != nil {
+		return p.withFlashError("error: " + err.Error())
+	}
+	out := p.running[:0]
+	for _, ri := range p.running {
+		if ri.PID != pid {
+			out = append(out, ri)
+		}
+	}
+	p.running = out
+	return p.withFlash(fmt.Sprintf("killed pid=%d", pid))
+}
+
+func (p ProfilesPage) launchProfileCmd(selected domain.Profile) tea.Cmd {
+	val := p.validator
+	mgr := p.manager
+	res := p.resolver
+	lg := p.logger
+	attemptID := log.NewAttemptID()
+	mode := processmgr.LaunchBackground
+	if !p.bgMode {
+		mode = processmgr.LaunchForeground
+	}
+	return func() tea.Msg {
+		evt := lg.With("attempt_id", attemptID, "profile_id", selected.ID)
+		evt.Info("launch_pipeline_start", "mode", modeString(mode))
+		if res == nil {
+			return launchErrMsg{err: fmt.Errorf("no backend resolver configured")}
+		}
+		rb, err := res.Resolve(selected)
+		if err != nil {
+			evt.Error("launch_pipeline_failed", "step", "resolve", "err", err)
+			return launchErrMsg{err: fmt.Errorf("resolve backend: %w", err)}
+		}
+		activeSchema := rb.Schema.ToFlagSchema()
+		if val != nil {
+			rep := val.Validate(selected, activeSchema)
+			if rep.HasBlockingErrors() {
+				evt.Error("launch_pipeline_failed",
+					"step", "validate", "err_count", len(rep.Errors))
+				return launchErrMsg{err: fmt.Errorf("validation failed: %d errors", len(rep.Errors))}
+			}
+		}
+		selected.Launch.ResolvedExecutable = rb.ExecutablePath
+		selected.Launch.ResolvedBackendKind = rb.Backend.Kind
+		inst, err := mgr.Launch(selected, mode, attemptID)
+		if err != nil {
+			evt.Error("launch_pipeline_failed", "step", "spawn", "err", err)
+			return launchErrMsg{err: err}
+		}
+		return launchedMsg{inst: inst, attemptID: attemptID}
+	}
+}
+
+func (p ProfilesPage) renderRunningList() string {
+	if len(p.running) == 0 {
+		return "Running: " + components.EmptyState("(none)", "Press [enter] to launch selected profile")
+	}
+	lines := []string{theme.Subtitle.Render("Running")}
+	for _, ri := range p.running {
+		tag := "fg"
+		if ri.Background {
+			tag = "bg"
+		}
+		lines = append(lines, fmt.Sprintf("  %s pid=%d port=%d %s", ri.ProfileID, ri.PID, ri.Port, tag))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (p ProfilesPage) renderLaunchStatus() string {
+	if p.launchStatus != "" {
+		statusLine := p.launchStatus
+		if p.launchWaitPID != 0 {
+			statusLine = p.launchSpinner.View() + " " + statusLine
+		}
+		return theme.Subtitle.Render(statusLine)
+	}
+	return p.flash.View()
+}
+
+func friendlyLaunchError(err error) string {
+	switch {
+	case errors.Is(err, processmgr.ErrPortBusy):
+		return "error: port in use — change the profile port or kill the running PID"
+	case errors.Is(err, processmgr.ErrModelNotFound):
+		return "error: model file not found — fix the profile's Model path"
+	case errors.Is(err, processmgr.ErrForegroundBusy):
+		return "error: a foreground instance is already running — toggle [b] to background mode"
+	case errors.Is(err, processmgr.ErrHealthCheckTimeout):
+		return "error: server did not become healthy within timeout — check logs"
+	default:
+		return "error: " + err.Error()
+	}
+}
+
+func enrichWithExit(base string, exit processmgr.ExitInfo) string {
+	parts := []string{base}
+	switch {
+	case exit.ExitSignal != "":
+		parts = append(parts, "(signal: "+exit.ExitSignal+")")
+	case exit.ExitCode != nil:
+		parts = append(parts, fmt.Sprintf("(exit %d)", *exit.ExitCode))
+	}
+	if last := lastNonEmpty(exit.StderrTail); last != "" {
+		parts = append(parts, "— last: "+truncRunes(last, 80))
+	}
+	if len(parts) == 1 {
+		return base
+	}
+	return strings.Join(parts, " ")
+}
+
+func lastNonEmpty(s []string) string {
+	for i := len(s) - 1; i >= 0; i-- {
+		if strings.TrimSpace(s[i]) != "" {
+			return s[i]
+		}
+	}
+	return ""
+}
+
+func modeString(mode processmgr.LaunchMode) string {
+	if mode == processmgr.LaunchForeground {
+		return "foreground"
+	}
+	return "background"
 }
 
 func (p ProfilesPage) updatePicker(msg tea.Msg) (tea.Model, tea.Cmd) {

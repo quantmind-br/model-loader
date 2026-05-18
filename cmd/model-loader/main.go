@@ -93,8 +93,9 @@ func runTUI() int {
 		WithProfileStore(svc.store).
 		WithHFClient(hfClient).
 		WithDownloadManager(dlManager)
-	launcherPage := pages.NewLauncherPage(svc.store, svc.mgr, svc.val).
-		SetBackendResolver(svc.resolver).
+	profilesPage = profilesPage.
+		WithProcessManager(svc.mgr, svc.val).
+		WithBackendResolver(svc.resolver).
 		WithLogger(logger)
 
 	mon := monitor.New(monitor.Config{NvidiaSMIPath: "nvidia-smi"})
@@ -108,7 +109,6 @@ func runTUI() int {
 	root := ui.NewRoot(parseTab(cfg.UI.DefaultTab)).
 		WithProfilesPage(profilesPage).
 		WithModelsPage(modelsPage).
-		WithLauncherPage(launcherPage).
 		WithServerPage(serverPage).
 		WithBackendsPage(backendsPage).
 		WithProcessManager(svc.mgr)
@@ -294,8 +294,6 @@ func buildResolver(resolver backendcatalog.Resolver) func(domain.Profile) (strin
 
 func parseTab(name string) ui.Tab {
 	switch name {
-	case "launcher":
-		return ui.TabLauncher
 	case "profiles":
 		return ui.TabProfiles
 	case "server":
@@ -305,6 +303,6 @@ func parseTab(name string) ui.Tab {
 	case "backends":
 		return ui.TabBackends
 	default:
-		return ui.TabLauncher
+		return ui.TabProfiles
 	}
 }

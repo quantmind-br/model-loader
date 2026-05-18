@@ -17,8 +17,7 @@ import (
 type Tab int
 
 const (
-	TabLauncher Tab = iota
-	TabProfiles
+	TabProfiles Tab = iota
 	TabServer
 	TabModels
 	TabBackends
@@ -26,12 +25,10 @@ const (
 
 // tabCount is the number of top-level tabs. Single source of truth for
 // keybinding ranges, modulo math, and array sizing.
-const tabCount = 5
+const tabCount = 4
 
 func (t Tab) Title() string {
 	switch t {
-	case TabLauncher:
-		return "Launcher"
 	case TabProfiles:
 		return "Profiles"
 	case TabServer:
@@ -89,7 +86,7 @@ type Overlayer interface {
 }
 
 // globalHints is the prefix shown in every status bar line.
-const globalHints = "[1-5] tabs  [tab] next  [q] quit" + components.HelpToken
+const globalHints = "[1-4] tabs  [tab] next  [q] quit" + components.HelpToken
 
 // bootBlocker carrega o conteúdo de um modal bloqueante exibido sobre toda a UI.
 type bootBlocker struct {
@@ -112,11 +109,9 @@ type RootModel struct {
 }
 
 // NewRoot constructs a RootModel with placeholder pages.
-// Slice 0 swaps the Launcher slot with the real implementation in main.go.
 func NewRoot(initial Tab) RootModel {
 	return RootModel{
 		pages: [tabCount]tea.Model{
-			pages.Placeholder{TabName: TabLauncher.Title()},
 			pages.Placeholder{TabName: TabProfiles.Title()},
 			pages.Placeholder{TabName: TabServer.Title()},
 			pages.Placeholder{TabName: TabModels.Title()},
@@ -137,12 +132,6 @@ func (m RootModel) WithProfilesPage(p tea.Model) RootModel {
 // WithModelsPage replaces the placeholder Models tab with a real model.
 func (m RootModel) WithModelsPage(p tea.Model) RootModel {
 	m.pages[TabModels] = p
-	return m
-}
-
-// WithLauncherPage replaces the placeholder Launcher tab with a real model.
-func (m RootModel) WithLauncherPage(p tea.Model) RootModel {
-	m.pages[TabLauncher] = p
 	return m
 }
 
@@ -194,8 +183,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleBootBlocker(msg)
 	}
 	switch msg := msg.(type) {
-	case pages.LauncherProfilesLoadedMsg:
-		return m.forwardTo(TabLauncher, msg)
 	case pages.UseInNewProfileMsg:
 		return m.activateAndForward(TabProfiles, msg)
 	case pages.SwitchToServerMsg:
@@ -203,7 +190,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case pages.NavigateToSizingMsg:
 		return m.handleNavigateToSizing(msg)
 	case pages.LaunchProfileMsg:
-		return m.activateAndForward(TabLauncher, msg)
+		return m.activateAndForward(TabProfiles, msg)
 	case tea.WindowSizeMsg:
 		return m.handleResize(msg)
 	case tea.KeyMsg:
@@ -271,7 +258,7 @@ func (m RootModel) handleNavigateToSizing(msg pages.NavigateToSizingMsg) (tea.Mo
 }
 
 // handleKey dispatches a key event. ctrl+c and ctrl+p are unconditional
-// global shortcuts — every other binding (?, q, 1-5, tab, shift+tab) is gated
+// global shortcuts — every other binding (?, q, 1-4, tab, shift+tab) is gated
 // by IsCapturingInput so printable keys reach an active editor/picker
 // instead of triggering quit/tab-switch/help.
 func (m RootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -300,14 +287,12 @@ func (m RootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "q":
 			return m, tea.Quit
 		case "1":
-			return m.activate(TabLauncher)
-		case "2":
 			return m.activate(TabProfiles)
-		case "3":
+		case "2":
 			return m.activate(TabServer)
-		case "4":
+		case "3":
 			return m.activate(TabModels)
-		case "5":
+		case "4":
 			return m.activate(TabBackends)
 		case "tab":
 			return m.activate((m.active + 1) % tabCount)

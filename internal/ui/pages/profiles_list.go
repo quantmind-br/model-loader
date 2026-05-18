@@ -22,7 +22,7 @@ import (
 // profilesKeyMap groups the master-list / launcher key bindings used by
 // ProfilesPage. Defined here so profiles.go stays focused on dispatch.
 type profilesKeyMap struct {
-	New, Save, Duplicate, Delete, Edit, Cancel, Tab, Launch, Export, Pin, Import, Undo key.Binding
+	New, Save, Duplicate, Delete, Edit, Cancel, Tab, Launch, BgToggle, Kill, Refresh, Export, Pin, Import, Undo key.Binding
 }
 
 func defaultProfilesKeys() profilesKeyMap {
@@ -31,10 +31,13 @@ func defaultProfilesKeys() profilesKeyMap {
 		Save:      key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "save")),
 		Duplicate: key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "dup")),
 		Delete:    key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "del")),
-		Edit:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "edit")),
+		Edit:      key.NewBinding(key.WithKeys("E"), key.WithHelp("E", "edit")),
 		Cancel:    key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
 		Tab:       key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "tab editor")),
-		Launch:    key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "launch")),
+		Launch:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "launch")),
+		BgToggle:  key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "bg/fg")),
+		Kill:      key.NewBinding(key.WithKeys("k"), key.WithHelp("k", "kill")),
+		Refresh:   key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
 		Export:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "export")),
 		Pin:       key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "pin")),
 		Import:    key.NewBinding(key.WithKeys("I"), key.WithHelp("I", "import")),

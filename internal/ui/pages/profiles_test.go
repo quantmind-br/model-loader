@@ -3,6 +3,7 @@ package pages
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/log"
+	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/service/validator"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
@@ -48,6 +50,37 @@ func (w viewWrapper) View() string {
 }
 
 func (w viewWrapper) inner() tea.Model { return w.page }
+
+type fakeManager struct {
+	launched  []domain.Profile
+	mode      processmgr.LaunchMode
+	nextErr   error
+	exitInfos map[int]processmgr.ExitInfo
+}
+
+func (f *fakeManager) Launch(p domain.Profile, mode processmgr.LaunchMode, _ string) (domain.RunningInstance, error) {
+	if f.nextErr != nil {
+		err := f.nextErr
+		f.nextErr = nil
+		return domain.RunningInstance{}, err
+	}
+	f.launched = append(f.launched, p)
+	f.mode = mode
+	return domain.RunningInstance{ProfileID: p.ID, PID: 4242, Port: 8080, Background: mode == processmgr.LaunchBackground}, nil
+}
+func (f *fakeManager) Kill(pid int) error                                    { return nil }
+func (f *fakeManager) List() []domain.RunningInstance                        { return nil }
+func (f *fakeManager) WaitHealthy(_, _ int, _ time.Duration, _ string) error { return nil }
+func (f *fakeManager) TailLogs(_ int) (io.ReadCloser, error)                 { return nil, processmgr.ErrUnknownPID }
+func (f *fakeManager) Close() error                                          { return nil }
+func (f *fakeManager) History() []domain.ExitedInstance                      { return nil }
+func (f *fakeManager) GetExitInfo(pid int) (processmgr.ExitInfo, bool) {
+	if f.exitInfos == nil {
+		return processmgr.ExitInfo{}, false
+	}
+	ei, ok := f.exitInfos[pid]
+	return ei, ok
+}
 
 func TestProfilesPage_LoadsExistingProfile(t *testing.T) {
 	dir := t.TempDir()
@@ -270,7 +303,7 @@ func TestProfilesPage_UseInNewProfilePrefillsDraft(t *testing.T) {
 	}
 }
 
-func TestProfilesPage_LKeyEmitsLaunchProfileMsg(t *testing.T) {
+func TestProfilesPage_EnterLaunchesSelected(t *testing.T) {
 	dir := t.TempDir()
 	store, err := profilestore.NewFSStore(dir)
 	if err != nil {
@@ -284,25 +317,19 @@ func TestProfilesPage_LKeyEmitsLaunchProfileMsg(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	page := NewProfilesPage(store, domain.FlagSchema{})
+	page := NewProfilesPage(store, domain.FlagSchema{}).
+		WithProcessManager(&fakeManager{}, nil)
 	updated, _ := page.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	page = updated.(ProfilesPage)
 	updated, _ = page.Update(loadedMsg{profiles: []domain.Profile{{ID: "demo", Name: "Demo"}}})
 	page = updated.(ProfilesPage)
 
-	updated, cmd := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'L'}})
+	updated, cmd := page.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	_ = updated
 	if cmd == nil {
-		t.Fatal("expected LaunchProfileMsg cmd, got nil")
+		t.Fatal("expected launch cmd, got nil")
 	}
-	got := cmd()
-	lp, ok := got.(LaunchProfileMsg)
-	if !ok {
-		t.Fatalf("msg type = %T, want LaunchProfileMsg", got)
-	}
-	if lp.ID != "demo" {
-		t.Errorf("ID = %q, want demo", lp.ID)
-	}
+	// With a fake manager wired, pressing [enter] should produce a launch cmd.
 }
 
 func TestProfilesPage_FlashAutoClear(t *testing.T) {
@@ -419,13 +446,16 @@ func TestProfilesPage_DeleteCompletesViaAsyncMsgs(t *testing.T) {
 	}
 }
 
-func TestProfilesPage_HintsIncludeLaunch(t *testing.T) {
+func TestProfilesPage_HintsIncludeLaunchAndEdit(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := profilestore.NewFSStore(dir)
 	page := NewProfilesPage(store, domain.FlagSchema{})
 	hints := page.Hints()
-	if !strings.Contains(hints, "[L] launch") {
-		t.Errorf("list-mode Hints missing [L] launch; got %q", hints)
+	if !strings.Contains(hints, "[enter] launch") {
+		t.Errorf("list-mode Hints missing [enter] launch; got %q", hints)
+	}
+	if !strings.Contains(hints, "[E] edit") {
+		t.Errorf("list-mode Hints missing [E] edit; got %q", hints)
 	}
 	if !strings.Contains(hints, "[e] export") {
 		t.Errorf("list-mode Hints missing [e] export; got %q", hints)

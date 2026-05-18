@@ -1,6 +1,12 @@
 package pages
 
-// SwitchToServerMsg is emitted by LauncherPage after a launch is healthy.
+// LaunchProfileMsg requests the Profiles page to start the profile identified
+// by ID. Routed by root.go to the Profiles tab.
+type LaunchProfileMsg struct {
+	ID string
+}
+
+// SwitchToServerMsg is emitted by ProfilesPage after a launch is healthy.
 // root.go consumes this to switch the active tab to Server and pre-select
 // the new PID.
 type SwitchToServerMsg struct {

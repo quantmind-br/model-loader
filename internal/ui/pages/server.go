@@ -728,7 +728,7 @@ func (p *ServerPage) View() string {
 		if p.flash.Message() != "" {
 			header = p.flash.View() + "\n" + header
 		}
-		body = header + "\n" + components.EmptyState("No instances running", "Switch to Launcher [1] to start one")
+		body = header + "\n" + components.EmptyState("No instances running", "Switch to Profiles [1] to start one")
 	} else {
 		body = p.renderTable() + "\n\n" + p.renderStatusLine() + "\n" + p.renderSubViewBody()
 	}
