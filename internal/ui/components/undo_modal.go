@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
@@ -21,9 +20,6 @@ type UndoModal struct {
 	onConfirm func() tea.Cmd
 	onCancel  func() tea.Cmd
 }
-
-var redStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#f87171"))
-var greenStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#4ade80"))
 
 func NewUndoModal(diffs []FieldDiff, onConfirm func() tea.Cmd, onCancel func() tea.Cmd) UndoModal {
 	return UndoModal{active: true, diffs: diffs, onConfirm: onConfirm, onCancel: onCancel}
@@ -67,8 +63,8 @@ func (u UndoModal) View() string {
 	} else {
 		for _, d := range u.diffs {
 			b.WriteString(d.Key + ":\n")
-			b.WriteString("  old: " + redStyle.Render(d.OldValue) + "\n")
-			b.WriteString("  new: " + greenStyle.Render(d.NewValue) + "\n\n")
+			b.WriteString("  old: " + theme.Error.Render(d.OldValue) + "\n")
+			b.WriteString("  new: " + theme.OK.Render(d.NewValue) + "\n\n")
 		}
 	}
 	b.WriteString("[enter] confirm  [esc] cancel")

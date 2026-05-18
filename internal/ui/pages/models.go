@@ -182,6 +182,12 @@ func (p ModelsPage) withFlash(msg string) (ModelsPage, tea.Cmd) {
 	return p, cmd
 }
 
+func (p ModelsPage) withFlashError(msg string) (ModelsPage, tea.Cmd) {
+	var cmd tea.Cmd
+	p.flash, cmd = p.flash.SetError(msg)
+	return p, cmd
+}
+
 type modelsKeyMap struct {
 	Filter, Rescan, Enter, Cancel key.Binding
 }
@@ -511,17 +517,17 @@ func (p ModelsPage) handleProfilePicked(msg components.ProfilePickedMsg) (tea.Mo
 	p.profilePicker = nil
 	p.profilePickerTargetPath = ""
 	if p.store == nil {
-		p, fc := p.withFlash("profile store not wired")
+		p, fc := p.withFlashError("profile store not wired")
 		return p, fc
 	}
 	pr, err := p.store.Get(msg.ID)
 	if err != nil {
-		p, fc := p.withFlash("load profile: " + err.Error())
+		p, fc := p.withFlashError("load profile: " + err.Error())
 		return p, fc
 	}
 	pr.Model = targetPath
 	if err := p.store.Save(pr); err != nil {
-		p, fc := p.withFlash("save profile: " + err.Error())
+		p, fc := p.withFlashError("save profile: " + err.Error())
 		return p, fc
 	}
 	p, fc := p.withFlash("updated " + msg.ID)
@@ -550,7 +556,7 @@ func (p ModelsPage) handleDownloadEvent(ev downloadmgr.Event) (tea.Model, tea.Cm
 
 func (p ModelsPage) openHFFilePicker(item components.ResultItem) (tea.Model, tea.Cmd) {
 	if p.hfClient == nil {
-		return p.withFlash("HF client not wired")
+		return p.withFlashError("HF client not wired")
 	}
 	isSnapshot := !item.HasGGUFTag()
 	p.pendingRepoID = item.ModelID
@@ -572,12 +578,12 @@ func (p ModelsPage) startSelectedDownloads() (tea.Model, tea.Cmd) {
 	if p.dlManager == nil {
 		p.hfFilePicker = nil
 		p.pendingRepoID = ""
-		return p.withFlash("download manager not wired")
+		return p.withFlashError("download manager not wired")
 	}
 	if len(p.paths) == 0 {
 		p.hfFilePicker = nil
 		p.pendingRepoID = ""
-		return p.withFlash(downloadmgr.ErrNoSearchPath.Error())
+		return p.withFlashError(downloadmgr.ErrNoSearchPath.Error())
 	}
 
 	files := p.hfFilePicker.SelectedFiles()
@@ -598,7 +604,7 @@ func (p ModelsPage) startSelectedDownloads() (tea.Model, tea.Cmd) {
 		}
 		if err != nil {
 			var cmd tea.Cmd
-			p.flash, cmd = p.flash.Set(err.Error())
+			p.flash, cmd = p.flash.SetError(err.Error())
 			cmds = append(cmds, cmd)
 			continue
 		}
@@ -613,7 +619,7 @@ func (p ModelsPage) startSelectedDownloads() (tea.Model, tea.Cmd) {
 		})
 		if err != nil {
 			var cmd tea.Cmd
-			p.flash, cmd = p.flash.Set(err.Error())
+			p.flash, cmd = p.flash.SetError(err.Error())
 			cmds = append(cmds, cmd)
 			continue
 		}
@@ -627,11 +633,6 @@ func (p ModelsPage) startSelectedDownloads() (tea.Model, tea.Cmd) {
 }
 
 func (p ModelsPage) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "esc" {
-		p.deleteConfirm = components.Confirm{}
-		p, fc := p.withFlash("delete cancelled")
-		return p, fc
-	}
 	var cmd tea.Cmd
 	p.deleteConfirm, cmd = p.deleteConfirm.Update(msg)
 	return p, cmd
@@ -671,7 +672,7 @@ func (p ModelsPage) commitRootAction(choice, path string) (tea.Model, tea.Cmd) {
 	case "reveal":
 		p.action = nil
 		if err := clipboardWriter(path); err != nil {
-			p, fc := p.withFlash("clipboard error: " + err.Error())
+			p, fc := p.withFlashError("clipboard error: " + err.Error())
 			return p, fc
 		}
 		p, fc := p.withFlash("path copied to clipboard")
@@ -679,16 +680,16 @@ func (p ModelsPage) commitRootAction(choice, path string) (tea.Model, tea.Cmd) {
 	case "existing":
 		p.action = nil
 		if p.store == nil {
-			p, fc := p.withFlash("profile store not wired")
+			p, fc := p.withFlashError("profile store not wired")
 			return p, fc
 		}
 		profiles, err := p.store.List()
 		if err != nil {
-			p, fc := p.withFlash("load profiles: " + err.Error())
+			p, fc := p.withFlashError("load profiles: " + err.Error())
 			return p, fc
 		}
 		if len(profiles) == 0 {
-			p, fc := p.withFlash("no existing profiles to update")
+			p, fc := p.withFlashError("no existing profiles to update")
 			return p, fc
 		}
 		picker := components.NewProfilePicker(profiles)
@@ -719,7 +720,7 @@ func (p ModelsPage) commitRootAction(choice, path string) (tea.Model, tea.Cmd) {
 
 func (p ModelsPage) performDelete(path string) (tea.Model, tea.Cmd) {
 	if err := fileRemover(path); err != nil {
-		p, fc := p.withFlash("delete failed: " + err.Error())
+		p, fc := p.withFlashError("delete failed: " + err.Error())
 		return p, fc
 	}
 	filtered := p.files[:0]
@@ -872,7 +873,7 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case key.Matches(msg, p.keys.Rescan):
 		if p.isScanning() {
-			return p.withFlash("Scan already in progress")
+			return p.withFlashError("Scan already in progress")
 		}
 		next, cmd := p.beginRescan(true)
 		return next, cmd
@@ -1003,8 +1004,14 @@ func (p ModelsPage) View() string {
 		return p.deleteConfirm.View()
 	}
 	if p.action != nil {
-		return p.renderActionMenu()
+		bg := p.regularBodyView()
+		fg := p.renderActionMenu()
+		return components.Overlay(bg, fg, p.width, p.height)
 	}
+	return p.regularBodyView()
+}
+
+func (p ModelsPage) regularBodyView() string {
 	header := theme.Title.Render("Models")
 	statusLine := p.renderStatus()
 	filterLine := ""
@@ -1014,7 +1021,7 @@ func (p ModelsPage) View() string {
 	footer := p.flash.View()
 	var content string
 	if len(p.files) == 0 && (len(p.paths) == 0 || p.hasScannedRoot()) {
-		emptyMsg := theme.Subtitle.Render("(no .gguf files in configured search paths — edit ~/.config/model-loader/config.toml or press [R] to rescan)")
+		emptyMsg := components.EmptyState("No .gguf files in configured search paths", "Press [R] to rescan, or edit ~/.config/model-loader/config.toml")
 		content = lipgloss.JoinVertical(lipgloss.Left, header, statusLine, emptyMsg, filterLine, footer)
 	} else {
 		content = lipgloss.JoinVertical(lipgloss.Left, header, statusLine, p.table.View(), filterLine, footer)
@@ -1032,7 +1039,14 @@ func (p ModelsPage) View() string {
 		}
 	}
 	if p.infoPanel != nil {
-		panel := p.infoPanel.Render(p.width / 3)
+		w := p.width / 3
+		if w > 60 {
+			w = 60
+		}
+		if w < 30 {
+			w = 30
+		}
+		panel := p.infoPanel.Render(w)
 		content = lipgloss.JoinHorizontal(lipgloss.Top, content, panel)
 	}
 	return content
@@ -1089,6 +1103,10 @@ func (p ModelsPage) Hints() string {
 // renderActionMenu draws the inline modal-ish overlay used for both the
 // root action menu and the follow-up profile picker.
 func (p ModelsPage) renderActionMenu() string {
+	return components.Modal("", p.renderActionMenuContent(), menuWidth(p.width), 0)
+}
+
+func (p ModelsPage) renderActionMenuContent() string {
 	lines := []string{theme.Title.Render(p.action.title)}
 	for i, opt := range p.action.options {
 		prefix := "  "
@@ -1101,6 +1119,21 @@ func (p ModelsPage) renderActionMenu() string {
 	}
 	lines = append(lines, "", theme.Subtitle.Render("[↑/↓] move  [enter] select  [esc] cancel"))
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+func menuWidth(termWidth int) int {
+	const (
+		floor = 40
+		ceil  = 80
+	)
+	w := termWidth - 4
+	if w > ceil {
+		w = ceil
+	}
+	if w < floor {
+		w = floor
+	}
+	return w
 }
 
 func (p ModelsPage) renderStatus() string {

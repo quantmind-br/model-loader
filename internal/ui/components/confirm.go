@@ -78,6 +78,13 @@ func (c Confirm) Update(msg tea.Msg) (Confirm, tea.Cmd) {
 	if c.form == nil {
 		return c, nil
 	}
+	if k, ok := msg.(tea.KeyMsg); ok {
+		if k.String() == "esc" {
+			c.form = nil
+			c.answer = nil
+			return c, nil
+		}
+	}
 	updated, cmd := c.form.Update(msg)
 	if f, ok := updated.(*huh.Form); ok {
 		c.form = f

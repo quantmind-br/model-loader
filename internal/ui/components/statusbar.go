@@ -42,13 +42,33 @@ func (s *StatusBar) SetMessage(level StatusLevel, msg string) {
 
 // Render returns the bar as a styled single line, fitted to width.
 func (s StatusBar) Render(width int) string {
-	hints := theme.Subtitle.Render(s.Hints)
+	globalPart := s.Hints
+	pagePart := ""
+	if i := strings.LastIndex(s.Hints, " | "); i >= 0 {
+		globalPart = s.Hints[:i]
+		pagePart = s.Hints[i+3:]
+	}
+	separatorWidth := 0
+	if pagePart != "" {
+		separatorWidth = lipgloss.Width(theme.Subtitle.Render(" | "))
+	}
+	gw := lipgloss.Width(theme.Subtitle.Render(globalPart))
+	pw := lipgloss.Width(theme.Subtitle.Render(pagePart))
 	msg := s.styledMessage()
 	badge := s.restartBadge()
-
-	gap := width - lipgloss.Width(hints) - lipgloss.Width(msg) - lipgloss.Width(badge)
+	gap := width - gw - separatorWidth - pw - lipgloss.Width(msg) - lipgloss.Width(badge)
 	if gap < 1 {
+		avail := width - gw - separatorWidth - lipgloss.Width(msg) - lipgloss.Width(badge) - 1
+		if avail > 0 {
+			pagePart = truncateString(pagePart, avail)
+		} else {
+			pagePart = ""
+		}
 		gap = 1
+	}
+	hints := theme.Subtitle.Render(globalPart)
+	if pagePart != "" {
+		hints += theme.Subtitle.Render(" | " + pagePart)
 	}
 	return hints + strings.Repeat(" ", gap) + badge + msg
 }
@@ -72,4 +92,15 @@ func (s StatusBar) styledMessage() string {
 	default:
 		return theme.Subtitle.Render(s.Message)
 	}
+}
+
+func truncateString(s string, max int) string {
+	if lipgloss.Width(s) <= max {
+		return s
+	}
+	runes := []rune(s)
+	if max <= 1 {
+		return "…"
+	}
+	return string(runes[:max-1]) + "…"
 }

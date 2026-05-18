@@ -2,10 +2,11 @@ package components
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -49,13 +50,14 @@ type hfSearchResultMsg = HFSearchResultMsg
 // HFSearchPicker is an overlay for searching Hugging Face models.
 type HFSearchPicker struct {
 	searcher  HFSearcher
-	query     string
+	input     textinput.Model
 	results   []ResultItem
 	cursor    int
 	ggufOnly  bool
 	width     int
 	height    int
 	searching bool
+	spinner   spinner.Model
 	err       error
 	active    bool
 	epoch     int
@@ -63,8 +65,15 @@ type HFSearchPicker struct {
 
 // NewHFSearchPicker creates a new search picker.
 func NewHFSearchPicker(searcher HFSearcher, width, height int) *HFSearchPicker {
+	ti := textinput.New()
+	ti.Placeholder = "Search Hugging Face..."
+	ti.Focus()
+	ti.CharLimit = 200
+	ti.Width = 40
 	return &HFSearchPicker{
 		searcher: searcher,
+		input:    ti,
+		spinner:  NewLoadingSpinner(),
 		width:    width,
 		height:   height,
 	}
@@ -79,6 +88,12 @@ func (p *HFSearchPicker) Init() tea.Cmd {
 // Update implements tea.Model.
 func (p *HFSearchPicker) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
+	case spinner.TickMsg:
+		if p.searching {
+			var cmd tea.Cmd
+			p.spinner, cmd = p.spinner.Update(msg)
+			return cmd
+		}
 	case tea.WindowSizeMsg:
 		p.SetSize(msg.Width, msg.Height)
 		return nil
@@ -100,7 +115,9 @@ func (p *HFSearchPicker) Update(msg tea.Msg) tea.Cmd {
 		p.cursor = 0
 		return nil
 	}
-	return nil
+	var cmd tea.Cmd
+	p.input, cmd = p.input.Update(msg)
+	return cmd
 }
 
 func (p *HFSearchPicker) handleKey(msg tea.KeyMsg) tea.Cmd {
@@ -113,6 +130,10 @@ func (p *HFSearchPicker) handleKey(msg tea.KeyMsg) tea.Cmd {
 		if len(p.results) > 0 {
 			p.active = false
 			p.searcher = nil
+		} else if p.input.Value() != "" {
+			p.epoch++
+			p.searching = true
+			return tea.Batch(p.debounceSearch(), p.spinner.Tick)
 		}
 		return nil
 	case "up":
@@ -129,34 +150,27 @@ func (p *HFSearchPicker) handleKey(msg tea.KeyMsg) tea.Cmd {
 		p.ggufOnly = !p.ggufOnly
 		p.cursor = 0
 		return nil
-	case "backspace":
-		if len(p.query) > 0 {
-			p.query = p.query[:len(p.query)-1]
-			p.epoch++
-			p.searching = true
-			return p.debounceSearch()
-		}
-		return nil
-	default:
-		if len(msg.Runes) == 1 && msg.Runes[0] >= 32 {
-			p.query += string(msg.Runes)
-			p.epoch++
-			p.searching = true
-			return p.debounceSearch()
-		}
-		return nil
 	}
+	var cmd tea.Cmd
+	p.input, cmd = p.input.Update(msg)
+	if p.input.Value() != "" {
+		p.epoch++
+		p.searching = true
+		return tea.Batch(p.debounceSearch(), p.spinner.Tick, cmd)
+	}
+	return cmd
 }
 
 func (p *HFSearchPicker) debounceSearch() tea.Cmd {
 	epoch := p.epoch
+	query := p.input.Value()
 	return tea.Tick(300*time.Millisecond, func(t time.Time) tea.Msg {
 		if p.searcher == nil {
 			return hfSearchResultMsg{Epoch: epoch, Results: nil, Err: nil}
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		raw, err := p.searcher.Search(ctx, p.query, 20)
+		raw, err := p.searcher.Search(ctx, query, 20)
 		if err != nil {
 			return hfSearchResultMsg{Epoch: epoch, Err: err}
 		}
@@ -194,15 +208,14 @@ func hasGGUFTag(tags []string) bool {
 func (p *HFSearchPicker) View() string {
 	boxW := pickerBoxWidth(p.width)
 
-	searchLine := fmt.Sprintf("Search: %s_", p.query)
-	parts := []string{theme.Subtitle.Render(searchLine)}
+	parts := []string{p.input.View()}
 
 	if p.err != nil {
 		parts = append(parts, theme.Error.Render("error: "+p.err.Error()))
 	}
 
 	if p.searching {
-		parts = append(parts, theme.Subtitle.Render("Searching..."))
+		parts = append(parts, LoadingLine(p.spinner, "Searching", len(p.results)))
 	}
 
 	resultLines := make([]string, 0, len(p.results))
@@ -225,7 +238,7 @@ func (p *HFSearchPicker) View() string {
 	}
 	if len(resultLines) > 0 {
 		parts = append(parts, strings.Join(resultLines, "\n"))
-	} else if !p.searching && p.query != "" {
+	} else if !p.searching && p.input.Value() != "" {
 		parts = append(parts, theme.Subtitle.Render("No results"))
 	}
 

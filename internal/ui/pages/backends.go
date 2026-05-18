@@ -185,7 +185,7 @@ func (p BackendsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (p BackendsPage) handleLoaded(msg backendsLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
-		p, fc := p.withFlash("load backends failed: " + msg.err.Error())
+		p, fc := p.withFlashError("load backends failed: " + msg.err.Error())
 		return p, fc
 	}
 	items := make([]list.Item, 0, len(msg.backends))
@@ -209,22 +209,11 @@ func (p BackendsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.forwardToForm(msg)
 	}
 	if p.refreshConfirm.Active() {
-		if msg.String() == "esc" {
-			p.refreshConfirm = components.Confirm{}
-			p.pendingRefresh = false
-			p, fc := p.withFlash("refresh cancelled")
-			return p, fc
-		}
 		var cmd tea.Cmd
 		p.refreshConfirm, cmd = p.refreshConfirm.Update(msg)
 		return p, cmd
 	}
 	if p.deleteConfirm.Active() {
-		if msg.String() == "esc" {
-			p.deleteConfirm = components.Confirm{}
-			p, fc := p.withFlash("delete cancelled")
-			return p, fc
-		}
 		var cmd tea.Cmd
 		p.deleteConfirm, cmd = p.deleteConfirm.Update(msg)
 		return p, cmd
@@ -290,7 +279,7 @@ func (p BackendsPage) View() string {
 	leftWidth, rightWidth := theme.SplitTwoPanes(p.width)
 	leftContent := p.list.View()
 	if len(p.list.Items()) == 0 {
-		leftContent = theme.Subtitle.Render("No backends yet. Press [n] to add one.")
+		leftContent = components.EmptyState("No backends yet", "Press [n] to add one")
 	}
 	left := theme.Pane.Width(leftWidth).Render(leftContent)
 	rightContent := p.detailView()
@@ -311,7 +300,7 @@ func (p BackendsPage) View() string {
 
 func (p BackendsPage) detailView() string {
 	if len(p.list.Items()) == 0 {
-		return theme.Subtitle.Render("No backends yet. Press [n] to add one.")
+		return components.EmptyState("No backends yet", "Press [n] to add one")
 	}
 	sel, ok := p.selectedBackend()
 	if !ok {
@@ -343,21 +332,25 @@ func (p BackendsPage) detailView() string {
 			probeLine += " (" + r.latency.String() + ")"
 		}
 	}
-	return fmt.Sprintf(
-		"%s%s\n%s\n\nID:          %s\nKind:        %s\nExecutable:  %s\nSchemaRef:   %s\nDescription: %s\nTags:        %s\nCreated:     %s\nUpdated:     %s%s",
-		theme.Title.Render(sel.Name),
-		defaultMark,
-		theme.Subtitle.Render(string(sel.Kind)),
-		sel.ID,
-		sel.Kind,
-		sel.Executable,
-		sel.SchemaRef,
-		desc,
-		tags,
-		formatBackendTime(sel.Meta.CreatedAt),
-		formatBackendTime(sel.Meta.UpdatedAt),
-		probeLine,
-	)
+	labelStyle := lipgloss.NewStyle().Width(12).Foreground(theme.ColorDim)
+
+	row := func(label, value string) string {
+		return lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render(label), value)
+	}
+
+	var b strings.Builder
+	b.WriteString(theme.Title.Render(sel.Name) + defaultMark + "\n")
+	b.WriteString(theme.Subtitle.Render(string(sel.Kind)) + "\n\n")
+	b.WriteString(row("ID:", sel.ID) + "\n")
+	b.WriteString(row("Kind:", string(sel.Kind)) + "\n")
+	b.WriteString(row("Executable:", sel.Executable) + "\n")
+	b.WriteString(row("SchemaRef:", sel.SchemaRef) + "\n")
+	b.WriteString(row("Description:", desc) + "\n")
+	b.WriteString(row("Tags:", tags) + "\n")
+	b.WriteString(row("Created:", formatBackendTime(sel.Meta.CreatedAt)) + "\n")
+	b.WriteString(row("Updated:", formatBackendTime(sel.Meta.UpdatedAt)) + "\n")
+	b.WriteString(probeLine)
+	return b.String()
 }
 
 func (p BackendsPage) Hints() string {
@@ -388,13 +381,19 @@ func (p BackendsPage) withFlash(msg string) (BackendsPage, tea.Cmd) {
 	return p, cmd
 }
 
+func (p BackendsPage) withFlashError(msg string) (BackendsPage, tea.Cmd) {
+	var cmd tea.Cmd
+	p.flash, cmd = p.flash.SetError(msg)
+	return p, cmd
+}
+
 func (p BackendsPage) startAdd() (tea.Model, tea.Cmd) {
 	if p.manager == nil {
-		p, fc := p.withFlash("backend manager not available")
+		p, fc := p.withFlashError("backend manager not available")
 		return p, fc
 	}
 	if len(p.kindOptions()) == 0 {
-		p, fc := p.withFlash("no backend generators registered")
+		p, fc := p.withFlashError("no backend generators registered")
 		return p, fc
 	}
 	p.formMode = formModeAdd
@@ -487,7 +486,7 @@ func (p BackendsPage) commitForm(formCmd tea.Cmd) (tea.Model, tea.Cmd) {
 
 	var fc tea.Cmd
 	if err != nil {
-		p, fc = p.withFlash("save backend failed: " + err.Error())
+		p, fc = p.withFlashError("save backend failed: " + err.Error())
 		return p, tea.Batch(formCmd, fc)
 	}
 	p, fc = p.withFlash("saved backend " + b.ID)
@@ -514,12 +513,12 @@ func (p BackendsPage) askDeleteSelected() (tea.Model, tea.Cmd) {
 
 func (p BackendsPage) performDelete(id string) (tea.Model, tea.Cmd) {
 	if p.manager == nil {
-		p, fc := p.withFlash("backend manager not available")
+		p, fc := p.withFlashError("backend manager not available")
 		return p, fc
 	}
 	var fc tea.Cmd
 	if err := p.manager.DeleteBackend(id); err != nil {
-		p, fc = p.withFlash("delete failed: " + err.Error())
+		p, fc = p.withFlashError("delete failed: " + err.Error())
 	} else {
 		p, fc = p.withFlash("deleted " + id)
 	}
@@ -533,7 +532,7 @@ func (p BackendsPage) setDefaultSelected() (tea.Model, tea.Cmd) {
 		return p, nil
 	}
 	if err := p.manager.SetDefaultBackend(b.ID); err != nil {
-		p, fc := p.withFlash("set default failed: " + err.Error())
+		p, fc := p.withFlashError("set default failed: " + err.Error())
 		return p, fc
 	}
 	p.defaultBackendID = b.ID
@@ -562,13 +561,13 @@ func (p BackendsPage) askRefreshSelected() (tea.Model, tea.Cmd) {
 func (p BackendsPage) performRefresh(id string) (tea.Model, tea.Cmd) {
 	if p.manager == nil {
 		p.pendingRefresh = false
-		p, fc := p.withFlash("backend manager not available")
+		p, fc := p.withFlashError("backend manager not available")
 		return p, fc
 	}
 	p.refreshConfirm = components.Confirm{}
 	if err := p.manager.RefreshSchema(id); err != nil {
 		p.pendingRefresh = false
-		p, fc := p.withFlash("refresh schema failed: " + err.Error())
+		p, fc := p.withFlashError("refresh schema failed: " + err.Error())
 		return p, fc
 	}
 	p.pendingRefresh = false
@@ -578,7 +577,7 @@ func (p BackendsPage) performRefresh(id string) (tea.Model, tea.Cmd) {
 
 func (p BackendsPage) askProbeAll() (tea.Model, tea.Cmd) {
 	if p.prober == nil {
-		p, fc := p.withFlash("prober not available")
+		p, fc := p.withFlashError("prober not available")
 		return p, fc
 	}
 	p.pendingProbe = true
@@ -587,7 +586,7 @@ func (p BackendsPage) askProbeAll() (tea.Model, tea.Cmd) {
 	ch, err := p.prober.Probe(context.Background())
 	if err != nil {
 		p.pendingProbe = false
-		p, fc := p.withFlash("probe failed: " + err.Error())
+		p, fc := p.withFlashError("probe failed: " + err.Error())
 		return p, fc
 	}
 	p.probeCh = ch

@@ -785,7 +785,7 @@ func TestServerPage_EmptyStateHint(t *testing.T) {
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 
 	out := p.View()
-	if !strings.Contains(out, "no instances running") {
+	if !strings.Contains(out, "No instances running") {
 		t.Errorf("empty Monitor view missing hint; got:\n%s", out)
 	}
 	if !strings.Contains(out, "Launcher [1]") {
@@ -832,13 +832,13 @@ func TestServerPage_LogsShowingNofMFooter(t *testing.T) {
 		t.Errorf("5-log view should not show count footer; got:\n%s", p.View())
 	}
 
-	// 11 lines — footer present.
-	st.logs = make([]string, 11)
+	// More than visible log lines — footer present.
+	st.logs = make([]string, 19)
 	for i := range st.logs {
 		st.logs[i] = fmt.Sprintf("line %d", i)
 	}
-	if !strings.Contains(p.View(), "showing last 10 of 11") {
-		t.Errorf("11-log view should show count footer; got:\n%s", p.View())
+	if !strings.Contains(p.View(), "showing last 18 of 19") {
+		t.Errorf("overflow log view should show count footer; got:\n%s", p.View())
 	}
 }
 

@@ -175,7 +175,7 @@ func (p ProfilesPage) handleFlashClear(msg components.FlashClearMsg) (tea.Model,
 
 func (p ProfilesPage) handleLoaded(msg loadedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
-		p, fc := p.withFlash("load error: " + msg.err.Error())
+		p, fc := p.withFlashError("load error: " + msg.err.Error())
 		return p, fc
 	}
 	sortProfilesPinnedFirst(msg.profiles)
@@ -275,7 +275,7 @@ func (p ProfilesPage) handleEditorCommitted(msg profile_editor.EditorCommittedMs
 
 	var fc tea.Cmd
 	if err := p.store.Save(pr); err != nil {
-		p, fc = p.withFlash("save failed: " + err.Error())
+		p, fc = p.withFlashError("save failed: " + err.Error())
 	} else {
 		p, fc = p.withFlash("saved " + pr.ID)
 	}
@@ -383,7 +383,7 @@ func (p ProfilesPage) View() string {
 
 func (p ProfilesPage) detailView() string {
 	if len(p.list.Items()) == 0 {
-		return theme.Subtitle.Render("No profiles yet. Press [n] to create one.")
+		return components.EmptyState("No profiles yet", "Press [n] to create one")
 	}
 	sel, ok := p.list.SelectedItem().(item)
 	if !ok {
@@ -454,12 +454,12 @@ func (p ProfilesPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (p ProfilesPage) exportProfiles() (tea.Model, tea.Cmd) {
 	if p.exportDir == "" {
-		p, fc := p.withFlash("export directory not configured")
+		p, fc := p.withFlashError("export directory not configured")
 		return p, fc
 	}
 	bundle, err := profilestore.ExportAll(p.store, p.exportDir)
 	if err != nil {
-		p, fc := p.withFlash("export failed: " + err.Error())
+		p, fc := p.withFlashError("export failed: " + err.Error())
 		return p, fc
 	}
 	filename := filepath.Base(profilestore.ExportFilename(p.exportDir, bundle.ExportedAt))
@@ -478,7 +478,7 @@ func (p ProfilesPage) togglePinSelected() (tea.Model, tea.Cmd) {
 	pr := sel.p
 	pr.Pinned = !pr.Pinned
 	if err := p.store.Save(pr); err != nil {
-		p, fc := p.withFlash("pin failed: " + err.Error())
+		p, fc := p.withFlashError("pin failed: " + err.Error())
 		return p, fc
 	}
 	return p, p.loadCmd()
@@ -542,7 +542,7 @@ func (p ProfilesPage) handleNavigateToSizing(msg NavigateToSizingMsg) (tea.Model
 			return p, cmd
 		}
 	}
-	p, fc := p.withFlash("profile not found for sizing navigation")
+	p, fc := p.withFlashError("profile not found for sizing navigation")
 	return p, fc
 }
 
@@ -603,7 +603,7 @@ func (p ProfilesPage) handleUndoDone(_ undoDoneMsg) (tea.Model, tea.Cmd) {
 // profile so the root model can switch to the Launcher tab and run it.
 func (p ProfilesPage) launchSelected() (tea.Model, tea.Cmd) {
 	if _, isCorrupt := p.list.SelectedItem().(corruptItem); isCorrupt {
-		p, fc := p.withFlash("corrupt entry — fix the JSON file or delete it")
+		p, fc := p.withFlashError("corrupt entry — fix the JSON file or delete it")
 		return p, fc
 	}
 	sel, ok := p.list.SelectedItem().(item)
@@ -630,6 +630,12 @@ func (p ProfilesPage) withFlash(msg string) (ProfilesPage, tea.Cmd) {
 	return p, cmd
 }
 
+func (p ProfilesPage) withFlashError(msg string) (ProfilesPage, tea.Cmd) {
+	var cmd tea.Cmd
+	p.flash, cmd = p.flash.SetError(msg)
+	return p, cmd
+}
+
 func (p ProfilesPage) updatePicker(msg tea.Msg) (tea.Model, tea.Cmd) {
 	picker, cmd := p.picker.picker.Update(msg)
 	p.picker.picker = picker
@@ -637,11 +643,6 @@ func (p ProfilesPage) updatePicker(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (p ProfilesPage) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "esc" {
-		p.deleteConfirm = components.Confirm{}
-		p, fc := p.withFlash("delete cancelled")
-		return p, fc
-	}
 	var cmd tea.Cmd
 	p.deleteConfirm, cmd = p.deleteConfirm.Update(msg)
 	return p, cmd
@@ -654,7 +655,7 @@ func (p ProfilesPage) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (p ProfilesPage) performDelete(id string) (tea.Model, tea.Cmd) {
 	var fc tea.Cmd
 	if err := p.store.Delete(id); err != nil {
-		p, fc = p.withFlash("delete failed: " + err.Error())
+		p, fc = p.withFlashError("delete failed: " + err.Error())
 	} else {
 		p, fc = p.withFlash("deleted " + id)
 	}
@@ -720,7 +721,7 @@ func (p ProfilesPage) startNew() (tea.Model, tea.Cmd) {
 
 func (p ProfilesPage) startEditSelected() (tea.Model, tea.Cmd) {
 	if _, isCorrupt := p.list.SelectedItem().(corruptItem); isCorrupt {
-		p, fc := p.withFlash("selected entry is corrupt — delete it (x) or fix the JSON file")
+		p, fc := p.withFlashError("selected entry is corrupt — delete it (x) or fix the JSON file")
 		return p, fc
 	}
 	sel, ok := p.list.SelectedItem().(item)
@@ -766,7 +767,7 @@ func (p ProfilesPage) startEditSelected() (tea.Model, tea.Cmd) {
 
 func (p ProfilesPage) duplicateSelected() (tea.Model, tea.Cmd) {
 	if _, isCorrupt := p.list.SelectedItem().(corruptItem); isCorrupt {
-		p, fc := p.withFlash("selected entry is corrupt — delete it (x) or fix the JSON file")
+		p, fc := p.withFlashError("selected entry is corrupt — delete it (x) or fix the JSON file")
 		return p, fc
 	}
 	sel, ok := p.list.SelectedItem().(item)
@@ -775,7 +776,7 @@ func (p ProfilesPage) duplicateSelected() (tea.Model, tea.Cmd) {
 	}
 	newID := sel.p.ID + "-copy"
 	if _, err := p.store.Duplicate(sel.p.ID, newID); err != nil {
-		p, fc := p.withFlash("duplicate failed: " + err.Error())
+		p, fc := p.withFlashError("duplicate failed: " + err.Error())
 		return p, fc
 	}
 	p, fc := p.withFlash("duplicated as " + newID)

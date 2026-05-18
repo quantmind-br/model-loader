@@ -1,3 +1,6 @@
+// Playground modal is currently inert — input has no cursor handling and
+// p.response is never populated by a real stream. Re-enable Ctrl+P in
+// root.go once streaming wiring is in place.
 package components
 
 import (

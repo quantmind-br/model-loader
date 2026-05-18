@@ -172,14 +172,16 @@ type launchErrMsg struct {
 type healthyMsg struct{ pid int }
 
 type profileItem struct {
-	p domain.Profile
+	p   domain.Profile
+	idx int
 }
 
 func (i profileItem) Title() string {
+	name := i.p.Name
 	if i.p.Pinned {
-		return "★ " + i.p.Name
+		name = "★ " + name
 	}
-	return i.p.Name
+	return fmt.Sprintf("%d %s", i.idx+1, name)
 }
 func (i profileItem) Description() string {
 	desc := fmt.Sprintf("%s | port %v", i.p.ID, i.p.Args["port"])
@@ -248,7 +250,7 @@ func (p LauncherPage) handleProfilesLoaded(msg LauncherProfilesLoadedMsg) (tea.M
 	p.profiles = msg.Profiles
 	items := make([]list.Item, len(msg.Profiles))
 	for i, pr := range msg.Profiles {
-		items[i] = profileItem{p: pr}
+		items[i] = profileItem{p: pr, idx: i}
 	}
 	p.plist.SetItems(items)
 	return p, nil
@@ -311,12 +313,12 @@ func (p LauncherPage) handleFlashClear(msg components.FlashClearMsg) (tea.Model,
 
 func (p LauncherPage) handleLaunchProfile(msg LaunchProfileMsg) (tea.Model, tea.Cmd) {
 	if p.manager == nil {
-		p, fc := p.withFlash("launch failed: process manager unavailable")
+		p, fc := p.withFlashError("launch failed: process manager unavailable")
 		return p, fc
 	}
 	selected, err := p.store.Get(msg.ID)
 	if err != nil {
-		p, fc := p.withFlash("launch failed: " + err.Error())
+		p, fc := p.withFlashError("launch failed: " + err.Error())
 		return p, fc
 	}
 	// Refresh the in-memory list so the user sees the profile they
@@ -326,7 +328,7 @@ func (p LauncherPage) handleLaunchProfile(msg LaunchProfileMsg) (tea.Model, tea.
 		p.profiles = got
 		items := make([]list.Item, len(got))
 		for i, pr := range got {
-			items[i] = profileItem{p: pr}
+			items[i] = profileItem{p: pr, idx: i}
 			if pr.ID == msg.ID {
 				p.plist.Select(i)
 			}
@@ -407,12 +409,6 @@ func (p LauncherPage) askConfirmKill(pid int) (tea.Model, tea.Cmd) {
 }
 
 func (p LauncherPage) updateConfirmKill(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "esc" {
-		p.killConfirm = components.Confirm{}
-		var fc tea.Cmd
-		p, fc = p.withFlash("kill cancelled")
-		return p, fc
-	}
 	var cmd tea.Cmd
 	p.killConfirm, cmd = p.killConfirm.Update(msg)
 	return p, cmd
@@ -423,7 +419,7 @@ func (p LauncherPage) updateConfirmKill(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // on the page (the Confirm callback only emits a tea.Cmd).
 func (p LauncherPage) performKill(pid int) (LauncherPage, tea.Cmd) {
 	if err := p.manager.Kill(pid); err != nil {
-		return p.withFlash("error: " + err.Error())
+		return p.withFlashError("error: " + err.Error())
 	}
 	out := p.running[:0]
 	for _, ri := range p.running {
@@ -452,6 +448,14 @@ func (p LauncherPage) withFlash(msg string) (LauncherPage, tea.Cmd) {
 	p.statusAt = time.Time{}
 	var cmd tea.Cmd
 	p.flash, cmd = p.flash.Set(msg)
+	return p, cmd
+}
+
+func (p LauncherPage) withFlashError(msg string) (LauncherPage, tea.Cmd) {
+	p.status = ""
+	p.statusAt = time.Time{}
+	var cmd tea.Cmd
+	p.flash, cmd = p.flash.SetError(msg)
 	return p, cmd
 }
 
@@ -511,7 +515,7 @@ func (p LauncherPage) View() string {
 		return theme.Subtitle.Render(fmt.Sprintf("load profiles: %v", p.loadErr))
 	}
 	if len(p.profiles) == 0 && p.status == "" && p.flash.Message() == "" {
-		return theme.Subtitle.Render("(no profiles yet — switch to Profiles [2] to create one)")
+		return components.EmptyState("No profiles yet", "Switch to Profiles [2] to create one")
 	}
 
 	parts := []string{p.renderProfileDetail(), "", p.renderRunningList()}
@@ -558,7 +562,7 @@ func (p LauncherPage) renderProfileDetail() string {
 // the "Running: (none)" placeholder when no instances are tracked.
 func (p LauncherPage) renderRunningList() string {
 	if len(p.running) == 0 {
-		return theme.Subtitle.Render("Running: (none) — press [enter] to launch selected profile")
+		return "Running: " + components.EmptyState("(none)", "Press [enter] to launch selected profile")
 	}
 	lines := []string{theme.Subtitle.Render("Running")}
 	for _, ri := range p.running {
@@ -594,7 +598,7 @@ func (p LauncherPage) togglePinSelected() (tea.Model, tea.Cmd) {
 	pr := it.p
 	pr.Pinned = !pr.Pinned
 	if err := p.store.Save(pr); err != nil {
-		p, fc := p.withFlash("pin failed: " + err.Error())
+		p, fc := p.withFlashError("pin failed: " + err.Error())
 		return p, fc
 	}
 	return p, loadProfilesCmd(p.store)

@@ -69,7 +69,7 @@ func (f *fakeManager) List() []domain.RunningInstance                        { r
 func (f *fakeManager) WaitHealthy(_, _ int, _ time.Duration, _ string) error { return nil }
 func (f *fakeManager) TailLogs(_ int) (io.ReadCloser, error)                 { return nil, processmgr.ErrUnknownPID }
 func (f *fakeManager) Close() error                                          { return nil }
-func (f *fakeManager) History() []domain.ExitedInstance { return nil }
+func (f *fakeManager) History() []domain.ExitedInstance                      { return nil }
 func (f *fakeManager) GetExitInfo(pid int) (processmgr.ExitInfo, bool) {
 	if f.exitInfos == nil {
 		return processmgr.ExitInfo{}, false
@@ -502,7 +502,7 @@ func TestLauncherPage_EmptyStateHint(t *testing.T) {
 	store, _ := profilestore.NewFSStore(dir)
 	page := NewLauncherPage(store, nil, nil)
 	view := page.View()
-	if !strings.Contains(view, "no profiles yet") {
+	if !strings.Contains(view, "No profiles yet.") {
 		t.Errorf("empty Launcher view missing hint; got:\n%s", view)
 	}
 	if !strings.Contains(view, "Profiles [2]") {

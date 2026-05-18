@@ -21,6 +21,9 @@ _Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or
 - ` + "`x`" + ` — delete         ` + "`enter`" + ` — edit / submit Save
 - ` + "`esc`" + ` — cancel editing (prompts to discard unsaved changes)
 - ` + "`L`" + ` — launch directly from selected profile
+- ` + "`p`" + ` — pin selected profile
+- ` + "`I`" + ` — import profiles from JSON bundle
+- ` + "`u`" + ` — undo last import
 - ` + "`e`" + ` — export all profiles to JSON bundle
 - ` + "`ctrl+t`" + ` — toggle Essentials / Advanced sub-tab while editing
 - ` + "`/`" + ` — filter
@@ -48,6 +51,9 @@ _Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or
 - ` + "`R`" + ` — rescan all configured paths
 - ` + "`/`" + ` — filter
 - ` + "`enter`" + ` — actions: use in new profile / existing profile / reveal path
+- ` + "`s`" + ` — search Hugging Face
+- ` + "`i`" + ` — show model info panel
+- ` + "`→`" + ` / ` + "`g`" + ` — navigate to sizing for this model
 
 ## Backends tab
 

@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
@@ -71,9 +70,9 @@ func (c ConflictModal) View() string {
 	b.WriteString("File: " + c.path + "\n\n")
 	for i, label := range conflictLabels {
 		if i == c.selected {
-			b.WriteString(lipgloss.NewStyle().Foreground(theme.ColorAccent).Render("> "+label) + "\n")
+			b.WriteString(theme.Selected.Render(label) + "\n")
 		} else {
-			b.WriteString("  " + label + "\n")
+			b.WriteString(label + "\n")
 		}
 	}
 	b.WriteString("\n[←→] choose  [enter] confirm  [esc] cancel")

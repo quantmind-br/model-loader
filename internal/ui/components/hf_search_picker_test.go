@@ -100,8 +100,8 @@ func TestHFSearchPicker_PrintableRuneAppendsToQuery(t *testing.T) {
 	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
 	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
 	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
-	if p.query != "llama" {
-		t.Errorf("query = %q, want %q", p.query, "llama")
+	if p.input.Value() != "llama" {
+		t.Errorf("query = %q, want %q", p.input.Value(), "llama")
 	}
 }
 
@@ -112,8 +112,8 @@ func TestHFSearchPicker_RuneGAppendsToQueryAndDoesNotToggle(t *testing.T) {
 		t.Fatal("ggufOnly should default false")
 	}
 	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
-	if p.query != "g" {
-		t.Errorf("query = %q, want %q", p.query, "g")
+	if p.input.Value() != "g" {
+		t.Errorf("query = %q, want %q", p.input.Value(), "g")
 	}
 	if p.ggufOnly {
 		t.Error("ggufOnly should still be false after typing 'g'")
@@ -123,10 +123,10 @@ func TestHFSearchPicker_RuneGAppendsToQueryAndDoesNotToggle(t *testing.T) {
 func TestHFSearchPicker_BackspaceRemovesLastRune(t *testing.T) {
 	p := NewHFSearchPicker(&fakeSearcher{}, 80, 24)
 	p.Init()
-	p.query = "abc"
+	p.input.SetValue("abc")
 	p.Update(tea.KeyMsg{Type: tea.KeyBackspace})
-	if p.query != "ab" {
-		t.Errorf("query after backspace = %q, want %q", p.query, "ab")
+	if p.input.Value() != "ab" {
+		t.Errorf("query after backspace = %q, want %q", p.input.Value(), "ab")
 	}
 }
 
@@ -137,8 +137,8 @@ func TestHFSearchPicker_BackspaceOnEmptyIsNoOp(t *testing.T) {
 	if cmd != nil {
 		t.Errorf("backspace on empty query should return nil cmd; got %v", cmd)
 	}
-	if p.query != "" {
-		t.Errorf("query should remain empty; got %q", p.query)
+	if p.input.Value() != "" {
+		t.Errorf("query should remain empty; got %q", p.input.Value())
 	}
 }
 
@@ -146,8 +146,8 @@ func TestHFSearchPicker_ViewRendersSearchPrompt(t *testing.T) {
 	p := NewHFSearchPicker(&fakeSearcher{}, 80, 24)
 	p.Init()
 	out := p.View()
-	if !strings.Contains(out, "Search:") {
-		t.Errorf("view missing 'Search:' prompt; got:\n%s", out)
+	if !strings.Contains(out, "Search Hugging Face...") {
+		t.Errorf("view missing placeholder prompt; got:\n%s", out)
 	}
 	if !strings.Contains(out, "esc") {
 		t.Errorf("view should mention 'esc' hint; got:\n%s", out)
@@ -176,7 +176,7 @@ func TestHFSearchPicker_ViewRendersResults(t *testing.T) {
 func TestHFSearchPicker_ViewShowsNoResultsForQuery(t *testing.T) {
 	p := NewHFSearchPicker(&fakeSearcher{}, 80, 24)
 	p.Init()
-	p.query = "nothingmatches"
+	p.input.SetValue("nothingmatches")
 	out := p.View()
 	if !strings.Contains(out, "No results") {
 		t.Errorf("view should show 'No results' for empty result set; got:\n%s", out)

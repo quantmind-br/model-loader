@@ -193,8 +193,7 @@ func (p *ServerPage) WithProxy(srv components.HTTPProxyController) *ServerPage {
 func (p *ServerPage) openHistoryChart() (tea.Model, tea.Cmd) {
 	pid := p.selectedPID()
 	if pid <= 0 || p.metricsDir == "" {
-		p.flash, _ = p.flash.Set("history: no metrics directory configured")
-		return p, nil
+		return p.withFlashError("history: no metrics directory configured")
 	}
 	insts := p.pm.List()
 	var profileID string
@@ -205,13 +204,11 @@ func (p *ServerPage) openHistoryChart() (tea.Model, tea.Cmd) {
 		}
 	}
 	if profileID == "" {
-		p.flash, _ = p.flash.Set("history: no profile for selected instance")
-		return p, nil
+		return p.withFlashError("history: no profile for selected instance")
 	}
 	recs, err := metricsstore.Read(p.metricsDir, profileID, time.Now().Add(-24*time.Hour))
 	if err != nil {
-		p.flash, _ = p.flash.Set("history: " + err.Error())
-		return p, nil
+		return p.withFlashError("history: " + err.Error())
 	}
 	p.historyChart = &components.HistoryChart{}
 	*p.historyChart = components.NewHistoryChart(recs, time.Hour)
@@ -405,9 +402,15 @@ func (p *ServerPage) handleInstancesRefreshed(m monitorInstancesRefreshedMsg) (t
 func (p *ServerPage) handleRestartResult(m restartResultMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	if m.err != nil {
-		p.flash, cmd = p.flash.Set(fmt.Sprintf("restart: pid %d failed: %v", m.pid, m.err))
+		p.flash, cmd = p.flash.SetError(fmt.Sprintf("restart: pid %d failed: %v", m.pid, m.err))
 	}
 	return p, tea.Batch(p.refreshInstancesCmd(), p.forwardToConfirms(m), cmd)
+}
+
+func (p *ServerPage) withFlashError(msg string) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	p.flash, cmd = p.flash.SetError(msg)
+	return p, cmd
 }
 
 func (p *ServerPage) handleSelectPID(m ServerSelectPIDMsg) (tea.Model, tea.Cmd) {
@@ -522,10 +525,6 @@ func (p *ServerPage) askConfirmKill(pid int) tea.Cmd {
 }
 
 func (p *ServerPage) handleConfirmKillKey(msg tea.KeyMsg) tea.Cmd {
-	if msg.String() == "esc" {
-		p.killConfirm = components.Confirm{}
-		return nil
-	}
 	var cmd tea.Cmd
 	p.killConfirm, cmd = p.killConfirm.Update(msg)
 	return cmd
@@ -556,16 +555,16 @@ func (p *ServerPage) askConfirmRestart(pid int) tea.Cmd {
 	}
 	var cmd tea.Cmd
 	if inst == nil {
-		p.flash, cmd = p.flash.Set(fmt.Sprintf("restart: pid %d not found", pid))
+		p.flash, cmd = p.flash.SetError(fmt.Sprintf("restart: pid %d not found", pid))
 		return cmd
 	}
 	if p.ps == nil {
-		p.flash, cmd = p.flash.Set("restart: profile store not available")
+		p.flash, cmd = p.flash.SetError("restart: profile store not available")
 		return cmd
 	}
 	prof, err := p.ps.Get(inst.ProfileID)
 	if err != nil {
-		p.flash, cmd = p.flash.Set(fmt.Sprintf("restart: profile %q not found", inst.ProfileID))
+		p.flash, cmd = p.flash.SetError(fmt.Sprintf("restart: profile %q not found", inst.ProfileID))
 		return cmd
 	}
 	payload := restartPayload{pid: pid, profile: prof, background: inst.Background}
@@ -585,10 +584,6 @@ func (p *ServerPage) askConfirmRestart(pid int) tea.Cmd {
 }
 
 func (p *ServerPage) handleConfirmRestartKey(msg tea.KeyMsg) tea.Cmd {
-	if msg.String() == "esc" {
-		p.restartConfirm = components.Confirm{}
-		return nil
-	}
 	var cmd tea.Cmd
 	p.restartConfirm, cmd = p.restartConfirm.Update(msg)
 	return cmd
@@ -740,7 +735,7 @@ func (p *ServerPage) View() string {
 		if p.flash.Message() != "" {
 			header = p.flash.View() + "\n" + header
 		}
-		body = header + "\n" + theme.Subtitle.Render("(no instances running — switch to Launcher [1] to start one)")
+		body = header + "\n" + components.EmptyState("No instances running", "Switch to Launcher [1] to start one")
 	} else {
 		body = p.renderTable() + "\n\n" + p.renderStatusLine() + "\n" + p.renderSubViewBody()
 	}
@@ -784,7 +779,11 @@ func (p *ServerPage) renderSubViewBody() string {
 		if st.subErr != "" {
 			return theme.Error.Render("Logs unavailable: " + st.subErr)
 		}
-		start := len(st.logs) - 10
+		visible := p.height - 12 // header + table + sub-tabs + status + flash + margins
+		if visible < 5 {
+			visible = 5
+		}
+		start := len(st.logs) - visible
 		if start < 0 {
 			start = 0
 		}
@@ -793,10 +792,11 @@ func (p *ServerPage) renderSubViewBody() string {
 			bottom = "(no log lines yet)"
 		}
 		if p.paused {
-			bottom = theme.Warn.Render("Logs (PAUSED — Space to resume)") + "\n" + bottom
+			bottom = theme.Warn.Render("Logs (PAUSED — Space to resume)") + "\n" +
+				theme.Subtitle.Render(centeredDivider("PAUSED", p.width-4)) + "\n" + bottom
 		}
-		if len(st.logs) > 10 {
-			bottom += "\n" + theme.Subtitle.Render(fmt.Sprintf("— showing last 10 of %d (Space pauses, buffer 2000)", len(st.logs)))
+		if len(st.logs) > visible {
+			bottom += "\n" + theme.Subtitle.Render(fmt.Sprintf("— showing last %d of %d (Space pauses, buffer 2000)", visible, len(st.logs)))
 		}
 		return bottom
 	case SubViewSlots:
@@ -836,10 +836,11 @@ func (p *ServerPage) renderHistory() string {
 		return "(no exit history yet)"
 	}
 	var b strings.Builder
-	b.WriteString("profile          │ pid  │ started            │ exited             │ duration │ reason          │ stderr\n")
+	b.WriteString("profile          │ pid  │ started    │ exited     │ duration │ reason          │ stderr\n")
+	now := time.Now()
 	for _, h := range p.history {
-		started := h.StartedAt.Format("2006-01-02 15:04:05")
-		exited := h.ExitedAt.Format("2006-01-02 15:04:05")
+		started := humanRelative(h.StartedAt, now)
+		exited := humanRelative(h.ExitedAt, now)
 		dur := humanDuration(time.Duration(h.DurationSeconds) * time.Second)
 		reason := h.ExitReason
 		if reason == "" {
@@ -849,7 +850,7 @@ func (p *ServerPage) renderHistory() string {
 		if len(h.StderrTail) == 0 {
 			stderr = "—"
 		}
-		fmt.Fprintf(&b, "%-16s │ %-4d │ %s │ %s │ %-8s │ %-15s │ %s\n",
+		fmt.Fprintf(&b, "%-16s │ %-4d │ %-10s │ %-10s │ %-8s │ %-15s │ %s\n",
 			h.ProfileID, h.PID, started, exited, dur, reason, stderr)
 	}
 	return b.String()
@@ -915,6 +916,29 @@ func humanDuration(d time.Duration) string {
 	h := int(d / time.Hour)
 	m := int((d % time.Hour) / time.Minute)
 	return fmt.Sprintf("%dh%02dm", h, m)
+}
+
+func humanRelative(t, now time.Time) string {
+	d := now.Sub(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return t.Format("2006-01-02")
+	}
+}
+
+func centeredDivider(label string, width int) string {
+	lw := len(label)
+	if width < lw+6 {
+		return strings.Repeat("─", width)
+	}
+	side := (width - lw - 2) / 2
+	return strings.Repeat("─", side) + " " + label + " " + strings.Repeat("─", width-side-lw-2)
 }
 
 // formatVRAM renders the per-instance VRAM cell. Returns "--" when no

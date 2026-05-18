@@ -81,7 +81,7 @@ func TestBackendsPage_RendersEmptyState(t *testing.T) {
 	p = loadBackendsPage(t, p)
 
 	out := p.View()
-	if !strings.Contains(out, "No backends yet. Press [n] to add one.") {
+	if !strings.Contains(out, "No backends yet.") || !strings.Contains(out, "Press [n] to add one") {
 		t.Fatalf("empty state missing; got:\n%s", out)
 	}
 }
@@ -277,9 +277,6 @@ func TestBackendsPage_RefreshSchemaCancel(t *testing.T) {
 
 	if gen.calls != before {
 		t.Fatalf("generator calls = %d, want %d (no refresh after cancel)", gen.calls, before)
-	}
-	if !strings.Contains(p.flash.Message(), "refresh cancelled") {
-		t.Fatalf("flash = %q", p.flash.Message())
 	}
 	if p.refreshConfirm.Active() {
 		t.Fatal("expected refresh confirmation to be cleared after cancel")

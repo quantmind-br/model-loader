@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // HFFileLister is the minimal interface needed to list files in a HF repo.
@@ -52,6 +54,7 @@ type HFFilePicker struct {
 	width      int
 	height     int
 	loading    bool
+	spinner    spinner.Model
 	err        error
 }
 
@@ -63,6 +66,7 @@ func NewHFFilePicker(lister HFFileLister, repoID string, isSnapshot bool, width,
 		isSnapshot: isSnapshot,
 		active:     true,
 		loading:    true,
+		spinner:    NewLoadingSpinner(),
 		width:      width,
 		height:     height,
 	}
@@ -89,6 +93,12 @@ func (p *HFFilePicker) Init() tea.Cmd {
 // Update implements tea.Model.
 func (p *HFFilePicker) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
+	case spinner.TickMsg:
+		if p.loading {
+			var cmd tea.Cmd
+			p.spinner, cmd = p.spinner.Update(msg)
+			return cmd
+		}
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
@@ -135,7 +145,7 @@ func (p *HFFilePicker) Update(msg tea.Msg) tea.Cmd {
 // View implements tea.Model.
 func (p *HFFilePicker) View() string {
 	if p.loading {
-		return "Loading files..."
+		return LoadingLine(p.spinner, "Loading files", 0)
 	}
 	if p.err != nil {
 		return fmt.Sprintf("Error: %v", p.err)
@@ -149,6 +159,11 @@ func (p *HFFilePicker) View() string {
 	}
 	b.WriteString("\n")
 
+	const (
+		hfFilePrefixWidth = 5 // cursor(1) + checked(3) + space(1)
+		hfFileSizeWidth   = 12
+	)
+	sizeStyle := lipgloss.NewStyle().Width(hfFileSizeWidth).Align(lipgloss.Right)
 	for i, f := range p.files {
 		cursor := " "
 		if i == p.cursor {
@@ -158,8 +173,9 @@ func (p *HFFilePicker) View() string {
 		if f.Selected {
 			checked = "[x]"
 		}
-		size := humanBytes(f.Size)
-		b.WriteString(fmt.Sprintf("%s %s %s (%s)\n", cursor, checked, f.RFilename, size))
+		size := sizeStyle.Render(humanBytes(f.Size))
+		name := truncatePath(f.RFilename, p.width-hfFilePrefixWidth-hfFileSizeWidth-1)
+		b.WriteString(fmt.Sprintf("%s%s %s %s\n", cursor, checked, name, size))
 	}
 
 	b.WriteString("\n")
@@ -204,5 +220,3 @@ func (p *HFFilePicker) IsActive() bool {
 func (p *HFFilePicker) IsSnapshot() bool {
 	return p.isSnapshot
 }
-
-

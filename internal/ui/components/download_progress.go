@@ -5,6 +5,9 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // DownloadStateSnapshotter is the minimal interface for observing download states.
@@ -116,15 +119,29 @@ func (p *DownloadProgress) View() string {
 	return strings.Join(lines, "\n")
 }
 
+var statusStyle = map[string]lipgloss.Style{
+	"done":   theme.OK,
+	"failed": theme.Error,
+	"paused": theme.Subtitle,
+}
+
+func styleStatus(state string) string {
+	s, ok := statusStyle[state]
+	if !ok {
+		return "[" + state + "]"
+	}
+	return s.Render("[" + state + "]")
+}
+
 func formatProgress(state DownloadState) string {
 	var percent int64
 	if state.Total > 0 {
 		percent = state.Bytes * 100 / state.Total
 	}
 
-	line := fmt.Sprintf("%s [%s] %s/%s (%d%%)",
+	line := fmt.Sprintf("%s %s %s/%s (%d%%)",
 		state.Name,
-		state.Status,
+		styleStatus(state.Status),
 		humanBytes(state.Bytes),
 		humanBytes(state.Total),
 		percent,

@@ -8,13 +8,11 @@ import (
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
-// FlashLifetime is how long a flash message stays on screen before the
-// auto-clear FlashClearMsg fires.
-const FlashLifetime = 15 * time.Second
-
-// FlashDimAfter is the age at which View switches to a Faint style so the
-// flash visibly cools off before disappearing.
-const FlashDimAfter = 5 * time.Second
+const (
+	FlashLifetime      = 6 * time.Second
+	FlashLifetimeError = 15 * time.Second
+	FlashDimAfter      = 5 * time.Second
+)
 
 // FlashClearMsg is the tea.Msg emitted by the Cmd that Set returns, once
 // FlashLifetime has elapsed. Tag identifies the owning page so unrelated
@@ -54,6 +52,16 @@ func (f Flash) Set(message string) (Flash, tea.Cmd) {
 	tag := f.tag
 	at := f.at
 	return f, tea.Tick(FlashLifetime, func(time.Time) tea.Msg {
+		return FlashClearMsg{Tag: tag, At: at}
+	})
+}
+
+func (f Flash) SetError(message string) (Flash, tea.Cmd) {
+	f.message = message
+	f.at = time.Now()
+	tag := f.tag
+	at := f.at
+	return f, tea.Tick(FlashLifetimeError, func(time.Time) tea.Msg {
 		return FlashClearMsg{Tag: tag, At: at}
 	})
 }

@@ -283,19 +283,8 @@ func (m RootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "ctrl+c" {
 		return m, tea.Quit
 	}
-	if msg.String() == "ctrl+p" {
-		if m.playgroundOpen {
-			m.playgroundOpen = false
-			return m, nil
-		}
-		if !m.activePageCapturesInput() {
-			m.playgroundOpen = true
-			if m.pm != nil {
-				m.playgroundModal = components.NewPlaygroundModal(m.pm.List())
-			}
-			return m, nil
-		}
-	}
+	// TODO(playground): re-enable Ctrl+P binding once streaming wiring lands.
+	//                   PlaygroundModal struct kept intact to avoid churn in importers.
 	if !m.activePageCapturesInput() {
 		if msg.String() == "?" {
 			m.helpOpen = true

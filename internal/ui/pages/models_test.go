@@ -221,7 +221,7 @@ func TestModelsPage_EmptyStateHintAfterScanComplete(t *testing.T) {
 	// Mark the root as scanned with zero results.
 	page.statusMap["/models"] = pathStatus{state: "scanned"}
 	out := page.View()
-	if !strings.Contains(out, "no .gguf files") {
+	if !strings.Contains(out, "No .gguf files") {
 		t.Errorf("scanned-empty Models view missing hint; got:\n%s", out)
 	}
 }
@@ -230,7 +230,7 @@ func TestModelsPage_NoEmptyStateWhileScanning(t *testing.T) {
 	page := NewModelsPage(&fakeScanner{}, []string{"/models"})
 	// statusMap initialized to "scanning" — empty hint must not show yet.
 	out := page.View()
-	if strings.Contains(out, "no .gguf files") {
+	if strings.Contains(out, "No .gguf files") {
 		t.Errorf("scanning Models view should not show empty hint yet; got:\n%s", out)
 	}
 }
@@ -703,8 +703,8 @@ func TestModelsPage_DeleteCancelKeepsFile(t *testing.T) {
 	if len(mp2.files) != 1 {
 		t.Errorf("files = %d, want 1 (must not remove on cancel)", len(mp2.files))
 	}
-	if !strings.Contains(mp2.flash.Message(), "cancelled") {
-		t.Errorf("flash = %q, want 'cancelled'", mp2.flash.Message())
+	if mp2.flash.Message() != "" {
+		t.Errorf("flash = %q, want empty after confirm-owned cancel", mp2.flash.Message())
 	}
 }
 
