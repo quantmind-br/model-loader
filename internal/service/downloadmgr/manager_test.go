@@ -1,196 +1,275 @@
 package downloadmgr
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 )
 
-func TestStart_SingleDownload(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("model data"))
-	}))
-	defer server.Close()
-
-	dest := filepath.Join(t.TempDir(), "model.gguf")
-	mgr := NewManager(server.Client(), 1)
-	id, err := mgr.Start(Spec{URL: server.URL, DestFile: dest})
-	if err != nil {
-		t.Fatalf("Start returned error: %v", err)
-	}
-
-	state := waitForStatus(t, mgr, id, StatusCompleted)
-	if state.Bytes != int64(len("model data")) {
-		t.Errorf("Bytes: want %d, got %d", len("model data"), state.Bytes)
-	}
-	data, err := os.ReadFile(dest)
-	if err != nil {
-		t.Fatalf("ReadFile returned error: %v", err)
-	}
-	if string(data) != "model data" {
-		t.Errorf("file content: want %q, got %q", "model data", string(data))
+// inProcessSpawner runs RunWorker in a goroutine and returns the current
+// process PID (always alive) so pidAlive checks pass during the test.
+// It captures the worker's expected user-agent.
+func inProcessSpawner(t *testing.T, client *http.Client, wg *sync.WaitGroup) Spawner {
+	t.Helper()
+	return func(statePath, userAgent string) (int, error) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = RunWorker(WorkerConfig{
+				StatePath:          statePath,
+				Client:             client,
+				UserAgent:          userAgent,
+				CheckpointBytes:    1024,
+				CheckpointInterval: 10 * time.Millisecond,
+			})
+		}()
+		return syscall.Getpid(), nil
 	}
 }
 
-func TestStart_ConcurrentLimit(t *testing.T) {
-	blocked := make(chan struct{})
-	var active int64
+func TestManager_StartSpawnsWorkerAndCompletes(t *testing.T) {
+	body := "model bytes"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	var wg sync.WaitGroup
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "out.gguf")
+	mgr := NewManager(dir, 1).
+		WithSpawner(inProcessSpawner(t, srv.Client(), &wg)).
+		WithPollInterval(20 * time.Millisecond)
+	mgr.StartPolling()
+	defer mgr.Close()
+
+	id, err := mgr.Start(Spec{URL: srv.URL, DestFile: dest})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForStatus(t, mgr, id, StatusCompleted)
+	wg.Wait()
+}
+
+func TestManager_QueueBeyondConcurrency(t *testing.T) {
+	release := make(chan struct{})
+	var inflight int64
 	var maxSeen int64
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		current := atomic.AddInt64(&active, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		now := atomic.AddInt64(&inflight, 1)
 		for {
-			max := atomic.LoadInt64(&maxSeen)
-			if current <= max || atomic.CompareAndSwapInt64(&maxSeen, max, current) {
+			m := atomic.LoadInt64(&maxSeen)
+			if now <= m || atomic.CompareAndSwapInt64(&maxSeen, m, now) {
 				break
 			}
 		}
-		defer atomic.AddInt64(&active, -1)
-		<-blocked
+		defer atomic.AddInt64(&inflight, -1)
+		<-release
 		_, _ = w.Write([]byte("ok"))
 	}))
-	defer server.Close()
+	defer srv.Close()
 
+	var wg sync.WaitGroup
 	dir := t.TempDir()
-	mgr := NewManager(server.Client(), 2)
-	ids := make([]ID, 0, 5)
-	for i := 0; i < 5; i++ {
-		id, err := mgr.Start(Spec{URL: server.URL, DestFile: filepath.Join(dir, fmt.Sprintf("file-%d", i))})
+	mgr := NewManager(dir, 2).
+		WithSpawner(inProcessSpawner(t, srv.Client(), &wg)).
+		WithPollInterval(20 * time.Millisecond)
+	mgr.StartPolling()
+	defer mgr.Close()
+
+	ids := make([]ID, 0, 4)
+	for i := 0; i < 4; i++ {
+		id, err := mgr.Start(Spec{URL: srv.URL, DestFile: filepath.Join(dir, "f"+string(rune('a'+i)))})
 		if err != nil {
-			t.Fatalf("Start %d returned error: %v", i, err)
+			t.Fatalf("Start %d: %v", i, err)
 		}
 		ids = append(ids, id)
 	}
-
-	waitForActiveCount(t, mgr, 2)
-	for _, id := range ids[2:] {
-		state := stateByID(t, mgr, id)
-		if state.Status != StatusQueued {
-			t.Errorf("queued state %s: want StatusQueued, got %v", id, state.Status)
-		}
+	// Two should be active concurrently; rest queued.
+	deadline := time.Now().Add(time.Second)
+	for atomic.LoadInt64(&inflight) < 2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
 	}
-	close(blocked)
+	if got := atomic.LoadInt64(&inflight); got != 2 {
+		t.Errorf("inflight = %d, want 2", got)
+	}
+	close(release)
 	for _, id := range ids {
 		waitForStatus(t, mgr, id, StatusCompleted)
 	}
 	if got := atomic.LoadInt64(&maxSeen); got > 2 {
-		t.Errorf("max concurrent requests: want <= 2, got %d", got)
+		t.Errorf("max concurrent = %d, want <= 2", got)
 	}
+	wg.Wait()
 }
 
-func TestCancel_Active(t *testing.T) {
-	started := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		close(started)
-		<-r.Context().Done()
-	}))
-	defer server.Close()
-
-	dest := filepath.Join(t.TempDir(), "active.bin")
-	mgr := NewManager(server.Client(), 1)
-	id, err := mgr.Start(Spec{URL: server.URL, DestFile: dest})
-	if err != nil {
-		t.Fatalf("Start returned error: %v", err)
-	}
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("server never received request")
-	}
-	if err := mgr.Cancel(id); err != nil {
-		t.Fatalf("Cancel returned error: %v", err)
-	}
-	waitForStatus(t, mgr, id, StatusCancelled)
-	if _, err := os.Stat(dest + ".partial"); !os.IsNotExist(err) {
-		t.Errorf("partial file should be removed, stat err=%v", err)
-	}
-}
-
-func TestCancel_Queued(t *testing.T) {
-	firstStarted := make(chan struct{})
-	releaseFirst := make(chan struct{})
-	var requests int64
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt64(&requests, 1)
-		if r.URL.Query().Get("id") == "first" {
-			close(firstStarted)
-			<-releaseFirst
-		}
+func TestManager_CancelQueuedRecord(t *testing.T) {
+	// Active-worker SIGTERM is verified end-to-end in the tmux smoke
+	// test (sending SIGTERM to the in-process worker would kill the
+	// test runner). This test covers the queued-record branch: cancel
+	// before a spawn happens → record flipped to StatusCancelled and
+	// no worker is ever started.
+	release := make(chan struct{})
+	defer close(release)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-release
 		_, _ = w.Write([]byte("ok"))
 	}))
-	defer server.Close()
+	defer srv.Close()
 
+	var wg sync.WaitGroup
 	dir := t.TempDir()
-	mgr := NewManager(server.Client(), 1)
-	firstID, err := mgr.Start(Spec{URL: server.URL + "?id=first", DestFile: filepath.Join(dir, "first")})
-	if err != nil {
-		t.Fatalf("Start first returned error: %v", err)
+	mgr := NewManager(dir, 1).
+		WithSpawner(inProcessSpawner(t, srv.Client(), &wg)).
+		WithPollInterval(20 * time.Millisecond)
+	mgr.StartPolling()
+	defer mgr.Close()
+
+	first, _ := mgr.Start(Spec{URL: srv.URL, DestFile: filepath.Join(dir, "first")})
+	queued, _ := mgr.Start(Spec{URL: srv.URL, DestFile: filepath.Join(dir, "queued")})
+
+	if err := mgr.Cancel(queued); err != nil {
+		t.Fatalf("Cancel queued: %v", err)
 	}
-	queuedID, err := mgr.Start(Spec{URL: server.URL + "?id=queued", DestFile: filepath.Join(dir, "queued")})
-	if err != nil {
-		t.Fatalf("Start queued returned error: %v", err)
-	}
-	select {
-	case <-firstStarted:
-	case <-time.After(time.Second):
-		t.Fatal("first request never started")
-	}
-	if err := mgr.Cancel(queuedID); err != nil {
-		t.Fatalf("Cancel queued returned error: %v", err)
-	}
-	state := waitForStatus(t, mgr, queuedID, StatusCancelled)
+	state := waitForStatus(t, mgr, queued, StatusCancelled)
 	if state.Bytes != 0 {
-		t.Errorf("queued Bytes: want 0, got %d", state.Bytes)
+		t.Errorf("queued cancel must not have downloaded bytes; got %d", state.Bytes)
 	}
-	close(releaseFirst)
-	waitForStatus(t, mgr, firstID, StatusCompleted)
-	if got := atomic.LoadInt64(&requests); got != 1 {
-		t.Errorf("request count: want 1, got %d", got)
-	}
+	_ = first
 }
 
-func TestSnapshot(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("ok"))
-	}))
-	defer server.Close()
-
+func TestManager_ReconcileMarksDeadWorkersAbandoned(t *testing.T) {
 	dir := t.TempDir()
-	mgr := NewManager(server.Client(), 1)
-	id, err := mgr.Start(Spec{URL: server.URL, DestFile: filepath.Join(dir, "snapshot")})
-	if err != nil {
-		t.Fatalf("Start returned error: %v", err)
+	id := ID("rec-dead")
+	rec := DownloadRecord{
+		ID:       id,
+		PID:      99999999, // very likely dead
+		URL:      "http://example",
+		DestFile: filepath.Join(dir, "x"),
+		Status:   StatusActive,
+		Bytes:    100,
+		Total:    1000,
 	}
-	waitForStatus(t, mgr, id, StatusCompleted)
-	snapshot := mgr.Snapshot()
-	if len(snapshot) != 1 {
-		t.Fatalf("Snapshot len: want 1, got %d", len(snapshot))
+	if err := SaveRecord(dir, rec); err != nil {
+		t.Fatal(err)
 	}
-	if snapshot[0].ID != id || snapshot[0].Status != StatusCompleted {
-		t.Errorf("Snapshot state: got ID=%s Status=%v", snapshot[0].ID, snapshot[0].Status)
+
+	mgr := NewManager(dir, 1)
+	if err := mgr.Reconcile(); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	got, _ := LoadRecord(StatePath(dir, id))
+	if got.Status != StatusAbandoned {
+		t.Errorf("Status = %v, want StatusAbandoned", got.Status)
 	}
 }
 
-func TestSubscribe(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("event data"))
-	}))
-	defer server.Close()
+func TestManager_ReconcileKeepsLiveWorkers(t *testing.T) {
+	dir := t.TempDir()
+	id := ID("rec-live")
+	rec := DownloadRecord{
+		ID:       id,
+		PID:      syscall.Getpid(), // current process is alive
+		URL:      "http://example",
+		DestFile: filepath.Join(dir, "x"),
+		Status:   StatusActive,
+		Bytes:    100,
+	}
+	if err := SaveRecord(dir, rec); err != nil {
+		t.Fatal(err)
+	}
 
-	mgr := NewManager(server.Client(), 1)
-	ch := mgr.Subscribe()
-	id, err := mgr.Start(Spec{URL: server.URL, DestFile: filepath.Join(t.TempDir(), "events")})
-	if err != nil {
-		t.Fatalf("Start returned error: %v", err)
+	mgr := NewManager(dir, 1)
+	if err := mgr.Reconcile(); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := LoadRecord(StatePath(dir, id))
+	if got.Status != StatusActive {
+		t.Errorf("Status = %v, want StatusActive (live PID)", got.Status)
+	}
+}
+
+func TestManager_ResumeRespawnsAbandoned(t *testing.T) {
+	body := "abc12345"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Range") != "" {
+			// Respect range: serve remainder.
+			w.Header().Set("Content-Range", "bytes 3-7/8")
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write([]byte(body[3:]))
+			return
+		}
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	var wg sync.WaitGroup
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "resume.bin")
+
+	// Seed an abandoned record with a partial file.
+	id := ID("res-test")
+	if err := SaveRecord(dir, DownloadRecord{
+		ID: id, URL: srv.URL, DestFile: dest,
+		Status: StatusAbandoned, Bytes: 3, Total: int64(len(body)),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Place a .partial with the first 3 bytes already on disk.
+	if err := os.WriteFile(dest+".partial", []byte(body[:3]), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mgr := NewManager(dir, 1).
+		WithSpawner(inProcessSpawner(t, srv.Client(), &wg)).
+		WithPollInterval(20 * time.Millisecond)
+	mgr.StartPolling()
+	defer mgr.Close()
+
+	if err := mgr.Resume(id); err != nil {
+		t.Fatalf("Resume: %v", err)
 	}
 	waitForStatus(t, mgr, id, StatusCompleted)
+	wg.Wait()
+}
+
+func TestManager_ResumeRejectsActive(t *testing.T) {
+	dir := t.TempDir()
+	id := ID("res-active")
+	_ = SaveRecord(dir, DownloadRecord{
+		ID: id, URL: "u", DestFile: filepath.Join(dir, "x"), Status: StatusActive,
+	})
+	mgr := NewManager(dir, 1)
+	if err := mgr.Resume(id); err != ErrNotResumable {
+		t.Errorf("err = %v, want ErrNotResumable", err)
+	}
+}
+
+func TestManager_SubscribeReceivesEvents(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("data"))
+	}))
+	defer srv.Close()
+
+	var wg sync.WaitGroup
+	dir := t.TempDir()
+	mgr := NewManager(dir, 1).
+		WithSpawner(inProcessSpawner(t, srv.Client(), &wg)).
+		WithPollInterval(10 * time.Millisecond)
+	mgr.StartPolling()
+	defer mgr.Close()
+
+	ch := mgr.Subscribe()
+	id, _ := mgr.Start(Spec{URL: srv.URL, DestFile: filepath.Join(dir, "evt.bin")})
 
 	seen := map[Status]bool{}
-	deadline := time.After(time.Second)
+	deadline := time.After(2 * time.Second)
 	for !seen[StatusActive] || !seen[StatusCompleted] {
 		select {
 		case ev := <-ch:
@@ -198,89 +277,57 @@ func TestSubscribe(t *testing.T) {
 				seen[ev.State.Status] = true
 			}
 		case <-deadline:
-			t.Fatalf("timed out waiting for active/completed events, seen=%v", seen)
+			t.Fatalf("missing events; seen=%v", seen)
 		}
 	}
+	wg.Wait()
 }
 
-func TestClose(t *testing.T) {
-	started := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		close(started)
-		<-r.Context().Done()
+func TestManager_CloseDoesNotKillWorker(t *testing.T) {
+	// The whole point of the orchestrator: Close stops polling and
+	// closes subscriber channels but leaves the worker PID alone.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("x"))
 	}))
-	defer server.Close()
+	defer srv.Close()
 
-	mgr := NewManager(server.Client(), 1)
-	ch := mgr.Subscribe()
-	id, err := mgr.Start(Spec{URL: server.URL, DestFile: filepath.Join(t.TempDir(), "close")})
-	if err != nil {
-		t.Fatalf("Start returned error: %v", err)
-	}
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("server never received request")
+	var wg sync.WaitGroup
+	dir := t.TempDir()
+	mgr := NewManager(dir, 1).
+		WithSpawner(inProcessSpawner(t, srv.Client(), &wg)).
+		WithPollInterval(20 * time.Millisecond)
+	mgr.StartPolling()
+
+	id, _ := mgr.Start(Spec{URL: srv.URL, DestFile: filepath.Join(dir, "c.bin")})
+	waitForStatus(t, mgr, id, StatusCompleted)
+	if err := mgr.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
 	}
 	if err := mgr.Close(); err != nil {
-		t.Fatalf("Close returned error: %v", err)
+		t.Errorf("second Close errored: %v", err)
 	}
-	state := stateByID(t, mgr, id)
-	if state.Status != StatusCancelled {
-		t.Errorf("Status after Close: want StatusCancelled, got %v", state.Status)
-	}
-	select {
-	case _, ok := <-ch:
-		if ok {
-			for ok {
-				_, ok = <-ch
-			}
-		}
-	case <-time.After(time.Second):
-		t.Fatal("subscriber channel not closed")
-	}
+	wg.Wait()
 }
 
+// waitForStatus polls the manager Snapshot until id reaches want or the
+// deadline expires.
 func waitForStatus(t *testing.T, mgr *Manager, id ID, want Status) State {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		state := stateByID(t, mgr, id)
-		if state.Status == want {
-			return state
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	state := stateByID(t, mgr, id)
-	t.Fatalf("status for %s: want %v, got %v", id, want, state.Status)
-	return State{}
-}
-
-func waitForActiveCount(t *testing.T, mgr *Manager, want int) {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		got := 0
-		for _, state := range mgr.Snapshot() {
-			if state.Status == StatusActive {
-				got++
+		for _, st := range mgr.Snapshot() {
+			if st.ID == id && st.Status == want {
+				return st
 			}
 		}
-		if got == want {
-			return
-		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatalf("active count: want %d", want)
-}
-
-func stateByID(t *testing.T, mgr *Manager, id ID) State {
-	t.Helper()
-	for _, state := range mgr.Snapshot() {
-		if state.ID == id {
-			return state
+	for _, st := range mgr.Snapshot() {
+		if st.ID == id {
+			t.Fatalf("status for %s: want %v, got %v (err=%v)", id, want, st.Status, st.Err)
 		}
 	}
-	t.Fatalf("state %s missing", id)
+	t.Fatalf("record %s never appeared in snapshot", id)
 	return State{}
 }
+

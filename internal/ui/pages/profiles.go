@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/key"
@@ -161,9 +162,8 @@ func (p ProfilesPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (p ProfilesPage) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	p.width, p.height = msg.Width, msg.Height
-	paneWidth := p.width / 3
-	listWidth := paneWidth - theme.Pane.GetHorizontalFrameSize()
-	listHeight := msg.Height - theme.Pane.GetVerticalFrameSize()
+	listWidth := p.width / 3
+	listHeight := msg.Height
 	p.list.SetSize(listWidth, listHeight)
 	return p, nil
 }
@@ -352,33 +352,43 @@ func (p ProfilesPage) forwardNonKey(msg tea.Msg) (tea.Model, tea.Cmd) {
 type profileDeleteConfirmedMsg struct{ id string }
 
 func (p ProfilesPage) View() string {
-	if p.importPickerActive {
-		return p.importPicker.View()
+	leftW := p.width / 3
+	rightW := (p.width*2)/3 - 2
+	left := lipgloss.NewStyle().Width(leftW).Render(p.list.View())
+	right := lipgloss.NewStyle().Width(rightW).Render(p.detailView())
+	// Build a multi-line divider matching the tallest pane.
+	leftH := len(strings.Split(left, "\n"))
+	rightH := len(strings.Split(right, "\n"))
+	divH := leftH
+	if rightH > divH {
+		divH = rightH
 	}
-	if p.picker.active {
-		return p.picker.picker.View()
-	}
-	if p.conflictModal.Active() {
-		return p.conflictModal.View()
-	}
-	if p.undoModal.Active() {
-		return p.undoModal.View()
-	}
-	if p.editor.Active() {
-		return p.editor.View()
-	}
-	if p.deleteConfirm.Active() {
-		return p.deleteConfirm.View()
-	}
-
-	left := theme.Pane.Width(p.width / 3).Render(p.list.View())
-	right := theme.Pane.Width((p.width*2)/3 - 2).Render(p.detailView())
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	divLine := lipgloss.NewStyle().Foreground(theme.ColorDim).Render("│")
+	divider := strings.Repeat(divLine+"\n", divH-1) + divLine
+	body := lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
 
 	if v := p.flash.View(); v != "" {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, v)
 	}
 	return body
+}
+
+func (p ProfilesPage) OverlayView() (string, int, int, bool) {
+	switch {
+	case p.importPickerActive:
+		return p.importPicker.View(), p.width, p.height, true
+	case p.picker.active:
+		return p.picker.picker.View(), p.width, p.height, true
+	case p.conflictModal.Active():
+		return p.conflictModal.View(), p.width, p.height, true
+	case p.undoModal.Active():
+		return p.undoModal.View(), p.width, p.height, true
+	case p.editor.Active():
+		return p.editor.View(), p.width, p.height, true
+	case p.deleteConfirm.Active():
+		return p.deleteConfirm.View(), p.width, p.height, true
+	}
+	return "", 0, 0, false
 }
 
 func (p ProfilesPage) detailView() string {

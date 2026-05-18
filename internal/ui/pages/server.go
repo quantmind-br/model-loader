@@ -720,13 +720,6 @@ func (p *ServerPage) reapDeadSubscriptions(insts []domain.RunningInstance) {
 }
 
 func (p *ServerPage) View() string {
-	if p.killConfirm.Active() {
-		return p.killConfirm.View()
-	}
-	if p.restartConfirm.Active() {
-		return p.restartConfirm.View()
-	}
-
 	var body string
 	if p.historyChart != nil {
 		body = p.renderTable() + "\n\n" + p.historyChart.View()
@@ -743,10 +736,20 @@ func (p *ServerPage) View() string {
 	if p.proxy != nil {
 		proxyView := p.proxy.View()
 		if proxyView != "" {
-			return proxyView + "\n" + body
+			body = proxyView + "\n" + body
 		}
 	}
 	return body
+}
+
+func (p *ServerPage) OverlayView() (string, int, int, bool) {
+	if p.killConfirm.Active() {
+		return p.killConfirm.View(), p.width, p.height, true
+	}
+	if p.restartConfirm.Active() {
+		return p.restartConfirm.View(), p.width, p.height, true
+	}
+	return "", 0, 0, false
 }
 
 // renderTable renders the bold "Running instances" header (prefixed with the

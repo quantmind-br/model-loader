@@ -477,7 +477,7 @@ func TestLauncherPage_SpinnerClearedOnLaunchErr(t *testing.T) {
 	}
 }
 
-func TestLauncherPage_PaneBorderInSplit(t *testing.T) {
+func TestLauncherPage_PaneDividerInSplit(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := profilestore.NewFSStore(dir)
 	_ = store.Save(domain.Profile{ID: "alpha", Name: "Alpha", Model: "/m.gguf", Args: map[string]any{"port": float64(8080)}})
@@ -488,11 +488,14 @@ func TestLauncherPage_PaneBorderInSplit(t *testing.T) {
 	page.width = 120
 	page.height = 30
 
-	// Rounded border characters used by theme.Pane (theme.Border = RoundedBorder).
+	// Simple vertical divider replaces the old rounded pane borders.
 	out := page.View()
+	if !strings.Contains(out, "│") {
+		t.Errorf("Launcher view missing pane divider %q; got:\n%s", "│", out)
+	}
 	for _, ch := range []string{"╭", "╮", "╰", "╯"} {
-		if !strings.Contains(out, ch) {
-			t.Errorf("Launcher view missing pane border char %q; got:\n%s", ch, out)
+		if strings.Contains(out, ch) {
+			t.Errorf("Launcher view should not contain old rounded border char %q; got:\n%s", ch, out)
 		}
 	}
 }

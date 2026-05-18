@@ -30,6 +30,13 @@ type DownloadCancelMsg struct {
 	ID string
 }
 
+// DownloadResumeMsg is emitted when the user asks to re-spawn a worker
+// for a previously abandoned or failed download. The page handler
+// translates this into a downloadmgr.Resume call.
+type DownloadResumeMsg struct {
+	ID string
+}
+
 // DownloadProgress renders active download progress lines.
 type DownloadProgress struct {
 	snapshotter DownloadStateSnapshotter
@@ -79,6 +86,18 @@ func (p *DownloadProgress) Update(msg tea.Msg) tea.Cmd {
 					}
 				}
 			}
+		case "r":
+			if p.visible {
+				snap := p.snapshotter.Snapshot()
+				if p.focusIndex >= 0 && p.focusIndex < len(snap) {
+					state := snap[p.focusIndex]
+					if state.Status == "abandoned" || state.Status == "failed" {
+						return func() tea.Msg {
+							return DownloadResumeMsg{ID: state.ID}
+						}
+					}
+				}
+			}
 		case "d":
 			p.visible = !p.visible
 			if !p.visible {
@@ -120,9 +139,13 @@ func (p *DownloadProgress) View() string {
 }
 
 var statusStyle = map[string]lipgloss.Style{
-	"done":   theme.OK,
-	"failed": theme.Error,
-	"paused": theme.Subtitle,
+	"done":      theme.OK,
+	"completed": theme.OK,
+	"failed":    theme.Error,
+	"abandoned": theme.Warn,
+	"cancelled": theme.Subtitle,
+	"paused":    theme.Subtitle,
+	"queued":    theme.Subtitle,
 }
 
 func styleStatus(state string) string {

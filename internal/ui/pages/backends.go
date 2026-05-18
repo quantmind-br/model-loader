@@ -162,9 +162,7 @@ func (p BackendsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		p.width, p.height = m.Width, m.Height
 		leftWidth, _ := theme.SplitTwoPanes(p.width)
-		listWidth := leftWidth - theme.Pane.GetHorizontalFrameSize()
-		listHeight := m.Height - theme.Pane.GetVerticalFrameSize()
-		p.list.SetSize(listWidth, listHeight)
+		p.list.SetSize(leftWidth, m.Height)
 		return p, nil
 	case components.FlashClearMsg:
 		p.flash, _ = p.flash.Update(m)
@@ -281,7 +279,7 @@ func (p BackendsPage) View() string {
 	if len(p.list.Items()) == 0 {
 		leftContent = components.EmptyState("No backends yet", "Press [n] to add one")
 	}
-	left := theme.Pane.Width(leftWidth).Render(leftContent)
+	left := lipgloss.NewStyle().Width(leftWidth).Render(leftContent)
 	rightContent := p.detailView()
 	if p.pendingRefresh {
 		rightContent = theme.Subtitle.Render("Refreshing schema…") + "\n" + rightContent
@@ -289,8 +287,16 @@ func (p BackendsPage) View() string {
 	if p.pendingProbe {
 		rightContent = theme.Subtitle.Render("Probing backends…") + "\n" + rightContent
 	}
-	right := theme.Pane.Width(rightWidth).Render(rightContent)
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	right := lipgloss.NewStyle().Width(rightWidth).Render(rightContent)
+	leftH := len(strings.Split(left, "\n"))
+	rightH := len(strings.Split(right, "\n"))
+	divH := leftH
+	if rightH > divH {
+		divH = rightH
+	}
+	divLine := lipgloss.NewStyle().Foreground(theme.ColorDim).Render("│")
+	divider := strings.Repeat(divLine+"\n", divH-1) + divLine
+	body := lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
 
 	if v := p.flash.View(); v != "" {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, v)

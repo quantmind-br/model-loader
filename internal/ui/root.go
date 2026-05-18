@@ -82,6 +82,12 @@ type HelpContextProvider interface {
 	HelpContext() string
 }
 
+// Overlayer is the optional contract a page implements to expose an active
+// modal overlay that should be rendered on top of the page content.
+type Overlayer interface {
+	OverlayView() (content string, width, height int, active bool)
+}
+
 // globalHints is the prefix shown in every status bar line.
 const globalHints = "[1-5] tabs  [tab] next  [q] quit" + components.HelpToken
 
@@ -391,14 +397,25 @@ func (m RootModel) View() string {
 		return components.Modal("Keybindings", body, m.width, m.height)
 	}
 	header := m.renderTabs()
-	body := m.pages[m.active].View()
 	status := m.status.Render(m.width)
-	view := lipgloss.JoinVertical(lipgloss.Left, header, body, status)
+	bodyHeight := theme.BodyHeight(m.height)
+	bodyWidth := m.width
+	var clampedBody string
+	if bodyHeight > 0 {
+		rawBody := m.pages[m.active].View()
+		clampedBody = theme.ClampBody(rawBody, bodyWidth, bodyHeight)
+	}
+	frame := lipgloss.JoinVertical(lipgloss.Left, header, clampedBody, status)
+	if ov, ok := m.pages[m.active].(Overlayer); ok {
+		if content, _, _, active := ov.OverlayView(); active {
+			frame = components.Overlay(frame, content, m.width, m.height)
+		}
+	}
 	if m.playgroundOpen && m.playgroundModal != nil {
 		overlay := m.playgroundModal.View()
-		view = components.Overlay(view, overlay, m.width, m.height)
+		frame = components.Overlay(frame, overlay, m.width, m.height)
 	}
-	return view
+	return frame
 }
 
 // activate switches to the given tab and triggers Reload on the page if
@@ -443,18 +460,23 @@ func (m RootModel) activePageCapturesInput() bool {
 }
 
 func (m RootModel) renderTabs() string {
-	sep := theme.Subtitle.Render(" │ ")
-	parts := make([]string, 0, 2*tabCount)
+	labels := make([]string, tabCount)
 	for i := Tab(0); i < tabCount; i++ {
-		if i > 0 {
-			parts = append(parts, sep)
-		}
-		title := fmt.Sprintf("%d %s", int(i)+1, i.Title())
-		if i == m.active {
-			parts = append(parts, theme.TabActive.Render(title))
-		} else {
-			parts = append(parts, theme.TabInactive.Render(title))
-		}
+		labels[i] = fmt.Sprintf("%d %s", int(i)+1, i.Title())
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
+	activeStyle := lipgloss.NewStyle().
+		Background(theme.AccentBg).
+		Foreground(theme.AccentFg).
+		Bold(true).
+		Padding(0, 1)
+	inactiveStyle := lipgloss.NewStyle().
+		Foreground(theme.ColorDim).
+		Padding(0, 1)
+	return components.TabBar(components.TabBarOptions{
+		Labels:         labels,
+		ActiveIndex:    int(m.active),
+		AvailableWidth: m.width,
+		ActiveStyle:    activeStyle,
+		InactiveStyle:  inactiveStyle,
+	})
 }

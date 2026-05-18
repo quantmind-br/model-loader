@@ -96,6 +96,8 @@ func downloadStatusLabel(status downloadmgr.Status) string {
 		return "failed"
 	case downloadmgr.StatusCancelled:
 		return "cancelled"
+	case downloadmgr.StatusAbandoned:
+		return "abandoned"
 	default:
 		return "unknown"
 	}
@@ -485,6 +487,14 @@ func (p ModelsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = p.dlManager.Cancel(downloadmgr.ID(msg.id))
 		}
 		return p, nil
+	case components.DownloadResumeMsg:
+		if p.dlManager != nil {
+			if err := p.dlManager.Resume(downloadmgr.ID(msg.ID)); err != nil {
+				return p.withFlashError("resume: " + err.Error())
+			}
+			return p.withFlash("resuming " + msg.ID)
+		}
+		return p, nil
 	case components.ProfilePickedMsg:
 		return p.handleProfilePicked(msg)
 	case components.ProfilePickerCancelledMsg:
@@ -506,6 +516,20 @@ func (p ModelsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return p.updateActionMenu(msg)
 		}
 		return p.handleKey(msg)
+	default:
+		return p.forwardNonKey(msg)
+	}
+}
+
+// forwardNonKey routes non-key messages to the highest-priority active
+// surface so its internal Cmd→Msg loops complete (huh focus init, async
+// transitions). Without this the deleteConfirm's huh.Form never reaches
+// StateCompleted on Enter and onYes never fires.
+func (p ModelsPage) forwardNonKey(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if p.deleteConfirm.Active() {
+		var cmd tea.Cmd
+		p.deleteConfirm, cmd = p.deleteConfirm.Update(msg)
+		return p, cmd
 	}
 	return p, nil
 }
@@ -923,6 +947,17 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if p.downloads != nil && p.downloads.IsVisible() {
 			return p, p.downloads.Update(msg)
 		}
+	case msg.String() == "d":
+		// Toggle download footer visibility even when currently
+		// hidden — the component's own forwarding only kicks in
+		// after IsVisible(), so we need an unconditional entry point.
+		if p.downloads != nil {
+			return p, p.downloads.Update(msg)
+		}
+	case msg.String() == "r":
+		if p.downloads != nil && p.downloads.IsVisible() {
+			return p, p.downloads.Update(msg)
+		}
 	}
 
 	t, cmd := p.table.Update(msg)
@@ -1092,7 +1127,7 @@ func (p ModelsPage) Hints() string {
 	}
 	hints := "[/] filter  [R] rescan  [s] search HF  [enter] actions  [i] info  [esc] clear"
 	if p.downloads != nil && p.downloads.IsVisible() {
-		hints += "  [x] cancel dl"
+		hints += "  [x] cancel dl  [r] resume"
 	}
 	if p.infoPanel != nil {
 		hints = "[→/g] sizing  [esc] close info"

@@ -22,6 +22,33 @@ import (
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
+// viewWrapper wraps a page model so that teatest sees overlay content
+// (modal/editor/picker) when active, matching the old full-screen View()
+// behavior that tests depend on.
+type viewWrapper struct {
+	page tea.Model
+}
+
+func (w viewWrapper) Init() tea.Cmd { return w.page.Init() }
+func (w viewWrapper) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m, cmd := w.page.Update(msg)
+	w.page = m
+	return w, cmd
+}
+func (w viewWrapper) View() string {
+	type overlayer interface {
+		OverlayView() (string, int, int, bool)
+	}
+	if ov, ok := w.page.(overlayer); ok {
+		if content, _, _, active := ov.OverlayView(); active {
+			return content
+		}
+	}
+	return w.page.View()
+}
+
+func (w viewWrapper) inner() tea.Model { return w.page }
+
 func TestProfilesPage_LoadsExistingProfile(t *testing.T) {
 	dir := t.TempDir()
 	store, err := profilestore.NewFSStore(dir)
@@ -57,7 +84,7 @@ func TestProfilesPage_NewProfileSavesViaStore(t *testing.T) {
 	}
 
 	page := NewProfilesPage(store, domain.FlagSchema{})
-	tm := teatest.NewTestModel(t, page, teatest.WithInitialTermSize(120, 30))
+	tm := teatest.NewTestModel(t, viewWrapper{page: page}, teatest.WithInitialTermSize(120, 30))
 	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
 
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
@@ -357,7 +384,7 @@ func TestProfilesPage_DeleteCompletesViaAsyncMsgs(t *testing.T) {
 	})
 
 	page := NewProfilesPage(store, domain.FlagSchema{})
-	tm := teatest.NewTestModel(t, page, teatest.WithInitialTermSize(120, 30))
+	tm := teatest.NewTestModel(t, viewWrapper{page: page}, teatest.WithInitialTermSize(120, 30))
 	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
 
 	// Wait for the profile to render.
@@ -382,7 +409,7 @@ func TestProfilesPage_DeleteCompletesViaAsyncMsgs(t *testing.T) {
 	}, teatest.WithDuration(2*time.Second))
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlC})
-	final := tm.FinalModel(t).(ProfilesPage)
+	final := tm.FinalModel(t).(viewWrapper).inner().(ProfilesPage)
 	if final.deleteConfirm.Active() {
 		t.Error("deleteConfirm should be inactive after async-driven completion")
 	}

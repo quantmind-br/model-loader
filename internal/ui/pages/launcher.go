@@ -236,8 +236,7 @@ func (p LauncherPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (p LauncherPage) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	p.width, p.height = msg.Width, msg.Height
 	leftW, _ := theme.SplitTwoPanes(p.width)
-	listWidth := leftW - theme.Pane.GetHorizontalFrameSize()
-	p.plist.SetSize(listWidth, msg.Height-6)
+	p.plist.SetSize(leftW, msg.Height-6)
 	return p, nil
 }
 
@@ -553,9 +552,17 @@ func (p LauncherPage) renderProfileDetail() string {
 	}
 
 	leftW, rightW := theme.SplitTwoPanes(p.width)
-	left := theme.Pane.Width(leftW).Render(p.plist.View())
-	right := theme.Pane.Width(rightW).Render(rightContent)
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	left := lipgloss.NewStyle().Width(leftW).Render(p.plist.View())
+	right := lipgloss.NewStyle().Width(rightW).Render(rightContent)
+	leftH := len(strings.Split(left, "\n"))
+	rightH := len(strings.Split(right, "\n"))
+	divH := leftH
+	if rightH > divH {
+		divH = rightH
+	}
+	divLine := lipgloss.NewStyle().Foreground(theme.ColorDim).Render("│")
+	divider := strings.Repeat(divLine+"\n", divH-1) + divLine
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
 }
 
 // renderRunningList renders the "Running" section listing live instances, or

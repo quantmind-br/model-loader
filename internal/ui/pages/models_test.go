@@ -758,3 +758,88 @@ func TestModelsPage_HintsWhileDeleteConfirmActive(t *testing.T) {
 		}
 	}
 }
+
+// TestModelsPage_DeleteConfirmEndToEnd drives the full keypress pipeline
+// through the huh.Form-backed Confirm without bypassing via direct
+// modelDeleteConfirmedMsg injection. Guards against the regression where
+// ModelsPage.Update dropped non-tea.KeyMsg messages so the inner form
+// never reached StateCompleted and onYes never fired (delete silently
+// did nothing).
+func TestModelsPage_DeleteConfirmEndToEnd(t *testing.T) {
+	var removed string
+	prev := fileRemover
+	fileRemover = func(p string) error { removed = p; return nil }
+	t.Cleanup(func() { fileRemover = prev })
+
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.files = []domain.ModelFile{
+		{Path: "/m/foo.gguf", Name: "foo.gguf"},
+		{Path: "/m/bar.gguf", Name: "bar.gguf"},
+	}
+	page.refreshRows()
+
+	// Open confirm via the same path the action menu uses.
+	openedI, initCmd := page.commitRootAction("delete", "/m/foo.gguf")
+	opened := openedI.(ModelsPage)
+	if !opened.deleteConfirm.Active() {
+		t.Fatal("expected deleteConfirm active after commitRootAction")
+	}
+
+	// Drain init Cmd → non-KeyMsg → must reach the form via forwardNonKey.
+	drainI := tea.Model(opened)
+	if initCmd != nil {
+		if m := initCmd(); m != nil {
+			d, _ := drainI.Update(m)
+			drainI = d
+		}
+	}
+	drained := drainI.(ModelsPage)
+
+	// Cursor defaults to Negative ("Cancel"). Press Left to flip to
+	// affirmative ("Delete"), then drain any follow-up Cmd that comes back.
+	leftI, leftCmd := drained.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	left := leftI.(ModelsPage)
+	if leftCmd != nil {
+		if m := leftCmd(); m != nil {
+			l2, _ := left.Update(m)
+			left = l2.(ModelsPage)
+		}
+	}
+
+	// Submit with Enter. huh.Form may emit multiple internal transition
+	// msgs (nextFieldMsg, nextGroupMsg) before reaching StateCompleted,
+	// so drain Cmds back through Update until either
+	// modelDeleteConfirmedMsg appears or we hit a sanity cap.
+	cur := tea.Model(left)
+	cmd := tea.Cmd(func() tea.Msg { return tea.KeyMsg{Type: tea.KeyEnter} })
+	var deleteMsg tea.Msg
+	for i := 0; i < 16 && cmd != nil; i++ {
+		m := cmd()
+		if m == nil {
+			break
+		}
+		if _, ok := m.(modelDeleteConfirmedMsg); ok {
+			deleteMsg = m
+			break
+		}
+		cur, cmd = cur.Update(m)
+	}
+	if deleteMsg == nil {
+		t.Fatal("modelDeleteConfirmedMsg never produced — pipeline still broken")
+	}
+
+	// Replay the message back through Update — the page's own handler
+	// performs the disk remove and table refresh.
+	finalI, _ := cur.Update(deleteMsg)
+	final := finalI.(ModelsPage)
+
+	if removed != "/m/foo.gguf" {
+		t.Errorf("fileRemover called with %q, want /m/foo.gguf", removed)
+	}
+	if len(final.files) != 1 || final.files[0].Name != "bar.gguf" {
+		t.Errorf("files post-delete = %+v, want only bar.gguf", final.files)
+	}
+	if !strings.Contains(final.flash.Message(), "deleted") {
+		t.Errorf("flash = %q, want 'deleted ...'", final.flash.Message())
+	}
+}

@@ -42,6 +42,9 @@ func main() {
 		case "import":
 			os.Args = append(os.Args[:1], os.Args[2:]...)
 			os.Exit(runImport())
+		case "download":
+			os.Args = append(os.Args[:1], os.Args[2:]...)
+			os.Exit(runDownloadWorker())
 		}
 	}
 	os.Exit(runTUI())
@@ -60,7 +63,12 @@ func runTUI() int {
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	hfClient := hfhub.NewClient(httpClient, "model-loader/dev")
-	dlManager := downloadmgr.NewManager(httpClient, 3).WithUserAgent("model-loader/dev")
+	dlStateDir := filepath.Join(cfg.Paths.StateDir, "downloads")
+	dlManager := downloadmgr.NewManager(dlStateDir, 3).WithUserAgent("model-loader/dev")
+	if err := dlManager.Reconcile(); err != nil {
+		logger.Error("download_reconcile_failed", "err", err)
+	}
+	dlManager.StartPolling()
 	defer dlManager.Close()
 
 	scanner := modelscanner.New()

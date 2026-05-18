@@ -1,5 +1,7 @@
 package theme
 
+import "github.com/charmbracelet/lipgloss"
+
 const (
 	TabBarHeight    = 1
 	StatusBarHeight = 1
@@ -15,6 +17,19 @@ func BodyHeight(totalHeight int) int {
 		return 0
 	}
 	return totalHeight - TabBarHeight - StatusBarHeight
+}
+
+// ClampBody truncates/restricts the rendered string to the given width and height.
+func ClampBody(s string, width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	return lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		MaxWidth(width).
+		MaxHeight(height).
+		Render(s)
 }
 
 // SplitTwoPanes returns left/right widths for a two-pane layout with gutter.
