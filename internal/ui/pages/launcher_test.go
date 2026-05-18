@@ -389,23 +389,23 @@ func TestLauncherPage_HealthyEmitsSwitchToMonitor(t *testing.T) {
 	page := LauncherPage{}
 	model, cmd := page.Update(healthyMsg{pid: 4242})
 	if cmd == nil {
-		t.Fatal("expected Cmd batch with SwitchToMonitorMsg")
+		t.Fatal("expected Cmd batch with SwitchToServerMsg")
 	}
 	// healthyMsg now returns a tea.Batch (status auto-clear + switch). Drain
-	// the batch and look for SwitchToMonitorMsg.
+	// the batch and look for SwitchToServerMsg.
 	got := drainCmd(cmd)
-	var found *SwitchToMonitorMsg
+	var found *SwitchToServerMsg
 	for _, m := range got {
-		if sw, ok := m.(SwitchToMonitorMsg); ok {
+		if sw, ok := m.(SwitchToServerMsg); ok {
 			found = &sw
 			break
 		}
 	}
 	if found == nil {
-		t.Fatalf("no SwitchToMonitorMsg in cmd batch; got %v", got)
+		t.Fatalf("no SwitchToServerMsg in cmd batch; got %v", got)
 	}
 	if found.PID != 4242 {
-		t.Fatalf("SwitchToMonitorMsg.PID = %d, want 4242", found.PID)
+		t.Fatalf("SwitchToServerMsg.PID = %d, want 4242", found.PID)
 	}
 	_ = model
 }

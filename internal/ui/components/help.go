@@ -8,7 +8,7 @@ const HelpMarkdown = `# model-loader — Keybindings
 
 ## Global
 
-- ` + "`1`" + `–` + "`6`" + ` — switch directly to a tab
+- ` + "`1`" + `–` + "`5`" + ` — switch directly to a tab
 - ` + "`Tab`" + ` — next tab     ` + "`Shift+Tab`" + ` — previous tab
 - ` + "`?`" + ` — toggle this help
 - ` + "`q`" + ` / ` + "`Ctrl+C`" + ` — quit (background instances survive)
@@ -32,12 +32,16 @@ _Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or
 - ` + "`k`" + ` — kill the most recent launched instance
 - ` + "`r`" + ` — refresh profile list
 
-## Monitor tab
+## Server tab
 
-- ` + "`v`" + ` — cycle Logs / Slots / Metrics sub-views
+- ` + "`v`" + ` — cycle Logs / Slots / Metrics / History sub-views
 - ` + "`Space`" + ` — pause/resume log scroll
 - ` + "`k`" + ` — kill selected instance
 - ` + "`r`" + ` — restart selected instance (Kill + Launch)
+- ` + "`H`" + ` — open history chart for the selected instance
+- ` + "`1`" + ` / ` + "`2`" + ` / ` + "`3`" + ` / ` + "`4`" + ` — history chart window: 1h / 6h / 24h / 7d (only while chart is open)
+- ` + "`s`" + ` — start HTTP proxy listener
+- ` + "`x`" + ` — stop HTTP proxy listener
 
 ## Models tab
 
@@ -54,12 +58,6 @@ _Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or
 - ` + "`R`" + ` — refresh selected backend schema
 - ` + "`P`" + ` — probe selected backend (latency / version)
 - ` + "`/`" + ` — filter
-
-## Server tab
-
-- ` + "`s`" + ` — start HTTP proxy listener
-- ` + "`x`" + ` — stop listener
-- ` + "`r`" + ` — refresh status
 `
 
 // RenderHelp retorna o markdown HelpMarkdown renderizado via glamour.

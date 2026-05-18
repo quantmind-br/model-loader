@@ -25,7 +25,7 @@ const (
 type Manager interface {
 	// Launch spawns the configured backend. attemptID is the correlation ID
 	// emitted by the calling page (LauncherPage.launchProfileCmd or
-	// MonitorPage.restartCmd) and threaded into every log event the manager
+	// ServerPage.restartCmd) and threaded into every log event the manager
 	// emits for this PID. Empty attemptID is permitted but breaks grep-ability.
 	Launch(p domain.Profile, mode LaunchMode, attemptID string) (domain.RunningInstance, error)
 	Kill(pid int) error

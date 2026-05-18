@@ -32,6 +32,22 @@ type bootServices struct {
 	val           validator.Validator
 }
 
+type restartHelper struct {
+	store profilestore.Store
+	mgr   processmgr.Manager
+}
+
+func (r *restartHelper) restart(profileID string) {
+	if r.store == nil || r.mgr == nil {
+		return
+	}
+	p, err := r.store.Get(profileID)
+	if err != nil {
+		return
+	}
+	_, _ = r.mgr.Launch(p, processmgr.LaunchBackground, "watchdog")
+}
+
 // bootstrap loads config, builds the logger, wires every service and
 // performs initial migrations + reconcile. Returns the populated container
 // or an error message routed to stderr.
@@ -94,6 +110,7 @@ func bootstrap(cliLevel string) (cfg config.AppConfig, logger *slog.Logger, clos
 	resolver := backendcatalog.NewResolver(catalogStore, schemaStore, logger)
 	defaultSchema := ensureDefaultCatalog(catalogStore, schemaStore, schemaManager, cfg.Paths.LlamaServerBinaryPath, logger)
 
+	helper := &restartHelper{}
 	mgr := processmgr.New(processmgr.Config{
 		Resolver:     buildResolver(resolver),
 		LogDir:       cfg.Paths.LogDir,
@@ -101,6 +118,7 @@ func bootstrap(cliLevel string) (cfg config.AppConfig, logger *slog.Logger, clos
 		HistoryPath:  filepath.Join(cfg.Paths.StateDir, "instances-history.json"),
 		LastUsedSink: store,
 		Logger:       logger,
+		RestartFunc:  helper.restart,
 	})
 	if rErr := mgr.Reconcile(); rErr != nil {
 		logger.Error("reconcile_failed", "err", rErr)
@@ -119,5 +137,7 @@ func bootstrap(cliLevel string) (cfg config.AppConfig, logger *slog.Logger, clos
 		mgr:           mgr,
 		val:           val,
 	}
+	helper.store = store
+	helper.mgr = mgr
 	return cfg, logger, closeLog, svc, nil
 }

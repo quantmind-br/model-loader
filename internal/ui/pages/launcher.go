@@ -175,7 +175,12 @@ type profileItem struct {
 	p domain.Profile
 }
 
-func (i profileItem) Title() string { return i.p.Name }
+func (i profileItem) Title() string {
+	if i.p.Pinned {
+		return "★ " + i.p.Name
+	}
+	return i.p.Name
+}
 func (i profileItem) Description() string {
 	desc := fmt.Sprintf("%s | port %v", i.p.ID, i.p.Args["port"])
 	if i.p.Launch.BackendID != "" {
@@ -237,6 +242,7 @@ func (p LauncherPage) handleProfilesLoaded(msg LauncherProfilesLoadedMsg) (tea.M
 		p.loadErr = msg.Err
 		return p, nil
 	}
+	sortProfilesPinnedFirst(msg.Profiles)
 	p.profiles = msg.Profiles
 	items := make([]list.Item, len(msg.Profiles))
 	for i, pr := range msg.Profiles {
@@ -269,7 +275,7 @@ func (p LauncherPage) handleHealthy(msg healthyMsg) (tea.Model, tea.Cmd) {
 	p.waitingPID = 0
 	p, fc := p.withFlash(fmt.Sprintf("healthy pid=%d", msg.pid))
 	pid := msg.pid
-	return p, tea.Batch(fc, func() tea.Msg { return SwitchToMonitorMsg{PID: pid} })
+	return p, tea.Batch(fc, func() tea.Msg { return SwitchToServerMsg{PID: pid} })
 }
 
 func (p LauncherPage) handleLaunchErr(msg launchErrMsg) (tea.Model, tea.Cmd) {
@@ -349,6 +355,8 @@ func (p LauncherPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.askConfirmKill(p.running[len(p.running)-1].PID)
 	case "r":
 		return p, loadProfilesCmd(p.store)
+	case "p":
+		return p.togglePinSelected()
 	case "enter":
 		if p.waitingPID != 0 {
 			return p, nil
@@ -576,9 +584,23 @@ func (p LauncherPage) renderStatusLine() string {
 }
 
 // Hints implements ui.HintProvider for the Launcher tab.
+func (p LauncherPage) togglePinSelected() (tea.Model, tea.Cmd) {
+	it, ok := p.plist.SelectedItem().(profileItem)
+	if !ok {
+		return p, nil
+	}
+	pr := it.p
+	pr.Pinned = !pr.Pinned
+	if err := p.store.Save(pr); err != nil {
+		p, fc := p.withFlash("pin failed: " + err.Error())
+		return p, fc
+	}
+	return p, loadProfilesCmd(p.store)
+}
+
 func (p LauncherPage) Hints() string {
 	if p.killConfirm.Active() {
 		return "[←→] choose  [enter] confirm  [esc] cancel"
 	}
-	return "[b] mode  [enter] launch  [k] kill last  [r] refresh"
+	return "[b] mode  [enter] launch  [k] kill last  [r] refresh  [p] pin"
 }

@@ -13,6 +13,11 @@ type RunningInstance struct {
 	Background bool       `json:"background"`
 	Crashed    bool       `json:"crashed,omitempty"`
 	ExitedAt   *time.Time `json:"exitedAt,omitempty"`
+	RestartCount   int       `json:"restartCount,omitempty"`
+	LastRestartAt  *time.Time `json:"lastRestartAt,omitempty"`
+	RestartPolicy  string    `json:"restartPolicy,omitempty"`
+	MaxRestarts    int       `json:"maxRestarts,omitempty"`
+	BackoffSeconds int       `json:"backoffSeconds,omitempty"`
 	// ExitCode is the process exit status when known. Set by processmgr's
 	// cmd.Wait goroutine; nil for processes that are still alive or whose
 	// exit was signal-only.

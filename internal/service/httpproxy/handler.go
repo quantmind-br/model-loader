@@ -18,6 +18,7 @@ import (
 // keep `/v1/models/anything` and every other path routed to the forwarder.
 func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/models", s.handleModelsList)
+	mux.HandleFunc("/_status", s.handleStatus)
 	mux.HandleFunc("/", s.handleForward)
 }
 
@@ -66,6 +67,18 @@ func (s *Server) handleModelsList(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(out)
+}
+
+func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	st := s.Status()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(st)
 }
 
 func (s *Server) handleForward(w http.ResponseWriter, r *http.Request) {

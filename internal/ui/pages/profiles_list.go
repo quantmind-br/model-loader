@@ -9,6 +9,7 @@ package pages
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -21,7 +22,7 @@ import (
 // profilesKeyMap groups the master-list / launcher key bindings used by
 // ProfilesPage. Defined here so profiles.go stays focused on dispatch.
 type profilesKeyMap struct {
-	New, Save, Duplicate, Delete, Edit, Cancel, Tab, Launch, Export key.Binding
+	New, Save, Duplicate, Delete, Edit, Cancel, Tab, Launch, Export, Pin, Import, Undo key.Binding
 }
 
 func defaultProfilesKeys() profilesKeyMap {
@@ -35,6 +36,9 @@ func defaultProfilesKeys() profilesKeyMap {
 		Tab:       key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "tab editor")),
 		Launch:    key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "launch")),
 		Export:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "export")),
+		Pin:       key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "pin")),
+		Import:    key.NewBinding(key.WithKeys("I"), key.WithHelp("I", "import")),
+		Undo:      key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "undo")),
 	}
 }
 
@@ -43,7 +47,21 @@ type item struct {
 	p domain.Profile
 }
 
-func (i item) Title() string { return i.p.Name }
+func sortProfilesPinnedFirst(profiles []domain.Profile) {
+	sort.SliceStable(profiles, func(i, j int) bool {
+		if profiles[i].Pinned != profiles[j].Pinned {
+			return profiles[i].Pinned
+		}
+		return profiles[i].Meta.UpdatedAt.After(profiles[j].Meta.UpdatedAt)
+	})
+}
+
+func (i item) Title() string {
+	if i.p.Pinned {
+		return "★ " + i.p.Name
+	}
+	return i.p.Name
+}
 func (i item) Description() string {
 	desc := i.p.ID
 	if i.p.Launch.BackendID != "" {

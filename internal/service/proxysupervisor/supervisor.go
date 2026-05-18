@@ -2,10 +2,12 @@ package proxysupervisor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -189,10 +191,19 @@ func (s *Supervisor) Status() httpproxy.Status {
 		return httpproxy.Status{Running: false}
 	}
 
-	return httpproxy.Status{
+	st := httpproxy.Status{
 		Running: true,
 		Addr:    s.addr(s.state),
 	}
+
+	url := "http://" + s.addr(s.state) + "/_status"
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+	resp, err := client.Get(url)
+	if err == nil && resp.StatusCode == http.StatusOK {
+		_ = json.NewDecoder(resp.Body).Decode(&st)
+		_ = resp.Body.Close()
+	}
+	return st
 }
 
 // Reconcile reads the on-disk state, validates the PID is still alive and the

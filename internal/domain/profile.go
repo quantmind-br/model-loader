@@ -8,7 +8,7 @@ import (
 )
 
 // SchemaVersion is the current Profile JSON schema version.
-const SchemaVersion = 1
+const SchemaVersion = 3
 
 // Profile represents a llama-server load profile persisted on disk.
 // Full field definitions are added in slice 1, task 1.
@@ -23,6 +23,7 @@ type Profile struct {
 	ExtraArgs     []string          `json:"extraArgs,omitempty"`
 	Launch        LaunchConfig      `json:"launch"`
 	Meta          ProfileMeta       `json:"meta"`
+	Pinned        bool              `json:"pinned"`
 }
 
 // EnvVar is a single KEY=VALUE pair applied to the backend process at launch.
@@ -31,6 +32,14 @@ type EnvVar struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
+
+type RestartPolicy string
+
+const (
+	RestartPolicyNone      RestartPolicy = "none"
+	RestartPolicyOnFailure RestartPolicy = "on-failure"
+	RestartPolicyAlways    RestartPolicy = "always"
+)
 
 // LaunchConfig holds per-profile launcher defaults.
 type LaunchConfig struct {
@@ -53,6 +62,10 @@ type LaunchConfig struct {
 	// ResolvedBackendKind is set at launch time by the launcher so
 	// processmgr knows which arg builder to use. Not persisted.
 	ResolvedBackendKind BackendKind `json:"-"`
+
+	RestartPolicy  RestartPolicy `json:"restart_policy"`
+	MaxRestarts    int           `json:"max_restarts"`
+	BackoffSeconds int           `json:"backoff_seconds"`
 }
 
 // ProfileMeta holds timestamps and bookkeeping.

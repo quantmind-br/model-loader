@@ -171,6 +171,9 @@ type ModelsPage struct {
 	pendingRepoID  string // carried between RepoInfo lookup and file picker open
 
 	keys modelsKeyMap
+
+	infoPanel        *components.InfoPanel
+	infoPanelUsedBy  []components.ProfileRef
 }
 
 func (p ModelsPage) withFlash(msg string) (ModelsPage, tea.Cmd) {
@@ -181,6 +184,14 @@ func (p ModelsPage) withFlash(msg string) (ModelsPage, tea.Cmd) {
 
 type modelsKeyMap struct {
 	Filter, Rescan, Enter, Cancel key.Binding
+}
+
+// NavigateToSizingMsg is emitted by ModelsPage when the user presses →/g on
+// the info panel for a model used by exactly one profile. root.go consumes
+// it to switch to the Profiles tab and open that profile in the editor.
+type NavigateToSizingMsg struct {
+	ModelPath string
+	ProfileID string
 }
 
 func defaultModelsKeys() modelsKeyMap {
@@ -252,7 +263,8 @@ func (p ModelsPage) IsCapturingInput() bool {
 	return p.action != nil || p.deleteConfirm.Active() || p.filterMode || p.profilePicker != nil ||
 		(p.hfSearch != nil && p.hfSearch.IsActive()) ||
 		(p.hfFilePicker != nil && p.hfFilePicker.IsActive()) ||
-		(p.downloads != nil && p.downloads.IsFocusVisible())
+		(p.downloads != nil && p.downloads.IsFocusVisible()) ||
+		p.infoPanel != nil
 }
 
 // scanStartedMsg delivers the channel + cancel handle from a fresh scan
@@ -866,6 +878,41 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return next, cmd
 	case key.Matches(msg, p.keys.Enter):
 		return p.openActionMenuForSelection()
+	case msg.String() == "i":
+		if !p.filterMode {
+			return p.openInfoPanel()
+		}
+	case msg.String() == "right", msg.String() == "g":
+		if p.infoPanel != nil {
+			visible := p.visibleFiles()
+			idx := p.table.Cursor()
+			var path string
+			if idx >= 0 && idx < len(visible) {
+				path = visible[idx].Path
+			}
+			if len(p.infoPanelUsedBy) == 1 {
+				return p, func() tea.Msg {
+					return NavigateToSizingMsg{ModelPath: path, ProfileID: p.infoPanelUsedBy[0].ID}
+				}
+			}
+			if len(p.infoPanelUsedBy) > 1 {
+				p, fc := p.withFlash("Multiple profiles use this model — switch to Profiles tab manually")
+				return p, fc
+			}
+			p, fc := p.withFlash("No profile uses this model — create one first")
+			return p, fc
+		}
+	case msg.String() == "esc":
+		if p.infoPanel != nil {
+			p.infoPanel = nil
+			p.infoPanelUsedBy = nil
+			return p, nil
+		}
+	case msg.String() == "esc":
+		if p.infoPanel != nil {
+			p.infoPanel = nil
+			return p, nil
+		}
 	case msg.String() == "s":
 		if !p.filterMode && p.hfClient != nil {
 			p.hfSearch = components.NewHFSearchPicker(hfSearcherAdapter{client: p.hfClient}, p.width, p.height)
@@ -880,6 +927,37 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	t, cmd := p.table.Update(msg)
 	p.table = t
 	return p, cmd
+}
+
+func (p ModelsPage) openInfoPanel() (tea.Model, tea.Cmd) {
+	visible := p.visibleFiles()
+	idx := p.table.Cursor()
+	if idx < 0 || idx >= len(visible) {
+		return p, nil
+	}
+	mf := visible[idx]
+	var usedBy []components.ProfileRef
+	if p.store != nil {
+		profiles, _ := p.store.List()
+		for _, pr := range profiles {
+			if pr.Model == mf.Path {
+				usedBy = append(usedBy, components.ProfileRef{ID: pr.ID, Name: pr.Name})
+			}
+		}
+	}
+	p.infoPanel = &components.InfoPanel{
+		Filename:       mf.Name,
+		Path:           mf.Path,
+		SizeOnDisk:     mf.SizeBytes,
+		ParameterCount: mf.Params,
+		SizeLabel:      "",
+		Quantization:   mf.Quant,
+		Architecture:   mf.Architecture,
+		BlockCount:     mf.BlockCount,
+		UsedByProfiles: usedBy,
+	}
+	p.infoPanelUsedBy = usedBy
+	return p, nil
 }
 
 // openActionMenuForSelection builds the per-row action menu for the
@@ -953,6 +1031,10 @@ func (p ModelsPage) View() string {
 			content = content + "\n" + progressView
 		}
 	}
+	if p.infoPanel != nil {
+		panel := p.infoPanel.Render(p.width / 3)
+		content = lipgloss.JoinHorizontal(lipgloss.Top, content, panel)
+	}
 	return content
 }
 
@@ -994,9 +1076,12 @@ func (p ModelsPage) Hints() string {
 	if p.filterMode {
 		return "[type] filter  [esc] clear"
 	}
-	hints := "[/] filter  [R] rescan  [s] search HF  [enter] actions  [esc] clear"
+	hints := "[/] filter  [R] rescan  [s] search HF  [enter] actions  [i] info  [esc] clear"
 	if p.downloads != nil && p.downloads.IsVisible() {
 		hints += "  [x] cancel dl"
+	}
+	if p.infoPanel != nil {
+		hints = "[→/g] sizing  [esc] close info"
 	}
 	return hints
 }

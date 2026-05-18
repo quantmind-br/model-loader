@@ -1,16 +1,16 @@
 package pages
 
-// SwitchToMonitorMsg is emitted by LauncherPage after a launch is healthy.
-// root.go consumes this to switch the active tab to Monitor and pre-select
+// SwitchToServerMsg is emitted by LauncherPage after a launch is healthy.
+// root.go consumes this to switch the active tab to Server and pre-select
 // the new PID.
-type SwitchToMonitorMsg struct {
+type SwitchToServerMsg struct {
 	PID int
 }
 
-// MonitorSelectPIDMsg instructs MonitorPage to select the row whose PID
-// matches. Sent by root when handling SwitchToMonitorMsg so the Monitor
+// ServerSelectPIDMsg instructs ServerPage to select the row whose PID
+// matches. Sent by root when handling SwitchToServerMsg so the Server
 // page lands focused on the newly-launched instance.
-type MonitorSelectPIDMsg struct {
+type ServerSelectPIDMsg struct {
 	PID int
 }
 

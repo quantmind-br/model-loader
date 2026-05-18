@@ -24,6 +24,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/modelscanner"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/service/proxysupervisor"
 	"github.com/quantmind-br/model-loader/internal/ui"
 	"github.com/quantmind-br/model-loader/internal/ui/pages"
@@ -33,9 +34,15 @@ func main() {
 	// Dispatch on the first positional argument. We strip the subcommand
 	// from os.Args so the downstream flag.Parse only sees flags, which
 	// keeps `model-loader serve --log-level=debug` working.
-	if len(os.Args) > 1 && os.Args[1] == "serve" {
-		os.Args = append(os.Args[:1], os.Args[2:]...)
-		os.Exit(runServe())
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "serve":
+			os.Args = append(os.Args[:1], os.Args[2:]...)
+			os.Exit(runServe())
+		case "import":
+			os.Args = append(os.Args[:1], os.Args[2:]...)
+			os.Exit(runImport())
+		}
 	}
 	os.Exit(runTUI())
 }
@@ -83,19 +90,20 @@ func runTUI() int {
 		WithLogger(logger)
 
 	mon := monitor.New(monitor.Config{NvidiaSMIPath: "nvidia-smi"})
-	monitorPage := pages.NewMonitorPage(svc.mgr, mon, svc.store).
-		SetBackendResolver(svc.resolver)
+	serverPage := pages.NewServerPage(svc.mgr, mon, svc.store).
+		WithMetricsDir(filepath.Join(cfg.Paths.StateDir, "metrics")).
+		SetBackendResolver(svc.resolver).
+		WithProxy(supervisor)
 	prober := backendcatalog.NewProber(svc.catalogStore, backendcatalog.ProbeConfig{Timeout: 10 * time.Second})
 	backendsPage := pages.NewBackendsPage(svc.schemaManager).WithProber(prober)
-	serverPage := pages.NewServerPage(supervisor)
 
 	root := ui.NewRoot(parseTab(cfg.UI.DefaultTab)).
 		WithProfilesPage(profilesPage).
 		WithModelsPage(modelsPage).
 		WithLauncherPage(launcherPage).
-		WithMonitorPage(monitorPage).
+		WithServerPage(serverPage).
 		WithBackendsPage(backendsPage).
-		WithServerPage(serverPage)
+		WithProcessManager(svc.mgr)
 
 	prog := tea.NewProgram(root, tea.WithAltScreen())
 	if _, err := prog.Run(); err != nil {
@@ -182,6 +190,40 @@ func runServe() int {
 // bundles into. It lives under <state-dir>/exports and is created lazily.
 // On mkdir failure we log a warning and return "" so the [e] shortcut
 // degrades to a "not configured" flash instead of crashing boot.
+func runImport() int {
+	cliLevel := flag.String("log-level", "", "override log level")
+	modeFlag := flag.String("mode", "merge", "conflict resolution: merge|overwrite|rename")
+	flag.Parse()
+
+	if flag.NArg() == 0 {
+		fmt.Fprintln(os.Stderr, "usage: model-loader import <path> [--mode=merge|overwrite|rename]")
+		return 1
+	}
+	path := flag.Arg(0)
+
+	mode := profilestore.ConflictModeMerge
+	if *modeFlag != "" {
+		mode = profilestore.ConflictMode(*modeFlag)
+	}
+
+	_, logger, closeLog, svc, err := bootstrap(*cliLevel)
+	if err != nil {
+		return 1
+	}
+	defer closeLog()
+	defer svc.mgr.Close()
+
+	res, err := profilestore.ImportBundle(svc.store, path, mode)
+	if err != nil {
+		logger.Error("import_failed", "err", err)
+		fmt.Fprintf(os.Stderr, "import failed: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Import result: added=%d skipped=%d renamed=%d replaced=%d\n",
+		res.Added, res.Skipped, res.Renamed, res.Replaced)
+	return 0
+}
+
 func resolveExportDir(stateDir string, logger *slog.Logger) string {
 	if stateDir == "" {
 		return ""
@@ -248,14 +290,12 @@ func parseTab(name string) ui.Tab {
 		return ui.TabLauncher
 	case "profiles":
 		return ui.TabProfiles
-	case "monitor":
-		return ui.TabMonitor
+	case "server":
+		return ui.TabServer
 	case "models":
 		return ui.TabModels
 	case "backends":
 		return ui.TabBackends
-	case "server":
-		return ui.TabServer
 	default:
 		return ui.TabLauncher
 	}

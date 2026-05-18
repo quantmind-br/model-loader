@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/pages"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
@@ -18,15 +19,14 @@ type Tab int
 const (
 	TabLauncher Tab = iota
 	TabProfiles
-	TabMonitor
+	TabServer
 	TabModels
 	TabBackends
-	TabServer
 )
 
 // tabCount is the number of top-level tabs. Single source of truth for
 // keybinding ranges, modulo math, and array sizing.
-const tabCount = 6
+const tabCount = 5
 
 func (t Tab) Title() string {
 	switch t {
@@ -34,14 +34,12 @@ func (t Tab) Title() string {
 		return "Launcher"
 	case TabProfiles:
 		return "Profiles"
-	case TabMonitor:
-		return "Monitor"
+	case TabServer:
+		return "Server"
 	case TabModels:
 		return "Models"
 	case TabBackends:
 		return "Backends"
-	case TabServer:
-		return "Server"
 	default:
 		return "?"
 	}
@@ -85,7 +83,7 @@ type HelpContextProvider interface {
 }
 
 // globalHints is the prefix shown in every status bar line.
-const globalHints = "[1-6] tabs  [tab] next  [q] quit" + components.HelpToken
+const globalHints = "[1-5] tabs  [tab] next  [q] quit" + components.HelpToken
 
 // bootBlocker carrega o conteúdo de um modal bloqueante exibido sobre toda a UI.
 type bootBlocker struct {
@@ -95,13 +93,16 @@ type bootBlocker struct {
 
 // RootModel is the top-level tea.Model.
 type RootModel struct {
-	pages       [tabCount]tea.Model
-	active      Tab
-	status      components.StatusBar
-	width       int
-	height      int
-	bootBlocker *bootBlocker
-	helpOpen    bool
+	pages           [tabCount]tea.Model
+	active          Tab
+	status          components.StatusBar
+	width           int
+	height          int
+	bootBlocker     *bootBlocker
+	helpOpen        bool
+	playgroundOpen  bool
+	playgroundModal tea.Model
+	pm              processmgr.Manager
 }
 
 // NewRoot constructs a RootModel with placeholder pages.
@@ -111,10 +112,9 @@ func NewRoot(initial Tab) RootModel {
 		pages: [tabCount]tea.Model{
 			pages.Placeholder{TabName: TabLauncher.Title()},
 			pages.Placeholder{TabName: TabProfiles.Title()},
-			pages.Placeholder{TabName: TabMonitor.Title()},
+			pages.Placeholder{TabName: TabServer.Title()},
 			pages.Placeholder{TabName: TabModels.Title()},
 			pages.Placeholder{TabName: TabBackends.Title()},
-			pages.Placeholder{TabName: TabServer.Title()},
 		},
 		active: initial,
 		status: components.StatusBar{Hints: globalHints},
@@ -140,12 +140,6 @@ func (m RootModel) WithLauncherPage(p tea.Model) RootModel {
 	return m
 }
 
-// WithMonitorPage replaces the placeholder Monitor tab with a real model.
-func (m RootModel) WithMonitorPage(p tea.Model) RootModel {
-	m.pages[TabMonitor] = p
-	return m
-}
-
 // WithBackendsPage replaces the placeholder Backends tab with a real model.
 func (m RootModel) WithBackendsPage(p tea.Model) RootModel {
 	m.pages[TabBackends] = p
@@ -155,6 +149,12 @@ func (m RootModel) WithBackendsPage(p tea.Model) RootModel {
 // WithServerPage replaces the placeholder Server tab with a real model.
 func (m RootModel) WithServerPage(p tea.Model) RootModel {
 	m.pages[TabServer] = p
+	return m
+}
+
+// WithProcessManager injects the process manager for the playground modal.
+func (m RootModel) WithProcessManager(pm processmgr.Manager) RootModel {
+	m.pm = pm
 	return m
 }
 
@@ -192,8 +192,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.forwardTo(TabLauncher, msg)
 	case pages.UseInNewProfileMsg:
 		return m.activateAndForward(TabProfiles, msg)
-	case pages.SwitchToMonitorMsg:
-		return m.handleSwitchToMonitor(msg)
+	case pages.SwitchToServerMsg:
+		return m.handleSwitchToServer(msg)
+	case pages.NavigateToSizingMsg:
+		return m.handleNavigateToSizing(msg)
 	case pages.LaunchProfileMsg:
 		return m.activateAndForward(TabLauncher, msg)
 	case tea.WindowSizeMsg:
@@ -240,27 +242,59 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// handleSwitchToMonitor activates the Monitor tab and translates the cross-
-// tab message into a MonitorSelectPIDMsg so the page refreshes + selects
+// handleSwitchToServer activates the Server tab and translates the cross-
+// tab message into a ServerSelectPIDMsg so the page refreshes + selects
 // the requested row.
-func (m RootModel) handleSwitchToMonitor(msg pages.SwitchToMonitorMsg) (tea.Model, tea.Cmd) {
-	m.active = TabMonitor
-	updated, cmd := m.pages[TabMonitor].Update(pages.MonitorSelectPIDMsg{PID: msg.PID})
-	m.pages[TabMonitor] = updated
+func (m RootModel) handleSwitchToServer(msg pages.SwitchToServerMsg) (tea.Model, tea.Cmd) {
+	m.active = TabServer
+	updated, cmd := m.pages[TabServer].Update(pages.ServerSelectPIDMsg{PID: msg.PID})
+	m.pages[TabServer] = updated
 	m.recomputeHints()
 	return m, cmd
 }
 
-// handleKey dispatches a key event. ctrl+c is the only unconditional global
-// shortcut — every other binding (?, q, 1-5, tab, shift+tab) is gated by
-// IsCapturingInput so printable keys reach an active editor/picker
+// handleNavigateToSizing switches to the Profiles tab and forwards the
+// NavigateToSizingMsg so the profiles page can select the matching profile
+// and open its editor on the sizing sub-tab.
+func (m RootModel) handleNavigateToSizing(msg pages.NavigateToSizingMsg) (tea.Model, tea.Cmd) {
+	m.active = TabProfiles
+	updated, cmd := m.pages[TabProfiles].Update(msg)
+	m.pages[TabProfiles] = updated
+	m.recomputeHints()
+	return m, cmd
+}
+
+// handleKey dispatches a key event. ctrl+c and ctrl+p are unconditional
+// global shortcuts — every other binding (?, q, 1-5, tab, shift+tab) is gated
+// by IsCapturingInput so printable keys reach an active editor/picker
 // instead of triggering quit/tab-switch/help.
 func (m RootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.helpOpen {
 		return m.handleHelpKey(msg)
 	}
+	if m.playgroundOpen && m.playgroundModal != nil {
+		updated, cmd := m.playgroundModal.Update(msg)
+		m.playgroundModal = updated
+		if msg.String() == "esc" || msg.String() == "ctrl+p" {
+			m.playgroundOpen = false
+		}
+		return m, cmd
+	}
 	if msg.String() == "ctrl+c" {
 		return m, tea.Quit
+	}
+	if msg.String() == "ctrl+p" {
+		if m.playgroundOpen {
+			m.playgroundOpen = false
+			return m, nil
+		}
+		if !m.activePageCapturesInput() {
+			m.playgroundOpen = true
+			if m.pm != nil {
+				m.playgroundModal = components.NewPlaygroundModal(m.pm.List())
+			}
+			return m, nil
+		}
 	}
 	if !m.activePageCapturesInput() {
 		if msg.String() == "?" {
@@ -275,13 +309,11 @@ func (m RootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "2":
 			return m.activate(TabProfiles)
 		case "3":
-			return m.activate(TabMonitor)
+			return m.activate(TabServer)
 		case "4":
 			return m.activate(TabModels)
 		case "5":
 			return m.activate(TabBackends)
-		case "6":
-			return m.activate(TabServer)
 		case "tab":
 			return m.activate((m.active + 1) % tabCount)
 		case "shift+tab":
@@ -372,7 +404,12 @@ func (m RootModel) View() string {
 	header := m.renderTabs()
 	body := m.pages[m.active].View()
 	status := m.status.Render(m.width)
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, status)
+	view := lipgloss.JoinVertical(lipgloss.Left, header, body, status)
+	if m.playgroundOpen && m.playgroundModal != nil {
+		overlay := m.playgroundModal.View()
+		view = components.Overlay(view, overlay, m.width, m.height)
+	}
+	return view
 }
 
 // activate switches to the given tab and triggers Reload on the page if
@@ -395,10 +432,18 @@ func (m *RootModel) recomputeHints() {
 	if h, ok := m.pages[m.active].(HintProvider); ok {
 		if ph := h.Hints(); ph != "" {
 			m.status.Hints = globalHints + " | " + ph
-			return
+		} else {
+			m.status.Hints = globalHints
+		}
+	} else {
+		m.status.Hints = globalHints
+	}
+	m.status.RestartCount = 0
+	if m.pm != nil {
+		for _, inst := range m.pm.List() {
+			m.status.RestartCount += inst.RestartCount
 		}
 	}
-	m.status.Hints = globalHints
 }
 
 func (m RootModel) activePageCapturesInput() bool {

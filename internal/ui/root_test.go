@@ -35,7 +35,7 @@ func TestRoot_TabSwitchByNumber(t *testing.T) {
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
 
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return strings.Contains(string(out), "Monitor")
+		return strings.Contains(string(out), "Server")
 	}, teatest.WithDuration(2*time.Second))
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
@@ -124,8 +124,8 @@ func TestRoot_TabSwitchToLauncherShowsPage(t *testing.T) {
 	_ = tm.Quit()
 }
 
-func TestRoot_WithMonitorPageReplacesPlaceholder(t *testing.T) {
-	root := NewRoot(TabMonitor).WithMonitorPage(pages.Placeholder{TabName: "MONITOR_REPLACED"})
+func TestRoot_WithServerPageReplacesPlaceholder(t *testing.T) {
+	root := NewRoot(TabServer).WithServerPage(pages.Placeholder{TabName: "MONITOR_REPLACED"})
 
 	tm := teatest.NewTestModel(t, root, teatest.WithInitialTermSize(120, 30))
 	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
@@ -138,28 +138,28 @@ func TestRoot_WithMonitorPageReplacesPlaceholder(t *testing.T) {
 	_ = tm.Quit()
 }
 
-func TestRoot_RoutesSwitchToMonitorMsg(t *testing.T) {
-	root := NewRoot(TabProfiles).WithMonitorPage(pages.Placeholder{TabName: "MONITOR"})
+func TestRoot_RoutesSwitchToServerMsg(t *testing.T) {
+	root := NewRoot(TabProfiles).WithServerPage(pages.Placeholder{TabName: "MONITOR"})
 
-	updated, _ := root.Update(pages.SwitchToMonitorMsg{PID: 999})
+	updated, _ := root.Update(pages.SwitchToServerMsg{PID: 999})
 	r := updated.(RootModel)
 
-	if r.active != TabMonitor {
-		t.Fatalf("active = %d, want TabMonitor=%d", r.active, TabMonitor)
+	if r.active != TabServer {
+		t.Fatalf("active = %d, want TabServer=%d", r.active, TabServer)
 	}
 }
 
-func TestRoot_ForwardsSwitchPIDToMonitor(t *testing.T) {
-	rec := &recordingMonitor{}
+func TestRoot_ForwardsSwitchPIDToServer(t *testing.T) {
+	rec := &recordingServer{}
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(rec).
+		WithServerPage(rec).
 		WithModelsPage(pages.Placeholder{TabName: "M"})
-	updated, _ := r.Update(pages.SwitchToMonitorMsg{PID: 4321})
+	updated, _ := r.Update(pages.SwitchToServerMsg{PID: 4321})
 	rm := updated.(RootModel)
-	if rm.active != TabMonitor {
-		t.Errorf("active = %v, want TabMonitor", rm.active)
+	if rm.active != TabServer {
+		t.Errorf("active = %v, want TabServer", rm.active)
 	}
 	if rec.lastSelectPID != 4321 {
 		t.Errorf("rec.lastSelectPID = %d, want 4321", rec.lastSelectPID)
@@ -196,7 +196,7 @@ func TestRoot_HelpToggle(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 	// Help closed by default.
 	if rendered := r.View(); strings.Contains(rendered, "Keybindings") {
@@ -220,7 +220,7 @@ func TestRoot_HelpModalShowsPageContext(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(hintingPage{name: "P"}).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 	r.width = 120
 	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
@@ -235,7 +235,7 @@ func TestRoot_HelpModalSwitchesContextOnTabChange(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(hintingPage{name: "P"}).
 		WithLauncherPage(hintingPage{name: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 	r.width = 120
 	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
@@ -255,7 +255,7 @@ func TestRoot_HelpSwallowsTabSwitch(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 	// Open help.
 	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
@@ -289,7 +289,7 @@ func TestRoot_TabPassesThroughWhenPageCapturesInput(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(cap).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 
 	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyTab})
@@ -308,7 +308,7 @@ func TestRoot_QSwallowedWhilePageCapturesInput(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(cap).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 
 	_, cmd := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
@@ -325,7 +325,7 @@ func TestRoot_NumberKeySwallowedWhilePageCapturesInput(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(cap).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 
 	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
@@ -343,7 +343,7 @@ func TestRoot_QuestionMarkSwallowedWhilePageCapturesInput(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(cap).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 
 	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
@@ -361,7 +361,7 @@ func TestRoot_CtrlCAlwaysQuitsEvenWhenCapturingInput(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(cap).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 
 	_, cmd := r.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
@@ -375,7 +375,7 @@ func TestRoot_TabSwitchesWhenPageDoesNotCapture(t *testing.T) {
 	r := NewRoot(TabLauncher).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
 		WithLauncherPage(cap).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 
 	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyTab})
@@ -391,7 +391,7 @@ func TestRoot_ModelsFilterDoesNotLeakQ(t *testing.T) {
 	r := NewRoot(TabModels).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(cap)
 
 	_, cmd := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
@@ -408,7 +408,7 @@ func TestRoot_ModelsFilterDoesNotLeakQuestionMark(t *testing.T) {
 	r := NewRoot(TabModels).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(cap)
 
 	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
@@ -426,7 +426,7 @@ func TestRoot_ModelsFilterDoesNotLeakNumberKeys(t *testing.T) {
 	r := NewRoot(TabModels).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(cap)
 
 	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
@@ -456,7 +456,7 @@ func TestRoot_TabStripContainsSeparator(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 	r.width = 120
 	if !strings.Contains(r.View(), "│") {
@@ -468,7 +468,7 @@ func TestRoot_StatusBarMentionsHelp(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"})
 	r.width = 120
 	view := r.View()
@@ -559,7 +559,7 @@ func TestRoot_TabCyclesThroughBackends(t *testing.T) {
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return strings.Contains(string(out), "Server")
+		return strings.Contains(string(out), "Launcher")
 	}, teatest.WithDuration(2*time.Second))
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
@@ -568,29 +568,13 @@ func TestRoot_TabCyclesThroughBackends(t *testing.T) {
 	}
 }
 
-func TestRoot_ShiftTabFromLauncherGoesToServer(t *testing.T) {
+func TestRoot_ShiftTabFromLauncherGoesToBackends(t *testing.T) {
 	tm := teatest.NewTestModel(t, NewRoot(TabLauncher), teatest.WithInitialTermSize(120, 30))
 	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyShiftTab})
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return strings.Contains(string(out), "Server")
-	}, teatest.WithDuration(2*time.Second))
-
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
-	if err := tm.Quit(); err != nil {
-		t.Fatalf("Quit returned err: %v", err)
-	}
-}
-
-func TestRoot_ServerTabSwitchByNumber(t *testing.T) {
-	tm := teatest.NewTestModel(t, NewRoot(TabLauncher), teatest.WithInitialTermSize(120, 30))
-	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
-
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'6'}})
-
-	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return strings.Contains(string(out), "Server")
+		return strings.Contains(string(out), "Backends")
 	}, teatest.WithDuration(2*time.Second))
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
@@ -618,7 +602,7 @@ func TestRoot_NumberFiveSwallowedWhilePageCapturesInput(t *testing.T) {
 	r := NewRoot(TabBackends).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
 		WithModelsPage(pages.Placeholder{TabName: "Md"}).
 		WithBackendsPage(cap)
 
@@ -632,35 +616,34 @@ func TestRoot_NumberFiveSwallowedWhilePageCapturesInput(t *testing.T) {
 	}
 }
 
-func TestRoot_NumberSixSwallowedWhilePageCapturesInput(t *testing.T) {
+func TestRoot_NumberThreeSwallowedWhilePageCapturesInput(t *testing.T) {
 	cap := &capturingPage{captured: true}
 	r := NewRoot(TabServer).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
 		WithLauncherPage(pages.Placeholder{TabName: "L"}).
-		WithMonitorPage(pages.Placeholder{TabName: "Mo"}).
+		WithServerPage(cap).
 		WithModelsPage(pages.Placeholder{TabName: "Md"}).
-		WithBackendsPage(pages.Placeholder{TabName: "B"}).
-		WithServerPage(cap)
+		WithBackendsPage(pages.Placeholder{TabName: "B"})
 
-	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'6'}})
+	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
 	rm := updated.(RootModel)
 	if rm.active != TabServer {
 		t.Errorf("active = %v, want still TabServer (page captures input)", rm.active)
 	}
-	if len(cap.keys) != 1 || cap.keys[0] != "6" {
-		t.Errorf("page did not receive '6'; keys=%v", cap.keys)
+	if len(cap.keys) != 1 || cap.keys[0] != "3" {
+		t.Errorf("page did not receive '3'; keys=%v", cap.keys)
 	}
 }
 
-type recordingMonitor struct {
+type recordingServer struct {
 	lastSelectPID int
 }
 
-func (r *recordingMonitor) Init() tea.Cmd { return nil }
-func (r *recordingMonitor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if m, ok := msg.(pages.MonitorSelectPIDMsg); ok {
+func (r *recordingServer) Init() tea.Cmd { return nil }
+func (r *recordingServer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m, ok := msg.(pages.ServerSelectPIDMsg); ok {
 		r.lastSelectPID = m.PID
 	}
 	return r, nil
 }
-func (r *recordingMonitor) View() string { return "" }
+func (r *recordingServer) View() string { return "" }

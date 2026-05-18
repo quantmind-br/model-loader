@@ -4,11 +4,13 @@ package domain
 // Quant and Params are best-effort: derived from filename heuristics
 // (and GGUF metadata when readable). Either may be empty.
 type ModelFile struct {
-	Path      string // absolute path
-	SizeBytes int64
-	Name      string // base filename
-	Quant     string // e.g. "Q4_K_M", "Q5_K_M", "Q8_0"
-	Params    string // e.g. "32B", "7B"
+	Path         string // absolute path
+	SizeBytes    int64
+	Name         string // base filename
+	Quant        string // e.g. "Q4_K_M", "Q5_K_M", "Q8_0"
+	Params       string // e.g. "32B", "7B"
+	Architecture string
+	BlockCount   uint64
 }
 
 // ScanEventType discriminates ScanEvent payloads.

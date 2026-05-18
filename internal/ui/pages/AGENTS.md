@@ -12,6 +12,8 @@ Tab page implementations. Each page is a `tea.Model` with isolated state and lif
 | `models.go` | GGUF model browser and scanner integration |
 | `launcher.go` | Profile selection, validation, launch orchestration |
 | `monitor.go` | Live GPU metrics, logs, slots per running instance |
+| `server.go` | HTTP proxy status and on/off toggle |
+| `backends.go` | Backend catalog management (add/edit/delete/probe) |
 | `messages.go` | Cross-tab messages consumed by `root.go` |
 | `placeholder.go` | Generic stub for unimplemented tabs |
 

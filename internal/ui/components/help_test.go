@@ -23,7 +23,7 @@ func TestRenderHelp_MentionsAllTabs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderHelp: %v", err)
 	}
-	for _, tab := range []string{"Profiles", "Launcher", "Monitor", "Models", "Backends", "Server"} {
+	for _, tab := range []string{"Profiles", "Launcher", "Server", "Models", "Backends"} {
 		if !strings.Contains(out, tab) {
 			t.Errorf("output missing %q", tab)
 		}
@@ -35,7 +35,7 @@ func TestRenderHelp_MentionsTabRange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderHelp: %v", err)
 	}
-	if !strings.Contains(out, "1") || !strings.Contains(out, "6") {
+	if !strings.Contains(out, "1") || !strings.Contains(out, "5") {
 		t.Errorf("output missing 1–6 tab range; got:\n%s", out)
 	}
 }

@@ -77,12 +77,17 @@ type Editor struct {
 
 	// Environment sub-tab state. Mirrors the advanced* fields above.
 	envTable       table.Model
+	envAll         []table.Row
+	envFilter      string
+	envFilterMode  bool
 	envEditing     bool
 	envEditKey     string
 	envEditValue   string
 	envEditIndex   int // -1 = adding new row; >=0 = editing existing
 	envEditField   envField
 	envSubmitError string
+
+	sizingTab SizingTab
 
 	discardConfirm components.Confirm
 }
@@ -144,6 +149,15 @@ func (e Editor) SetCatalogStore(s backendcatalog.Store) Editor {
 // profiles validate against their own backend's schema immediately.
 func (e Editor) Open(d Draft) (Editor, tea.Cmd) {
 	dp := d
+	if dp.RestartPolicy == "" {
+		dp.RestartPolicy = string(domain.RestartPolicyNone)
+	}
+	if dp.MaxRestarts == "" {
+		dp.MaxRestarts = "3"
+	}
+	if dp.BackoffSeconds == "" {
+		dp.BackoffSeconds = "5"
+	}
 	e.draft = &dp
 	e.openSnapshot = dp
 	e.lastBackendID = dp.BackendID
@@ -162,6 +176,7 @@ func (e Editor) Open(d Draft) (Editor, tea.Cmd) {
 	e.envEditField = envFieldKey
 	e.envSubmitError = ""
 	e.discardConfirm = components.Confirm{}
+	e.sizingTab = newSizingTabForDraft(*e.draft)
 	return e, e.form.Init()
 }
 
@@ -181,6 +196,16 @@ func (e Editor) SetModelPath(path string) (Editor, tea.Cmd) {
 	e.draft.Model = path
 	e.form = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
 	return e, e.form.Init()
+}
+
+// SetSubTabSizing switches the editor to the Sizing sub-tab. No-op when
+// inactive or when the backend is not llama-server.
+func (e Editor) SetSubTabSizing() Editor {
+	if !e.active || e.backendKind != domain.BackendKindLlamaServer {
+		return e
+	}
+	e.subTab = subTabSizing
+	return e
 }
 
 // CurrentDraft returns a copy of the in-flight draft. Returns the zero
@@ -219,6 +244,8 @@ func (e Editor) View() string {
 		body = e.form.View()
 	case e.subTab == subTabEnvironment:
 		body = e.renderEnvBody()
+	case e.subTab == subTabSizing:
+		body = e.sizingTab.View()
 	case e.advancedEditing:
 		body = theme.Subtitle.Render(fmt.Sprintf("Editing --%s: %s_", e.advancedEditFlag, e.advancedEditVal))
 	default:
@@ -266,6 +293,12 @@ func (e Editor) Update(msg tea.Msg) (Editor, tea.Cmd) {
 		e = e.close()
 		return e, emitCancelled
 	}
+	if suggest, ok := msg.(suggestAppliedMsg); ok {
+		if e.draft != nil {
+			e.draft.NGL = fmt.Sprintf("%d", suggest.ngl)
+		}
+		return e, nil
+	}
 	if e.discardConfirm.Active() {
 		return e.updateDiscardConfirm(msg)
 	}
@@ -306,7 +339,7 @@ func (e Editor) handleKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 		return e, emitCancelled
 	}
 	if key.Matches(msg, tabKey) {
-		e.subTab = (e.subTab + 1) % 3
+		e.subTab = e.nextSubTab()
 		return e, nil
 	}
 	if e.subTab == subTabAdvanced {
@@ -315,8 +348,21 @@ func (e Editor) handleKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 	if e.subTab == subTabEnvironment {
 		return e.handleEnvKey(msg)
 	}
+	if e.subTab == subTabSizing {
+		updated, cmd := e.sizingTab.Update(msg)
+		e.sizingTab = updated
+		return e, cmd
+	}
 	e.submitError = ""
 	return e.forwardToForm(msg)
+}
+
+func (e Editor) nextSubTab() subTab {
+	max := subTab(3)
+	if e.backendKind == domain.BackendKindLlamaServer {
+		max = subTab(4)
+	}
+	return (e.subTab + 1) % max
 }
 
 func (e Editor) handleAdvancedKey(msg tea.KeyMsg) (Editor, tea.Cmd) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // ggufMagic is the 4-byte file signature.
@@ -65,54 +66,100 @@ const (
 // or general.size_label which are usually within the first ~50.
 const metadataScanLimit = 128
 
+type ggufMeta struct {
+	Params       string
+	Architecture string
+	BlockCount   uint64
+}
+
+func readGGUFMeta(r io.Reader) (ggufMeta, error) {
+	hdr, err := readGGUFHeader(r)
+	if err != nil {
+		return ggufMeta{}, err
+	}
+	scan := hdr.MetadataCount
+	if scan > metadataScanLimit {
+		scan = metadataScanLimit
+	}
+
+	var params string
+	var arch string
+	blockCounts := make(map[string]uint64)
+
+	for i := uint64(0); i < scan; i++ {
+		key, err := readGGUFString(r)
+		if err != nil {
+			return ggufMeta{}, nil
+		}
+		var typeID uint32
+		if err := binary.Read(r, binary.LittleEndian, &typeID); err != nil {
+			return ggufMeta{}, nil
+		}
+
+		switch key {
+		case "general.parameter_count":
+			if typeID != ggufTypeUint64 {
+				return ggufMeta{}, nil
+			}
+			var n uint64
+			if err := binary.Read(r, binary.LittleEndian, &n); err != nil {
+				return ggufMeta{}, nil
+			}
+			params = formatParams(n)
+		case "general.size_label":
+			if typeID != ggufTypeString {
+				return ggufMeta{}, nil
+			}
+			s, err := readGGUFString(r)
+			if err != nil {
+				return ggufMeta{}, nil
+			}
+			params = s
+		case "general.architecture":
+			if typeID != ggufTypeString {
+				return ggufMeta{}, nil
+			}
+			s, err := readGGUFString(r)
+			if err != nil {
+				return ggufMeta{}, nil
+			}
+			arch = s
+		default:
+			if strings.HasSuffix(key, ".block_count") && typeID == ggufTypeUint64 {
+				var n uint64
+				if err := binary.Read(r, binary.LittleEndian, &n); err == nil {
+					prefix := strings.TrimSuffix(key, ".block_count")
+					blockCounts[prefix] = n
+				}
+			} else {
+				if !skipGGUFValue(r, typeID) {
+					return ggufMeta{}, nil
+				}
+			}
+		}
+	}
+
+	var blockCount uint64
+	if arch != "" {
+		if bc, ok := blockCounts[arch]; ok {
+			blockCount = bc
+		}
+	}
+
+	return ggufMeta{Params: params, Architecture: arch, BlockCount: blockCount}, nil
+}
+
 // readGGUFParams reads the full header and walks metadata KV pairs
 // looking for parameter-count signals. Returns "" when neither key is
 // present, when an unsupported value type is encountered (we cannot
 // safely advance the reader past unknown payloads), or when the file
 // is truncated. Caller must seek/wrap the reader to the start.
 func readGGUFParams(r io.Reader) (string, error) {
-	hdr, err := readGGUFHeader(r)
+	m, err := readGGUFMeta(r)
 	if err != nil {
 		return "", err
 	}
-	scan := hdr.MetadataCount
-	if scan > metadataScanLimit {
-		scan = metadataScanLimit
-	}
-	for i := uint64(0); i < scan; i++ {
-		key, err := readGGUFString(r)
-		if err != nil {
-			return "", nil
-		}
-		var typeID uint32
-		if err := binary.Read(r, binary.LittleEndian, &typeID); err != nil {
-			return "", nil
-		}
-		switch key {
-		case "general.parameter_count":
-			if typeID != ggufTypeUint64 {
-				return "", nil
-			}
-			var n uint64
-			if err := binary.Read(r, binary.LittleEndian, &n); err != nil {
-				return "", nil
-			}
-			return formatParams(n), nil
-		case "general.size_label":
-			if typeID != ggufTypeString {
-				return "", nil
-			}
-			s, err := readGGUFString(r)
-			if err != nil {
-				return "", nil
-			}
-			return s, nil
-		}
-		if !skipGGUFValue(r, typeID) {
-			return "", nil
-		}
-	}
-	return "", nil
+	return m.Params, nil
 }
 
 // readGGUFString reads a GGUF string (u64 length + utf8 bytes).

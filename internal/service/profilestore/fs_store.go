@@ -20,6 +20,8 @@ type FSStore struct {
 	dir string
 }
 
+func (s *FSStore) Dir() string { return s.dir }
+
 // NewFSStore returns a Store rooted at dir. The directory is created if missing.
 func NewFSStore(dir string) (*FSStore, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -86,6 +88,11 @@ func (s *FSStore) Get(id string) (domain.Profile, error) {
 	if err := json.Unmarshal(data, &p); err != nil {
 		return domain.Profile{}, fmt.Errorf("%w: %v", ErrInvalidJSON, err)
 	}
+	oldVersion := p.SchemaVersion
+	MigrateProfile(&p)
+	if p.SchemaVersion != oldVersion {
+		_ = s.Save(p)
+	}
 	return p, nil
 }
 
@@ -104,6 +111,16 @@ func (s *FSStore) Save(p domain.Profile) error {
 		p.Meta.CreatedAt = now
 	}
 	p.Meta.UpdatedAt = now
+
+	if _, err := os.Stat(s.path(p.ID)); err == nil {
+		var current domain.Profile
+		if data, err := os.ReadFile(s.path(p.ID)); err == nil {
+			_ = json.Unmarshal(data, &current)
+			if current.ID != "" {
+				_ = SavePrevious(s.dir, current)
+			}
+		}
+	}
 
 	if err := fsx.WriteJSONAtomic(s.path(p.ID), p); err != nil {
 		return fmt.Errorf("save profile: %w", err)
@@ -136,6 +153,7 @@ func (s *FSStore) Delete(id string) error {
 		}
 		return fmt.Errorf("remove profile: %w", err)
 	}
+	_ = DeletePrevious(s.dir, id)
 	return nil
 }
 

@@ -208,3 +208,39 @@ func TestHandleForward_CatchAllPreservesArbitraryPaths(t *testing.T) {
 		}
 	}
 }
+
+func TestHandleStatus_ReturnsCurrentStatus(t *testing.T) {
+	srv := newTestServer(t, newStubStore(), newStubManager())
+	mux := http.NewServeMux()
+	srv.registerRoutes(mux)
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest("GET", "/_status", nil))
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var st Status
+	if err := json.NewDecoder(rr.Body).Decode(&st); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if st.Running {
+		t.Errorf("Running = true, want false (server not started)")
+	}
+}
+
+func TestHandleStatus_RejectsNonGET(t *testing.T) {
+	srv := newTestServer(t, newStubStore(), newStubManager())
+	mux := http.NewServeMux()
+	srv.registerRoutes(mux)
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest("POST", "/_status", nil))
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("status = %d, want 405", rr.Code)
+	}
+	if rr.Header().Get("Allow") != "GET" {
+		t.Errorf("Allow = %q, want GET", rr.Header().Get("Allow"))
+	}
+}

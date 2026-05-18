@@ -25,6 +25,7 @@ const (
 	subTabEssentials subTab = iota
 	subTabAdvanced
 	subTabEnvironment
+	subTabSizing
 )
 
 func (s subTab) String() string {
@@ -35,6 +36,8 @@ func (s subTab) String() string {
 		return "Advanced"
 	case subTabEnvironment:
 		return "Environment"
+	case subTabSizing:
+		return "Sizing"
 	default:
 		return "?"
 	}
@@ -64,6 +67,9 @@ type Draft struct {
 	// Env mirrors Profile.Launch.Env in editor-friendly form. Slice preserves
 	// insertion order as shown in the Environment sub-tab.
 	Env []domain.EnvVar
+	RestartPolicy  string
+	MaxRestarts    string
+	BackoffSeconds string
 }
 
 // ParseTags converts a comma-separated editor string to the trimmed
@@ -179,6 +185,13 @@ func (d Draft) ApplyToWithSchema(base domain.Profile, schema domain.FlagSchema) 
 	} else {
 		out.Launch.Env = nil
 	}
+	out.Launch.RestartPolicy = domain.RestartPolicy(d.RestartPolicy)
+	if v, err := strconv.Atoi(d.MaxRestarts); err == nil {
+		out.Launch.MaxRestarts = v
+	}
+	if v, err := strconv.Atoi(d.BackoffSeconds); err == nil {
+		out.Launch.BackoffSeconds = v
+	}
 	return out
 }
 
@@ -251,11 +264,17 @@ func buildForm(d *Draft, schema domain.FlagSchema, backendOpts []huh.Option[stri
 			huh.NewSelect[string]().Title("cache-type-k").Description("Key cache quantization type").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeK),
 			huh.NewSelect[string]().Title("cache-type-v").Description("Value cache quantization type").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeV),
 		))
-	} else {
-		groups = append(groups, huh.NewGroup(
-			huh.NewInput().Title(labelWithHelp(schema, "port", "port")).Value(&d.Port).Validate(portValidator()),
-		))
 	}
+	restartOpts := []huh.Option[string]{
+		huh.NewOption("none", string(domain.RestartPolicyNone)),
+		huh.NewOption("on-failure", string(domain.RestartPolicyOnFailure)),
+		huh.NewOption("always", string(domain.RestartPolicyAlways)),
+	}
+	groups = append(groups, huh.NewGroup(
+		huh.NewSelect[string]().Title("Restart policy").Description("Auto-restart behaviour on crash").Options(restartOpts...).Value(&d.RestartPolicy),
+		huh.NewInput().Title("Max restarts").Description("Maximum consecutive restarts (0 = unlimited)").Value(&d.MaxRestarts).Validate(intRange(0, 100, false)),
+		huh.NewInput().Title("Backoff seconds").Description("Base delay before first restart attempt").Value(&d.BackoffSeconds).Validate(intRange(1, 3600, false)),
+	))
 	return huh.NewForm(groups...).WithShowHelp(true)
 }
 

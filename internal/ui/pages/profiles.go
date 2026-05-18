@@ -3,8 +3,11 @@ package pages
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
 
+	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -46,10 +49,15 @@ type ProfilesPage struct {
 
 	editor        profile_editor.Editor
 	deleteConfirm components.Confirm
+	conflictModal components.ConflictModal
+	undoModal     components.UndoModal
 
 	flash components.Flash
 
 	picker modelPickerOverlay
+
+	importPickerActive bool
+	importPicker       filepicker.Model
 
 	exportDir string
 }
@@ -139,6 +147,12 @@ func (p ProfilesPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.handleEditorCommitted(m)
 	case profile_editor.EditorCancelledMsg:
 		return p, nil
+	case importDoneMsg:
+		return p.handleImportDone(m)
+	case undoDoneMsg:
+		return p.handleUndoDone(m)
+	case NavigateToSizingMsg:
+		return p.handleNavigateToSizing(m)
 	case tea.KeyMsg:
 		return p.handleKey(m)
 	}
@@ -161,6 +175,7 @@ func (p ProfilesPage) handleLoaded(msg loadedMsg) (tea.Model, tea.Cmd) {
 		p, fc := p.withFlash("load error: " + msg.err.Error())
 		return p, fc
 	}
+	sortProfilesPinnedFirst(msg.profiles)
 	items := make([]list.Item, 0, len(msg.profiles)+len(msg.diags))
 	for _, pr := range msg.profiles {
 		items = append(items, item{p: pr})
@@ -268,8 +283,31 @@ func (p ProfilesPage) handleEditorCommitted(msg profile_editor.EditorCommittedMs
 // confirm) > delete confirm > list nav. Picker is intercepted on ctrl+p
 // or while open before forwarding to the editor.
 func (p ProfilesPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if p.importPickerActive {
+		updated, cmd := p.importPicker.Update(msg)
+		p.importPicker = updated
+		if didSelect, path := p.importPicker.DidSelectFile(msg); didSelect {
+			p.importPickerActive = false
+			return p.startImportWithPath(path)
+		}
+		if msg.String() == "esc" {
+			p.importPickerActive = false
+			return p, nil
+		}
+		return p, cmd
+	}
 	if p.picker.active {
 		return p.updatePicker(msg)
+	}
+	if p.conflictModal.Active() {
+		var cmd tea.Cmd
+		p.conflictModal, cmd = p.conflictModal.Update(msg)
+		return p, cmd
+	}
+	if p.undoModal.Active() {
+		var cmd tea.Cmd
+		p.undoModal, cmd = p.undoModal.Update(msg)
+		return p, cmd
 	}
 	if p.editor.Active() {
 		if msg.String() == "ctrl+p" && p.picker.scanner != nil {
@@ -311,8 +349,17 @@ func (p ProfilesPage) forwardNonKey(msg tea.Msg) (tea.Model, tea.Cmd) {
 type profileDeleteConfirmedMsg struct{ id string }
 
 func (p ProfilesPage) View() string {
+	if p.importPickerActive {
+		return p.importPicker.View()
+	}
 	if p.picker.active {
 		return p.picker.picker.View()
+	}
+	if p.conflictModal.Active() {
+		return p.conflictModal.View()
+	}
+	if p.undoModal.Active() {
+		return p.undoModal.View()
 	}
 	if p.editor.Active() {
 		return p.editor.View()
@@ -371,7 +418,7 @@ func (p ProfilesPage) Hints() string {
 	case p.editor.Active():
 		return "[ctrl+t] sub-tab  [ctrl+p] pick model  [esc] cancel"
 	default:
-		return "[enter] edit  [n] new  [d] dup  [x] del  [L] launch  [e] export  [/] filter"
+		return "[enter] edit  [n] new  [d] dup  [x] del  [L] launch  [e] export  [p] pin  [I] import  [u] undo  [/] filter"
 	}
 }
 
@@ -389,6 +436,12 @@ func (p ProfilesPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.launchSelected()
 	case key.Matches(msg, p.listKeys.Export):
 		return p.exportProfiles()
+	case key.Matches(msg, p.listKeys.Pin):
+		return p.togglePinSelected()
+	case key.Matches(msg, p.listKeys.Import):
+		return p.startImport()
+	case key.Matches(msg, p.listKeys.Undo):
+		return p.startUndo()
 	}
 
 	updated, cmd := p.list.Update(msg)
@@ -411,6 +464,138 @@ func (p ProfilesPage) exportProfiles() (tea.Model, tea.Cmd) {
 	return p, fc
 }
 
+func (p ProfilesPage) togglePinSelected() (tea.Model, tea.Cmd) {
+	if _, isCorrupt := p.list.SelectedItem().(corruptItem); isCorrupt {
+		return p, nil
+	}
+	sel, ok := p.list.SelectedItem().(item)
+	if !ok {
+		return p, nil
+	}
+	pr := sel.p
+	pr.Pinned = !pr.Pinned
+	if err := p.store.Save(pr); err != nil {
+		p, fc := p.withFlash("pin failed: " + err.Error())
+		return p, fc
+	}
+	return p, p.loadCmd()
+}
+
+func (p ProfilesPage) startImport() (tea.Model, tea.Cmd) {
+	fp := filepicker.New()
+	fp.AllowedTypes = []string{".json"}
+	fp.FileAllowed = true
+	fp.DirAllowed = false
+	if home, err := os.UserHomeDir(); err == nil {
+		fp.CurrentDirectory = home
+	}
+	p.importPicker = fp
+	p.importPickerActive = true
+	return p, p.importPicker.Init()
+}
+
+func (p ProfilesPage) startImportWithPath(path string) (tea.Model, tea.Cmd) {
+	p.conflictModal = components.NewConflictModal(path,
+		func(mode profilestore.ConflictMode) tea.Cmd {
+			return p.importBundleCmd(path, mode)
+		},
+		func() tea.Cmd {
+			_, fc := p.withFlash("import cancelled")
+			return fc
+		},
+	)
+	return p, p.conflictModal.Init()
+}
+
+func (p ProfilesPage) importBundleCmd(path string, mode profilestore.ConflictMode) tea.Cmd {
+	return func() tea.Msg {
+		res, err := profilestore.ImportBundle(p.store, path, mode)
+		if err != nil {
+			return components.FlashClearMsg{}
+		}
+		return importDoneMsg{Result: res}
+	}
+}
+
+type importDoneMsg struct {
+	Result profilestore.ImportResult
+}
+
+func (p ProfilesPage) handleImportDone(msg importDoneMsg) (tea.Model, tea.Cmd) {
+	p, fc := p.withFlash(fmt.Sprintf("imported: +%d ~%d !%d ->%d", msg.Result.Added, msg.Result.Skipped, msg.Result.Renamed, msg.Result.Replaced))
+	return p, tea.Batch(fc, p.loadCmd())
+}
+
+func (p ProfilesPage) handleNavigateToSizing(msg NavigateToSizingMsg) (tea.Model, tea.Cmd) {
+	items := p.list.Items()
+	for i, it := range items {
+		if sel, ok := it.(item); ok && sel.p.ID == msg.ProfileID {
+			p.list.Select(i)
+			p, cmd := p.startEditSelected()
+			if rm, ok := p.(ProfilesPage); ok {
+				rm.editor = rm.editor.SetSubTabSizing()
+				return rm, cmd
+			}
+			return p, cmd
+		}
+	}
+	p, fc := p.withFlash("profile not found for sizing navigation")
+	return p, fc
+}
+
+func (p ProfilesPage) startUndo() (tea.Model, tea.Cmd) {
+	if _, isCorrupt := p.list.SelectedItem().(corruptItem); isCorrupt {
+		return p, nil
+	}
+	sel, ok := p.list.SelectedItem().(item)
+	if !ok {
+		return p, nil
+	}
+	fsStore, ok := p.store.(*profilestore.FSStore)
+	if !ok {
+		p, fc := p.withFlash("undo not available for this store")
+		return p, fc
+	}
+	prev, found, err := profilestore.LoadPrevious(fsStore.Dir(), sel.p.ID)
+	if err != nil || !found {
+		p, fc := p.withFlash("No previous version available")
+		return p, fc
+	}
+	var diffs []components.FieldDiff
+	if prev.Name != sel.p.Name {
+		diffs = append(diffs, components.FieldDiff{Key: "Name", OldValue: prev.Name, NewValue: sel.p.Name})
+	}
+	if prev.Model != sel.p.Model {
+		diffs = append(diffs, components.FieldDiff{Key: "Model", OldValue: prev.Model, NewValue: sel.p.Model})
+	}
+	p.undoModal = components.NewUndoModal(diffs,
+		func() tea.Cmd {
+			return p.restorePreviousCmd(prev)
+		},
+		func() tea.Cmd {
+			_, fc := p.withFlash("undo cancelled")
+			return fc
+		},
+	)
+	return p, p.undoModal.Init()
+}
+
+func (p ProfilesPage) restorePreviousCmd(prev domain.Profile) tea.Cmd {
+	return func() tea.Msg {
+		if err := p.store.Save(prev); err != nil {
+			return components.FlashClearMsg{}
+		}
+		return undoDoneMsg{}
+	}
+}
+
+type undoDoneMsg struct{}
+
+func (p ProfilesPage) handleUndoDone(_ undoDoneMsg) (tea.Model, tea.Cmd) {
+	p, fc := p.withFlash("undo complete")
+	return p, tea.Batch(fc, p.loadCmd())
+}
+
 // launchSelected emits a LaunchProfileMsg for the currently selected
 // profile so the root model can switch to the Launcher tab and run it.
 func (p ProfilesPage) launchSelected() (tea.Model, tea.Cmd) {
@@ -427,7 +612,7 @@ func (p ProfilesPage) launchSelected() (tea.Model, tea.Cmd) {
 }
 
 func (p ProfilesPage) IsCapturingInput() bool {
-	return p.editor.Active() || p.deleteConfirm.Active() || p.picker.active
+	return p.editor.Active() || p.deleteConfirm.Active() || p.picker.active || p.conflictModal.Active() || p.undoModal.Active() || p.importPickerActive
 }
 
 // Reload triggers a fresh load from the underlying store. Called by the
@@ -477,18 +662,21 @@ func (p ProfilesPage) performDelete(id string) (tea.Model, tea.Cmd) {
 // for new profiles. Shared by [n] (start new) and "use in new profile".
 func (p ProfilesPage) newDraftDefaults() profile_editor.Draft {
 	d := profile_editor.Draft{
-		Name:       "New Profile",
-		Tags:       "",
-		NGL:        "99",
-		CtxSize:    "8192",
-		BatchSize:  "2048",
-		UBatchSize: "512",
-		Port:       "4321",
-		FlashAttn:  "auto",
-		CacheTypeK: "q8_0",
-		CacheTypeV: "q8_0",
-		IsNew:      true,
-		Args:       map[string]any{},
+		Name:           "New Profile",
+		Tags:           "",
+		NGL:            "99",
+		CtxSize:        "8192",
+		BatchSize:      "2048",
+		UBatchSize:     "512",
+		Port:           "4321",
+		FlashAttn:      "auto",
+		CacheTypeK:     "q8_0",
+		CacheTypeV:     "q8_0",
+		RestartPolicy:  string(domain.RestartPolicyNone),
+		MaxRestarts:    "3",
+		BackoffSeconds: "5",
+		IsNew:          true,
+		Args:           map[string]any{},
 	}
 	if p.catalogStore != nil {
 		if catalog, err := p.catalogStore.Load(); err == nil && catalog.DefaultBackendID != "" {
@@ -538,21 +726,24 @@ func (p ProfilesPage) startEditSelected() (tea.Model, tea.Cmd) {
 	}
 	pr := sel.p
 	d := profile_editor.Draft{
-		ID:          pr.ID,
-		Name:        pr.Name,
-		Description: pr.Description,
-		Tags:        profile_editor.FormatTags(pr.Tags),
-		Model:       pr.Model,
-		BackendID:   pr.Launch.BackendID,
-		NGL:         profile_editor.ArgString(pr.Args["ngl"]),
-		CtxSize:     profile_editor.ArgString(pr.Args["ctx-size"]),
-		BatchSize:   profile_editor.ArgString(pr.Args["batch-size"]),
-		UBatchSize:  profile_editor.ArgString(pr.Args["ubatch-size"]),
-		Port:        profile_editor.ArgString(pr.Args["port"]),
-		FlashAttn:   profile_editor.FlashAttnToString(pr.Args["flash-attn"]),
-		CacheTypeK:  profile_editor.ArgString(pr.Args["cache-type-k"]),
-		CacheTypeV:  profile_editor.ArgString(pr.Args["cache-type-v"]),
-		Env:         append([]domain.EnvVar(nil), pr.Launch.Env...),
+		ID:             pr.ID,
+		Name:           pr.Name,
+		Description:    pr.Description,
+		Tags:           profile_editor.FormatTags(pr.Tags),
+		Model:          pr.Model,
+		BackendID:      pr.Launch.BackendID,
+		NGL:            profile_editor.ArgString(pr.Args["ngl"]),
+		CtxSize:        profile_editor.ArgString(pr.Args["ctx-size"]),
+		BatchSize:      profile_editor.ArgString(pr.Args["batch-size"]),
+		UBatchSize:     profile_editor.ArgString(pr.Args["ubatch-size"]),
+		Port:           profile_editor.ArgString(pr.Args["port"]),
+		FlashAttn:      profile_editor.FlashAttnToString(pr.Args["flash-attn"]),
+		CacheTypeK:     profile_editor.ArgString(pr.Args["cache-type-k"]),
+		CacheTypeV:     profile_editor.ArgString(pr.Args["cache-type-v"]),
+		Env:            append([]domain.EnvVar(nil), pr.Launch.Env...),
+		RestartPolicy:  string(pr.Launch.RestartPolicy),
+		MaxRestarts:    strconv.Itoa(pr.Launch.MaxRestarts),
+		BackoffSeconds: strconv.Itoa(pr.Launch.BackoffSeconds),
 	}
 	// Copy remaining args not mapped to hardcoded Essentials fields into
 	// the generic Args map so the Advanced tab can edit them.

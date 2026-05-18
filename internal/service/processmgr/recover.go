@@ -1,6 +1,7 @@
 package processmgr
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -87,15 +88,14 @@ func (m *fsManager) Reconcile() error {
 // Linux truncates /proc/<pid>/comm to TASK_COMM_LEN-1 (15 bytes), so
 // expectedComm is truncated to the same length before comparison.
 func pidAliveAndNameMatches(pid int, expectedComm string) bool {
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	if err := proc.Signal(syscall.Signal(0)); err != nil {
+	if !pidAlive(pid) {
 		return false
 	}
 	commBytes, err := os.ReadFile(filepath.Join("/proc", fmt.Sprintf("%d", pid), "comm"))
 	if err != nil {
+		if errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EACCES) {
+			return true
+		}
 		return false
 	}
 	comm := strings.TrimSpace(string(commBytes))
@@ -111,18 +111,31 @@ func pidAliveAndNameMatches(pid int, expectedComm string) bool {
 // commands (e.g. "python -m sglang.launch_server") where /proc/comm
 // only shows the executable basename.
 func pidAliveAndCmdlineContains(pid int, token string) bool {
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	if err := proc.Signal(syscall.Signal(0)); err != nil {
+	if !pidAlive(pid) {
 		return false
 	}
 	cmdlineBytes, err := os.ReadFile(filepath.Join("/proc", fmt.Sprintf("%d", pid), "cmdline"))
 	if err != nil {
+		if errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EACCES) {
+			return true
+		}
 		return false
 	}
 	// cmdline uses null bytes as separators; join with spaces for matching.
 	cmdline := strings.Join(strings.Split(string(cmdlineBytes), "\x00"), " ")
 	return strings.Contains(cmdline, token)
+}
+
+func pidAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	err := syscall.Kill(pid, 0)
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, syscall.EPERM) {
+		return true
+	}
+	return false
 }

@@ -31,6 +31,7 @@ type fsManager struct {
 	sink          LastUsedSink
 	logger        *slog.Logger
 	waitFunc      func(*exec.Cmd) error
+	restartFunc   func(string)
 
 	mu        sync.Mutex
 	tracked   map[int]domain.RunningInstance
@@ -66,6 +67,10 @@ type Config struct {
 	// HistoryLimit caps the number of persisted exit-history entries.
 	// When zero or negative, it defaults to 50.
 	HistoryLimit int
+	// RestartFunc is called when the watchdog decides a process should be
+	// restarted. The function receives the profile ID and should re-launch it.
+	// When nil, restarts are logged but not executed.
+	RestartFunc func(profileID string)
 }
 
 // New constructs a Manager. nil-tolerant for Logger and WaitFunc.
@@ -84,6 +89,7 @@ func New(cfg Config) *fsManager {
 		sink:            cfg.LastUsedSink,
 		logger:          cfg.Logger,
 		waitFunc:        cfg.WaitFunc,
+		restartFunc:     cfg.RestartFunc,
 		tracked:         map[int]domain.RunningInstance{},
 		exitInfos:       map[int]ExitInfo{},
 		historyRecorded: map[int]struct{}{},
@@ -206,13 +212,16 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 	_ = logF.Close() // child inherited its own fd; drop ours
 
 	inst := domain.RunningInstance{
-		ProfileID:  p.ID,
-		PID:        cmd.Process.Pid,
-		Port:       port,
-		LogPath:    logPath,
-		BinaryPath: resolvedBinary,
-		StartedAt:  time.Now().UTC(),
-		Background: true,
+		ProfileID:      p.ID,
+		PID:            cmd.Process.Pid,
+		Port:           port,
+		LogPath:        logPath,
+		BinaryPath:     resolvedBinary,
+		StartedAt:      time.Now().UTC(),
+		Background:     true,
+		RestartPolicy:  string(p.Launch.RestartPolicy),
+		MaxRestarts:    p.Launch.MaxRestarts,
+		BackoffSeconds: p.Launch.BackoffSeconds,
 	}
 
 	m.mu.Lock()
@@ -339,6 +348,36 @@ func (m *fsManager) waitEnrichment(cmd *exec.Cmd, pid int, logPath string, attem
 		"pid", pid, "attempt_id", attemptID,
 		"exit_reason", reason,
 		"stderr_tail_lines", len(tail))
+
+	if cur.RestartPolicy != "" && cur.RestartPolicy != "none" {
+		shouldRestart := cur.RestartPolicy == "always" ||
+			(cur.RestartPolicy == "on-failure" && exitCode != nil && *exitCode != 0)
+		if shouldRestart && (cur.MaxRestarts <= 0 || cur.RestartCount < cur.MaxRestarts) {
+			cur.RestartCount++
+			now := time.Now().UTC()
+			cur.LastRestartAt = &now
+			m.mu.Lock()
+			m.tracked[pid] = cur
+			m.mu.Unlock()
+			backoff := time.Duration(cur.BackoffSeconds) * time.Second
+			if cur.RestartCount > 1 {
+				backoff = time.Duration(cur.BackoffSeconds*cur.RestartCount) * time.Second
+			}
+			if backoff > 30*time.Second {
+				backoff = 30 * time.Second
+			}
+			m.logger.Info("watchdog_restart",
+				"pid", pid, "profile_id", cur.ProfileID,
+				"restart_count", cur.RestartCount,
+				"backoff", backoff.String())
+			if backoff > 0 {
+				time.Sleep(backoff)
+			}
+			if m.restartFunc != nil {
+				m.restartFunc(cur.ProfileID)
+			}
+		}
+	}
 }
 
 // extractExit interprets the *exec.Cmd.Wait error + ProcessState into a

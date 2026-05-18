@@ -86,23 +86,26 @@ func buildModelFile(path string, d fs.DirEntry) domain.ModelFile {
 	if info, err := d.Info(); err == nil {
 		mf.SizeBytes = info.Size()
 	}
-	if params := readParamsFromFile(path); params != "" {
-		mf.Params = params
+	meta := readMetaFromFile(path)
+	if meta.Params != "" {
+		mf.Params = meta.Params
 	} else {
 		mf.Params = parseParams(name)
 	}
+	mf.Architecture = meta.Architecture
+	mf.BlockCount = meta.BlockCount
 	return mf
 }
 
-func readParamsFromFile(path string) string {
+func readMetaFromFile(path string) ggufMeta {
 	f, err := os.Open(path)
 	if err != nil {
-		return ""
+		return ggufMeta{}
 	}
 	defer f.Close()
-	p, err := readGGUFParams(f)
+	m, err := readGGUFMeta(f)
 	if err != nil {
-		return ""
+		return ggufMeta{}
 	}
-	return p
+	return m
 }
