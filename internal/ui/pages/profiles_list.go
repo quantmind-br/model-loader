@@ -94,7 +94,9 @@ type profileItemDelegate struct {
 }
 
 func newProfileItemDelegate() profileItemDelegate {
-	return profileItemDelegate{DefaultDelegate: list.NewDefaultDelegate()}
+	d := list.NewDefaultDelegate()
+	d.ShowDescription = false
+	return profileItemDelegate{DefaultDelegate: d}
 }
 
 func (d profileItemDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
@@ -104,12 +106,11 @@ func (d profileItemDelegate) Render(w io.Writer, m list.Model, index int, item l
 		return
 	}
 	title := theme.Error.Render("⚠ " + c.id)
-	desc := theme.Warn.Render("corrupt: " + c.err.Error())
 	if index == m.Index() {
 		// Mirror the default delegate's "selected" indent ("> ") to keep the
 		// cursor position visible even on corrupt rows.
-		fmt.Fprintf(w, "> %s\n  %s", title, desc)
+		fmt.Fprintf(w, "> %s", title)
 		return
 	}
-	fmt.Fprintf(w, "  %s\n  %s", title, desc)
+	fmt.Fprintf(w, "  %s", title)
 }

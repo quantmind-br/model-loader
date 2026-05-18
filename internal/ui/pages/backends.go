@@ -161,7 +161,10 @@ func (p BackendsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
 		p.width, p.height = m.Width, m.Height
-		p.list.SetSize(m.Width/3, m.Height-2)
+		leftWidth, _ := theme.SplitTwoPanes(p.width)
+		listWidth := leftWidth - theme.Pane.GetHorizontalFrameSize()
+		listHeight := m.Height - theme.Pane.GetVerticalFrameSize()
+		p.list.SetSize(listWidth, listHeight)
 		return p, nil
 	case components.FlashClearMsg:
 		p.flash, _ = p.flash.Update(m)

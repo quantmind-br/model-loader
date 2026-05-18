@@ -233,7 +233,9 @@ func (p LauncherPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (p LauncherPage) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	p.width, p.height = msg.Width, msg.Height
-	p.plist.SetSize(msg.Width/2, msg.Height-6)
+	leftW, _ := theme.SplitTwoPanes(p.width)
+	listWidth := leftW - theme.Pane.GetHorizontalFrameSize()
+	p.plist.SetSize(listWidth, msg.Height-6)
 	return p, nil
 }
 

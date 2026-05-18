@@ -161,7 +161,10 @@ func (p ProfilesPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (p ProfilesPage) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	p.width, p.height = msg.Width, msg.Height
-	p.list.SetSize(msg.Width/3, msg.Height-2)
+	paneWidth := p.width / 3
+	listWidth := paneWidth - theme.Pane.GetHorizontalFrameSize()
+	listHeight := msg.Height - theme.Pane.GetVerticalFrameSize()
+	p.list.SetSize(listWidth, listHeight)
 	return p, nil
 }
 
