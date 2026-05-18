@@ -25,13 +25,13 @@ func (m *watchdogTestManager) Launch(p domain.Profile, mode LaunchMode, attemptI
 	return domain.RunningInstance{PID: m.nextPID, ProfileID: p.ID, Background: mode == LaunchBackground}, nil
 }
 
-func (m *watchdogTestManager) Kill(int) error { return nil }
-func (m *watchdogTestManager) List() []domain.RunningInstance { return nil }
+func (m *watchdogTestManager) Kill(int) error                                    { return nil }
+func (m *watchdogTestManager) List() []domain.RunningInstance                    { return nil }
 func (m *watchdogTestManager) WaitHealthy(int, int, time.Duration, string) error { return nil }
-func (m *watchdogTestManager) TailLogs(int) (io.ReadCloser, error) { return io.NopCloser(nil), nil }
-func (m *watchdogTestManager) Close() error { return nil }
-func (m *watchdogTestManager) GetExitInfo(int) (ExitInfo, bool) { return ExitInfo{}, false }
-func (m *watchdogTestManager) History() []domain.ExitedInstance { return nil }
+func (m *watchdogTestManager) TailLogs(int) (io.ReadCloser, error)               { return io.NopCloser(nil), nil }
+func (m *watchdogTestManager) Close() error                                      { return nil }
+func (m *watchdogTestManager) GetExitInfo(int) (ExitInfo, bool)                  { return ExitInfo{}, false }
+func (m *watchdogTestManager) History() []domain.ExitedInstance                  { return nil }
 
 func TestWatchdogPolicies(t *testing.T) {
 	tests := []struct {

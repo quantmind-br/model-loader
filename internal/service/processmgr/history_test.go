@@ -37,8 +37,8 @@ func TestHistory_SaveAndLoadRoundTrip(t *testing.T) {
 
 	want := []domain.ExitedInstance{
 		{ProfileID: "qwen", PID: 4521, Port: 8080,
-			StartedAt: time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Second),
-			ExitedAt:  time.Now().UTC().Truncate(time.Second),
+			StartedAt:       time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Second),
+			ExitedAt:        time.Now().UTC().Truncate(time.Second),
 			DurationSeconds: 7200, Background: true, ExitReason: "exit:0"},
 	}
 	if err := saveHistory(path, want); err != nil {

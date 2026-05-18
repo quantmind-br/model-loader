@@ -19,6 +19,7 @@ type Profile struct {
 	Description   string            `json:"description,omitempty"`
 	Tags          []string          `json:"tags,omitempty"`
 	Model         string            `json:"model"`
+	// Note: ints round-trip as float64 via JSON; see validator.checkType.
 	Args          map[string]any    `json:"args"`
 	ExtraArgs     []string          `json:"extraArgs,omitempty"`
 	Launch        LaunchConfig      `json:"launch"`
