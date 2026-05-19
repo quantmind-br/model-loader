@@ -385,21 +385,17 @@ func (m *Manager) pollLoop(stop <-chan struct{}, done chan<- struct{}, interval 
 	}
 }
 
-// tick is one iteration of pollLoop, factored out for direct unit
-// testing.
-func (m *Manager) tick() {
-	recs, err := ListRecords(m.stateDir)
-	if err != nil {
-		return
-	}
-	type pending struct {
-		id    ID
-		state State
-	}
+type pending struct {
+	id    ID
+	state State
+}
+
+// reapCompleted iterates the on-disk records, reconciles m.lastSnapshot,
+// detects dead workers, and reports pending events plus freed slot count.
+// MUST be called with m.mu held.
+func (m *Manager) reapCompleted(recs []DownloadRecord) ([]pending, int) {
 	var events []pending
 	var freedSlots int
-
-	m.mu.Lock()
 	for _, r := range recs {
 		prev, had := m.lastSnapshot[r.ID]
 		changed := !had ||
@@ -429,7 +425,13 @@ func (m *Manager) tick() {
 			}
 		}
 	}
-	// Promote queued downloads into freed slots.
+	return events, freedSlots
+}
+
+// promoteQueued moves IDs from the queue into the active set, bounded by
+// freedSlots and m.maxConcurrent. Returns IDs that the caller must spawn.
+// MUST be called with m.mu held.
+func (m *Manager) promoteQueued(freedSlots int) []ID {
 	var toSpawn []ID
 	for freedSlots > 0 && len(m.queue) > 0 && len(m.active) < m.maxConcurrent {
 		next := m.queue[0]
@@ -437,14 +439,32 @@ func (m *Manager) tick() {
 		toSpawn = append(toSpawn, next)
 		freedSlots--
 	}
-	m.mu.Unlock()
+	return toSpawn
+}
 
+// emitEvents fires broadcast(...) for each pending event and spawn(...) for
+// each ID. MUST be called with m.mu released.
+func (m *Manager) emitEvents(events []pending, toSpawn []ID) {
 	for _, ev := range events {
 		m.broadcast(Event{ID: ev.id, State: ev.state})
 	}
 	for _, id := range toSpawn {
 		_ = m.spawn(id)
 	}
+}
+
+// tick is one iteration of pollLoop, factored out for direct unit
+// testing.
+func (m *Manager) tick() {
+	recs, err := ListRecords(m.stateDir)
+	if err != nil {
+		return
+	}
+	m.mu.Lock()
+	events, freedSlots := m.reapCompleted(recs)
+	toSpawn := m.promoteQueued(freedSlots)
+	m.mu.Unlock()
+	m.emitEvents(events, toSpawn)
 }
 
 func (m *Manager) broadcast(ev Event) {

@@ -29,52 +29,72 @@ func applyTypeRules(p domain.Profile, schema domain.FlagSchema, rep Report) Repo
 	return rep
 }
 
+// checkInt returns "" if val is an integer or an integer-valued JSON number.
+func checkInt(val any) string {
+	switch v := val.(type) {
+	case int, int32, int64:
+		return ""
+	case float64:
+		if v == math.Trunc(v) && !math.IsInf(v, 0) && !math.IsNaN(v) {
+			return ""
+		}
+		return fmt.Sprintf("expected int, got %v", v)
+	case float32:
+		vf := float64(v)
+		if v == float32(math.Trunc(vf)) && !math.IsInf(vf, 0) && !math.IsNaN(vf) {
+			return ""
+		}
+		return fmt.Sprintf("expected int, got %v", v)
+	}
+	return fmt.Sprintf("expected int, got %T", val)
+}
+
+// checkFloat returns "" if val is any numeric type.
+func checkFloat(val any) string {
+	switch val.(type) {
+	case float32, float64, int, int32, int64:
+		return ""
+	}
+	return fmt.Sprintf("expected float, got %T", val)
+}
+
+// checkBool returns "" if val is a bool.
+func checkBool(val any) string {
+	if _, ok := val.(bool); ok {
+		return ""
+	}
+	return fmt.Sprintf("expected bool, got %T", val)
+}
+
+// checkString returns "" if val is a string.
+func checkString(val any) string {
+	if _, ok := val.(string); ok {
+		return ""
+	}
+	return fmt.Sprintf("expected string, got %T", val)
+}
+
+// checkEnum returns "" if val is a string present in spec.Choices.
+func checkEnum(spec domain.FlagSpec, val any) string {
+	s, ok := val.(string)
+	if !ok {
+		return fmt.Sprintf("expected one of %v, got %T", spec.EnumValues, val)
+	}
+	for _, v := range spec.EnumValues {
+		if v == s {
+			return ""
+		}
+	}
+	return fmt.Sprintf("%q not in %v", s, spec.EnumValues)
+}
+
 func checkType(spec domain.FlagSpec, val any) string {
 	switch spec.Type {
-	case domain.FlagTypeInt:
-		switch v := val.(type) {
-		case int, int32, int64:
-			return ""
-		case float64:
-			if v == math.Trunc(v) && !math.IsInf(v, 0) && !math.IsNaN(v) {
-				return ""
-			}
-			return fmt.Sprintf("expected int, got %v", v)
-		case float32:
-			vf := float64(v)
-			if v == float32(math.Trunc(vf)) && !math.IsInf(vf, 0) && !math.IsNaN(vf) {
-				return ""
-			}
-			return fmt.Sprintf("expected int, got %v", v)
-		}
-		return fmt.Sprintf("expected int, got %T", val)
-	case domain.FlagTypeFloat:
-		switch val.(type) {
-		case float32, float64, int, int32, int64:
-			return ""
-		}
-		return fmt.Sprintf("expected float, got %T", val)
-	case domain.FlagTypeBool:
-		if _, ok := val.(bool); ok {
-			return ""
-		}
-		return fmt.Sprintf("expected bool, got %T", val)
-	case domain.FlagTypeString:
-		if _, ok := val.(string); ok {
-			return ""
-		}
-		return fmt.Sprintf("expected string, got %T", val)
-	case domain.FlagTypeEnum:
-		s, ok := val.(string)
-		if !ok {
-			return fmt.Sprintf("expected one of %v, got %T", spec.EnumValues, val)
-		}
-		for _, v := range spec.EnumValues {
-			if v == s {
-				return ""
-			}
-		}
-		return fmt.Sprintf("%q not in %v", s, spec.EnumValues)
+	case domain.FlagTypeInt:    return checkInt(val)
+	case domain.FlagTypeFloat:  return checkFloat(val)
+	case domain.FlagTypeBool:   return checkBool(val)
+	case domain.FlagTypeString: return checkString(val)
+	case domain.FlagTypeEnum:   return checkEnum(spec, val)
 	}
 	return ""
 }

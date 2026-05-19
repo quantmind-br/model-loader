@@ -19,13 +19,27 @@ type reqSample struct {
 	val float64
 }
 
+// metricsAgg accumulates token and request counters that the three monitor
+// pumps populate and that runMetricsTick periodically samples to emit
+// Metrics events.
+//
+// Concurrency:
+//   - mu guards every field below. Hold mu for every read and every write.
+//   - observeLog(at, line):     called from runLogPump; appends to tokens.
+//   - observeSlots(at, snap):   called from runSlotsPump; appends to requests,
+//                               updates lastSlots and lastTime.
+//   - snapshot(now):            called from runMetricsTick; reads tokens and
+//                               requests after calling prune(now).
+//   - prune(now):               called by observeLog, observeSlots, snapshot
+//                               before doing their work; trims out-of-window
+//                               samples from tokens and requests.
 type metricsAgg struct {
 	mu        sync.Mutex
 	window    time.Duration
-	tokens    []tokenSample
-	requests  []reqSample
-	lastSlots map[int]int // slotID → last NDecoded
-	lastTime  time.Time
+	tokens    []tokenSample   // appended by observeLog
+	requests  []reqSample     // appended by observeSlots
+	lastSlots map[int]int     // slotID → last NDecoded; written by observeSlots
+	lastTime  time.Time       // written by observeSlots
 }
 
 func newMetricsAgg(window time.Duration) *metricsAgg {

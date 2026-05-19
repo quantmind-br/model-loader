@@ -16,6 +16,41 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
+type launchPlan struct {
+	binary string
+	args   []string
+	env    []string
+	port   int
+}
+
+func (m *fsManager) prepareLaunch(p domain.Profile) (launchPlan, error) {
+	port, ok := portFromProfile(p)
+	if !ok {
+		return launchPlan{}, fmt.Errorf("profile %q: missing or invalid port arg", p.ID)
+	}
+	if err := checkPortFree(port); err != nil {
+		return launchPlan{}, err
+	}
+	resolvedBinary := p.Launch.ResolvedExecutable
+	if resolvedBinary == "" {
+		var err error
+		resolvedBinary, err = m.resolver(p)
+		if err != nil {
+			return launchPlan{}, fmt.Errorf("resolve backend executable: %w", err)
+		}
+	}
+	profileArgs, err := BuildArgsForBackend(p, p.Launch.ResolvedBackendKind, resolvedBinary)
+	if err != nil {
+		return launchPlan{}, fmt.Errorf("build args: %w", err)
+	}
+	return launchPlan{
+		binary: resolvedBinary,
+		args:   profileArgs,
+		env:    applyProfileEnv(p.Launch.Env),
+		port:   port,
+	}, nil
+}
+
 // Launch spawns llama-server with the args derived from p. mode chooses
 // between background (detached, log-to-file) and foreground (stdout/stderr
 // inherit; only one allowed at a time — covered in Task 6).
@@ -36,45 +71,29 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 			return domain.RunningInstance{}, fmt.Errorf("stat model: %w", err)
 		}
 	}
-	port, ok := portFromProfile(p)
-	if !ok {
-		return domain.RunningInstance{}, fmt.Errorf("profile %q: missing or invalid port arg", p.ID)
-	}
-	if err := checkPortFree(port); err != nil {
+	plan, err := m.prepareLaunch(p)
+	if err != nil {
 		return domain.RunningInstance{}, err
 	}
 	if mode == LaunchForeground {
-		return m.launchForeground(p, port, attemptID)
+		return m.launchForeground(p, plan.port, attemptID)
 	}
 
 	if err := os.MkdirAll(m.logDir, 0o755); err != nil {
 		return domain.RunningInstance{}, fmt.Errorf("mkdir log dir: %w", err)
 	}
-	resolvedBinary := p.Launch.ResolvedExecutable
-	if resolvedBinary == "" {
-		var err error
-		resolvedBinary, err = m.resolver(p)
-		if err != nil {
-			return domain.RunningInstance{}, fmt.Errorf("resolve backend executable: %w", err)
-		}
-	}
-	logPath := filepath.Join(m.logDir, fmt.Sprintf("%s-%d.log", p.ID, port))
+	logPath := filepath.Join(m.logDir, fmt.Sprintf("%s-%d.log", p.ID, plan.port))
 	logF, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return domain.RunningInstance{}, fmt.Errorf("open log: %w", err)
 	}
 
-	profileArgs, err := BuildArgsForBackend(p, p.Launch.ResolvedBackendKind, resolvedBinary)
-	if err != nil {
-		_ = logF.Close()
-		return domain.RunningInstance{}, fmt.Errorf("build args: %w", err)
-	}
-	cmd := makeCommand(resolvedBinary, profileArgs)
+	cmd := makeCommand(plan.binary, plan.args)
 	cmd.Stdout = logF
 	cmd.Stderr = logF
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	if env := applyProfileEnv(p.Launch.Env); env != nil {
-		cmd.Env = env
+	if plan.env != nil {
+		cmd.Env = plan.env
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -86,9 +105,9 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 	inst := domain.RunningInstance{
 		ProfileID:      p.ID,
 		PID:            cmd.Process.Pid,
-		Port:           port,
+		Port:           plan.port,
 		LogPath:        logPath,
-		BinaryPath:     resolvedBinary,
+		BinaryPath:     plan.binary,
 		StartedAt:      time.Now().UTC(),
 		Background:     true,
 		RestartPolicy:  string(p.Launch.RestartPolicy),
@@ -107,7 +126,7 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 	m.logger.Info("launch_started",
 		"pid", inst.PID, "port", inst.Port,
 		"profile_id", p.ID, "attempt_id", attemptID,
-		"mode", "background", "binary", resolvedBinary)
+		"mode", "background", "binary", plan.binary)
 
 	// MOVED from pre-Start to here (post-insert) so the waitEnrichment
 	// body's re-read of m.tracked[inst.PID] sees a populated entry.
@@ -159,13 +178,9 @@ func checkPortFree(port int) error {
 // is NOT detached via Setsid: it remains in the TUI's process group so
 // Ctrl+C from the TUI propagates if desired.
 func (m *fsManager) launchForeground(p domain.Profile, port int, attemptID string) (domain.RunningInstance, error) {
-	resolvedBinary := p.Launch.ResolvedExecutable
-	if resolvedBinary == "" {
-		var err error
-		resolvedBinary, err = m.resolver(p)
-		if err != nil {
-			return domain.RunningInstance{}, fmt.Errorf("resolve backend executable: %w", err)
-		}
+	plan, err := m.prepareLaunch(p)
+	if err != nil {
+		return domain.RunningInstance{}, err
 	}
 
 	m.mu.Lock()
@@ -185,16 +200,11 @@ func (m *fsManager) launchForeground(p domain.Profile, port int, attemptID strin
 		return domain.RunningInstance{}, fmt.Errorf("open log: %w", err)
 	}
 
-	profileArgs, err := BuildArgsForBackend(p, p.Launch.ResolvedBackendKind, resolvedBinary)
-	if err != nil {
-		_ = logF.Close()
-		return domain.RunningInstance{}, fmt.Errorf("build args: %w", err)
-	}
-	cmd := makeCommand(resolvedBinary, profileArgs)
+	cmd := makeCommand(plan.binary, plan.args)
 	cmd.Stdout = logF
 	cmd.Stderr = logF
-	if env := applyProfileEnv(p.Launch.Env); env != nil {
-		cmd.Env = env
+	if plan.env != nil {
+		cmd.Env = plan.env
 	}
 	if err := cmd.Start(); err != nil {
 		_ = logF.Close()
@@ -211,7 +221,7 @@ func (m *fsManager) launchForeground(p domain.Profile, port int, attemptID strin
 		PID:        cmd.Process.Pid,
 		Port:       port,
 		LogPath:    logPath,
-		BinaryPath: resolvedBinary,
+		BinaryPath: plan.binary,
 		StartedAt:  time.Now().UTC(),
 		Background: false,
 	}
@@ -227,7 +237,7 @@ func (m *fsManager) launchForeground(p domain.Profile, port int, attemptID strin
 	m.logger.Info("launch_started",
 		"pid", inst.PID, "port", inst.Port,
 		"profile_id", p.ID, "attempt_id", attemptID,
-		"mode", "foreground", "binary", resolvedBinary)
+		"mode", "foreground", "binary", plan.binary)
 
 	// MOVED from pre-Start to here (post-insert) so the waitEnrichment
 	// body's re-read of m.tracked[inst.PID] sees a populated entry.

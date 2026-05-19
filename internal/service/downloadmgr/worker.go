@@ -123,40 +123,47 @@ func RunWorker(cfg WorkerConfig) int {
 	return 0
 }
 
-// runDownload performs the HTTP transfer and incremental disk writes.
-// It updates rec.Bytes and rec.Total in place; the caller persists the
-// terminal status. Returns nil on success.
-func runDownload(
-	ctx context.Context,
-	client *http.Client,
-	userAgent, stateDir string,
-	rec *DownloadRecord,
-	checkpointBytes int64,
-	checkpointInterval time.Duration,
-) error {
+// setupOutput ensures the destination directory exists and reports the
+// existing bytes on disk at the partial path (0 if no partial).
+func setupOutput(rec *DownloadRecord) (partialPath string, existing int64, err error) {
 	if rec.URL == "" {
-		return errors.New("worker: empty URL")
+		return "", 0, errors.New("worker: empty URL")
 	}
 	if rec.DestFile == "" {
-		return errors.New("worker: empty dest file")
+		return "", 0, errors.New("worker: empty dest file")
 	}
 	if err := os.MkdirAll(filepath.Dir(rec.DestFile), 0o755); err != nil {
-		return fmt.Errorf("mkdir dest: %w", err)
+		return "", 0, fmt.Errorf("mkdir dest: %w", err)
 	}
-
-	partialPath := rec.DestFile + ".partial"
-
-	// Resume support: if a partial file is present with bytes >0, send
-	// Range. The server may answer 206 (resume) or 200 (ignored — full
-	// body) so we adapt the file open mode after seeing the response.
-	var existing int64
+	partialPath = rec.DestFile + ".partial"
 	if info, err := os.Stat(partialPath); err == nil {
 		existing = info.Size()
 	}
+	return partialPath, existing, nil
+}
 
+// transferHandle bundles the resources resumeOrCreate hands off to the
+// streaming phase.
+type transferHandle struct {
+	file       *os.File
+	body       io.ReadCloser
+	appendMode bool
+}
+
+// resumeOrCreate issues the HTTP request with optional Range header and
+// opens the partial file in the correct mode based on the response status.
+// The caller MUST Close(handle.file) and Close(handle.body).
+func resumeOrCreate(
+	ctx context.Context,
+	client *http.Client,
+	userAgent string,
+	rec *DownloadRecord,
+	partialPath string,
+	existing int64,
+) (transferHandle, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rec.URL, nil)
 	if err != nil {
-		return fmt.Errorf("build request: %w", err)
+		return transferHandle{}, fmt.Errorf("build request: %w", err)
 	}
 	if userAgent != "" {
 		req.Header.Set("User-Agent", userAgent)
@@ -167,9 +174,8 @@ func runDownload(
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("http: %w", err)
+		return transferHandle{}, fmt.Errorf("http: %w", err)
 	}
-	defer resp.Body.Close()
 
 	var appendMode bool
 	switch resp.StatusCode {
@@ -186,7 +192,8 @@ func runDownload(
 			rec.Total = existing + resp.ContentLength
 		}
 	default:
-		return fmt.Errorf("http status %d", resp.StatusCode)
+		resp.Body.Close()
+		return transferHandle{}, fmt.Errorf("http status %d", resp.StatusCode)
 	}
 
 	var f *os.File
@@ -196,13 +203,26 @@ func runDownload(
 		f, err = os.OpenFile(partialPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	}
 	if err != nil {
-		return fmt.Errorf("open partial: %w", err)
+		resp.Body.Close()
+		return transferHandle{}, fmt.Errorf("open partial: %w", err)
 	}
 
-	_ = SaveRecord(stateDir, *rec)
+	return transferHandle{file: f, body: resp.Body, appendMode: appendMode}, nil
+}
 
+// streamWithProgress copies handle.body into handle.file with checkpoint
+// writes every checkpointBytes or checkpointInterval, whichever comes first.
+func streamWithProgress(
+	ctx context.Context,
+	stateDir string,
+	rec *DownloadRecord,
+	handle transferHandle,
+	existing int64,
+	checkpointBytes int64,
+	checkpointInterval time.Duration,
+) error {
 	pr := &checkpointReader{
-		reader:   resp.Body,
+		reader:   handle.body,
 		ctx:      ctx,
 		bytes:    rec.Bytes,
 		thresh:   checkpointBytes,
@@ -215,8 +235,8 @@ func runDownload(
 	pr.lastFlush = time.Now()
 	pr.lastFlushBytes = rec.Bytes
 
-	_, copyErr := io.Copy(f, pr)
-	closeErr := f.Close()
+	_, copyErr := io.Copy(handle.file, pr)
+	closeErr := handle.file.Close()
 	// Final progress write so the UI doesn't show stale bytes.
 	rec.Bytes = pr.bytes
 	_ = SaveRecord(stateDir, *rec)
@@ -227,6 +247,37 @@ func runDownload(
 	if closeErr != nil {
 		return closeErr
 	}
+	return nil
+}
+
+// runDownload performs the HTTP transfer and incremental disk writes.
+// It updates rec.Bytes and rec.Total in place; the caller persists the
+// terminal status. Returns nil on success.
+func runDownload(
+	ctx context.Context,
+	client *http.Client,
+	userAgent, stateDir string,
+	rec *DownloadRecord,
+	checkpointBytes int64,
+	checkpointInterval time.Duration,
+) error {
+	partialPath, existing, err := setupOutput(rec)
+	if err != nil {
+		return err
+	}
+
+	handle, err := resumeOrCreate(ctx, client, userAgent, rec, partialPath, existing)
+	if err != nil {
+		return err
+	}
+	defer handle.body.Close()
+
+	_ = SaveRecord(stateDir, *rec)
+
+	if err := streamWithProgress(ctx, stateDir, rec, handle, rec.Bytes, checkpointBytes, checkpointInterval); err != nil {
+		return err
+	}
+
 	if err := os.Rename(partialPath, rec.DestFile); err != nil {
 		return fmt.Errorf("rename: %w", err)
 	}

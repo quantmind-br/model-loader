@@ -12,6 +12,15 @@ type subscription struct {
 	doneCh chan struct{}
 }
 
+// pumpContext bundles the parameters shared by every monitor pump.
+type pumpContext struct {
+	ctx context.Context
+	wg  *sync.WaitGroup
+	pid int
+	agg *metricsAgg
+	out chan<- MonitorEvent
+}
+
 func (m *fsMonitor) Subscribe(pid, port int, logPath string) (<-chan MonitorEvent, func() error, error) {
 	if logPath == "" {
 		return nil, nil, ErrLogPathEmpty
@@ -29,9 +38,10 @@ func (m *fsMonitor) Subscribe(pid, port int, logPath string) (<-chan MonitorEven
 	}
 	startSlotsPoller(ctx, &wg, port, m.cfg, slotsRaw)
 	startGPUPoller(ctx, &wg, pid, m.cfg, out)
-	runLogPump(ctx, &wg, pid, m.cfg.LogRingSize, agg, logLines, out)
-	runSlotsPump(ctx, &wg, pid, agg, slotsRaw, out)
-	runMetricsTick(ctx, &wg, pid, m.cfg.SlotsTickInterval, agg, out)
+	pc := pumpContext{ctx: ctx, wg: &wg, pid: pid, agg: agg, out: out}
+	runLogPump(pc, m.cfg.LogRingSize, logLines)
+	runSlotsPump(pc, slotsRaw)
+	runMetricsTick(pc, m.cfg.SlotsTickInterval)
 
 	sub := &subscription{cancel: cancel, doneCh: make(chan struct{})}
 	closeOnDone(&wg, out, sub.doneCh)
@@ -84,29 +94,29 @@ func startGPUPoller(ctx context.Context, wg *sync.WaitGroup, pid int, cfg Config
 
 // runLogPump consumes logLines, maintains the ring buffer for crash dumps,
 // feeds the metrics aggregator, and forwards each line as SourceLogs.
-func runLogPump(ctx context.Context, wg *sync.WaitGroup, pid, ringSize int, agg *metricsAgg, logLines <-chan string, out chan<- MonitorEvent) {
-	wg.Add(1)
+func runLogPump(pc pumpContext, ringSize int, logLines <-chan string) {
+	pc.wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer pc.wg.Done()
 		ring := newLogRing(ringSize)
 		for {
 			select {
-			case <-ctx.Done():
+			case <-pc.ctx.Done():
 				return
 			case line, ok := <-logLines:
 				if !ok {
 					return
 				}
 				ring.push(line)
-				agg.observeLog(time.Now(), line)
+				pc.agg.observeLog(time.Now(), line)
 				ev := MonitorEvent{
 					Timestamp: time.Now(),
 					Source:    SourceLogs,
-					PID:       pid,
+					PID:       pc.pid,
 					Data:      LogLine{Line: line},
 				}
 				select {
-				case out <- ev:
+				case pc.out <- ev:
 				default:
 				}
 			}
@@ -116,13 +126,13 @@ func runLogPump(ctx context.Context, wg *sync.WaitGroup, pid, ringSize int, agg 
 
 // runSlotsPump feeds slot snapshots into the metrics aggregator and forwards
 // every slotsRaw event to out, stamping the PID first.
-func runSlotsPump(ctx context.Context, wg *sync.WaitGroup, pid int, agg *metricsAgg, slotsRaw <-chan MonitorEvent, out chan<- MonitorEvent) {
-	wg.Add(1)
+func runSlotsPump(pc pumpContext, slotsRaw <-chan MonitorEvent) {
+	pc.wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer pc.wg.Done()
 		for {
 			select {
-			case <-ctx.Done():
+			case <-pc.ctx.Done():
 				return
 			case ev, ok := <-slotsRaw:
 				if !ok {
@@ -130,12 +140,12 @@ func runSlotsPump(ctx context.Context, wg *sync.WaitGroup, pid int, agg *metrics
 				}
 				if ev.Source == SourceSlots {
 					if snap, ok := ev.Data.(SlotSnapshot); ok {
-						agg.observeSlots(time.Now(), snap)
+						pc.agg.observeSlots(time.Now(), snap)
 					}
 				}
-				ev.PID = pid
+				ev.PID = pc.pid
 				select {
-				case out <- ev:
+				case pc.out <- ev:
 				default:
 				}
 			}
@@ -144,20 +154,20 @@ func runSlotsPump(ctx context.Context, wg *sync.WaitGroup, pid int, agg *metrics
 }
 
 // runMetricsTick emits a SourceMetrics snapshot every interval.
-func runMetricsTick(ctx context.Context, wg *sync.WaitGroup, pid int, interval time.Duration, agg *metricsAgg, out chan<- MonitorEvent) {
-	wg.Add(1)
+func runMetricsTick(pc pumpContext, interval time.Duration) {
+	pc.wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer pc.wg.Done()
 		t := time.NewTicker(interval)
 		defer t.Stop()
 		for {
 			select {
-			case <-ctx.Done():
+			case <-pc.ctx.Done():
 				return
 			case now := <-t.C:
-				snap := agg.snapshot(now)
+				snap := pc.agg.snapshot(now)
 				select {
-				case out <- MonitorEvent{Timestamp: now, Source: SourceMetrics, PID: pid, Data: snap}:
+				case pc.out <- MonitorEvent{Timestamp: now, Source: SourceMetrics, PID: pc.pid, Data: snap}:
 				default:
 				}
 			}
