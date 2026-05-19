@@ -375,6 +375,122 @@ func TestRoot_TabSwitchesWhenPageDoesNotCapture(t *testing.T) {
 	}
 }
 
+// TestRoot_EscSwallowedWhenPageDoesNotCaptureInput verifies the Esc gate added
+// in T7: when the active page does NOT capture input, Esc must be swallowed
+// at the root (no tea.Quit, no tab change) instead of bubbling to a page that
+// might quit or take a destructive action. ctrl+c remains the only escape.
+func TestRoot_EscSwallowedWhenPageDoesNotCaptureInput(t *testing.T) {
+	cap := &capturingPage{captured: false}
+	r := NewRoot(TabProfiles).
+		WithProfilesPage(cap).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
+		WithModelsPage(pages.Placeholder{TabName: "Md"})
+
+	_, cmd := r.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd != nil {
+		t.Errorf("Esc produced cmd while page does not capture input; want nil (swallowed)")
+	}
+	if len(cap.keys) != 0 {
+		t.Errorf("page received Esc while it does not capture input; keys=%v", cap.keys)
+	}
+}
+
+// TestRoot_EscFromBackendsTabDoesNotQuit ensures Esc on the Backends tab
+// (when nothing is capturing input) does not produce tea.Quit. Bug F-01:
+// the validator observed Esc terminating the app from Profiles/Backends.
+func TestRoot_EscFromBackendsTabDoesNotQuit(t *testing.T) {
+	r := NewRoot(TabBackends).
+		WithProfilesPage(pages.Placeholder{TabName: "P"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
+		WithModelsPage(pages.Placeholder{TabName: "Md"}).
+		WithBackendsPage(pages.Placeholder{TabName: "B"})
+
+	_, cmd := r.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd != nil {
+		t.Errorf("Esc on Backends tab produced cmd; want nil (no quit)")
+	}
+}
+
+// F-12 regression: with a real terminal size (height > 0), the help
+// modal title must announce the scroll keys so users know the content
+// is scrollable.
+func TestRoot_HelpModalAnnouncesScrollKeysWhenSized(t *testing.T) {
+	r := NewRoot(TabProfiles).
+		WithProfilesPage(pages.Placeholder{TabName: "P"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
+		WithModelsPage(pages.Placeholder{TabName: "Md"})
+	r.width = 120
+	r.height = 30
+	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	rm := updated.(RootModel)
+	view := rm.View()
+	for _, want := range []string{"PgUp", "PgDn", "scroll"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("help title missing %q; view:\n%s", want, view)
+		}
+	}
+}
+
+// F-12 regression: pressing Down/PgDown after `?` must move the
+// viewport's scroll offset so long help content becomes reachable.
+func TestRoot_HelpModalScrollsOnDownKey(t *testing.T) {
+	r := NewRoot(TabProfiles).
+		WithProfilesPage(pages.Placeholder{TabName: "P"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
+		WithModelsPage(pages.Placeholder{TabName: "Md"})
+	r.width = 120
+	r.height = 30
+	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	rm := updated.(RootModel)
+	_ = rm.View()
+
+	if got := rm.helpViewport.YOffset; got != 0 {
+		t.Fatalf("initial YOffset=%d; want 0", got)
+	}
+	updated, _ = rm.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	rm = updated.(RootModel)
+	if got := rm.helpViewport.YOffset; got == 0 {
+		t.Errorf("YOffset still 0 after PgDown; viewport did not scroll")
+	}
+}
+
+// F-12 regression: `j` (vim-style) also drives the help viewport.
+func TestRoot_HelpModalScrollsOnJKey(t *testing.T) {
+	r := NewRoot(TabProfiles).
+		WithProfilesPage(pages.Placeholder{TabName: "P"}).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
+		WithModelsPage(pages.Placeholder{TabName: "Md"})
+	r.width = 120
+	r.height = 30
+	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	rm := updated.(RootModel)
+	_ = rm.View()
+
+	for i := 0; i < 30; i++ {
+		updated, _ = rm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		rm = updated.(RootModel)
+	}
+	if rm.helpViewport.YOffset == 0 {
+		t.Errorf("YOffset still 0 after 30 j presses; viewport did not scroll")
+	}
+}
+
+// TestRoot_EscForwardedWhenPageCapturesInput ensures Esc reaches the page
+// when it owns input (e.g. confirm dialog, picker overlay). The Esc gate
+// must only swallow when activePageCapturesInput() returns false.
+func TestRoot_EscForwardedWhenPageCapturesInput(t *testing.T) {
+	cap := &capturingPage{captured: true}
+	r := NewRoot(TabProfiles).
+		WithProfilesPage(cap).
+		WithServerPage(pages.Placeholder{TabName: "Mo"}).
+		WithModelsPage(pages.Placeholder{TabName: "Md"})
+
+	_, _ = r.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if len(cap.keys) != 1 || cap.keys[0] != "esc" {
+		t.Errorf("page did not receive esc while capturing input; keys=%v", cap.keys)
+	}
+}
+
 func TestRoot_ModelsFilterDoesNotLeakQ(t *testing.T) {
 	cap := &capturingPage{captured: true}
 	r := NewRoot(TabModels).

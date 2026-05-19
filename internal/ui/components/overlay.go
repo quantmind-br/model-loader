@@ -2,6 +2,8 @@ package components
 
 import (
 	"strings"
+
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // Overlay places foreground on top of background at the center of the screen.
@@ -39,16 +41,19 @@ func overlayLine(bg, fg string, width int) string {
 	}
 	bgRunes := []rune(bg)
 	fgRunes := []rune(fg)
+	fgWidth := theme.RuneWidth(fg)
 
-	startX := (width - len(fgRunes)) / 2
+	startX := (width - fgWidth) / 2
 	if startX < 0 {
 		startX = 0
 	}
 
 	var out []rune
+	cursor := 0
 	for i := 0; i < width; i++ {
-		if i >= startX && i-startX < len(fgRunes) {
-			out = append(out, fgRunes[i-startX])
+		if i >= startX && cursor < len(fgRunes) {
+			out = append(out, fgRunes[cursor])
+			cursor++
 		} else if i < len(bgRunes) {
 			out = append(out, bgRunes[i])
 		} else {

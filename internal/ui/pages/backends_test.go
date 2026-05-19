@@ -86,6 +86,21 @@ func TestBackendsPage_RendersEmptyState(t *testing.T) {
 	}
 }
 
+func TestBackendsPage_EmptyStateWhenNoDefault(t *testing.T) {
+	p, mgr, _ := newBackendsPageHarness(t)
+	addBackendForPage(t, mgr, "Llama Main", "/bin/echo")
+	p = loadBackendsPage(t, p)
+	p.defaultBackendID = ""
+
+	out := p.View()
+	if !strings.Contains(out, "No default backend set") {
+		t.Errorf("no-default Backends view missing hint; got:\n%s", out)
+	}
+	if !strings.Contains(out, "Press [D] to set a backend as default") {
+		t.Errorf("no-default Backends view missing action hint; got:\n%s", out)
+	}
+}
+
 func TestBackendsPage_DetailShowsSelectedBackend(t *testing.T) {
 	p, mgr, _ := newBackendsPageHarness(t)
 	b := addBackendForPage(t, mgr, "Detail Backend", "/usr/bin/llama-server")
@@ -491,5 +506,80 @@ func TestBackendsPage_ProbeStaleEpochIgnored(t *testing.T) {
 	p = model.(BackendsPage)
 	if p.probeResults[b.ID].status != backendcatalog.ProbeStatusOK {
 		t.Fatal("stale event should not overwrite current results")
+	}
+}
+
+// drainBackendsCmd settles internal Cmd→Msg chains (bubbles list
+// filterItems) so the page assertions can observe the post-filter state
+// without spinning a tea.Program.
+func drainBackendsCmd(t *testing.T, p *BackendsPage, cmd tea.Cmd) {
+	t.Helper()
+	for i := 0; cmd != nil && i < 16; i++ {
+		msg := cmd()
+		if msg == nil {
+			return
+		}
+		if batch, ok := msg.(tea.BatchMsg); ok {
+			for _, c := range batch {
+				drainBackendsCmd(t, p, c)
+			}
+			return
+		}
+		upd, next := p.Update(msg)
+		*p = upd.(BackendsPage)
+		cmd = next
+	}
+}
+
+// F-07 regression: pressing `/` on the Backends tab must enter the
+// bubbles list filter mode and IsCapturingInput must report true so
+// global shortcuts stop stealing keystrokes.
+func TestBackendsPage_SlashEntersFilterMode(t *testing.T) {
+	p, mgr, _ := newBackendsPageHarness(t)
+	addBackendForPage(t, mgr, "Alpha Backend", "/bin/echo")
+	p = loadBackendsPage(t, p)
+
+	if p.IsCapturingInput() {
+		t.Fatal("expected not capturing input before filter starts")
+	}
+	model, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	p = model.(BackendsPage)
+	drainBackendsCmd(t, &p, cmd)
+	if p.list.FilterState() != list.Filtering {
+		t.Fatalf("filterState=%v after '/'; want Filtering", p.list.FilterState())
+	}
+	if !p.IsCapturingInput() {
+		t.Fatalf("expected capturing input after '/'; filterState=%v", p.list.FilterState())
+	}
+}
+
+// F-07 regression: characters typed while filtering must reach the list
+// (narrowing visible items) — they must NOT trigger page shortcuts like
+// `n` (new), `e` (edit), `x` (delete).
+func TestBackendsPage_FilterNarrowsList(t *testing.T) {
+	p, mgr, _ := newBackendsPageHarness(t)
+	addBackendForPage(t, mgr, "Alpha", "/bin/a")
+	addBackendForPage(t, mgr, "Beta", "/bin/b")
+	p = loadBackendsPage(t, p)
+
+	send := func(p BackendsPage, msg tea.Msg) BackendsPage {
+		upd, cmd := p.Update(msg)
+		out := upd.(BackendsPage)
+		drainBackendsCmd(t, &out, cmd)
+		return out
+	}
+
+	p = send(p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	for _, r := range "alph" {
+		p = send(p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	p = send(p, tea.KeyMsg{Type: tea.KeyEnter})
+
+	visible := p.list.VisibleItems()
+	if len(visible) != 1 {
+		t.Fatalf("VisibleItems=%d after typing 'alph'; want 1", len(visible))
+	}
+	if bi, ok := visible[0].(backendItem); !ok || bi.backend.Name != "Alpha" {
+		t.Fatalf("VisibleItems[0]=%+v; want Alpha", visible[0])
 	}
 }

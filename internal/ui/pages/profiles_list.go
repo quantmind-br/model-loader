@@ -61,7 +61,7 @@ func sortProfilesPinnedFirst(profiles []domain.Profile) {
 
 func (i item) Title() string {
 	if i.p.Pinned {
-		return "★ " + i.p.Name
+		return "📌 " + i.p.Name
 	}
 	return i.p.Name
 }

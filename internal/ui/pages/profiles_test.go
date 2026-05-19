@@ -743,3 +743,297 @@ func TestProfilesPage_ExportFailureFlashesError(t *testing.T) {
 		t.Errorf("flash = %q, want prefix 'export failed:'", got)
 	}
 }
+
+// F-04 regression: when the user presses `/` the list enters Filtering
+// state. IsCapturingInput must report true so global shortcuts (Tab/q/?)
+// stop stealing the user's keystrokes.
+func TestProfilesPage_FilterCapturesInput(t *testing.T) {
+	dir := t.TempDir()
+	store, err := profilestore.NewFSStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(domain.Profile{ID: "a", Name: "Alpha", Model: "/m.gguf"}); err != nil {
+		t.Fatal(err)
+	}
+
+	page := NewProfilesPage(store, domain.FlagSchema{})
+	page.list.SetSize(80, 20)
+	updated, _ := page.Update(loadedMsg{profiles: []domain.Profile{{ID: "a", Name: "Alpha", Model: "/m.gguf"}}})
+	page = updated.(ProfilesPage)
+
+	if page.IsCapturingInput() {
+		t.Fatal("expected not capturing input before filter starts")
+	}
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	page = updated.(ProfilesPage)
+	if !page.IsCapturingInput() {
+		t.Fatalf("expected capturing input after '/'; filterState=%v", page.list.FilterState())
+	}
+}
+
+// F-04 regression: characters typed during filter must reach the list and
+// narrow the visible rows — not trigger profile shortcuts. Two items, one
+// matches the typed filter.
+//
+// The bubbles list runs filtering through a tea.Cmd that produces a
+// FilterMatchesMsg; tests have to drain that cmd chain to observe the
+// narrowed VisibleItems.
+func TestProfilesPage_FilterNarrowsList(t *testing.T) {
+	dir := t.TempDir()
+	store, err := profilestore.NewFSStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	page := NewProfilesPage(store, domain.FlagSchema{})
+	page.list.SetSize(80, 20)
+	updated, _ := page.Update(loadedMsg{profiles: []domain.Profile{
+		{ID: "alpha", Name: "Alpha", Model: "/m.gguf"},
+		{ID: "beta", Name: "Beta", Model: "/m.gguf"},
+	}})
+	page = updated.(ProfilesPage)
+
+	send := func(p ProfilesPage, msg tea.Msg) ProfilesPage {
+		upd, cmd := p.Update(msg)
+		out := upd.(ProfilesPage)
+		drainPageCmd(t, &out, cmd)
+		return out
+	}
+
+	page = send(page, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	for _, r := range "alph" {
+		page = send(page, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	page = send(page, tea.KeyMsg{Type: tea.KeyEnter})
+
+	visible := page.list.VisibleItems()
+	if len(visible) != 1 {
+		t.Fatalf("VisibleItems=%d after typing 'alph'+Enter; want 1", len(visible))
+	}
+	if it, ok := visible[0].(item); !ok || it.p.ID != "alpha" {
+		t.Fatalf("VisibleItems[0]=%+v; want alpha", visible[0])
+	}
+}
+
+// drainPageCmd executes a tea.Cmd recursively, feeding each produced msg
+// back through the page Update so internal Cmd→Msg chains (e.g. bubbles
+// list filterItems) settle synchronously for assertions.
+func drainPageCmd(t *testing.T, page *ProfilesPage, cmd tea.Cmd) {
+	t.Helper()
+	for i := 0; cmd != nil && i < 16; i++ {
+		msg := cmd()
+		if msg == nil {
+			return
+		}
+		if batch, ok := msg.(tea.BatchMsg); ok {
+			for _, c := range batch {
+				drainPageCmd(t, page, c)
+			}
+			return
+		}
+		upd, next := page.Update(msg)
+		*page = upd.(ProfilesPage)
+		cmd = next
+	}
+}
+
+// F-06 regression: while filter is active, pressing `e` must reach the
+// list (typing into the filter buffer), NOT silently fire the export
+// shortcut. Verified by ensuring the flash stays empty after `e`.
+func TestProfilesPage_ExportGatedWhileFiltering(t *testing.T) {
+	dir := t.TempDir()
+	store, err := profilestore.NewFSStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exportDir := t.TempDir()
+	page := NewProfilesPage(store, domain.FlagSchema{}).WithExportDir(exportDir)
+	page.list.SetSize(80, 20)
+	updated, _ := page.Update(loadedMsg{profiles: []domain.Profile{{ID: "a", Name: "Alpha", Model: "/m.gguf"}}})
+	page = updated.(ProfilesPage)
+
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	page = updated.(ProfilesPage)
+	if !page.IsCapturingInput() {
+		t.Fatal("filter mode did not capture input")
+	}
+
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	page = updated.(ProfilesPage)
+
+	if got := page.flash.Message(); strings.HasPrefix(got, "exported to ") {
+		t.Errorf("export fired during filter mode; flash=%q", got)
+	}
+	entries, _ := os.ReadDir(exportDir)
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".json") {
+			t.Errorf("export bundle was written during filter mode: %s", e.Name())
+		}
+	}
+}
+
+// F-06 regression: when filter is NOT active, `e` must still export and
+// flash success — proves the gate didn't disable the shortcut outright.
+func TestProfilesPage_ExportFlashesOnSuccess(t *testing.T) {
+	dir := t.TempDir()
+	store, err := profilestore.NewFSStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(domain.Profile{ID: "a", Name: "Alpha", Model: "/m.gguf"}); err != nil {
+		t.Fatal(err)
+	}
+	exportDir := t.TempDir()
+	page := NewProfilesPage(store, domain.FlagSchema{}).WithExportDir(exportDir)
+	page.list.SetSize(80, 20)
+	updated, _ := page.Update(loadedMsg{profiles: []domain.Profile{{ID: "a", Name: "Alpha", Model: "/m.gguf"}}})
+	page = updated.(ProfilesPage)
+
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	page = updated.(ProfilesPage)
+
+	if got := page.flash.Message(); !strings.HasPrefix(got, "exported to ") {
+		t.Errorf("flash=%q; want 'exported to …'", got)
+	}
+}
+
+// F-09 regression: pinned profile must appear exactly once in the list
+// and carry the 📌 glyph (replaced the star). Pinned items sort first
+// (the regression observed duplicate rendering — the bug is that the
+// single appearance must be unambiguous).
+func TestProfilesPage_PinnedProfileAppearsOnceWithPinGlyph(t *testing.T) {
+	dir := t.TempDir()
+	store, err := profilestore.NewFSStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(domain.Profile{ID: "p", Name: "Pinned", Model: "/m.gguf", Pinned: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(domain.Profile{ID: "n", Name: "Normal", Model: "/m.gguf"}); err != nil {
+		t.Fatal(err)
+	}
+
+	page := NewProfilesPage(store, domain.FlagSchema{})
+	page.list.SetSize(80, 20)
+	updated, _ := page.Update(loadedMsg{profiles: []domain.Profile{
+		{ID: "p", Name: "Pinned", Model: "/m.gguf", Pinned: true},
+		{ID: "n", Name: "Normal", Model: "/m.gguf"},
+	}})
+	page = updated.(ProfilesPage)
+
+	items := page.list.Items()
+	pinnedCount := 0
+	var pinnedTitle string
+	for _, it := range items {
+		if i, ok := it.(item); ok && i.p.ID == "p" {
+			pinnedCount++
+			pinnedTitle = i.Title()
+		}
+	}
+	if pinnedCount != 1 {
+		t.Fatalf("pinned profile appears %d times; want exactly 1", pinnedCount)
+	}
+	if !strings.HasPrefix(pinnedTitle, "📌 ") {
+		t.Fatalf("pinned title=%q; want '📌 ' prefix", pinnedTitle)
+	}
+	if strings.HasPrefix(pinnedTitle, "★") {
+		t.Fatalf("pinned title still uses old star glyph: %q", pinnedTitle)
+	}
+}
+
+// F-11 regression: Args must render as indented `--key value` lines, not
+// as a Go map literal `map[k:v ...]`.
+func TestProfilesPage_DetailRendersArgsAsFlags(t *testing.T) {
+	dir := t.TempDir()
+	store, err := profilestore.NewFSStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr := domain.Profile{
+		ID:    "p",
+		Name:  "Detail",
+		Model: "/m.gguf",
+		Args: map[string]any{
+			"ngl":        float64(99),
+			"flash-attn": true,
+			"alias":      "test",
+		},
+	}
+	if err := store.Save(pr); err != nil {
+		t.Fatal(err)
+	}
+
+	page := NewProfilesPage(store, domain.FlagSchema{})
+	page.list.SetSize(80, 20)
+	updated, _ := page.Update(loadedMsg{profiles: []domain.Profile{pr}})
+	page = updated.(ProfilesPage)
+	page.width = 120
+	page.height = 30
+
+	view := page.detailView()
+	if strings.Contains(view, "map[") {
+		t.Errorf("detail view contains Go map literal:\n%s", view)
+	}
+	for _, want := range []string{"--alias test", "--flash-attn true", "--ngl 99"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("detail view missing %q; got:\n%s", want, view)
+		}
+	}
+}
+
+// F-11 regression: an empty Args map renders as "(none)" instead of the
+// raw map literal.
+func TestProfilesPage_DetailRendersEmptyArgs(t *testing.T) {
+	dir := t.TempDir()
+	store, err := profilestore.NewFSStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr := domain.Profile{ID: "p", Name: "Empty", Model: "/m.gguf"}
+	if err := store.Save(pr); err != nil {
+		t.Fatal(err)
+	}
+	page := NewProfilesPage(store, domain.FlagSchema{})
+	page.list.SetSize(80, 20)
+	updated, _ := page.Update(loadedMsg{profiles: []domain.Profile{pr}})
+	page = updated.(ProfilesPage)
+	page.width = 120
+	page.height = 30
+
+	view := page.detailView()
+	if strings.Contains(view, "map[") {
+		t.Errorf("detail view contains Go map literal:\n%s", view)
+	}
+	if !strings.Contains(view, "Args:") {
+		t.Errorf("detail view missing Args label:\n%s", view)
+	}
+}
+
+// F-09 regression: pinned items must sort BEFORE unpinned items so the
+// single appearance is visually distinct at the top of the list.
+func TestProfilesPage_PinnedSortsFirst(t *testing.T) {
+	dir := t.TempDir()
+	store, err := profilestore.NewFSStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	page := NewProfilesPage(store, domain.FlagSchema{})
+	page.list.SetSize(80, 20)
+	updated, _ := page.Update(loadedMsg{profiles: []domain.Profile{
+		{ID: "n", Name: "Normal", Model: "/m.gguf"},
+		{ID: "p", Name: "Pinned", Model: "/m.gguf", Pinned: true},
+	}})
+	page = updated.(ProfilesPage)
+
+	items := page.list.Items()
+	if len(items) < 2 {
+		t.Fatalf("Items=%d; want >=2", len(items))
+	}
+	first, ok := items[0].(item)
+	if !ok || first.p.ID != "p" {
+		t.Fatalf("first item=%+v; want pinned 'p'", items[0])
+	}
+}

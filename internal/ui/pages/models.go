@@ -271,8 +271,7 @@ func (p ModelsPage) IsCapturingInput() bool {
 	return p.action != nil || p.deleteConfirm.Active() || p.filterMode || p.profilePicker != nil ||
 		(p.hfSearch != nil && p.hfSearch.IsActive()) ||
 		(p.hfFilePicker != nil && p.hfFilePicker.IsActive()) ||
-		(p.downloads != nil && p.downloads.IsFocusVisible()) ||
-		p.infoPanel != nil
+		(p.downloads != nil && p.downloads.IsFocusVisible())
 }
 
 // scanStartedMsg delivers the channel + cancel handle from a fresh scan
@@ -841,7 +840,8 @@ func (p ModelsPage) handleFilterKey(msg tea.KeyMsg) (handled bool, m tea.Model, 
 	default:
 		if msg.String() == "backspace" {
 			if len(p.filter) > 0 {
-				p.filter = p.filter[:len(p.filter)-1]
+				rs := []rune(p.filter)
+				p.filter = string(rs[:len(rs)-1])
 				p.refreshRows()
 			}
 			return true, p, nil
@@ -889,6 +889,11 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p.filterMode = !p.filterMode
 		return p, nil
 	case key.Matches(msg, p.keys.Cancel):
+		if p.infoPanel != nil {
+			p.infoPanel = nil
+			p.infoPanelUsedBy = nil
+			return p, nil
+		}
 		if p.filterMode || p.filter != "" {
 			p.filterMode = false
 			p.filter = ""
@@ -905,6 +910,11 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.openActionMenuForSelection()
 	case msg.String() == "i":
 		if !p.filterMode {
+			if p.infoPanel != nil {
+				p.infoPanel = nil
+				p.infoPanelUsedBy = nil
+				return p, nil
+			}
 			return p.openInfoPanel()
 		}
 	case msg.String() == "right", msg.String() == "g":
@@ -926,17 +936,6 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			p, fc := p.withFlash("No profile uses this model — create one first")
 			return p, fc
-		}
-	case msg.String() == "esc":
-		if p.infoPanel != nil {
-			p.infoPanel = nil
-			p.infoPanelUsedBy = nil
-			return p, nil
-		}
-	case msg.String() == "esc":
-		if p.infoPanel != nil {
-			p.infoPanel = nil
-			return p, nil
 		}
 	case msg.String() == "s":
 		if !p.filterMode && p.hfClient != nil {
@@ -1039,9 +1038,7 @@ func (p ModelsPage) View() string {
 		return p.deleteConfirm.View()
 	}
 	if p.action != nil {
-		bg := p.regularBodyView()
-		fg := p.renderActionMenu()
-		return components.Overlay(bg, fg, p.width, p.height)
+		return p.renderActionMenu()
 	}
 	return p.regularBodyView()
 }
@@ -1057,6 +1054,9 @@ func (p ModelsPage) regularBodyView() string {
 	var content string
 	if len(p.files) == 0 && (len(p.paths) == 0 || p.hasScannedRoot()) {
 		emptyMsg := components.EmptyState("No .gguf files in configured search paths", "Press [R] to rescan, or edit ~/.config/model-loader/config.toml")
+		content = lipgloss.JoinVertical(lipgloss.Left, header, statusLine, emptyMsg, filterLine, footer)
+	} else if len(p.visibleFiles()) == 0 && p.filter != "" {
+		emptyMsg := components.EmptyState("No models match the current filter", "Press [esc] to clear filter, or [/] to edit filter")
 		content = lipgloss.JoinVertical(lipgloss.Left, header, statusLine, emptyMsg, filterLine, footer)
 	} else {
 		content = lipgloss.JoinVertical(lipgloss.Left, header, statusLine, p.table.View(), filterLine, footer)
@@ -1135,10 +1135,12 @@ func (p ModelsPage) Hints() string {
 	return hints
 }
 
-// renderActionMenu draws the inline modal-ish overlay used for both the
-// root action menu and the follow-up profile picker.
+// renderActionMenu returns the action modal placed on a full p.width × p.height
+// canvas. The surrounding spaces from lipgloss.Place are what make the modal
+// opaque — passing height=0 would skip Place and let table rows leak around
+// the box frame (F-03 audit regression).
 func (p ModelsPage) renderActionMenu() string {
-	return components.Modal("", p.renderActionMenuContent(), menuWidth(p.width), 0)
+	return components.Modal("", p.renderActionMenuContent(), p.width, p.height)
 }
 
 func (p ModelsPage) renderActionMenuContent() string {

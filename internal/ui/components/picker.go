@@ -363,8 +363,8 @@ func pickerColumnWidths(boxW int) (name, quant, params, path int) {
 }
 
 func truncatePath(s string, max int) string {
-	if len(s) <= max {
+	if theme.RuneWidth(s) <= max {
 		return s
 	}
-	return s[:max-1] + "…"
+	return theme.TruncateRuneWidth(s, max, "…")
 }

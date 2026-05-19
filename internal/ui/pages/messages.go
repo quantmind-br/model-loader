@@ -1,5 +1,7 @@
 package pages
 
+import "github.com/quantmind-br/model-loader/internal/ui/theme"
+
 // LaunchProfileMsg requests the Profiles page to start the profile identified
 // by ID. Routed by root.go to the Profiles tab.
 type LaunchProfileMsg struct {
@@ -20,18 +22,14 @@ type ServerSelectPIDMsg struct {
 	PID int
 }
 
-// truncate clips s to max runes, replacing the last with "…" when the
-// input is longer. Used by ModelsPage for table-cell shortening.
-//
-// NOTE: name is misleading — this clips by BYTES, not runes. Safe for the
-// ASCII-only callers in models.go / profile_editor/draft.go. For UTF-8 input
-// (e.g. stderr-tail lines that may contain multi-byte characters), use
-// `truncRunes` below instead.
+// truncate clips s to the target visual width, replacing the tail with "…"
+// when the input is wider. Uses theme.RuneWidth so CJK and emoji are counted
+// by display cells, not bytes or runes.
 func truncate(s string, max int) string {
-	if len(s) <= max {
+	if theme.RuneWidth(s) <= max {
 		return s
 	}
-	return s[:max-1] + "…"
+	return theme.TruncateRuneWidth(s, max, "…")
 }
 
 // truncRunes clips s to max RUNES (not bytes), appending "…" when the input

@@ -129,8 +129,8 @@ func (p *DownloadProgress) View() string {
 		} else {
 			line = "  " + line
 		}
-		if len(line) > p.width {
-			line = line[:p.width]
+		if theme.RuneWidth(line) > p.width {
+			line = theme.TruncateRuneWidth(line, p.width, "…")
 		}
 		lines = append(lines, line)
 	}

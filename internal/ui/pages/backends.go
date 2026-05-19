@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
@@ -78,9 +79,11 @@ type BackendsPage struct {
 	refreshConfirm components.Confirm
 
 	flash components.Flash
+	spinnerModel spinner.Model
 
 	pendingRefresh bool
 	pendingProbe   bool
+	probeStartTime time.Time
 
 	defaultBackendID string
 
@@ -121,12 +124,13 @@ func NewBackendsPage(manager *backendschema.Manager) BackendsPage {
 	l.Title = "Backends"
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
-	l.SetFilteringEnabled(false)
+	l.SetFilteringEnabled(true)
 	return BackendsPage{
 		manager: manager,
 		list:    l,
 		keys:    defaultBackendsKeys(),
 		flash:   components.NewFlash("backends"),
+		spinnerModel: components.NewLoadingSpinner(),
 	}
 }
 
@@ -136,7 +140,9 @@ func (p BackendsPage) WithProber(prober backendProberIface) BackendsPage {
 	return p
 }
 
-func (p BackendsPage) Init() tea.Cmd { return p.loadCmd() }
+func (p BackendsPage) Init() tea.Cmd {
+	return tea.Batch(p.loadCmd(), p.spinnerModel.Tick)
+}
 
 func (p BackendsPage) Reload() tea.Cmd { return p.loadCmd() }
 
@@ -175,6 +181,8 @@ func (p BackendsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.performRefresh(m.id)
 	case probeEventMsg:
 		return p.handleProbeEvent(m)
+	case spinner.TickMsg:
+		return p.handleSpinnerTick(m)
 	case tea.KeyMsg:
 		return p.handleKey(m)
 	}
@@ -233,10 +241,20 @@ func (p BackendsPage) forwardNonKey(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.deleteConfirm, cmd = p.deleteConfirm.Update(msg)
 		return p, cmd
 	}
+	if _, isFilterMatches := msg.(list.FilterMatchesMsg); isFilterMatches {
+		updated, cmd := p.list.Update(msg)
+		p.list = updated
+		return p, cmd
+	}
 	return p, nil
 }
 
 func (p BackendsPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if p.list.FilterState() == list.Filtering {
+		updated, cmd := p.list.Update(msg)
+		p.list = updated
+		return p, cmd
+	}
 	switch {
 	case key.Matches(msg, p.keys.New):
 		return p.startAdd()
@@ -282,10 +300,10 @@ func (p BackendsPage) View() string {
 	left := lipgloss.NewStyle().Width(leftWidth).Render(leftContent)
 	rightContent := p.detailView()
 	if p.pendingRefresh {
-		rightContent = theme.Subtitle.Render("Refreshing schema…") + "\n" + rightContent
+		rightContent = components.LoadingLine(p.spinnerModel, "Refreshing schema", 0) + "\n" + rightContent
 	}
 	if p.pendingProbe {
-		rightContent = theme.Subtitle.Render("Probing backends…") + "\n" + rightContent
+		rightContent = components.LoadingLine(p.spinnerModel, "Probing backends", 0) + "\n" + rightContent
 	}
 	right := lipgloss.NewStyle().Width(rightWidth).Render(rightContent)
 	leftH := len(strings.Split(left, "\n"))
@@ -345,6 +363,9 @@ func (p BackendsPage) detailView() string {
 	}
 
 	var b strings.Builder
+	if p.defaultBackendID == "" {
+		b.WriteString(components.EmptyState("No default backend set", "Press [D] to set a backend as default") + "\n\n")
+	}
 	b.WriteString(theme.Title.Render(sel.Name) + defaultMark + "\n")
 	b.WriteString(theme.Subtitle.Render(string(sel.Kind)) + "\n\n")
 	b.WriteString(row("ID:", sel.ID) + "\n")
@@ -378,7 +399,10 @@ func (p BackendsPage) Hints() string {
 }
 
 func (p BackendsPage) IsCapturingInput() bool {
-	return p.form != nil || p.refreshConfirm.Active() || p.deleteConfirm.Active()
+	if p.form != nil || p.refreshConfirm.Active() || p.deleteConfirm.Active() {
+		return true
+	}
+	return p.list.FilterState() != list.Unfiltered
 }
 
 func (p BackendsPage) withFlash(msg string) (BackendsPage, tea.Cmd) {
@@ -587,6 +611,7 @@ func (p BackendsPage) askProbeAll() (tea.Model, tea.Cmd) {
 		return p, fc
 	}
 	p.pendingProbe = true
+	p.probeStartTime = time.Now()
 	p.probeEpoch++
 	p.probeResults = make(map[string]backendProbeResult)
 	ch, err := p.prober.Probe(context.Background())
@@ -628,6 +653,18 @@ func (p BackendsPage) handleProbeEvent(m probeEventMsg) (tea.Model, tea.Cmd) {
 		latency: m.event.Latency,
 	}
 	return p, p.readNextProbeEvent(p.probeEpoch)
+}
+
+func (p BackendsPage) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
+	if p.pendingProbe && time.Since(p.probeStartTime) > 3*time.Second {
+		p.pendingProbe = false
+		p.probeCh = nil
+		p, fc := p.withFlashError("probe timed out")
+		return p, fc
+	}
+	updated, cmd := p.spinnerModel.Update(msg)
+	p.spinnerModel = updated
+	return p, cmd
 }
 
 func (p BackendsPage) selectedBackend() (domain.Backend, bool) {

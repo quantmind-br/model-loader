@@ -4,6 +4,8 @@ package ui
 import (
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -103,6 +105,8 @@ type RootModel struct {
 	height          int
 	bootBlocker     *bootBlocker
 	helpOpen        bool
+	helpViewport    viewport.Model
+	helpReady       bool
 	playgroundOpen  bool
 	playgroundModal tea.Model
 	pm              processmgr.Manager
@@ -281,6 +285,10 @@ func (m RootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if !m.activePageCapturesInput() {
 		if msg.String() == "?" {
 			m.helpOpen = true
+			m = m.ensureHelpViewport()
+			return m, nil
+		}
+		if msg.String() == "esc" {
 			return m, nil
 		}
 		switch msg.String() {
@@ -309,7 +317,9 @@ func (m RootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleHelpKey runs while the help modal is on screen: `?` and `esc` close
-// it, `ctrl+c` still quits, every other key is swallowed.
+// it, `ctrl+c` still quits, scroll keys (Up/Down/PgUp/PgDn/k/j/home/end)
+// drive the viewport so long help content is reachable. Every other key
+// is swallowed.
 func (m RootModel) handleHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "?", "esc":
@@ -318,7 +328,73 @@ func (m RootModel) handleHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		return m, tea.Quit
 	}
+	if helpScrollKey(msg) {
+		m = m.ensureHelpViewport()
+		var cmd tea.Cmd
+		m.helpViewport, cmd = m.helpViewport.Update(msg)
+		return m, cmd
+	}
 	return m, nil
+}
+
+// ensureHelpViewport guarantees the help viewport is sized, has the
+// current page's contextual help loaded, and is ready to receive scroll
+// keys — even on Update paths that never call View.
+func (m RootModel) ensureHelpViewport() RootModel {
+	if m.height <= 0 {
+		return m
+	}
+	viewportW, viewportH := helpViewportSize(m.width, m.height)
+	if !m.helpReady || m.helpViewport.Width != viewportW || m.helpViewport.Height != viewportH {
+		m.helpViewport = viewport.New(viewportW, viewportH)
+		m.helpReady = true
+	}
+	activeContext := ""
+	if h, ok := m.pages[m.active].(HelpContextProvider); ok {
+		activeContext = h.HelpContext()
+	} else if h, ok := m.pages[m.active].(HintProvider); ok {
+		activeContext = h.Hints()
+	}
+	body, err := components.RenderContextualHelp(m.width-8, activeContext)
+	if err != nil {
+		body = components.HelpMarkdown
+	}
+	m.helpViewport.SetContent(body)
+	return m
+}
+
+// helpViewportSize returns the inner width/height for the help modal
+// viewport, accounting for the modal box border + padding so the scroll
+// area always fits inside the terminal.
+func helpViewportSize(width, height int) (int, int) {
+	w := width - 12
+	if w < 20 {
+		w = 20
+	}
+	h := height - 8
+	if h < 5 {
+		h = 5
+	}
+	return w, h
+}
+
+// helpScrollKey reports whether msg matches a scroll keybinding the
+// viewport should consume while the help modal is open.
+func helpScrollKey(msg tea.KeyMsg) bool {
+	scroll := []key.Binding{
+		key.NewBinding(key.WithKeys("up", "k")),
+		key.NewBinding(key.WithKeys("down", "j")),
+		key.NewBinding(key.WithKeys("pgup", "ctrl+u")),
+		key.NewBinding(key.WithKeys("pgdown", "ctrl+d")),
+		key.NewBinding(key.WithKeys("home", "g")),
+		key.NewBinding(key.WithKeys("end", "G")),
+	}
+	for _, b := range scroll {
+		if key.Matches(msg, b) {
+			return true
+		}
+	}
+	return false
 }
 
 // activateAndForward switches to t before forwarding the message — used by
@@ -369,17 +445,21 @@ func (m RootModel) View() string {
 		return components.Modal(m.bootBlocker.title, m.bootBlocker.body+"\n\nPress q to quit.", m.width, m.height)
 	}
 	if m.helpOpen {
-		activeContext := ""
-		if h, ok := m.pages[m.active].(HelpContextProvider); ok {
-			activeContext = h.HelpContext()
-		} else if h, ok := m.pages[m.active].(HintProvider); ok {
-			activeContext = h.Hints()
+		if m.height <= 0 {
+			activeContext := ""
+			if h, ok := m.pages[m.active].(HelpContextProvider); ok {
+				activeContext = h.HelpContext()
+			} else if h, ok := m.pages[m.active].(HintProvider); ok {
+				activeContext = h.Hints()
+			}
+			body, err := components.RenderContextualHelp(m.width-8, activeContext)
+			if err != nil {
+				body = components.HelpMarkdown
+			}
+			return components.Modal("Keybindings", body, m.width, m.height)
 		}
-		body, err := components.RenderContextualHelp(m.width-8, activeContext)
-		if err != nil {
-			body = components.HelpMarkdown // fallback raw
-		}
-		return components.Modal("Keybindings", body, m.width, m.height)
+		m = m.ensureHelpViewport()
+		return components.Modal("Keybindings (↑/↓/PgUp/PgDn/k/j/g/G to scroll · ? or esc to close)", m.helpViewport.View(), m.width, m.height)
 	}
 	header := m.renderTabs()
 	status := m.status.Render(m.width)
@@ -449,19 +529,9 @@ func (m RootModel) renderTabs() string {
 	for i := Tab(0); i < tabCount; i++ {
 		labels[i] = fmt.Sprintf("%d %s", int(i)+1, i.Title())
 	}
-	activeStyle := lipgloss.NewStyle().
-		Background(theme.AccentBg).
-		Foreground(theme.AccentFg).
-		Bold(true).
-		Padding(0, 1)
-	inactiveStyle := lipgloss.NewStyle().
-		Foreground(theme.ColorDim).
-		Padding(0, 1)
 	return components.TabBar(components.TabBarOptions{
 		Labels:         labels,
 		ActiveIndex:    int(m.active),
 		AvailableWidth: m.width,
-		ActiveStyle:    activeStyle,
-		InactiveStyle:  inactiveStyle,
 	})
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
@@ -232,6 +233,43 @@ func TestModelsPage_NoEmptyStateWhileScanning(t *testing.T) {
 	out := page.View()
 	if strings.Contains(out, "No .gguf files") {
 		t.Errorf("scanning Models view should not show empty hint yet; got:\n%s", out)
+	}
+}
+
+func TestModelsPage_EmptyStateWhenFilterNoMatches(t *testing.T) {
+	mf := domain.ModelFile{
+		Path:      "/tmp/models/qwen-32b.gguf",
+		SizeBytes: 16_000_000_000,
+		Name:      "qwen-32b.gguf",
+		Quant:     "Q4_K_M",
+		Params:    "32B",
+	}
+	scanner := &fakeScanner{events: []domain.ScanEvent{
+		{Type: domain.ScanEventFile, Root: "/tmp/models", File: &mf},
+		{Type: domain.ScanEventProgress, Root: "/tmp/models", Count: 1},
+		{Type: domain.ScanEventDone},
+	}}
+	page := NewModelsPage(scanner, []string{"/tmp/models"})
+	model := tea.Model(page)
+	cmd := model.Init()
+	for cmd != nil {
+		msg := cmd()
+		if msg == nil {
+			break
+		}
+		var c tea.Cmd
+		model, c = model.Update(msg)
+		cmd = c
+	}
+	mp := model.(ModelsPage)
+	mp.filter = "nonexistent"
+	mp.refreshRows()
+	out := mp.View()
+	if !strings.Contains(out, "No models match the current filter") {
+		t.Errorf("filter-empty Models view missing hint; got:\n%s", out)
+	}
+	if !strings.Contains(out, "Press [esc] to clear filter") {
+		t.Errorf("filter-empty Models view missing action hint; got:\n%s", out)
 	}
 }
 
@@ -841,5 +879,113 @@ func TestModelsPage_DeleteConfirmEndToEnd(t *testing.T) {
 	}
 	if !strings.Contains(final.flash.Message(), "deleted") {
 		t.Errorf("flash = %q, want 'deleted ...'", final.flash.Message())
+	}
+}
+
+// TestModelsPage_ActionModalOpaqueBackground is the F-03 audit regression
+// guard: with the action menu open at 120×40, only the file referenced by
+// the modal title may appear in the rendered output. Any other .gguf row
+// from the table indicates the body bled around the modal frame.
+func TestModelsPage_ActionModalOpaqueBackground(t *testing.T) {
+	target := domain.ModelFile{Path: "/m/Hunyuan-MT-7B.Q4_K_S.gguf", Name: "Hunyuan-MT-7B.Q4_K_S.gguf"}
+	background := domain.ModelFile{Path: "/m/background-leak-canary.gguf", Name: "background-leak-canary.gguf"}
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.width = 120
+	page.height = 40
+	page.files = []domain.ModelFile{target, background}
+	page.refreshRows()
+
+	page.action = &actionMenu{
+		title:      "Action for " + target.Name,
+		options:    []actionOption{{label: "Use in new profile", value: "new"}},
+		targetPath: target.Path,
+		stage:      actionStageRoot,
+	}
+
+	out := page.View()
+	if strings.Contains(out, background.Name) {
+		t.Fatalf("background filename %q bled through opaque action modal\noutput:\n%s", background.Name, out)
+	}
+	if !strings.Contains(out, target.Name) {
+		t.Fatalf("modal title with target filename %q missing from output\noutput:\n%s", target.Name, out)
+	}
+	lines := strings.Split(out, "\n")
+	if got := len(lines); got != page.height {
+		t.Fatalf("rendered height = %d lines, want %d (lipgloss.Place canvas)", got, page.height)
+	}
+}
+
+// TestModelsPage_ActionModalCoversFullCanvas asserts that renderActionMenu
+// emits a string sized to p.width × p.height. Without the Place wrap the
+// result would be a small box and components.Overlay (or the direct return
+// in View) would leak the body underneath.
+func TestModelsPage_ActionModalCoversFullCanvas(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.width = 120
+	page.height = 40
+	page.action = &actionMenu{
+		title:   "Action for some.gguf",
+		options: []actionOption{{label: "Use in new profile", value: "new"}},
+		stage:   actionStageRoot,
+	}
+	out := page.renderActionMenu()
+	lines := strings.Split(out, "\n")
+	if len(lines) != page.height {
+		t.Fatalf("renderActionMenu height = %d lines, want %d", len(lines), page.height)
+	}
+	if w := lipgloss.Width(lines[0]); w != page.width {
+		t.Fatalf("renderActionMenu width = %d cols, want %d", w, page.width)
+	}
+}
+
+// F-02 regression: pressing `i` while the info panel is open must close it
+// (toggle behaviour). Previously the handler was monotonic-open.
+func TestModelsPage_IKeyTogglesInfoPanel(t *testing.T) {
+	mf := domain.ModelFile{Path: "/m/q.gguf", Name: "q.gguf"}
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.store = &fakeModelsStore{}
+	page.files = []domain.ModelFile{mf}
+	page.refreshRows()
+
+	updated, _ := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	mp := updated.(ModelsPage)
+	if mp.infoPanel == nil {
+		t.Fatal("first `i` did not open info panel")
+	}
+
+	updated, _ = mp.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	mp = updated.(ModelsPage)
+	if mp.infoPanel != nil {
+		t.Fatal("second `i` did not close info panel")
+	}
+}
+
+// F-02 regression: Esc must close an open info panel.
+func TestModelsPage_EscClosesInfoPanel(t *testing.T) {
+	mf := domain.ModelFile{Path: "/m/q.gguf", Name: "q.gguf"}
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.store = &fakeModelsStore{}
+	page.files = []domain.ModelFile{mf}
+	page.refreshRows()
+
+	updated, _ := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	mp := updated.(ModelsPage)
+	if mp.infoPanel == nil {
+		t.Fatal("info panel did not open")
+	}
+	updated, _ = mp.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	mp = updated.(ModelsPage)
+	if mp.infoPanel != nil {
+		t.Fatal("Esc did not close info panel")
+	}
+}
+
+// F-02 regression: info panel is read-only, so it must NOT mark the page
+// as capturing input. Otherwise global tab shortcuts would be eaten.
+func TestModelsPage_InfoPanelDoesNotCaptureInput(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, nil)
+	page.infoPanel = &components.InfoPanel{}
+	if page.IsCapturingInput() {
+		t.Error("info panel must not mark page as capturing input")
 	}
 }

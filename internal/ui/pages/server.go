@@ -202,7 +202,7 @@ func (p *ServerPage) WithProxy(srv components.HTTPProxyController) *ServerPage {
 func (p *ServerPage) openHistoryChart() (tea.Model, tea.Cmd) {
 	pid := p.selectedPID()
 	if pid <= 0 || p.metricsDir == "" {
-		return p.withFlashError("history: no metrics directory configured")
+		return p.withFlashError("history: no metrics directory configured (set logging.metrics_dir in config.toml)")
 	}
 	insts := p.pm.List()
 	var profileID string

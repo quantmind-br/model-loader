@@ -33,7 +33,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 │   │   └── vllmhelp/      # Embedded schema for vLLM
 │   └── ui/
 │       ├── components/    # Help, Modal, Picker, Sparkline, Statusbar
-│       ├── pages/         # 5 tabs + profile_editor sub-package
+│       ├── pages/         # 4 tabs + profile_editor sub-package
 │       │   └── profile_editor/  # huh-based profile editing
 │       └── theme/
 ├── testdata/              # Golden test fixtures (help-v7376.txt, .golden.json)
@@ -57,7 +57,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 | HF Hub API client | internal/service/hfhub/ | model search, file listing |
 | Binary resolution | internal/service/llamabin/ | PATH lookup + Python fallback |
 | Proxy lifecycle | internal/service/proxysupervisor/ | state machine driving httpproxy |
-| TUI pages | internal/ui/pages/ | 5 tabs + profile_editor sub-package |
+| TUI pages | internal/ui/pages/ | 4 tabs + profile_editor sub-package |
 | Profile editing | internal/ui/pages/profile_editor/ | huh forms, draft state machine |
 | Config | internal/config/ | Viper TOML at ~/.config/model-loader/ |
 | Logging | internal/log/ | file-only slog, rotate-by-session |
@@ -81,7 +81,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 - **Tests**: any new global shortcut MUST have a paired test using the `capturingPage` test double in `internal/ui/root_test.go` proving the key is forwarded (not consumed) when the active page captures input.
 
 ## UNIQUE STYLES
-- Charmbracelet TUI with 5-tab model (tea.Program)
+- Charmbracelet TUI with 4-tab model (tea.Program)
 - Viper config with mapstructure tags
 - Domain-driven service layer under internal/service/
 - Embedded fallback schema for llama-server --help (parses at runtime if binary present)

@@ -1371,3 +1371,22 @@ func TestServerPage_HistoryRefreshedOnInstanceRefresh(t *testing.T) {
 		t.Fatalf("history not updated on second refresh; got %+v", p.history)
 	}
 }
+
+// F-08 regression: pressing H without metrics_dir configured must flash a
+// message that names the exact config key (logging.metrics_dir) so the
+// user knows what to set in config.toml.
+func TestServerPage_HHintMentionsMetricsDirKey(t *testing.T) {
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{
+		{PID: 1234, Port: 8080, ProfileID: "p1"},
+	}}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil)
+	p.SetSize(120, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'H'}})
+
+	msg := p.flash.Message()
+	if !strings.Contains(msg, "logging.metrics_dir") {
+		t.Errorf("flash=%q; want it to mention 'logging.metrics_dir'", msg)
+	}
+}

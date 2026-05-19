@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -416,7 +417,9 @@ func (p ProfilesPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // forwardNonKey routes non-key messages to the highest-priority active
 // surface so its internal Cmd→Msg loops complete (huh focus init, async
 // validation). Editor first (its discard confirm and form both need
-// non-key forwarding), then delete confirm.
+// non-key forwarding), then delete confirm. As fallback, forwards
+// list-internal messages (e.g. list.FilterMatchesMsg) to the list so the
+// filter Cmd→Msg cycle settles.
 func (p ProfilesPage) forwardNonKey(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if p.editor.Active() {
 		var cmd tea.Cmd
@@ -426,6 +429,11 @@ func (p ProfilesPage) forwardNonKey(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if p.deleteConfirm.Active() {
 		var cmd tea.Cmd
 		p.deleteConfirm, cmd = p.deleteConfirm.Update(msg)
+		return p, cmd
+	}
+	if _, isFilterMatches := msg.(list.FilterMatchesMsg); isFilterMatches {
+		updated, cmd := p.list.Update(msg)
+		p.list = updated
 		return p, cmd
 	}
 	return p, nil
@@ -469,23 +477,31 @@ func (p ProfilesPage) View() string {
 }
 
 func (p ProfilesPage) OverlayView() (string, int, int, bool) {
+	var raw string
 	switch {
 	case p.killConfirm.Active():
-		return p.killConfirm.View(), p.width, p.height, true
+		raw = p.killConfirm.View()
 	case p.importPickerActive:
-		return p.importPicker.View(), p.width, p.height, true
+		raw = p.importPicker.View()
 	case p.picker.active:
-		return p.picker.picker.View(), p.width, p.height, true
+		raw = p.picker.picker.View()
 	case p.conflictModal.Active():
-		return p.conflictModal.View(), p.width, p.height, true
+		raw = p.conflictModal.View()
 	case p.undoModal.Active():
-		return p.undoModal.View(), p.width, p.height, true
+		raw = p.undoModal.View()
 	case p.editor.Active():
-		return p.editor.View(), p.width, p.height, true
+		raw = p.editor.View()
 	case p.deleteConfirm.Active():
-		return p.deleteConfirm.View(), p.width, p.height, true
+		raw = p.deleteConfirm.View()
+	default:
+		return "", 0, 0, false
 	}
-	return "", 0, 0, false
+	// Center the modal box inside a full p.width × p.height canvas so the
+	// surrounding spaces from lipgloss.Place fully overwrite the body when
+	// components.Overlay composites in root.go (F-03 audit: stops master-list
+	// rows from bleeding around the modal frame).
+	placed := lipgloss.Place(p.width, p.height, lipgloss.Center, lipgloss.Center, raw)
+	return placed, p.width, p.height, true
 }
 
 func (p ProfilesPage) detailView() string {
@@ -505,16 +521,60 @@ func (p ProfilesPage) detailView() string {
 	if tags == "" {
 		tags = "(none)"
 	}
+	argsBlock := formatArgsBlock(pr.Args)
 	return fmt.Sprintf(
-		"%s\n%s\n\nID:      %s\nModel:   %s\nBackend: %s\nTags:    %s\nArgs:    %v",
+		"%s\n%s\n\nID:      %s\nModel:   %s\nBackend: %s\nTags:    %s\nArgs:%s",
 		theme.Title.Render(pr.Name),
 		theme.Subtitle.Render(pr.Description),
 		pr.ID,
 		pr.Model,
 		backend,
 		tags,
-		pr.Args,
+		argsBlock,
 	)
+}
+
+func formatArgsBlock(args map[string]any) string {
+	if len(args) == 0 {
+		return "    (none)"
+	}
+	keys := make([]string, 0, len(args))
+	for k := range args {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		b.WriteString("\n    --")
+		b.WriteString(k)
+		if v := formatArgValue(args[k]); v != "" {
+			b.WriteString(" ")
+			b.WriteString(v)
+		}
+	}
+	return b.String()
+}
+
+func formatArgValue(v any) string {
+	if v == nil {
+		return ""
+	}
+	switch x := v.(type) {
+	case string:
+		return x
+	case bool:
+		if x {
+			return "true"
+		}
+		return "false"
+	case float64:
+		if x == float64(int64(x)) {
+			return strconv.FormatInt(int64(x), 10)
+		}
+		return strconv.FormatFloat(x, 'f', -1, 64)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 // Hints implements ui.HintProvider — returns page-local key reminders for
@@ -533,6 +593,11 @@ func (p ProfilesPage) Hints() string {
 }
 
 func (p ProfilesPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if p.list.FilterState() == list.Filtering {
+		updated, cmd := p.list.Update(msg)
+		p.list = updated
+		return p, cmd
+	}
 	switch {
 	case key.Matches(msg, p.listKeys.New):
 		return p.startNew()
@@ -730,7 +795,10 @@ func (p ProfilesPage) launchSelected() (tea.Model, tea.Cmd) {
 }
 
 func (p ProfilesPage) IsCapturingInput() bool {
-	return p.editor.Active() || p.deleteConfirm.Active() || p.picker.active || p.conflictModal.Active() || p.undoModal.Active() || p.importPickerActive || p.killConfirm.Active()
+	if p.editor.Active() || p.deleteConfirm.Active() || p.picker.active || p.conflictModal.Active() || p.undoModal.Active() || p.importPickerActive || p.killConfirm.Active() {
+		return true
+	}
+	return p.list.FilterState() != list.Unfiltered
 }
 
 // Reload triggers a fresh load from the underlying store. Called by the

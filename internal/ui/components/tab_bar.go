@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // TabBarOptions configures the tab bar rendering.
@@ -11,8 +13,6 @@ type TabBarOptions struct {
 	Labels         []string
 	ActiveIndex    int
 	AvailableWidth int
-	ActiveStyle    lipgloss.Style
-	InactiveStyle  lipgloss.Style
 	LeftIndicator  string // default "‹"
 	RightIndicator string // default "›"
 }
@@ -51,9 +51,9 @@ func TabBar(opts TabBarOptions) string {
 	widths := make([]int, len(opts.Labels))
 	for i, label := range opts.Labels {
 		if i == opts.ActiveIndex {
-			rendered[i] = opts.ActiveStyle.Render(label)
+			rendered[i] = theme.TabActive.Render(label)
 		} else {
-			rendered[i] = opts.InactiveStyle.Render(label)
+			rendered[i] = theme.TabInactive.Render(label)
 		}
 		widths[i] = lipgloss.Width(rendered[i])
 	}

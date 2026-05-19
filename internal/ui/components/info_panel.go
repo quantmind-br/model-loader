@@ -50,7 +50,11 @@ func (p InfoPanel) Render(width int) string {
 	b.WriteString("File: " + p.Filename + "\n")
 	b.WriteString("Path: " + p.Path + "\n")
 	b.WriteString("Size: " + humanSize(p.SizeOnDisk) + "\n")
-	b.WriteString("Modified: " + p.Mtime.Format(time.RFC3339) + "\n\n")
+	if p.Mtime.IsZero() {
+		b.WriteString("Modified: —\n\n")
+	} else {
+		b.WriteString("Modified: " + p.Mtime.Format(time.RFC3339) + "\n\n")
+	}
 
 	b.WriteString(theme.Subtitle.Render("Metadata") + "\n")
 	if p.ParameterCount != "" {
