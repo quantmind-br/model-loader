@@ -5,6 +5,7 @@ package httpproxy
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -46,17 +47,72 @@ type Deps struct {
 
 // Status is the snapshot consumed by the TUI Server page and by Stop()
 // idempotency checks.
+// Explicit snake_case JSON tags lock the wire contract between the proxy
+// process (producer) and the supervisor (consumer) so field-name drift
+// cannot silently break propagation.
 type Status struct {
-	Running          bool
-	Addr             string
-	LoadedProfileID  string
-	LoadedPID        int
-	LoadedPort       int
-	LastSwapAt       time.Time
-	LastSwapDur      time.Duration
-	LastError        string
-	LastErrorAt      time.Time
-	InflightRequests int
+	Running          bool          `json:"running"`
+	Addr             string        `json:"addr"`
+	LoadedProfileID  string        `json:"loaded_profile_id"`
+	LoadedPID        int           `json:"loaded_pid,omitempty"`
+	LoadedPort       int           `json:"loaded_port,omitempty"`
+	LastSwapAt       time.Time     `json:"last_swap_at,omitempty"`
+	LastSwapDur      time.Duration `json:"last_swap_dur,omitempty"`
+	LastError        string        `json:"last_error,omitempty"`
+	LastErrorAt      time.Time     `json:"last_error_at,omitempty"`
+	InflightRequests int           `json:"inflight_requests"`
+}
+
+// UnmarshalJSON supports both snake_case keys (current wire format) and
+// PascalCase keys (legacy wire format from older proxy binaries). Go's
+// encoding/json only falls back to case-insensitive matching when a struct
+// field has NO json tag; once a tag is present the key must match exactly.
+// Without this shim a new TUI cannot decode Status JSON produced by an
+// old proxy that predates the snake_case tags.
+func (st *Status) UnmarshalJSON(data []byte) error {
+	type Alias Status // prevent infinite recursion
+	var aux struct {
+		*Alias
+		// Old PascalCase keys emitted by proxy binaries predating snake_case tags.
+		LoadedProfileIDOld string        `json:"LoadedProfileID"`
+		LoadedPIDOld       int           `json:"LoadedPID"`
+		LoadedPortOld      int           `json:"LoadedPort"`
+		LastSwapAtOld      time.Time     `json:"LastSwapAt"`
+		LastSwapDurOld     time.Duration `json:"LastSwapDur"`
+		LastErrorOld       string        `json:"LastError"`
+		LastErrorAtOld     time.Time     `json:"LastErrorAt"`
+		InflightRequestsOld int          `json:"InflightRequests"`
+	}
+	aux.Alias = (*Alias)(st)
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	// Fallback: only copy old values when the new key was absent (zero value).
+	if st.LoadedProfileID == "" {
+		st.LoadedProfileID = aux.LoadedProfileIDOld
+	}
+	if st.LoadedPID == 0 {
+		st.LoadedPID = aux.LoadedPIDOld
+	}
+	if st.LoadedPort == 0 {
+		st.LoadedPort = aux.LoadedPortOld
+	}
+	if st.LastSwapAt.IsZero() {
+		st.LastSwapAt = aux.LastSwapAtOld
+	}
+	if st.LastSwapDur == 0 {
+		st.LastSwapDur = aux.LastSwapDurOld
+	}
+	if st.LastError == "" {
+		st.LastError = aux.LastErrorOld
+	}
+	if st.LastErrorAt.IsZero() {
+		st.LastErrorAt = aux.LastErrorAtOld
+	}
+	if st.InflightRequests == 0 {
+		st.InflightRequests = aux.InflightRequestsOld
+	}
+	return nil
 }
 
 // loadedBackend captures the proxy's view of the currently-running backend.

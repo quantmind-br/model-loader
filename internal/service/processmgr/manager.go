@@ -194,6 +194,16 @@ func (m *fsManager) Kill(pid int) error {
 func (m *fsManager) List() []domain.RunningInstance {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// Merge newly-launched instances from the on-disk registry. The HTTP
+	// proxy runs in a separate OS process with its own fsManager; both
+	// share the same registry file. Without this refresh the TUI never
+	// discovers proxy-spawned backends after boot.
+	loaded, _ := loadRegistry(m.registryPath)
+	for _, ri := range loaded {
+		if _, ok := m.tracked[ri.PID]; !ok {
+			m.tracked[ri.PID] = ri
+		}
+	}
 	return snapshotLocked(m.tracked)
 }
 

@@ -154,14 +154,23 @@ func (p *ServerPage) SetBackendResolver(r backendResolverIface) *ServerPage {
 	return p
 }
 
+const (
+	colPID       = 8
+	colPort      = 6
+	colProfile   = 18
+	colUptime    = 10
+	colVRAM      = 12
+	colTokensPerSec = 10
+)
+
 func NewServerPage(pm procMgrIface, mm monitor.Manager, ps profileStoreIface) *ServerPage {
 	cols := []table.Column{
-		{Title: "PID", Width: 8},
-		{Title: "Port", Width: 6},
-		{Title: "Profile", Width: 18},
-		{Title: "Uptime", Width: 10},
-		{Title: "VRAM", Width: 12},
-		{Title: "Tokens/s", Width: 10},
+		{Title: "PID", Width: colPID},
+		{Title: "Port", Width: colPort},
+		{Title: "Profile", Width: colProfile},
+		{Title: "Uptime", Width: colUptime},
+		{Title: "VRAM", Width: colVRAM},
+		{Title: "Tokens/s", Width: colTokensPerSec},
 	}
 	t := table.New(table.WithColumns(cols), table.WithFocused(true), table.WithHeight(8))
 	return &ServerPage{
@@ -722,7 +731,7 @@ func (p *ServerPage) reapDeadSubscriptions(insts []domain.RunningInstance) {
 func (p *ServerPage) View() string {
 	var body string
 	if p.historyChart != nil {
-		body = p.renderTable() + "\n\n" + p.historyChart.View()
+		body = p.renderTable() + "\n" + p.historyChart.View()
 	} else if len(p.tbl.Rows()) == 0 {
 		header := theme.Title.Render("Running instances")
 		if p.flash.Message() != "" {
@@ -730,7 +739,7 @@ func (p *ServerPage) View() string {
 		}
 		body = header + "\n" + components.EmptyState("No instances running", "Switch to Profiles [1] to start one")
 	} else {
-		body = p.renderTable() + "\n\n" + p.renderStatusLine() + "\n" + p.renderSubViewBody()
+		body = p.renderTable() + "\n" + p.renderStatusLine() + "\n" + p.renderSubViewBody()
 	}
 
 	if p.proxy != nil {

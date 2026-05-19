@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 )
@@ -198,14 +199,14 @@ func TestProxyPanel_ViewShowsLastSwapAndInflight(t *testing.T) {
 	}}
 	p := NewProxyPanel(f)
 	v := p.View()
-	if !strings.Contains(v, "Last swap") {
-		t.Errorf("View missing Last swap:\n%s", v)
+	if !strings.Contains(v, "swap ") {
+		t.Errorf("View missing swap line:\n%s", v)
 	}
-	if !strings.Contains(v, "Inflight: 3") {
-		t.Errorf("View missing Inflight:\n%s", v)
+	if !strings.Contains(v, "inflight=3") {
+		t.Errorf("View missing inflight:\n%s", v)
 	}
 	if !strings.Contains(v, "some error") {
-		t.Errorf("View missing Last error:\n%s", v)
+		t.Errorf("View missing error:\n%s", v)
 	}
 }
 
@@ -281,5 +282,61 @@ func TestProxyPanel_NilProxyViewIsEmpty(t *testing.T) {
 	p := NewProxyPanel(nil)
 	if v := p.View(); v != "" {
 		t.Errorf("nil proxy View() = %q, want empty", v)
+	}
+}
+
+func TestProxyPanel_HeightInvariant(t *testing.T) {
+	cases := []struct {
+		name   string
+		status httpproxy.Status
+		want   int
+	}{
+		{"stopped", httpproxy.Status{Running: false}, 1},
+		{"running no extras", httpproxy.Status{Running: true, Addr: "a", LoadedProfileID: "p"}, 2},
+		{"running swap+inflight", httpproxy.Status{Running: true, Addr: "a", LoadedProfileID: "p", LastSwapAt: time.Now(), LastSwapDur: 1 * time.Millisecond, InflightRequests: 1}, 3},
+		{"running swap+inflight+error", httpproxy.Status{Running: true, Addr: "a", LoadedProfileID: "p", LastSwapAt: time.Now(), LastSwapDur: 1 * time.Millisecond, InflightRequests: 1, LastError: "e"}, 4},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := NewProxyPanel(&fakeHTTPProxy{status: c.status})
+			p.SetWidth(80)
+			lines := strings.Split(strings.TrimRight(p.View(), "\n"), "\n")
+			var nonEmpty int
+			for _, l := range lines {
+				if strings.TrimSpace(l) != "" {
+					nonEmpty++
+				}
+			}
+			if nonEmpty > c.want {
+				t.Errorf("non-empty lines = %d, want <= %d; view:\n%s", nonEmpty, c.want, p.View())
+			}
+		})
+	}
+}
+
+func TestProxyPanel_WidthInvariant(t *testing.T) {
+	cases := []struct {
+		name   string
+		status httpproxy.Status
+	}{
+		{"stopped", httpproxy.Status{Running: false}},
+		{"running no extras", httpproxy.Status{Running: true, Addr: "a", LoadedProfileID: "p"}},
+		{"running swap+inflight", httpproxy.Status{Running: true, Addr: "a", LoadedProfileID: "p", LastSwapAt: time.Now(), LastSwapDur: 1 * time.Millisecond, InflightRequests: 1}},
+		{"running swap+inflight+error", httpproxy.Status{Running: true, Addr: "a", LoadedProfileID: "p", LastSwapAt: time.Now(), LastSwapDur: 1 * time.Millisecond, InflightRequests: 1, LastError: "very long error message that might overflow the terminal width"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := NewProxyPanel(&fakeHTTPProxy{status: c.status})
+			p.SetWidth(80)
+			lines := strings.Split(p.View(), "\n")
+			for _, l := range lines {
+				if strings.TrimSpace(l) == "" {
+					continue
+				}
+				if w := lipgloss.Width(l); w > 80 {
+					t.Errorf("line width = %d, want <= 80: %q", w, l)
+				}
+			}
+		})
 	}
 }

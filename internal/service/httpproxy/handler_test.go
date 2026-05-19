@@ -1,6 +1,8 @@
 package httpproxy
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -242,5 +244,97 @@ func TestHandleStatus_RejectsNonGET(t *testing.T) {
 	}
 	if rr.Header().Get("Allow") != "GET" {
 		t.Errorf("Allow = %q, want GET", rr.Header().Get("Allow"))
+	}
+}
+
+// TestHandleStatus_PropagateLoadedProfileID is a regression test for the
+// serialization layer. Before the fix httpproxy.Status had no JSON tags, so
+// the wire field name was Go-default PascalCase. The test would have failed
+// because it asserts the snake_case key that the supervisor decoder now
+// expects.
+func TestHandleStatus_PropagateLoadedProfileID(t *testing.T) {
+	store := newStubStore(makeProfile("alpha", 9101))
+	mgr := newStubManager()
+	srv := newTestServer(t, store, mgr)
+
+	if err := srv.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer srv.Stop(context.Background())
+
+	addr := srv.Status().Addr
+	if addr == "" {
+		t.Fatal("server did not bind")
+	}
+
+	triggerURL := "http://" + addr + "/v1/chat/completions?model=alpha"
+	client := &http.Client{Timeout: 2 * time.Second}
+	_, _ = client.Post(triggerURL, "application/json", nil)
+
+	statusURL := "http://" + addr + "/_status"
+	resp, err := client.Get(statusURL)
+	if err != nil {
+		t.Fatalf("status probe: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status code = %d, want 200", resp.StatusCode)
+	}
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+
+	if !bytes.Contains(raw, []byte(`"loaded_profile_id"`)) {
+		t.Fatalf("JSON missing loaded_profile_id; body=%s", raw)
+	}
+
+	st := Status{Running: true, Addr: addr}
+	if err := json.Unmarshal(raw, &st); err != nil {
+		t.Fatalf("decode like supervisor: %v", err)
+	}
+	if st.LoadedProfileID != "alpha" {
+		t.Errorf("LoadedProfileID = %q, want alpha", st.LoadedProfileID)
+	}
+}
+
+func TestStatus_UnmarshalJSON_BackwardCompatibility(t *testing.T) {
+	oldFormat := `{
+		"Running": true,
+		"Addr": "127.0.0.1:4321",
+		"LoadedProfileID": "hunyuan-mt-7b",
+		"LoadedPID": 61816,
+		"LoadedPort": 4329,
+		"InflightRequests": 3,
+		"LastError": "backend timeout"
+	}`
+	var st Status
+	if err := json.Unmarshal([]byte(oldFormat), &st); err != nil {
+		t.Fatalf("unmarshal old format: %v", err)
+	}
+	if st.LoadedProfileID != "hunyuan-mt-7b" {
+		t.Errorf("LoadedProfileID = %q, want hunyuan-mt-7b", st.LoadedProfileID)
+	}
+	if st.LoadedPID != 61816 {
+		t.Errorf("LoadedPID = %d, want 61816", st.LoadedPID)
+	}
+	if st.LoadedPort != 4329 {
+		t.Errorf("LoadedPort = %d, want 4329", st.LoadedPort)
+	}
+	if st.InflightRequests != 3 {
+		t.Errorf("InflightRequests = %d, want 3", st.InflightRequests)
+	}
+	if st.LastError != "backend timeout" {
+		t.Errorf("LastError = %q, want 'backend timeout'", st.LastError)
+	}
+
+	mixed := `{"loaded_profile_id":"new","LoadedProfileID":"old"}`
+	var st2 Status
+	if err := json.Unmarshal([]byte(mixed), &st2); err != nil {
+		t.Fatalf("unmarshal mixed format: %v", err)
+	}
+	if st2.LoadedProfileID != "new" {
+		t.Errorf("LoadedProfileID = %q, want new (snake_case wins)", st2.LoadedProfileID)
 	}
 }

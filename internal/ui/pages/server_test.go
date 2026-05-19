@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -10,8 +11,10 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
@@ -66,6 +69,14 @@ func (fakeMonMgr) Subscribe(pid, port int, logPath string) (<-chan monitor.Monit
 	return ch, func() error { close(ch); return nil }, nil
 }
 
+type fakeProxyForPages struct {
+	status httpproxy.Status
+}
+
+func (f *fakeProxyForPages) Start(context.Context) error { return nil }
+func (f *fakeProxyForPages) Stop(context.Context) error  { return nil }
+func (f *fakeProxyForPages) Status() httpproxy.Status    { return f.status }
+
 func TestServerPage_RendersInstanceRows(t *testing.T) {
 	pm := &fakeProcMgr{insts: []domain.RunningInstance{
 		{PID: 1234, Port: 8080, ProfileID: "p1", LogPath: "/tmp/x.log"},
@@ -83,6 +94,65 @@ func TestServerPage_RendersInstanceRows(t *testing.T) {
 	}
 	if !strings.Contains(view, "5678") {
 		t.Fatalf("view missing pid 5678:\n%s", view)
+	}
+}
+
+func TestServerPage_TableFits80Columns(t *testing.T) {
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{
+		{PID: 12345, Port: 8080, ProfileID: "very-long-profile-id-123", LogPath: "/tmp/x.log"},
+	}}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil)
+	p.SetSize(80, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	for _, line := range strings.Split(p.renderTable(), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if w := lipgloss.Width(line); w > 80 {
+			t.Errorf("table line width = %d, want <= 80: %q", w, line)
+		}
+	}
+}
+
+func TestServerPage_FullViewFits80Columns(t *testing.T) {
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{
+		{PID: 12345, Port: 8080, ProfileID: "very-long-profile-id-123", LogPath: "/tmp/x.log"},
+	}}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil)
+	p.SetSize(80, 24)
+	p.WithProxy(&fakeProxyForPages{
+		status: httpproxy.Status{Running: true, Addr: "http://127.0.0.1:8080", LoadedProfileID: "qwen", LastSwapAt: time.Now(), LastSwapDur: 140 * time.Millisecond, InflightRequests: 1, LastError: "backend timeout"},
+	})
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	for _, line := range strings.Split(p.View(), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if w := lipgloss.Width(line); w > 80 {
+			t.Errorf("full view line width = %d, want <= 80: %q", w, line)
+		}
+	}
+}
+
+func TestServerPage_NoGapBetweenTableAndSubTabs(t *testing.T) {
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{
+		{PID: 1234, Port: 8080, ProfileID: "p1", LogPath: "/tmp/x.log"},
+	}}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil)
+	p.SetSize(120, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	view := p.View()
+	tablePart := p.renderTable()
+	tabsPart := p.renderStatusLine()
+
+	if strings.Contains(view, tablePart+"\n\n"+tabsPart) {
+		t.Fatalf("view contains blank line between table and sub-tabs:\n%s", view)
+	}
+	if !strings.Contains(view, tablePart+"\n"+tabsPart) {
+		t.Fatalf("view missing expected table→sub-tabs transition:\n%s", view)
 	}
 }
 

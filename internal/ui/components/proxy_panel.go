@@ -3,10 +3,11 @@ package components
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/mattn/go-runewidth"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
@@ -138,62 +139,78 @@ func (p *ProxyPanel) stopCmd() tea.Cmd {
 	}
 }
 
-// View renders the compact panel (1–3 lines). Returns "" when srv is nil.
+// View renders the proxy status block as 2–5 lines, each fitting within
+// p.width columns. Lines are emitted only when the corresponding state is
+// meaningful; the panel never reserves vertical space for absent data.
 func (p *ProxyPanel) View() string {
 	if p.srv == nil {
 		return ""
 	}
 
-	var b strings.Builder
+	w := p.width
+	if w == 0 {
+		w = 80
+	}
+	trunc := lipgloss.NewStyle().MaxWidth(w)
 
-	// Line 1: status + addr + profile
-	statusLine := theme.Error.Render("○ STOPPED")
+	var lines []string
+
+	var statusStr string
 	if p.status.Running {
-		statusLine = theme.OK.Render("● RUNNING")
+		statusStr = theme.OK.Render("● RUNNING")
+	} else {
+		statusStr = theme.Error.Render("○ STOPPED")
 	}
 	addr := p.status.Addr
 	if addr == "" {
 		addr = theme.Subtitle.Render("—")
 	}
-	profile := p.status.LoadedProfileID
-	if profile == "" {
-		profile = theme.Subtitle.Render("—")
-	}
-	b.WriteString(fmt.Sprintf("HTTP Proxy: %s  %s  profile=%s", statusLine, addr, profile))
-	b.WriteString("\n")
+	line1 := lipgloss.JoinHorizontal(lipgloss.Left, statusStr, "   ", addr)
+	lines = append(lines, trunc.Render(line1))
 
-	// Line 2: last swap, inflight, last error (conditional)
-	var line2Parts []string
+	if p.status.Running {
+		profileLabel := theme.Subtitle.Render("profile=")
+		profileVal := lipgloss.NewStyle().Bold(true).Render(p.status.LoadedProfileID)
+		if p.status.LoadedProfileID == "" {
+			profileVal = theme.Subtitle.Render("—")
+		}
+		profileBlock := lipgloss.JoinHorizontal(lipgloss.Left, profileLabel, profileVal)
+
+		var parts []string
+		parts = append(parts, profileBlock)
+		if p.status.InflightRequests > 0 {
+			parts = append(parts, "  ", fmt.Sprintf("inflight=%d", p.status.InflightRequests))
+		}
+		line2 := lipgloss.JoinHorizontal(lipgloss.Left, parts...)
+		lines = append(lines, trunc.Render(line2))
+	}
+
 	if !p.status.LastSwapAt.IsZero() {
-		line2Parts = append(line2Parts, fmt.Sprintf("Last swap: %s ago (%dms)",
+		line3 := theme.Subtitle.Render(fmt.Sprintf("swap %s ago (%dms)",
 			truncateDuration(time.Since(p.status.LastSwapAt)),
 			p.status.LastSwapDur.Milliseconds()))
-	}
-	if p.status.InflightRequests > 0 {
-		line2Parts = append(line2Parts, fmt.Sprintf("Inflight: %d", p.status.InflightRequests))
-	}
-	if p.status.LastError != "" {
-		line2Parts = append(line2Parts, theme.Error.Render("⚠ Last error: "+p.status.LastError))
-	}
-	if len(line2Parts) > 0 {
-		b.WriteString(strings.Join(line2Parts, "   "))
-		b.WriteString("\n")
+		lines = append(lines, trunc.Render(line3))
 	}
 
-	// Line 3: pending or flash
+	if p.status.LastError != "" {
+		line4 := theme.Error.Render("⚠ " + p.status.LastError)
+		if lipgloss.Width(line4) > w {
+			line4 = runewidth.Truncate(line4, w-1, "…")
+		}
+		lines = append(lines, line4)
+	}
+
 	if p.pending != pendingNone {
 		text := "Starting…"
 		if p.pending == pendingStop {
 			text = "Stopping…"
 		}
-		b.WriteString(theme.Subtitle.Render(text))
-		b.WriteString("\n")
+		lines = append(lines, trunc.Render(theme.Subtitle.Render(text)))
 	} else if v := p.flash.View(); v != "" {
-		b.WriteString(v)
-		b.WriteString("\n")
+		lines = append(lines, trunc.Render(v))
 	}
 
-	return b.String()
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
 // SetWidth resizes the panel for proper truncation/alignment.
