@@ -389,7 +389,7 @@ func (p BackendsPage) Hints() string {
 	case p.deleteConfirm.Active():
 		return "[←→] choose  [enter] confirm  [esc] cancel"
 	default:
-		hints := "[enter/e] edit  [n] new  [x] del  [D] default  [R] refresh schema"
+		hints := "[e] edit  [n] new  [x] del  [D] default  [R] refresh"
 		if p.prober != nil {
 			hints += "  [P] probe"
 		}

@@ -123,7 +123,7 @@ func TestBackendsPage_HintsVaryByMode(t *testing.T) {
 	addBackendForPage(t, mgr, "Hint Backend", "/bin/echo")
 	p = loadBackendsPage(t, p)
 
-	if got := p.Hints(); !strings.Contains(got, "[enter/e] edit") || !strings.Contains(got, "[R] refresh schema") {
+	if got := p.Hints(); !strings.Contains(got, "[e] edit") || !strings.Contains(got, "[R] refresh") {
 		t.Fatalf("list hints = %q", got)
 	}
 	model, _ := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})

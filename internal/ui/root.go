@@ -460,7 +460,7 @@ func (m RootModel) View() string {
 			return components.Modal("Keybindings", body, m.width, m.height)
 		}
 		m = m.ensureHelpViewport()
-		return components.Modal("Keybindings (↑/↓/PgUp/PgDn/k/j/g/G to scroll · ? or esc to close)", m.helpViewport.View(), m.width, m.height)
+		return components.Modal("Keybindings (↑/↓/PgUp/PgDn/k/j/g/G to scroll · ? to toggle · esc to close)", m.helpViewport.View(), m.width, m.height)
 	}
 	header := m.renderTabs()
 	status := m.status.Render(m.width)

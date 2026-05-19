@@ -28,7 +28,7 @@ The knowledge graph identified 208 functional communities. The top areas by symb
 | **Profile Store** | 36 | 0.85 | Profile persistence (filesystem-based CRUD, export, import) |
 | **Download Manager** | 31 | 0.92 | Queued downloads with progress events, HF file downloader |
 | **UI Pages — Backends** | 30 | 0.80 | Backends tab (catalog management, probe events) |
-| **UI Pages — Launcher/Models** | 30 | 0.76 | Launcher tab + Models tab (HF search, download queue) |
+| **UI Pages — Profiles/Models** | 30 | 0.76 | Profiles tab + Models tab (HF search, download queue) |
 | **UI Components — Proxy/Profile** | 25 | 0.89 | Proxy panel, profile picker, status bar |
 | **UI Components — Modal/Help** | 25 | 0.98 | Help overlay, modal dialogs, flash messages |
 | **HTTP Proxy** | 21 | 0.95 | OpenAI-shaped reverse proxy, handler, server |

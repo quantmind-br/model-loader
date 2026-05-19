@@ -42,22 +42,22 @@ make install
    ```
    On first run, a default `config.toml` is created at `~/.config/model-loader/config.toml`.
 
-2. **Launch** (Tab 1 — Launcher):
+2. **Launch** (Tab 1 — Profiles):
    - Select a profile from the list
    - Toggle `b` for background mode (default) or foreground
    - Press `Enter` to launch
 
-3. **Create a profile** (Tab 2 — Profiles):
+3. **Create a profile** (Tab 1 — Profiles):
    - Press `n` to create a new profile
    - Fill in the model path, name, and parameters (use `Tab` / `Shift+Tab` to move between fields)
    - Press `Enter` on the **Save** button to persist the profile (or `Esc` to cancel)
 
-4. **Monitor** (Tab 3 — Monitor):
+4. **Server** (Tab 2 — Server):
    - Select a running instance to view logs, slots, GPU stats, and metrics
 
-5. **Browse Models** (Tab 4 — Models):
+5. **Browse Models** (Tab 3 — Models):
    - Browse `.gguf` files found in configured search paths
-   - Filter and copy paths to clipboard
+   - Filter and search Hugging Face
 
 ## Keyboard Shortcuts
 
@@ -65,11 +65,10 @@ make install
 
 | Key | Action |
 |-----|--------|
-| `1` | Launcher tab |
-| `2` | Profiles tab |
-| `3` | Monitor tab |
-| `4` | Models tab |
-| `5` | Backends tab |
+| `1` | Profiles tab |
+| `2` | Server tab |
+| `3` | Models tab |
+| `4` | Backends tab |
 | `Tab` / `Shift+Tab` | Next / previous tab |
 | `q` | Quit |
 | `?` | Show help |
@@ -78,40 +77,44 @@ make install
 
 | Key | Action |
 |-----|--------|
+| `Enter` | Launch selected profile |
+| `E` | Edit selected profile |
 | `n` | New profile |
-| `Enter` | Edit selected profile / submit **Save** button in editor |
-| `Esc` | Cancel editing (prompts to discard unsaved changes) |
 | `d` | Duplicate profile |
 | `x` | Delete profile |
-| `L` | Launch selected profile |
-| `/` | Filter profiles |
-| `Ctrl+B` | Add new backend to catalog |
-| `Ctrl+T` | Toggle Essentials / Advanced sub-tab (while editing) |
-
-### Launcher Tab
-
-| Key | Action |
-|-----|--------|
-| `Enter` | Launch selected profile |
 | `b` | Toggle background / foreground mode |
-| `k` | Kill running instance |
+| `k` | Kill most recent launched instance |
+| `r` | Refresh profile list |
+| `p` | Pin selected profile |
+| `I` | Import profiles from JSON bundle |
+| `u` | Undo last import |
+| `e` | Export all profiles to JSON bundle |
+| `Ctrl+T` | Toggle Essentials / Advanced sub-tab (while editing) |
+| `/` | Filter profiles |
 
-### Monitor Tab
+### Server Tab
 
 | Key | Action |
 |-----|--------|
-| `Enter` | Subscribe to selected instance |
-| `u` | Unsubscribe from instance |
-| `k` | Kill instance |
-| `r` | Restart instance |
-| `l` / `s` / `m` | Switch sub-view: Logs / Slots / Metrics |
+| `v` | Cycle Logs / Slots / Metrics / History sub-views |
+| `Space` | Pause / resume log scroll |
+| `k` | Kill selected instance |
+| `r` | Restart selected instance |
+| `H` | Open history chart |
+| `1` / `2` / `3` / `4` | History chart window: 1h / 6h / 24h / 7d |
+| `s` | Start HTTP proxy listener |
+| `x` | Stop HTTP proxy listener |
 
 ### Models Tab
 
 | Key | Action |
 |-----|--------|
+| `R` | Rescan all configured paths |
 | `/` | Filter models |
-| `c` | Copy model path to clipboard |
+| `Enter` | Actions: use in new / existing profile or reveal path |
+| `s` | Search Hugging Face |
+| `i` | Show model info panel |
+| `→` / `g` | Navigate to sizing for this model |
 
 ## Configuration
 
@@ -128,7 +131,7 @@ state_dir = "~/.local/state/model-loader"
 search_paths = ["~/.lmstudio/models", "~/models"]
 
 [ui]
-default_tab = "launcher"
+default_tab = "profiles"
 ```
 
 See [docs/config.md](docs/config.md) for detailed configuration options.
@@ -160,11 +163,11 @@ See [AGENTS.md](AGENTS.md) for project conventions and architecture notes.
 
 ## Troubleshooting
 
-- **`llama-server` not found** — Ensure `llama-server` is compiled and available in your `PATH`. Use `Ctrl+B` in the Profiles tab to register a custom binary location as a backend
+- **`llama-server` not found** — Ensure `llama-server` is compiled and available in your `PATH`. Go to the Backends tab (`4`) and press `n` to register a custom binary location as a backend
 - **Port in use** — Edit the profile and change the port number
 - **Model not found** — Verify the model path in the profile or update `search_paths` in `config.toml`
 - **Instance not recovering** — Check that `instances.json` exists in the state directory
-- **Backend schema missing** — Each backend needs a validation schema. Add a backend via `Ctrl+B` to auto-generate one from `--help`, or place a manually edited schema in the backends directory
+- **Backend schema missing** — Each backend needs a validation schema. Add a backend via the Backends tab (`n`) to auto-generate one from `--help`, or place a manually edited schema in the backends directory
 
 For more details, see [docs/troubleshooting.md](docs/troubleshooting.md).
 

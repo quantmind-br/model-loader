@@ -12,7 +12,7 @@ Common issues and their solutions.
   ```bash
   which llama-server
   ```
-- If installed in a custom location, register it as a backend in the TUI (`Ctrl+B` in the Profiles tab) or add it to your `PATH`
+- If installed in a custom location, register it as a backend in the TUI (Backends tab `4`, press `n`) or add it to your `PATH`
 
 ## Port already in use
 
@@ -20,8 +20,8 @@ Common issues and their solutions.
 
 **Solution:**
 - Edit the profile and change the `port` argument
-- Or kill the existing instance from the Monitor tab (`k`)
-- Use the Launcher tab to check if an instance is already running on that port
+- Or kill the existing instance from the Server tab (`k`)
+- Use the Profiles tab to check if an instance is already running on that port
 
 ## Model file not found
 
@@ -38,12 +38,12 @@ Common issues and their solutions.
 
 ## Background instance not recovered
 
-**Symptom:** A background instance launched before closing the TUI does not appear in the Monitor tab on restart.
+**Symptom:** A background instance launched before closing the TUI does not appear in the Server tab on restart.
 
 **Solution:**
 - Check that `instances.json` exists in your state directory (`~/.local/state/model-loader/`)
 - Verify the process is still running: `ps aux | grep llama-server`
-- If the process crashed, it will be marked with a crash indicator; clear it from the Monitor tab
+- If the process crashed, it will be marked with a crash indicator; clear it from the Server tab
 
 ## Foreground instance already running
 
@@ -51,8 +51,8 @@ Common issues and their solutions.
 
 **Solution:**
 - Only one foreground instance is allowed at a time
-- Switch to background mode in the Launcher tab (`b`) before launching
-- Or kill the existing foreground instance from the Monitor tab
+- Switch to background mode in the Profiles tab (`b`) before launching
+- Or kill the existing foreground instance from the Server tab
 
 ## Health check timeout
 
@@ -60,7 +60,7 @@ Common issues and their solutions.
 
 **Solution:**
 - The instance may be taking longer than expected to load the model
-- Check the logs in the Monitor tab for errors
+- Check the logs in the Server tab for errors
 - Verify the model file is valid and compatible with your llama-server version
 - Large models may require a longer timeout; this is not currently configurable
 
@@ -79,13 +79,13 @@ Common issues and their solutions.
 
 **Solution:**
 - Validation uses the schema of the selected backend. Each backend has its own validation schema
-- Schemas are auto-generated when you add a backend via `Ctrl+B` (by running the binary's `--help`)
+- Schemas are auto-generated when you add a backend via the Backends tab (`n`) (by running the binary's `--help`)
 - If a schema is missing or outdated, delete and re-add the backend, or manually edit the schema JSON in the backends directory
 - Use the Advanced tab to enter flags not available in the Essentials tab
 
 ## Clipboard not working
 
-**Symptom:** Copying model path (`c` in Models tab) does nothing.
+**Symptom:** Copying model path from the Models tab does nothing.
 
 **Solution:**
 - The clipboard integration requires a display server (X11 or Wayland)
