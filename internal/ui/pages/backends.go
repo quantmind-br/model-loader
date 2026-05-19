@@ -399,21 +399,23 @@ func (p BackendsPage) Hints() string {
 }
 
 func (p BackendsPage) IsCapturingInput() bool {
-	if p.form != nil || p.refreshConfirm.Active() || p.deleteConfirm.Active() {
-		return true
-	}
-	return p.list.FilterState() != list.Unfiltered
+	return CaptureAny(
+		func() bool { return p.form != nil },
+		func() bool { return p.refreshConfirm.Active() },
+		func() bool { return p.deleteConfirm.Active() },
+		func() bool { return p.list.FilterState() != list.Unfiltered },
+	)
 }
 
 func (p BackendsPage) withFlash(msg string) (BackendsPage, tea.Cmd) {
 	var cmd tea.Cmd
-	p.flash, cmd = p.flash.Set(msg)
+	p.flash, cmd = flashSuccess(p.flash, msg)
 	return p, cmd
 }
 
 func (p BackendsPage) withFlashError(msg string) (BackendsPage, tea.Cmd) {
 	var cmd tea.Cmd
-	p.flash, cmd = p.flash.SetError(msg)
+	p.flash, cmd = flashError(p.flash, msg)
 	return p, cmd
 }
 

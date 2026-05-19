@@ -365,41 +365,149 @@ func (e Editor) nextSubTab() subTab {
 	return (e.subTab + 1) % max
 }
 
+func (e Editor) handleCellEscape() Editor {
+	e.advancedEditing = false
+	e.advancedEditFlag = ""
+	e.advancedEditVal = ""
+	e.envEditing = false
+	e.envEditKey = ""
+	e.envEditValue = ""
+	e.envEditIndex = -1
+	e.envEditField = envFieldKey
+	e.envSubmitError = ""
+	return e
+}
+
+func (e Editor) moveTableCursor(tbl table.Model, msg tea.Msg) (table.Model, tea.Cmd) {
+	t, cmd := tbl.Update(msg)
+	if rows := t.Rows(); len(rows) > 0 {
+		c := t.Cursor()
+		if c < 0 {
+			t.SetCursor(0)
+		} else if c >= len(rows) {
+			t.SetCursor(len(rows) - 1)
+		}
+	}
+	return t, cmd
+}
+
+func (e Editor) saveAdvancedEdit() (Editor, tea.Cmd) {
+	if e.draft != nil {
+		if e.draft.Args == nil {
+			e.draft.Args = map[string]any{}
+		}
+		if e.advancedEditVal == "" {
+			delete(e.draft.Args, e.advancedEditFlag)
+		} else {
+			val, err := parseFlagValue(e.advancedEditVal, e.schema, e.advancedEditFlag)
+			if err != nil {
+				e.submitError = fmt.Sprintf("Invalid value for --%s: %s", e.advancedEditFlag, err)
+				return e, nil
+			}
+			e.draft.Args[e.advancedEditFlag] = val
+		}
+		tbl := newAdvancedTable(e.schema, e.draft.Args, 100, 12)
+		e.advanced = tbl
+		e.advancedAll = tbl.Rows()
+		if e.advancedFilter != "" {
+			e.advanced.SetRows(filterRows(e.advancedAll, e.advancedFilter))
+		}
+	}
+	e.advancedEditing = false
+	e.advancedEditFlag = ""
+	e.advancedEditVal = ""
+	e.submitError = ""
+	return e, nil
+}
+
+func (e Editor) startAdvancedEdit() (Editor, tea.Cmd) {
+	if e.draft == nil {
+		return e, nil
+	}
+	row := e.advanced.SelectedRow()
+	if row == nil || len(row) == 0 {
+		return e, nil
+	}
+	flag := string(row[0])
+	e.advancedEditing = true
+	e.advancedEditFlag = flag
+	e.advancedEditVal = ArgString(e.draft.Args[flag])
+	return e, nil
+}
+
+func (e Editor) saveEnvEdit() (Editor, tea.Cmd) {
+	if e.draft == nil {
+		return e, nil
+	}
+	key := strings.TrimSpace(e.envEditKey)
+	if !envKeyRE.MatchString(key) {
+		e.envSubmitError = fmt.Sprintf("Invalid env key %q: must match [A-Za-z_][A-Za-z0-9_]*", e.envEditKey)
+		return e, nil
+	}
+	for i, ev := range e.draft.Env {
+		if ev.Key == key && i != e.envEditIndex {
+			e.envSubmitError = fmt.Sprintf("Duplicate env key %q", key)
+			return e, nil
+		}
+	}
+	nev := domain.EnvVar{Key: key, Value: e.envEditValue}
+	if e.envEditIndex < 0 {
+		e.draft.Env = append(e.draft.Env, nev)
+	} else if e.envEditIndex < len(e.draft.Env) {
+		e.draft.Env[e.envEditIndex] = nev
+	}
+	e.envTable = newEnvTable(e.draft.Env)
+	e.envEditing = false
+	e.envEditKey = ""
+	e.envEditValue = ""
+	e.envEditIndex = -1
+	e.envEditField = envFieldKey
+	e.envSubmitError = ""
+	return e, nil
+}
+
+func (e Editor) startEnvEdit() (Editor, tea.Cmd) {
+	if e.draft == nil || len(e.draft.Env) == 0 {
+		return e, nil
+	}
+	row := e.envTable.SelectedRow()
+	if len(row) < 2 {
+		return e, nil
+	}
+	idx := e.envTable.Cursor()
+	if idx < 0 || idx >= len(e.draft.Env) {
+		return e, nil
+	}
+	e.envEditing = true
+	e.envEditIndex = idx
+	e.envEditKey = e.draft.Env[idx].Key
+	e.envEditValue = e.draft.Env[idx].Value
+	e.envEditField = envFieldValue
+	e.envSubmitError = ""
+	return e, nil
+}
+
+func (e Editor) deleteEnvRow() (Editor, tea.Cmd) {
+	if e.draft == nil || len(e.draft.Env) == 0 {
+		return e, nil
+	}
+	idx := e.envTable.Cursor()
+	if idx < 0 || idx >= len(e.draft.Env) {
+		return e, nil
+	}
+	e.draft.Env = append(e.draft.Env[:idx], e.draft.Env[idx+1:]...)
+	e.envTable = newEnvTable(e.draft.Env)
+	e.envSubmitError = ""
+	return e, nil
+}
+
 func (e Editor) handleAdvancedKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 	if e.advancedEditing {
 		switch msg.String() {
 		case "esc":
-			e.advancedEditing = false
-			e.advancedEditFlag = ""
-			e.advancedEditVal = ""
-			return e, nil
+			return e.handleCellEscape(), nil
 		case "enter":
-			if e.draft != nil {
-				if e.draft.Args == nil {
-					e.draft.Args = map[string]any{}
-				}
-				if e.advancedEditVal == "" {
-					delete(e.draft.Args, e.advancedEditFlag)
-				} else {
-					val, err := parseFlagValue(e.advancedEditVal, e.schema, e.advancedEditFlag)
-					if err != nil {
-						e.submitError = fmt.Sprintf("Invalid value for --%s: %s", e.advancedEditFlag, err)
-						return e, nil
-					}
-					e.draft.Args[e.advancedEditFlag] = val
-				}
-				tbl := newAdvancedTable(e.schema, e.draft.Args, 100, 12)
-				e.advanced = tbl
-				e.advancedAll = tbl.Rows()
-				if e.advancedFilter != "" {
-					e.advanced.SetRows(filterRows(e.advancedAll, e.advancedFilter))
-				}
-			}
-			e.advancedEditing = false
-			e.advancedEditFlag = ""
-			e.advancedEditVal = ""
-			e.submitError = ""
-			return e, nil
+			return e.saveAdvancedEdit()
 		case "backspace":
 			if len(e.advancedEditVal) > 0 {
 				e.advancedEditVal = e.advancedEditVal[:len(e.advancedEditVal)-1]
@@ -424,26 +532,15 @@ func (e Editor) handleAdvancedKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 		}
 		return e, nil
 	case "enter":
-		if e.draft == nil {
-			return e, nil
-		}
-		row := e.advanced.SelectedRow()
-		if row == nil || len(row) == 0 {
-			return e, nil
-		}
-		flag := string(row[0])
-		e.advancedEditing = true
-		e.advancedEditFlag = flag
-		e.advancedEditVal = ArgString(e.draft.Args[flag])
-		return e, nil
+		return e.startAdvancedEdit()
 	}
 	if e.filterMode && len(msg.Runes) == 1 {
 		e.advancedFilter += string(msg.Runes)
 		e.advanced.SetRows(filterRows(e.advancedAll, e.advancedFilter))
 		return e, nil
 	}
-	t, cmd := e.advanced.Update(msg)
-	e.advanced = t
+	updated, cmd := e.moveTableCursor(e.advanced, msg)
+	e.advanced = updated
 	return e, cmd
 }
 
@@ -477,13 +574,7 @@ func (e Editor) handleEnvKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 	if e.envEditing {
 		switch msg.String() {
 		case "esc":
-			e.envEditing = false
-			e.envEditKey = ""
-			e.envEditValue = ""
-			e.envEditIndex = -1
-			e.envEditField = envFieldKey
-			e.envSubmitError = ""
-			return e, nil
+			return e.handleCellEscape(), nil
 		case "tab", "shift+tab":
 			if e.envEditField == envFieldKey {
 				e.envEditField = envFieldValue
@@ -492,34 +583,7 @@ func (e Editor) handleEnvKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 			}
 			return e, nil
 		case "enter":
-			if e.draft == nil {
-				return e, nil
-			}
-			key := strings.TrimSpace(e.envEditKey)
-			if !envKeyRE.MatchString(key) {
-				e.envSubmitError = fmt.Sprintf("Invalid env key %q: must match [A-Za-z_][A-Za-z0-9_]*", e.envEditKey)
-				return e, nil
-			}
-			for i, ev := range e.draft.Env {
-				if ev.Key == key && i != e.envEditIndex {
-					e.envSubmitError = fmt.Sprintf("Duplicate env key %q", key)
-					return e, nil
-				}
-			}
-			nev := domain.EnvVar{Key: key, Value: e.envEditValue}
-			if e.envEditIndex < 0 {
-				e.draft.Env = append(e.draft.Env, nev)
-			} else if e.envEditIndex < len(e.draft.Env) {
-				e.draft.Env[e.envEditIndex] = nev
-			}
-			e.envTable = newEnvTable(e.draft.Env)
-			e.envEditing = false
-			e.envEditKey = ""
-			e.envEditValue = ""
-			e.envEditIndex = -1
-			e.envEditField = envFieldKey
-			e.envSubmitError = ""
-			return e, nil
+			return e.saveEnvEdit()
 		case "backspace":
 			if e.envEditField == envFieldKey && len(e.envEditKey) > 0 {
 				e.envEditKey = e.envEditKey[:len(e.envEditKey)-1]
@@ -549,39 +613,12 @@ func (e Editor) handleEnvKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 		e.envSubmitError = ""
 		return e, nil
 	case "enter":
-		if e.draft == nil || len(e.draft.Env) == 0 {
-			return e, nil
-		}
-		row := e.envTable.SelectedRow()
-		if len(row) < 2 {
-			return e, nil
-		}
-		idx := e.envTable.Cursor()
-		if idx < 0 || idx >= len(e.draft.Env) {
-			return e, nil
-		}
-		e.envEditing = true
-		e.envEditIndex = idx
-		e.envEditKey = e.draft.Env[idx].Key
-		e.envEditValue = e.draft.Env[idx].Value
-		e.envEditField = envFieldValue
-		e.envSubmitError = ""
-		return e, nil
+		return e.startEnvEdit()
 	case "d":
-		if e.draft == nil || len(e.draft.Env) == 0 {
-			return e, nil
-		}
-		idx := e.envTable.Cursor()
-		if idx < 0 || idx >= len(e.draft.Env) {
-			return e, nil
-		}
-		e.draft.Env = append(e.draft.Env[:idx], e.draft.Env[idx+1:]...)
-		e.envTable = newEnvTable(e.draft.Env)
-		e.envSubmitError = ""
-		return e, nil
+		return e.deleteEnvRow()
 	}
-	t, cmd := e.envTable.Update(msg)
-	e.envTable = t
+	updated, cmd := e.moveTableCursor(e.envTable, msg)
+	e.envTable = updated
 	return e, cmd
 }
 

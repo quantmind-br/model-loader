@@ -29,6 +29,28 @@ const (
 // keybinding ranges, modulo math, and array sizing.
 const tabCount = 4
 
+// globalShortcut registers a root-level keyboard shortcut. Entries with
+// Captures==false are skipped when the active page is capturing input
+// (modal / form / picker open). Only ctrl+c may have Captures==true.
+type globalShortcut struct {
+	Keys     []string
+	Captures bool
+	Handler  func(RootModel) (tea.Model, tea.Cmd)
+}
+
+var rootShortcuts = []globalShortcut{
+	{Keys: []string{"ctrl+c"}, Captures: true, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m, tea.Quit }},
+	{Keys: []string{"?"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { m.helpOpen = true; m = m.ensureHelpViewport(); return m, nil }},
+	{Keys: []string{"esc"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m, nil }},
+	{Keys: []string{"q"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m, tea.Quit }},
+	{Keys: []string{"1"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate(TabProfiles) }},
+	{Keys: []string{"2"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate(TabServer) }},
+	{Keys: []string{"3"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate(TabModels) }},
+	{Keys: []string{"4"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate(TabBackends) }},
+	{Keys: []string{"tab"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate((m.active + 1) % tabCount) }},
+	{Keys: []string{"shift+tab"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate((m.active + tabCount - 1) % tabCount) }},
+}
+
 func (t Tab) Title() string {
 	switch t {
 	case TabProfiles:
@@ -84,7 +106,7 @@ type HelpContextProvider interface {
 // Overlayer is the optional contract a page implements to expose an active
 // modal overlay that should be rendered on top of the page content.
 type Overlayer interface {
-	OverlayView() (content string, width, height int, active bool)
+	OverlayView() pages.Overlay
 }
 
 // globalHints is the prefix shown in every status bar line.
@@ -277,35 +299,14 @@ func (m RootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, cmd
 	}
-	if msg.String() == "ctrl+c" {
-		return m, tea.Quit
-	}
-	// TODO(playground): re-enable Ctrl+P binding once streaming wiring lands.
-	//                   PlaygroundModal struct kept intact to avoid churn in importers.
-	if !m.activePageCapturesInput() {
-		if msg.String() == "?" {
-			m.helpOpen = true
-			m = m.ensureHelpViewport()
-			return m, nil
-		}
-		if msg.String() == "esc" {
-			return m, nil
-		}
-		switch msg.String() {
-		case "q":
-			return m, tea.Quit
-		case "1":
-			return m.activate(TabProfiles)
-		case "2":
-			return m.activate(TabServer)
-		case "3":
-			return m.activate(TabModels)
-		case "4":
-			return m.activate(TabBackends)
-		case "tab":
-			return m.activate((m.active + 1) % tabCount)
-		case "shift+tab":
-			return m.activate((m.active + tabCount - 1) % tabCount)
+	for _, sc := range rootShortcuts {
+		for _, k := range sc.Keys {
+			if msg.String() == k {
+				if !sc.Captures && m.activePageCapturesInput() {
+					break
+				}
+				return sc.Handler(m)
+			}
 		}
 	}
 	updated, cmd := m.forwardToActivePage(msg)
@@ -472,8 +473,9 @@ func (m RootModel) View() string {
 	}
 	frame := lipgloss.JoinVertical(lipgloss.Left, header, clampedBody, status)
 	if ov, ok := m.pages[m.active].(Overlayer); ok {
-		if content, _, _, active := ov.OverlayView(); active {
-			frame = components.Overlay(frame, content, m.width, m.height)
+		overlay := ov.OverlayView()
+		if overlay.Active {
+			frame = components.Overlay(frame, overlay.Content, m.width, m.height)
 		}
 	}
 	if m.playgroundOpen && m.playgroundModal != nil {

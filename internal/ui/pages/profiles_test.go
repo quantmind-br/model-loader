@@ -39,11 +39,12 @@ func (w viewWrapper) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 func (w viewWrapper) View() string {
 	type overlayer interface {
-		OverlayView() (string, int, int, bool)
+		OverlayView() Overlay
 	}
 	if ov, ok := w.page.(overlayer); ok {
-		if content, _, _, active := ov.OverlayView(); active {
-			return content
+		overlay := ov.OverlayView()
+		if overlay.Active {
+			return overlay.Content
 		}
 	}
 	return w.page.View()

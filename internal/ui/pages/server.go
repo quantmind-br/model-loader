@@ -418,7 +418,7 @@ func (p *ServerPage) handleRestartResult(m restartResultMsg) (tea.Model, tea.Cmd
 
 func (p *ServerPage) withFlashError(msg string) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	p.flash, cmd = p.flash.SetError(msg)
+	p.flash, cmd = flashError(p.flash, msg)
 	return p, cmd
 }
 
@@ -618,7 +618,10 @@ func restartCmd(pm procMgrIface, pid int, prof domain.Profile, bg bool) tea.Cmd 
 
 // IsCapturingInput tells the root model when the page owns global keys.
 func (p *ServerPage) IsCapturingInput() bool {
-	return p.killConfirm.Active() || p.restartConfirm.Active()
+	return CaptureAny(
+		func() bool { return p.killConfirm.Active() },
+		func() bool { return p.restartConfirm.Active() },
+	)
 }
 
 // applyInstances reconciles the page's per-PID table rows and subscription
@@ -751,14 +754,14 @@ func (p *ServerPage) View() string {
 	return body
 }
 
-func (p *ServerPage) OverlayView() (string, int, int, bool) {
+func (p *ServerPage) OverlayView() Overlay {
 	if p.killConfirm.Active() {
-		return p.killConfirm.View(), p.width, p.height, true
+		return Overlay{Content: p.killConfirm.View(), Width: p.width, Height: p.height, Active: true}
 	}
 	if p.restartConfirm.Active() {
-		return p.restartConfirm.View(), p.width, p.height, true
+		return Overlay{Content: p.restartConfirm.View(), Width: p.width, Height: p.height, Active: true}
 	}
-	return "", 0, 0, false
+	return Overlay{}
 }
 
 // renderTable renders the bold "Running instances" header (prefixed with the

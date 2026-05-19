@@ -180,13 +180,13 @@ type ModelsPage struct {
 
 func (p ModelsPage) withFlash(msg string) (ModelsPage, tea.Cmd) {
 	var cmd tea.Cmd
-	p.flash, cmd = p.flash.Set(msg)
+	p.flash, cmd = flashSuccess(p.flash, msg)
 	return p, cmd
 }
 
 func (p ModelsPage) withFlashError(msg string) (ModelsPage, tea.Cmd) {
 	var cmd tea.Cmd
-	p.flash, cmd = p.flash.SetError(msg)
+	p.flash, cmd = flashError(p.flash, msg)
 	return p, cmd
 }
 
@@ -268,10 +268,15 @@ func (p ModelsPage) WithDownloadManager(m *downloadmgr.Manager) ModelsPage {
 // filter input is open so cursor navigation does not leak into tab
 // cycling and printable characters are not stolen by global shortcuts.
 func (p ModelsPage) IsCapturingInput() bool {
-	return p.action != nil || p.deleteConfirm.Active() || p.filterMode || p.profilePicker != nil ||
-		(p.hfSearch != nil && p.hfSearch.IsActive()) ||
-		(p.hfFilePicker != nil && p.hfFilePicker.IsActive()) ||
-		(p.downloads != nil && p.downloads.IsFocusVisible())
+	return CaptureAny(
+		func() bool { return p.action != nil },
+		func() bool { return p.deleteConfirm.Active() },
+		func() bool { return p.filterMode },
+		func() bool { return p.profilePicker != nil },
+		func() bool { return p.hfSearch != nil && p.hfSearch.IsActive() },
+		func() bool { return p.hfFilePicker != nil && p.hfFilePicker.IsActive() },
+		func() bool { return p.downloads != nil && p.downloads.IsFocusVisible() },
+	)
 }
 
 // scanStartedMsg delivers the channel + cancel handle from a fresh scan

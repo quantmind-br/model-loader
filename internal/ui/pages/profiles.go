@@ -76,14 +76,18 @@ type ProfilesPage struct {
 	resolver  backendcatalog.Resolver
 	logger    *slog.Logger
 
-	running        []domain.RunningInstance
-	bgMode         bool
-	launchStatus   string
-	launchStatusAt time.Time
-	launchWaitPID  int
-	launchSpinner  spinner.Model
+	running []domain.RunningInstance
+	bgMode  bool
+	launch  launchTracker
 
 	killConfirm components.Confirm
+}
+
+type launchTracker struct {
+	status   string
+	statusAt time.Time
+	waitPID  int
+	spinner  spinner.Model
 }
 
 // NewProfilesPage constructs the page wired to a Store and FlagSchema.
@@ -102,9 +106,11 @@ func NewProfilesPage(store profilestore.Store, schema domain.FlagSchema) Profile
 		list:          l,
 		listKeys:      defaultProfilesKeys(),
 		flash:         components.NewFlash("profiles"),
-		bgMode:        true,
-		launchSpinner: sp,
-		logger:        log.Nop(),
+		bgMode: true,
+		launch: launchTracker{
+			spinner: sp,
+		},
+		logger: log.Nop(),
 	}
 }
 
@@ -476,7 +482,7 @@ func (p ProfilesPage) View() string {
 	return body
 }
 
-func (p ProfilesPage) OverlayView() (string, int, int, bool) {
+func (p ProfilesPage) OverlayView() Overlay {
 	var raw string
 	switch {
 	case p.killConfirm.Active():
@@ -494,14 +500,14 @@ func (p ProfilesPage) OverlayView() (string, int, int, bool) {
 	case p.deleteConfirm.Active():
 		raw = p.deleteConfirm.View()
 	default:
-		return "", 0, 0, false
+		return Overlay{}
 	}
 	// Center the modal box inside a full p.width × p.height canvas so the
 	// surrounding spaces from lipgloss.Place fully overwrite the body when
 	// components.Overlay composites in root.go (F-03 audit: stops master-list
 	// rows from bleeding around the modal frame).
 	placed := lipgloss.Place(p.width, p.height, lipgloss.Center, lipgloss.Center, raw)
-	return placed, p.width, p.height, true
+	return Overlay{Content: placed, Width: p.width, Height: p.height, Active: true}
 }
 
 func (p ProfilesPage) detailView() string {
@@ -780,7 +786,7 @@ func (p ProfilesPage) handleUndoDone(_ undoDoneMsg) (tea.Model, tea.Cmd) {
 
 // launchSelected starts the currently selected profile directly.
 func (p ProfilesPage) launchSelected() (tea.Model, tea.Cmd) {
-	if p.launchWaitPID != 0 {
+	if p.launch.waitPID != 0 {
 		return p, nil
 	}
 	if _, isCorrupt := p.list.SelectedItem().(corruptItem); isCorrupt {
@@ -795,10 +801,16 @@ func (p ProfilesPage) launchSelected() (tea.Model, tea.Cmd) {
 }
 
 func (p ProfilesPage) IsCapturingInput() bool {
-	if p.editor.Active() || p.deleteConfirm.Active() || p.picker.active || p.conflictModal.Active() || p.undoModal.Active() || p.importPickerActive || p.killConfirm.Active() {
-		return true
-	}
-	return p.list.FilterState() != list.Unfiltered
+	return CaptureAny(
+		func() bool { return p.editor.Active() },
+		func() bool { return p.deleteConfirm.Active() },
+		func() bool { return p.picker.active },
+		func() bool { return p.conflictModal.Active() },
+		func() bool { return p.undoModal.Active() },
+		func() bool { return p.importPickerActive },
+		func() bool { return p.killConfirm.Active() },
+		func() bool { return p.list.FilterState() != list.Unfiltered },
+	)
 }
 
 // Reload triggers a fresh load from the underlying store. Called by the
@@ -809,21 +821,21 @@ func (p ProfilesPage) Reload() tea.Cmd {
 
 func (p ProfilesPage) withFlash(msg string) (ProfilesPage, tea.Cmd) {
 	var cmd tea.Cmd
-	p.flash, cmd = p.flash.Set(msg)
+	p.flash, cmd = flashSuccess(p.flash, msg)
 	return p, cmd
 }
 
 func (p ProfilesPage) withFlashError(msg string) (ProfilesPage, tea.Cmd) {
 	var cmd tea.Cmd
-	p.flash, cmd = p.flash.SetError(msg)
+	p.flash, cmd = flashError(p.flash, msg)
 	return p, cmd
 }
 
 func (p ProfilesPage) handleLaunched(msg launchedMsg) (tea.Model, tea.Cmd) {
 	p.running = append(p.running, msg.inst)
-	p.launchWaitPID = msg.inst.PID
-	p.launchStatus = fmt.Sprintf("pid=%d port=%d — waiting for /health…", msg.inst.PID, msg.inst.Port)
-	p.launchStatusAt = time.Time{}
+	p.launch.waitPID = msg.inst.PID
+	p.launch.status = fmt.Sprintf("pid=%d port=%d — waiting for /health…", msg.inst.PID, msg.inst.Port)
+	p.launch.statusAt = time.Time{}
 	mgr := p.manager
 	port := msg.inst.Port
 	pid := msg.inst.PID
@@ -834,19 +846,19 @@ func (p ProfilesPage) handleLaunched(msg launchedMsg) (tea.Model, tea.Cmd) {
 		}
 		return healthyMsg{pid: pid}
 	}
-	return p, tea.Batch(p.launchSpinner.Tick, waitCmd)
+	return p, tea.Batch(p.launch.spinner.Tick, waitCmd)
 }
 
 func (p ProfilesPage) handleHealthy(msg healthyMsg) (tea.Model, tea.Cmd) {
-	p.launchWaitPID = 0
+	p.launch.waitPID = 0
 	p, fc := p.withFlash(fmt.Sprintf("healthy pid=%d", msg.pid))
 	pid := msg.pid
 	return p, tea.Batch(fc, func() tea.Msg { return SwitchToServerMsg{PID: pid} })
 }
 
 func (p ProfilesPage) handleLaunchErr(msg launchErrMsg) (tea.Model, tea.Cmd) {
-	pid := p.launchWaitPID
-	p.launchWaitPID = 0
+	pid := p.launch.waitPID
+	p.launch.waitPID = 0
 	base := friendlyLaunchError(msg.err)
 	if pid != 0 && p.manager != nil {
 		if exit, ok := p.manager.GetExitInfo(pid); ok {
@@ -858,11 +870,11 @@ func (p ProfilesPage) handleLaunchErr(msg launchErrMsg) (tea.Model, tea.Cmd) {
 }
 
 func (p ProfilesPage) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
-	if p.launchWaitPID == 0 {
+	if p.launch.waitPID == 0 {
 		return p, nil
 	}
-	updated, cmd := p.launchSpinner.Update(msg)
-	p.launchSpinner = updated
+	updated, cmd := p.launch.spinner.Update(msg)
+	p.launch.spinner = updated
 	return p, cmd
 }
 
@@ -980,10 +992,10 @@ func (p ProfilesPage) renderRunningList() string {
 }
 
 func (p ProfilesPage) renderLaunchStatus() string {
-	if p.launchStatus != "" {
-		statusLine := p.launchStatus
-		if p.launchWaitPID != 0 {
-			statusLine = p.launchSpinner.View() + " " + statusLine
+	if p.launch.status != "" {
+		statusLine := p.launch.status
+		if p.launch.waitPID != 0 {
+			statusLine = p.launch.spinner.View() + " " + statusLine
 		}
 		return theme.Subtitle.Render(statusLine)
 	}
