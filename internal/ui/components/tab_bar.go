@@ -34,15 +34,16 @@ func TabBar(opts TabBarOptions) string {
 		return ""
 	}
 	opts = applyTabBarDefaults(opts)
-	rendered, widths := renderTabLabels(opts.Labels, opts.ActiveIndex)
-	sep := " │ "
-	sepWidth := lipgloss.Width(sep)
-	if fitsFully(widths, sepWidth, opts.AvailableWidth) {
-		return renderTabStrip(rendered, sep)
+	labels := renderTabLabels(opts)
+	strip := strings.Join(labels, " │ ")
+	if fitsFully(strip, opts.AvailableWidth) {
+		return strip
 	}
-	return renderTruncated(rendered, widths, opts.ActiveIndex, sep, opts.AvailableWidth, opts.LeftIndicator, opts.RightIndicator)
+	return renderTruncated(opts, labels)
 }
 
+// applyTabBarDefaults fills missing TabBarOptions fields with package
+// defaults (separator, colors, padding) and returns the result.
 func applyTabBarDefaults(opts TabBarOptions) TabBarOptions {
 	if opts.LeftIndicator == "" {
 		opts.LeftIndicator = "‹"
@@ -53,72 +54,66 @@ func applyTabBarDefaults(opts TabBarOptions) TabBarOptions {
 	return opts
 }
 
-func renderTabLabels(labels []string, activeIndex int) ([]string, []int) {
-	rendered := make([]string, len(labels))
-	widths := make([]int, len(labels))
-	for i, label := range labels {
-		if i == activeIndex {
-			rendered[i] = theme.TabActive.Render(label)
+// renderTabLabels produces the styled label for each tab in opts.Labels in
+// order. The active tab gets the active style; the rest get the inactive
+// style.
+func renderTabLabels(opts TabBarOptions) []string {
+	labels := make([]string, len(opts.Labels))
+	for i, label := range opts.Labels {
+		if i == opts.ActiveIndex {
+			labels[i] = theme.TabActive.Render(label)
 		} else {
-			rendered[i] = theme.TabInactive.Render(label)
-		}
-		widths[i] = lipgloss.Width(rendered[i])
-	}
-	return rendered, widths
-}
-
-func fitsFully(widths []int, sepWidth, availableWidth int) bool {
-	totalWidth := 0
-	for i, w := range widths {
-		totalWidth += w
-		if i < len(widths)-1 {
-			totalWidth += sepWidth
+			labels[i] = theme.TabInactive.Render(label)
 		}
 	}
-	return totalWidth <= availableWidth
+	return labels
 }
 
-func renderTabStrip(rendered []string, sep string) string {
-	parts := make([]string, 0, 2*len(rendered))
-	for i := range rendered {
-		if i > 0 {
-			parts = append(parts, sep)
-		}
-		parts = append(parts, rendered[i])
-	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
+// fitsFully reports whether the joined strip plus minimum margins fits
+// within the given width.
+func fitsFully(strip string, width int) bool {
+	return lipgloss.Width(strip) <= width
 }
 
-func renderTruncated(rendered []string, widths []int, activeIndex int, sep string, availableWidth int, leftInd, rightInd string) string {
-	effectiveWidth := availableWidth - 2
-	if effectiveWidth < 1 {
-		effectiveWidth = 1
-	}
-
+// renderTruncated produces a horizontally truncated strip centered on the
+// active tab with left/right indicators when content is clipped.
+func renderTruncated(opts TabBarOptions, labels []string) string {
+	sep := " │ "
 	sepWidth := lipgloss.Width(sep)
 
+	// Compute the width of each styled label.
+	widths := make([]int, len(labels))
+	for i, label := range labels {
+		widths[i] = lipgloss.Width(label)
+	}
+
 	// Compute the start position of each tab in the full strip.
-	positions := make([]int, len(rendered))
+	positions := make([]int, len(labels))
 	cursor := 0
-	for i := range rendered {
+	for i := range labels {
 		positions[i] = cursor
 		cursor += widths[i]
-		if i < len(rendered)-1 {
+		if i < len(labels)-1 {
 			cursor += sepWidth
 		}
 	}
 	totalWidth := cursor
 
 	// Bound the active index defensively.
-	activeIdx := activeIndex
+	activeIdx := opts.ActiveIndex
 	if activeIdx < 0 {
 		activeIdx = 0
 	}
-	if activeIdx >= len(rendered) {
-		activeIdx = len(rendered) - 1
+	if activeIdx >= len(labels) {
+		activeIdx = len(labels) - 1
 	}
 	activeStart := positions[activeIdx]
 	activeEnd := activeStart + widths[activeIdx]
+
+	effectiveWidth := opts.AvailableWidth - 2
+	if effectiveWidth < 1 {
+		effectiveWidth = 1
+	}
 
 	// Center the active tab when possible.
 	offset := activeStart - (effectiveWidth-widths[activeIdx])/2
@@ -143,19 +138,19 @@ func renderTruncated(rendered []string, widths []int, activeIndex int, sep strin
 
 	// Build the visible strip by taking tabs that overlap the viewport.
 	var visibleParts []string
-	for i := range rendered {
+	for i := range labels {
 		tabStart := positions[i]
 		tabEnd := tabStart + widths[i]
 		if tabEnd <= offset || tabStart >= offset+effectiveWidth {
 			continue
 		}
-		visibleParts = append(visibleParts, rendered[i])
+		visibleParts = append(visibleParts, labels[i])
 	}
 
 	// Safety net: always include the active tab even if the math goes sideways
 	// (e.g. a single label wider than the viewport).
 	if len(visibleParts) == 0 {
-		visibleParts = append(visibleParts, rendered[activeIdx])
+		visibleParts = append(visibleParts, labels[activeIdx])
 	}
 
 	visibleStrip := lipgloss.JoinHorizontal(lipgloss.Top, visibleParts...)
@@ -168,13 +163,13 @@ func renderTruncated(rendered []string, widths []int, activeIndex int, sep strin
 
 	var b strings.Builder
 	if showLeft {
-		b.WriteString(leftInd)
+		b.WriteString(opts.LeftIndicator)
 	} else {
 		b.WriteString(" ")
 	}
 	b.WriteString(visibleStrip)
 	if showRight {
-		b.WriteString(rightInd)
+		b.WriteString(opts.RightIndicator)
 	} else {
 		b.WriteString(" ")
 	}
