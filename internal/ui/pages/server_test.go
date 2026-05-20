@@ -264,6 +264,52 @@ func TestServerPage_MetricsPlaceholderWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestServerPage_HistoryChartCapturesInput(t *testing.T) {
+	pm := &fakeProcMgr{}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil)
+	if p.IsCapturingInput() {
+		t.Fatal("page should not capture input with no overlay/chart")
+	}
+	// While the history chart is open the page must claim global keys so the
+	// 1/2/3/4 time-window keys reach it instead of switching tabs (ROUTE-01).
+	p.historyChart = &components.HistoryChart{}
+	if !p.IsCapturingInput() {
+		t.Fatal("page should capture input while the history chart is open")
+	}
+	// '1' must not panic and must keep the chart open (switchHistoryWindow).
+	p2, _ := updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	if p2.historyChart == nil {
+		t.Fatal("history-window key should not close the chart")
+	}
+	// esc closes it.
+	p2, _ = updateAs[*ServerPage](p2, tea.KeyMsg{Type: tea.KeyEsc})
+	if p2.historyChart != nil {
+		t.Fatal("esc should close the history chart")
+	}
+}
+
+func TestServerPage_KillConfirmedDropsRowOptimistically(t *testing.T) {
+	// killTrackingMgr.Kill records the pid but keeps it in List(), mimicking a
+	// real manager whose liveness reconcile lags. The row must vanish from the
+	// table immediately on confirm, not on the next monitor tick (UX-02).
+	pm := &killTrackingMgr{fakeProcMgr: fakeProcMgr{insts: []domain.RunningInstance{{PID: 7, Port: 8080, LogPath: "/tmp/x.log"}}}}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil)
+	p.SetSize(120, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+	if len(p.tbl.Rows()) != 1 {
+		t.Fatalf("setup: want 1 row, got %d", len(p.tbl.Rows()))
+	}
+
+	p, _ = updateAs[*ServerPage](p, monitorKillConfirmedMsg{pid: 7})
+
+	if len(p.tbl.Rows()) != 0 {
+		t.Fatalf("killed row should be dropped immediately; rows=%d", len(p.tbl.Rows()))
+	}
+	if pm.killed != 7 {
+		t.Fatalf("Kill(7) expected; killed=%d", pm.killed)
+	}
+}
+
 func TestServerPage_KOpensConfirmDoesNotKillImmediately(t *testing.T) {
 	pm := &killTrackingMgr{fakeProcMgr: fakeProcMgr{insts: []domain.RunningInstance{{PID: 7, Port: 8080, LogPath: "/tmp/x.log"}}}}
 	mm := &chanMonMgr{ch: make(chan monitor.MonitorEvent, 8)}

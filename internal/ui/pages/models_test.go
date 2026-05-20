@@ -364,6 +364,21 @@ func TestModelsPage_FilterModeRescanKeyAppendsToFilter(t *testing.T) {
 	}
 }
 
+// TestModelsPage_FilterAcceptsMultiRuneBurst is a regression for INPUT-01:
+// fast typing / paste arrives as one KeyMsg carrying several runes. The old
+// `len(Runes) == 1` guard dropped those, losing characters under speed.
+func TestModelsPage_FilterAcceptsMultiRuneBurst(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.filterMode = true
+
+	updated, _ := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Hunyuan")})
+	mp := updated.(ModelsPage)
+
+	if mp.filter != "Hunyuan" {
+		t.Errorf("filter = %q, want %q (multi-rune burst must not be dropped)", mp.filter, "Hunyuan")
+	}
+}
+
 func TestModelsPage_IsCapturingInput(t *testing.T) {
 	page := NewModelsPage(&fakeScanner{}, nil)
 

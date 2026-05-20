@@ -333,6 +333,16 @@ func (m RootModel) handleHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "ctrl+c":
 		return m, tea.Quit
+	case "g", "home":
+		// Jump-to-top: the bubbles viewport keymap doesn't bind these, so
+		// drive GotoTop explicitly (DEAD-01).
+		m = m.ensureHelpViewport()
+		m.helpViewport.GotoTop()
+		return m, nil
+	case "G", "end":
+		m = m.ensureHelpViewport()
+		m.helpViewport.GotoBottom()
+		return m, nil
 	}
 	if helpScrollKey(msg) {
 		m = m.ensureHelpViewport()
@@ -361,7 +371,10 @@ func (m RootModel) ensureHelpViewport() RootModel {
 	} else if h, ok := m.pages[m.active].(HintProvider); ok {
 		activeContext = h.Hints()
 	}
-	body, err := components.RenderContextualHelp(m.width-8, activeContext)
+	// Wrap help at the viewport's inner width so glamour's word-wrap matches
+	// the visible area exactly — otherwise text wrapped wider than the box
+	// gets clipped mid-word at the right border (RENDER-04).
+	body, err := components.RenderContextualHelp(viewportW, activeContext)
 	if err != nil {
 		body = components.HelpMarkdown
 	}
@@ -387,13 +400,13 @@ func helpViewportSize(width, height int) (int, int) {
 // helpScrollKey reports whether msg matches a scroll keybinding the
 // viewport should consume while the help modal is open.
 func helpScrollKey(msg tea.KeyMsg) bool {
+	// Note: g/G/home/end are handled directly in handleHelpKey via
+	// GotoTop/GotoBottom, since the viewport keymap doesn't bind them.
 	scroll := []key.Binding{
 		key.NewBinding(key.WithKeys("up", "k")),
 		key.NewBinding(key.WithKeys("down", "j")),
 		key.NewBinding(key.WithKeys("pgup", "ctrl+u")),
 		key.NewBinding(key.WithKeys("pgdown", "ctrl+d")),
-		key.NewBinding(key.WithKeys("home", "g")),
-		key.NewBinding(key.WithKeys("end", "G")),
 	}
 	for _, b := range scroll {
 		if key.Matches(msg, b) {

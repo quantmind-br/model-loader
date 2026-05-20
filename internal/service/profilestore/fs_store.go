@@ -174,6 +174,7 @@ func (s *FSStore) Duplicate(srcID, newID string) (domain.Profile, error) {
 	dup := src
 	dup.ID = newID
 	dup.Name = src.Name + " (copy)"
+	dup.Pinned = false              // the copy starts unpinned (UX-01)
 	dup.Meta = domain.ProfileMeta{} // reset timestamps; Save fills them
 
 	if dup.Args != nil {

@@ -179,10 +179,20 @@ func (p ProfilesPage) View() string {
 }
 
 func (p ProfilesPage) OverlayView() Overlay {
-	var raw string
+	// Bare yes/no confirms are wrapped in the centered Modal box so they
+	// render as an opaque bordered frame instead of a naked huh form whose
+	// short button row let the master list bleed in around it (RENDER-03).
 	switch {
 	case p.killConfirm.Active():
-		raw = p.killConfirm.View()
+		content := components.Modal("Kill instance", p.killConfirm.View(), p.width, p.height)
+		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
+	case p.deleteConfirm.Active():
+		content := components.Modal("Delete profile", p.deleteConfirm.View(), p.width, p.height)
+		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
+	}
+
+	var raw string
+	switch {
 	case p.importPickerActive:
 		raw = p.importPicker.View()
 	case p.picker.active:
@@ -193,15 +203,13 @@ func (p ProfilesPage) OverlayView() Overlay {
 		raw = p.undoModal.View()
 	case p.editor.Active():
 		raw = p.editor.View()
-	case p.deleteConfirm.Active():
-		raw = p.deleteConfirm.View()
 	default:
 		return Overlay{}
 	}
-	// Center the modal box inside a full p.width × p.height canvas so the
-	// surrounding spaces from lipgloss.Place fully overwrite the body when
-	// components.Overlay composites in root.go (F-03 audit: stops master-list
-	// rows from bleeding around the modal frame).
+	// Center the self-boxed surface inside a full p.width × p.height canvas
+	// so the surrounding spaces from lipgloss.Place fully overwrite the body
+	// when components.Overlay composites in root.go (F-03 audit: stops
+	// master-list rows from bleeding around the modal frame).
 	placed := lipgloss.Place(p.width, p.height, lipgloss.Center, lipgloss.Center, raw)
 	return Overlay{Content: placed, Width: p.width, Height: p.height, Active: true}
 }

@@ -1,11 +1,11 @@
 # TUI Validator — Audit Report
 
-**Application**: `/home/diogo/dev/model-loader/.worktrees/feature/backend-compatibility/bin/model-loader`
+**Application**: `/home/diogo/dev/model-loader/bin/model-loader`
 **Args**: ``
-**Working directory**: `/home/diogo/dev/model-loader/.worktrees/feature/backend-compatibility`
-**Timestamp**: `20260520T165549Z` UTC
+**Working directory**: `/home/diogo/dev/model-loader`
+**Timestamp**: `20260520T201513Z` UTC
 **Pipeline**: `tui-validator` skill (tmux + grim + capture-pane)
-**Workspace**: `/home/diogo/.cache/tui-validator/model-loader/20260520T165549Z`
+**Workspace**: `/home/diogo/.cache/tui-validator/model-loader/20260520T201513Z`
 
 ---
 
@@ -19,15 +19,15 @@ verdict is. Read so a busy reviewer can decide in 30 s whether to dig in. -->
 | Severity | Count             |
 | -------- | ----------------- |
 | Blocker  | 0  |
-| Major    | 1    |
-| Minor    | 2    |
-| Cosmetic | 2  |
+| Major    | 3    |
+| Minor    | 6    |
+| Cosmetic | 0  |
 
 | Audit stat                     | Value                |
 | ------------------------------ | -------------------- |
-| Captures (text + ANSI)         | 108         |
-| Screenshots                    | 0        |
-| Keybindings inventoried        | 49        |
+| Captures (text + ANSI)         | 200         |
+| Screenshots                    | 5        |
+| Keybindings inventoried        | 43        |
 | Initial geometry               | 80 × 24 |
 | TERM                           | `xterm-256color`         |
 
@@ -71,7 +71,7 @@ boundaries of these findings. -->
 table is auto-generated from `keybindings.json`. Free-form commentary about
 the inventory (parser quirks, undocumented bindings, etc.) goes here. -->
 
-Raw file: `/home/diogo/.cache/tui-validator/model-loader/20260520T165549Z/keybindings.json`.
+Raw file: `/home/diogo/.cache/tui-validator/model-loader/20260520T201513Z/keybindings.json`.
 
 ---
 
@@ -127,12 +127,12 @@ release. P2: nice-to-have. Each item names the finding ID it resolves. -->
 ## 9. Workspace
 
 ```
-/home/diogo/.cache/tui-validator/model-loader/20260520T165549Z/
+/home/diogo/.cache/tui-validator/model-loader/20260520T201513Z/
 ├── meta.json
 ├── keybindings.json
 ├── findings.json
-├── captures/      (108 text + ANSI scrapes)
-└── screenshots/   (0 PNGs)
+├── captures/      (200 text + ANSI scrapes)
+└── screenshots/   (5 PNGs)
 ```
 
 ---
@@ -141,9 +141,9 @@ release. P2: nice-to-have. Each item names the finding ID it resolves. -->
 
 - **TERM**: `xterm-256color`
 - **Initial geometry**: 80 × 24
-- **Binary**: `/home/diogo/dev/model-loader/.worktrees/feature/backend-compatibility/bin/model-loader`
+- **Binary**: `/home/diogo/dev/model-loader/bin/model-loader`
 - **Args**: ``
-- **CWD**: `/home/diogo/dev/model-loader/.worktrees/feature/backend-compatibility`
+- **CWD**: `/home/diogo/dev/model-loader`
 
 <!-- Anything else relevant: build commit, toolchain version, OS, terminal
 emulator the screenshots were taken in, fonts on the screenshot host. -->
@@ -154,115 +154,202 @@ emulator the screenshots were taken in, fonts on the screenshot host. -->
 
 | Key | Context | Description | Source |
 | --- | --- | --- | --- |
-| `1` | global | switch directly to tab 1 (Profiles) | documented |
-| `2` | global | switch directly to tab 2 (Server) | documented |
-| `3` | global | switch directly to tab 3 (Models) | documented |
-| `4` | global | switch directly to tab 4 (Backends) | documented |
-| `Tab` | global | next tab | documented |
-| `Shift+Tab` | global | previous tab | documented |
-| `?` | global | toggle help modal | documented |
-| `q` | global | quit (background instances survive) | documented |
-| `Ctrl+C` | global | quit (background instances survive) | documented |
+| `1` | global | switch to Profiles tab | documented+observed |
+| `2` | global | switch to Server tab | documented+observed |
+| `3` | global | switch to Models tab | documented+observed |
+| `4` | global | switch to Backends tab | documented+observed |
+| `Tab` | global | next tab (cyclical) | documented+observed |
+| `BTab` | global | previous tab (cyclical) | documented |
+| `?` | global | toggle help overlay | documented+observed |
+| `q` | global | quit (background instances survive) | documented+observed |
+| `C-c` | global | hard quit (always active, bypasses input gate) | documented |
+| `Escape` | help | close help overlay | documented |
 | `Enter` | profiles | launch selected profile | documented |
-| `E` | profiles | edit selected profile | documented |
+| `E` | profiles | edit selected profile (opens editor) | documented |
 | `n` | profiles | new profile | documented |
-| `d` | profiles | duplicate selected profile | documented |
-| `x` | profiles | delete selected profile | documented |
-| `b` | profiles | toggle background/foreground | documented |
-| `k` | profiles | kill most recent launched instance | documented |
+| `d` | profiles | duplicate profile | documented |
+| `x` | profiles | DELETE profile (confirm modal) | documented |
+| `b` | profiles | toggle background/foreground launch | documented |
+| `k` | profiles | kill most recent instance | documented |
 | `r` | profiles | refresh profile list | documented |
-| `p` | profiles | pin selected profile | documented |
-| `I` | profiles | import profiles from JSON bundle | documented |
+| `p` | profiles | pin profile | documented |
+| `e` | profiles | export all profiles | documented |
+| `I` | profiles | import profiles | documented |
 | `u` | profiles | undo last import | documented |
-| `e` | profiles | export all profiles to JSON bundle | documented |
-| `Ctrl+T` | profiles | toggle Essentials/Advanced sub-tab while editing | documented |
-| `/` | profiles | filter | documented |
-| `v` | server | cycle Logs/Slots/Metrics/History sub-views | documented |
-| `Space` | server | pause/resume log scroll | documented |
-| `k` | server | kill selected instance | documented |
-| `r` | server | restart selected instance | documented |
+| `/` | profiles | filter profiles | documented |
+| `v` | server | cycle sub-views (Logs/Slots/Metrics/History) | documented |
+| `k` | server | KILL selected instance (confirm) | documented |
+| `r` | server | RESTART instance (confirm) | documented |
 | `H` | server | open history chart | documented |
-| `1` | server-chart | history chart 1h window | documented |
-| `2` | server-chart | history chart 6h window | documented |
-| `3` | server-chart | history chart 24h window | documented |
-| `4` | server-chart | history chart 7d window | documented |
-| `s` | server | start HTTP proxy listener | documented |
-| `x` | server | stop HTTP proxy listener | documented |
-| `R` | models | rescan all configured paths | documented |
-| `/` | models | filter | documented |
-| `Enter` | models | actions: use in new/existing profile or reveal path | documented |
-| `s` | models | search Hugging Face | documented |
-| `i` | models | show model info panel | documented |
-| `→` | models | navigate to sizing for this model | documented |
-| `g` | models | navigate to sizing for this model | documented |
+| `Space` | server | pause/resume log scroll | documented |
+| `s` | server | start HTTP proxy | documented |
+| `x` | server | stop HTTP proxy | documented |
+| `/` | models | filter models | documented |
+| `R` | models | rescan all paths (heavy) | documented |
+| `Enter` | models | open action menu | documented |
+| `s` | models | open HuggingFace search | documented |
+| `i` | models | toggle info panel | documented |
 | `n` | backends | new backend | documented |
-| `Enter` | backends | edit selected backend | documented |
-| `e` | backends | edit selected backend | documented |
-| `x` | backends | delete selected backend | documented |
-| `D` | backends | set selected backend as default | documented |
-| `R` | backends | refresh selected backend schema | documented |
-| `P` | backends | probe selected backend | documented |
-| `/` | backends | filter | documented |
+| `e` | backends | edit backend | documented |
+| `Enter` | backends | edit backend | documented |
+| `x` | backends | DELETE backend (confirm) | documented |
+| `D` | backends | set as default backend | documented |
+| `R` | backends | refresh schema (heavy) | documented |
+| `P` | backends | probe backend (latency/version) | documented |
+| `/` | backends | filter backends | documented |
 
 ## Findings
 
-### [MAJOR] Pin feature (`p`) produces no visible change
+### [MAJOR] History chart window keys 1/2/3/4 are stolen by the global tab switcher
 
-**Phase:** ?  
-**Evidence:** ["/home/diogo/.cache/tui-validator/model-loader/20260520T165549Z/captures/0102-before-pin-profiles.txt","/home/diogo/.cache/tui-validator/model-loader/20260520T165549Z/captures/0103-after-pin-profiles.txt"]  
+**Phase:** probe  
+**Evidence:** captures/0126-after-v-H-press1.txt  
 
-Pressing `p` on the Profiles tab does not show a 📌 pin emoji on the selected profile, nor does it visibly re-sort the list. The `togglePinSelected` handler calls `store.Save` and `loadCmd`, but the UI remains unchanged. Either the save writes `pinned: false` (previous audit found this), or the list delegate does not re-render the title after reload.
+While the Server-tab History chart is open, the documented time-window keys (1=1h, 2=6h, 3=24h, 4=7d) never reach the chart. Each one fires the GLOBAL tab switch instead (1->Profiles, 2->Server, 3->Models, 4->Backends), closing the chart. The footer simultaneously advertises both '[1-4] tabs' and '[1] 1h [2] 6h [3] 24h [4] 7d' — a direct shortcut conflict, and the global binding wins. The History sub-view does not implement the InputCapture/IsCapturingInput() contract, so the printable digits are consumed by RootModel.Update. This directly violates the project's own 'TUI INPUT ROUTING RULES' / 'ANTI-PATTERNS' in CLAUDE.md (do not intercept printable runes globally without checking activePageCapturesInput). Net effect: the history time-window feature is completely unusable.
 
-
----
-
-### [MINOR] Help viewport scroll position is sticky across opens
-
-**Phase:** ?  
-**Evidence:** ["/home/diogo/.cache/tui-validator/model-loader/20260520T165549Z/captures/0107-help-at-bottom.txt","/home/diogo/.cache/tui-validator/model-loader/20260520T165549Z/captures/0108-help-reopened2.txt"]  
-
-The help modal remembers its viewport scroll position when closed and reopened. If a user scrolls to the bottom with `G`, closes help with `esc`, then reopens with `?`, the viewport is still at the bottom instead of resetting to the top. This contradicts user expectation for a transient modal.
-
+**Suggested fix:** Make the Server page report IsCapturingInput()==true while the History chart is open (like ProfilesPage.editing), or have the History view consume 1-4 before the global handler. Add a root_test.go case with the capturingPage double proving 1-4 are forwarded while the chart is open.
 
 ---
 
-### [MINOR] Editor sub-tab documentation mismatch
+### [MAJOR] Models table uses hard-coded column widths; every row wraps to a second line
 
-**Phase:** ?  
-**Evidence:** ["/home/diogo/.cache/tui-validator/model-loader/20260520T165549Z/captures/0073-after-editor-open.txt","/home/diogo/.cache/tui-validator/model-loader/20260520T165549Z/captures/0075-after-editor-toggle-tab.txt","/home/diogo/.cache/tui-validator/model-loader/20260520T165549Z/captures/0077-after-editor-toggle-tab2.txt"]  
+**Phase:** visual  
+**Evidence:** screenshots/models-80x24-tablebug.png  
 
-The help text says `ctrl+t` toggles between 'Essentials / Advanced sub-tab', but the actual Profile Editor has four sub-tabs: Essentials, Advanced, Environment, and Sizing. This mismatch confuses users about the editor's structure.
+The Models tab table allocates a fixed ~38-char Name column regardless of terminal width. At 80 cols the Path value overflows and wraps to column 0 on the next line (no indent), and at 60 cols even the header splits ('Size Quant' / 'Params Path'). Each model therefore occupies two visually-broken lines and the Path is unreadable. The Profiles detail panel wraps cleanly at the same widths, so the bug is specific to the Models table layout, not the terminal.
 
-
----
-
-### [COSMETIC] Help modal border truncated at 60-column width
-
-**Phase:** ?  
-**Evidence:** ["/home/diogo/.cache/tui-validator/model-loader/20260520T165549Z/captures/0097-visual-tiny.txt"]  
-
-At the `tiny` geometry (60×20), the help modal's Unicode box-drawing border is truncated and the content overflows the visible area. The modal does not adapt its width to the terminal size.
-
+**Suggested fix:** Compute column widths from the available pane width (flex the Name/Path columns, hard-truncate with an ellipsis instead of wrapping). Reuse the responsive sizing the detail panel already does.
 
 ---
 
-### [COSMETIC] Status bar truncated at wide geometry
+### [MAJOR] Profile descriptions bleed into the Server running-instances table
 
-**Phase:** ?  
-**Evidence:** ["/home/diogo/.cache/tui-validator/model-loader/20260520T165549Z/captures/0099-visual-wide.txt"]  
+**Phase:** probe  
+**Evidence:** captures/0128-after-s-kill-press.txt  
 
-At 160-column width, the global status bar at the bottom is truncated mid-string (e.g., `[1-4] tabs [tab] next [q] q` instead of `[q] quit`). This is a lipgloss width calculation issue where the status bar exceeds its allocated width.
+On the Server tab, the running-instances table rows are partially overwritten by text from another panel: rows render as truncated 'q...' fragments interleaved with profile-description / backend-detail strings (e.g. 'mean 26.042s +/-0.094, baseline 999s = -97.4%', 'Qwen3.6-35B-A3B MoE with native MTP self-'). The instance table is not clearing the cells previously occupied by another view's content, so stale text shows through between the PID/Port columns.
 
+**Suggested fix:** Ensure the instance-list view paints a full-width opaque background for each row (lipgloss Width + background) so residual content from the prior frame/right-panel is overwritten, or clear the region before rendering the table.
 
 ---
 
-### [INFO] Destructive keys skipped in audit
+### [MINOR] Confirm/discard modals misalign borders and truncate text at 80 cols
 
-**Phase:** ?  
-**Evidence:** []  
+**Phase:** probe  
+**Evidence:** captures/0088-after-p-edit-esc.txt  
 
-Keys `d` (duplicate), `D` (default backend), `x` (delete), `Delete`, `k` (kill instance), `r` (restart), and `Enter` (launch) were not probed because they can modify data or start processes. The audit covers only safe bindings.
+The Profiles delete, instance Kill, and Editor discard modals render with mismatched borders (top/bottom corners at one column, side '|' borders at another) and their text is clipped: 'Delete profile gemm', 'Discard unsaved cha', button label 'Ke[ep]' cut off. The user cannot read the full target name or the second button at the default 80x24. By contrast the Backends delete modal (a nested, centered modal component) renders correctly with the full text 'Delete backend vllm-qa?' and aligned borders — so two different modal implementations exist and only one is correct.
+
+**Suggested fix:** Route the Profiles/Server confirm dialogs through the same centered modal component the Backends tab uses; size the box to the content and the available width.
+
+---
+
+### [MINOR] Help overlay clips text mid-word instead of wrapping; side borders short
+
+**Phase:** inventory  
+**Evidence:** captures/0033-after-h3-open.txt  
+
+The help overlay hard-truncates long lines at the inner box width, dropping words: 'sub-tabs while editin', '[k] ki', 'history chart window ... (only whi chart is open)', 'L launches a process' (closing paren lost). The overlay's left/right '|' borders also sit ~2 columns short of the top/bottom corner glyphs at both 80 and 90 cols. Help content is therefore incomplete and the frame looks broken.
+
+**Suggested fix:** Word-wrap help lines to the inner content width (lipgloss can wrap), and derive the side-border width from the same value used for the top/bottom edges so corners line up.
+
+---
+
+### [MINOR] Help scroll keys g / G are dead despite being advertised
+
+**Phase:** probe  
+**Evidence:** captures/0035-after-h3-G-from-top.txt  
+
+The help overlay header states scroll keys '↑/↓/PgUp/PgDn/k/j/g/G'. Arrows, j/k and PgUp/PgDn all scroll, but g (jump to top) and G (jump to bottom) do nothing from any position. The advertised vim-style jump-to-ends is unimplemented.
+
+**Suggested fix:** Bind g/G in the help viewport to GotoTop/GotoBottom, or remove them from the advertised hint.
+
+---
+
+### [MINOR] Models filter drops fast / bursted keystrokes
+
+**Phase:** stress  
+**Evidence:** captures/0147-after-m-filter-type.txt  
+
+Typing into the Models filter at speed loses characters. Sending 'Hunyuan' as a fast burst left the filter buffer empty (filter: ""  [27/27]); the same text typed with a 60 ms inter-key delay registered correctly ('hun' -> [1/27]). The Profiles and Backends filters both accept the same bursted input without loss, so the Models filter has an input-handling race (likely re-initialising the text input or processing async between keystrokes).
+
+**Suggested fix:** Ensure the Models filter feeds every KeyMsg into a single persistent textinput.Model and does not reset state between messages; verify it doesn't depend on an async tick to commit characters.
+
+---
+
+### [MINOR] Duplicate (d) silently no-ops on a pinned profile
+
+**Phase:** probe  
+**Evidence:** captures/0174-after-p-dup.txt  
+
+Pressing d to duplicate while a PINNED profile is selected does nothing — no new file, no list change, no flash message. The same key on a non-pinned profile works correctly (6 -> 7 profiles, creates <name>-copy.json). Either pinned profiles should be duplicable too, or the no-op should surface a reason.
+
+**Suggested fix:** Allow duplicating pinned profiles (the copy need not inherit the pin), or show a status-bar message explaining why it was skipped.
+
+---
+
+### [MINOR] Stale proxy-state.json shown as RUNNING when no proxy process exists
+
+**Phase:** probe  
+**Evidence:** captures/0011-after-tab2.txt  
+
+On launch the Server tab showed '● RUNNING 127.0.0.1:4321' even though the proxy process recorded in proxy-state.json had already died (port 4321 was free). The status later flapped to '○ STOPPED'. The proxy state is read from disk but not validated against a live process at startup, so the UI can claim a proxy is running when it is not. (Manually starting/stopping via s/x worked correctly and bound a real listener.)
+
+**Suggested fix:** On boot, verify the PID/port in proxy-state.json is actually alive/listening before showing RUNNING; otherwise mark STOPPED and clear the stale state.
+
+---
+
+### [INFO] Server instance list does not refresh immediately after a kill
+
+**Phase:** probe  
+**Evidence:** captures/0129-after-kill-confirm.txt  
+
+After confirming a kill (the underlying llama-server process did terminate — verified dead), the killed instance row lingered in the table with its uptime still counting up until the next monitor tick. Cosmetic lag, not data loss.
+
+**Suggested fix:** Optimistically drop the row (or mark it 'stopping') on confirm rather than waiting for the next reconcile tick.
+
+---
+
+### [INFO] A second model-loader session was running concurrently during the audit
+
+**Phase:** discover  
+**Evidence:** n/a  
+
+While auditing, another model-loader instance (outside the tmux session) was actively mutating shared state: a new profile file (qwen36-35b-a3b-mtp-200k.json) appeared mid-run and the managed instance's PID changed (1406589 -> 1564337) without my input. Two instances share instances.json / proxy-state.json, which risks state races and partially explains STATE-01. Not a defect found by this audit per se, but the app has no apparent single-instance lock.
+
+**Suggested fix:** Consider an advisory lock or last-writer reconciliation on instances.json / proxy-state.json so two concurrent UIs don't clobber each other.
+
+---
+
+### [INFO] Verified-working: input-capture gate, unicode, core CRUD, proxy and kill
+
+**Phase:** probe  
+**Evidence:** captures/0080-after-p-edit-digit1.txt  
+
+Confirmed functional: global keys (1-4, Tab, Shift+Tab, ?, q); help scroll via arrows/j/k/PgUp/PgDn; the input-capture gate correctly forwards printable keys (typing '1' and 'q' into the Profiles filter and the Editor did NOT switch tabs or quit); Profiles nav/pin/background/refresh/filter/new/edit/export; Editor Ctrl+T sub-tab cycling and discard confirmation; Server v cycle / Space / H / proxy start(s)+stop(x) (bound and freed a real listener) / instance kill (terminated the real 35B process); Models info panel / action menu / down-nav (color highlight); Backends nav/filter/probe/edit/delete. Unicode in the Profiles filter renders correctly for accents (ção não), CJK (中日韓), symbols (café€£) and emoji (🚀😀).
+
+**Suggested fix:** No action — recorded so the report distinguishes verified-good behaviour from untested.
 
 ## Visual gallery
 
-_(no screenshots captured)_
+#### help-overlay-80x24
+
+![help-overlay-80x24](/home/diogo/.cache/tui-validator/model-loader/20260520T201513Z/screenshots/help-overlay-80x24.png)
+
+#### models-80x24-tablebug
+
+![models-80x24-tablebug](/home/diogo/.cache/tui-validator/model-loader/20260520T201513Z/screenshots/models-80x24-tablebug.png)
+
+#### test-wide-160x40
+
+![test-wide-160x40](/home/diogo/.cache/tui-validator/model-loader/20260520T201513Z/screenshots/test-wide-160x40.png)
+
+#### tiny-60x20-profiles
+
+![tiny-60x20-profiles](/home/diogo/.cache/tui-validator/model-loader/20260520T201513Z/screenshots/tiny-60x20-profiles.png)
+
+#### wide-160x40-profiles
+
+![wide-160x40-profiles](/home/diogo/.cache/tui-validator/model-loader/20260520T201513Z/screenshots/wide-160x40-profiles.png)
+
+

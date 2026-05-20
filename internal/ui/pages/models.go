@@ -32,6 +32,8 @@ type ModelsPage struct {
 	table      table.Model
 	width      int
 	height     int
+	nameColW   int // flexed Name column width, recomputed on resize (RENDER-01)
+	pathColW   int // flexed Path column width, recomputed on resize (RENDER-01)
 	filter     string
 	filterMode bool
 	flash      components.Flash
@@ -90,6 +92,8 @@ func NewModelsPage(scanner modelscanner.Scanner, paths []string) ModelsPage {
 		paths:     paths,
 		statusMap: statusMap,
 		table:     t,
+		nameColW:  36,
+		pathColW:  40,
 		keys:      defaultModelsKeys(),
 		flash:     components.NewFlash("models"),
 	}

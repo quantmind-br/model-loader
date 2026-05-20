@@ -192,6 +192,26 @@ func (p *ServerPage) renderRows(insts []domain.RunningInstance) []table.Row {
 	return rows
 }
 
+// dropInstanceRow removes the row for pid from the table immediately, so a
+// confirmed kill disappears from the list without waiting for the next 2s
+// monitor tick (UX-02). The authoritative refresh that follows reconciles
+// the table against the live process list.
+func (p *ServerPage) dropInstanceRow(pid int) {
+	rows := p.tbl.Rows()
+	kept := make([]table.Row, 0, len(rows))
+	for _, r := range rows {
+		pidCol := strings.TrimPrefix(stripANSI(r[0]), "✗ ")
+		var rowPID int
+		_, _ = fmt.Sscanf(pidCol, "%d", &rowPID)
+		if rowPID == pid {
+			continue
+		}
+		kept = append(kept, r)
+	}
+	p.tbl.SetRows(kept)
+	p.clampCursor(len(kept))
+}
+
 // clampCursor pulls the table cursor back into range when the row count
 // shrinks. Bubbles' table doesn't auto-clamp, so SelectedRow can later
 // return an empty Row and panic on row[0] without this.

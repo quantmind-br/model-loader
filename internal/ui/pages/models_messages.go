@@ -116,7 +116,11 @@ func (p ModelsPage) handleFilterKey(msg tea.KeyMsg) (handled bool, m tea.Model, 
 			}
 			return true, p, nil
 		}
-		if len(msg.Runes) == 1 {
+		// Append every rune in the message, not just single-rune events.
+		// Fast/bursted typing (and paste) arrives as one KeyMsg carrying
+		// multiple runes — the old `== 1` guard silently dropped those,
+		// losing characters under speed (INPUT-01).
+		if msg.Type == tea.KeyRunes && len(msg.Runes) > 0 {
 			p.filter += string(msg.Runes)
 			p.refreshRows()
 			return true, p, nil
@@ -162,6 +166,7 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if p.infoPanel != nil {
 			p.infoPanel = nil
 			p.infoPanelUsedBy = nil
+			p.resizeColumns(p.width)
 			return p, nil
 		}
 		if p.filterMode || p.filter != "" {
@@ -183,6 +188,7 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if p.infoPanel != nil {
 				p.infoPanel = nil
 				p.infoPanelUsedBy = nil
+				p.resizeColumns(p.width)
 				return p, nil
 			}
 			return p.openInfoPanel()

@@ -16,6 +16,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/quantmind-br/model-loader/internal/config"
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/backendschema"
@@ -53,6 +54,26 @@ func main() {
 func runTUI() int {
 	cliLevel := flag.String("log-level", "", "override log level (debug|info|warn|error); also reads $MODEL_LOADER_LOG_LEVEL and config logging.level")
 	flag.Parse()
+
+	// Single-instance guard (ENV-01): a second interactive TUI sharing the
+	// same state dir would race on instances.json / proxy-state.json. Acquire
+	// the advisory lock before bootstrap so we don't even run the boot-time
+	// reconcile from a duplicate session. Config-load failures are non-fatal
+	// here — bootstrap reports them properly.
+	if early, cErr := config.Load(); cErr == nil {
+		release, acquired, lErr := acquireSingleInstanceLock(early.Paths.StateDir)
+		if lErr != nil {
+			fmt.Fprintf(os.Stderr, "single-instance lock: %v\n", lErr)
+		}
+		if release != nil {
+			defer release()
+		}
+		if !acquired {
+			fmt.Fprintln(os.Stderr, "model-loader is already running (another instance holds the state lock).")
+			fmt.Fprintln(os.Stderr, "Close the other session first — two instances would clobber instances.json / proxy-state.json.")
+			return 1
+		}
+	}
 
 	cfg, logger, closeLog, svc, err := bootstrap(*cliLevel)
 	if err != nil {

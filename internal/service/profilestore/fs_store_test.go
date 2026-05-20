@@ -194,6 +194,22 @@ func TestFSStore_Duplicate(t *testing.T) {
 	}
 }
 
+func TestFSStore_DuplicateClearsPin(t *testing.T) {
+	s, _ := newStore(t)
+	src := sampleProfile("orig", "Original")
+	src.Pinned = true
+	if err := s.Save(src); err != nil {
+		t.Fatal(err)
+	}
+	dup, err := s.Duplicate("orig", "orig-copy")
+	if err != nil {
+		t.Fatalf("Duplicate: %v", err)
+	}
+	if dup.Pinned {
+		t.Error("duplicate of a pinned profile must start unpinned (UX-01)")
+	}
+}
+
 func TestFSStore_DuplicateBumpsPortWhenInUse(t *testing.T) {
 	s, _ := newStore(t)
 	if err := s.Save(sampleProfile("a", "A")); err != nil {

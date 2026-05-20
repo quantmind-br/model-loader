@@ -121,10 +121,13 @@ func (p *ServerPage) Init() tea.Cmd {
 }
 
 // IsCapturingInput tells the root model when the page owns global keys.
+// The history chart claims input so its 1/2/3/4 time-window keys reach the
+// page instead of triggering the global tab switch (ROUTE-01).
 func (p *ServerPage) IsCapturingInput() bool {
 	return CaptureAny(
 		func() bool { return p.killConfirm.Active() },
 		func() bool { return p.restartConfirm.Active() },
+		func() bool { return p.historyChart != nil },
 	)
 }
 
@@ -152,11 +155,17 @@ func (p *ServerPage) View() string {
 }
 
 func (p *ServerPage) OverlayView() Overlay {
+	// Route confirms through the centered Modal box (same path the Backends
+	// tab uses) so the dialog renders as a full-canvas opaque frame instead
+	// of a bare huh form. The bare form left page text bleeding around its
+	// short button row when composited by components.Overlay (RENDER-02/03).
 	if p.killConfirm.Active() {
-		return Overlay{Content: p.killConfirm.View(), Width: p.width, Height: p.height, Active: true}
+		content := components.Modal("Kill instance", p.killConfirm.View(), p.width, p.height)
+		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
 	}
 	if p.restartConfirm.Active() {
-		return Overlay{Content: p.restartConfirm.View(), Width: p.width, Height: p.height, Active: true}
+		content := components.Modal("Restart instance", p.restartConfirm.View(), p.width, p.height)
+		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
 	}
 	return Overlay{}
 }

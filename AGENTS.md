@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-05-19
-**Commit:** 72d6e9d
+**Generated:** 2026-05-20
+**Commit:** c7fc0c0
 **Branch:** main
 
 ## OVERVIEW
@@ -109,7 +109,7 @@ go test ./... -update  # Update golden test fixtures
 - Binary managed: `llama-server` (not model-loader)
 - Config path: ~/.config/model-loader/config.toml
 - State path: ~/.local/state/model-loader/instances.json
-- Profiles dir: ~/.local/share/model-loader/profiles/
+- Profiles dir: ~/.config/model-loader/profiles/ (config `paths.profiles_dir`; default in config.go:131)
 - Schema version: embedded-v7376
 
 <!-- gitnexus:start -->

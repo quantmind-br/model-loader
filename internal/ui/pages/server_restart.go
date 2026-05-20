@@ -42,6 +42,7 @@ func (p *ServerPage) handleRestartResult(m restartResultMsg) (tea.Model, tea.Cmd
 
 func (p *ServerPage) handleKillConfirmed(m monitorKillConfirmedMsg) (tea.Model, tea.Cmd) {
 	_ = p.pm.Kill(m.pid)
+	p.dropInstanceRow(m.pid) // optimistic removal; refresh below reconciles (UX-02)
 	return p, tea.Batch(p.refreshInstancesCmd(), p.forwardToConfirms(m))
 }
 

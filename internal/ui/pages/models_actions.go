@@ -170,6 +170,9 @@ func (p ModelsPage) openInfoPanel() (tea.Model, tea.Cmd) {
 		UsedByProfiles: usedBy,
 	}
 	p.infoPanelUsedBy = usedBy
+	// The table now shares the row with the info panel — reflow columns so
+	// they fit the narrower pane (RENDER-01).
+	p.resizeColumns(p.width)
 	return p, nil
 }
 

@@ -107,6 +107,7 @@ func (p ModelsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (p ModelsPage) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	p.width, p.height = msg.Width, msg.Height
 	p.table.SetHeight(msg.Height - 8)
+	p.resizeColumns(msg.Width)
 	if p.hfSearch != nil {
 		p.hfSearch.SetSize(msg.Width, msg.Height)
 	}

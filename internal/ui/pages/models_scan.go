@@ -105,20 +105,74 @@ func (p ModelsPage) visibleFiles() []domain.ModelFile {
 }
 
 // refreshRows rebuilds table rows from p.files honoring the current
-// filter. Sorted by name for stable display.
+// filter. Sorted by name for stable display. Name/Path cells are truncated
+// to the flexed column widths so the row never exceeds the terminal width
+// and wraps onto a second line (RENDER-01).
 func (p *ModelsPage) refreshRows() {
+	nameW, pathW := p.nameColW, p.pathColW
+	if nameW <= 0 {
+		nameW = 36
+	}
+	if pathW <= 0 {
+		pathW = 40
+	}
 	files := p.visibleFiles()
 	rows := make([]table.Row, 0, len(files))
 	for _, f := range files {
 		rows = append(rows, table.Row{
-			truncate(f.Name, 36),
+			truncate(f.Name, nameW),
 			humanSize(f.SizeBytes),
 			f.Quant,
 			f.Params,
-			truncate(f.Path, 40),
+			truncate(f.Path, pathW),
 		})
 	}
 	p.table.SetRows(rows)
+}
+
+// resizeColumns recomputes the Name/Path column widths so the table fits
+// within the available terminal width instead of overflowing with a fixed
+// 104-char layout. Size/Quant/Params stay fixed; Name and Path share the
+// remaining width. Rows are re-truncated to match (RENDER-01).
+func (p *ModelsPage) resizeColumns(width int) {
+	if width <= 0 {
+		return
+	}
+	const sizeW, quantW, paramsW = 10, 10, 8
+	avail := width
+	// Leave room for the info panel when it's open (rendered side-by-side).
+	if p.infoPanel != nil {
+		panelW := width / 3
+		if panelW > 60 {
+			panelW = 60
+		}
+		if panelW < 30 {
+			panelW = 30
+		}
+		avail -= panelW
+	}
+	// Reserve fixed columns plus per-column cell padding/borders.
+	flex := avail - (sizeW + quantW + paramsW) - 8
+	if flex < 32 {
+		flex = 32
+	}
+	nameW := flex * 9 / 20 // ~45% to Name
+	if nameW < 12 {
+		nameW = 12
+	}
+	pathW := flex - nameW
+	if pathW < 12 {
+		pathW = 12
+	}
+	p.nameColW, p.pathColW = nameW, pathW
+	p.table.SetColumns([]table.Column{
+		{Title: "Name", Width: nameW},
+		{Title: "Size", Width: sizeW},
+		{Title: "Quant", Width: quantW},
+		{Title: "Params", Width: paramsW},
+		{Title: "Path", Width: pathW},
+	})
+	p.refreshRows()
 }
 
 // isScanning reports whether any configured root is still being scanned.

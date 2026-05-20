@@ -8,6 +8,7 @@ Tab page implementations. Each page is a `tea.Model` with isolated state and lif
 |------|---------|
 | `profiles.go` | Profile CRUD master list |
 | `profiles_list.go` | Profile list view delegate |
+| `profiles_crud.go` | Profile create/update/delete orchestration (extracted from profiles.go) |
 | `profile_editor/` | Inline huh form for profile creation/editing (sub-package) |
 | `models.go` | GGUF model browser and scanner integration |
 | `launcher.go` | Profile selection, validation, launch orchestration |
