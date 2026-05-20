@@ -5,6 +5,11 @@
       "source": "/home/diogo/dev/skills/llamacpp",
       "sourceType": "local",
       "computedHash": "d99b92723cc416c4b2c8c984dd5b61b605118e0f0df4d2592a320f45db7b71fe"
+    },
+    "tui-validator": {
+      "source": "/home/diogo/dev/skills/tui-validator",
+      "sourceType": "local",
+      "computedHash": "4b1342c58e8e02b023c050207609d312b1dd9183ed134869efd8c7034e193c63"
     }
   }
 }
