@@ -50,15 +50,12 @@ type Draft struct {
 	Tags        string
 	Model       string
 	BackendID   string
-	NGL         string
-	CtxSize     string
-	BatchSize   string
-	UBatchSize  string
-	Port        string
-	FlashAttn   string
-	CacheTypeK  string
-	CacheTypeV  string
 	IsNew       bool
+	// Essentials holds schema-driven essential flag values keyed by canonical
+	// long flag name (e.g. "n-gpu-layers", "ctx-size"). Populated by
+	// hydrateEssentials and kept in sync with the huh form via syncEssentials.
+	// Value map (not pointer) so Draft remains copyable for snapshot/dirty-check.
+	Essentials map[string]string
 	// Args holds generic schema-backed flag values edited in the Advanced
 	// tab. Keys are flag long names; values are typed per domain.FlagSpec.
 	// Essentials fields (ngl, ctx-size, etc.) take precedence and overwrite
@@ -66,7 +63,7 @@ type Draft struct {
 	Args map[string]any
 	// Env mirrors Profile.Launch.Env in editor-friendly form. Slice preserves
 	// insertion order as shown in the Environment sub-tab.
-	Env []domain.EnvVar
+	Env            []domain.EnvVar
 	RestartPolicy  string
 	MaxRestarts    string
 	BackoffSeconds string
@@ -120,19 +117,30 @@ func (d Draft) ApplyTo(base domain.Profile) domain.Profile {
 
 // ApplyToWithSchema maps the editor draft onto base, filtering args to only
 // include flags known by the provided schema. When schema is empty (no flags),
-// it falls back to the legacy behaviour of including all draft fields.
-// Existing base.Args that are valid in the schema are preserved, then
-// Draft.Args overlays them, and finally Essentials fields take precedence.
+// it falls back to pass-through behaviour for any keys present.
+//
+// Precedence (lowest → highest):
+//  1. base.Args (filtered by schema; entries whose canonical long collides
+//     with an Essentials key are skipped to dedupe legacy short keys such as
+//     "ngl" vs "n-gpu-layers").
+//  2. Draft.Args (Advanced tab edits, overlay).
+//  3. Draft.Essentials (highest; keyed by canonical long name; empty values
+//     are omitted so the user can clear a field back to backend default;
+//     each value is parsed via parseFlagValue and silently dropped on parse
+//     error since the form validator should have caught it).
 func (d Draft) ApplyToWithSchema(base domain.Profile, schema domain.FlagSchema) domain.Profile {
-	ngl, _ := strconv.Atoi(d.NGL)
-	ctx, _ := strconv.Atoi(d.CtxSize)
-	port, _ := strconv.Atoi(d.Port)
 	args := map[string]any{}
+	hasSchema := len(schema.Flags) > 0
 
-	// include adds a flag only when the schema knows it or when no schema
-	// is available (fallback for backward compatibility).
+	// Set of canonical longs in Essentials, used to dedupe legacy short keys
+	// (e.g. base.Args["ngl"] when Essentials carries "n-gpu-layers").
+	essLong := map[string]bool{}
+	for k := range d.Essentials {
+		essLong[k] = true
+	}
+
 	include := func(key string, val any) {
-		if len(schema.Flags) == 0 {
+		if !hasSchema {
 			args[key] = val
 			return
 		}
@@ -141,34 +149,40 @@ func (d Draft) ApplyToWithSchema(base domain.Profile, schema domain.FlagSchema) 
 		}
 	}
 
-	// 1. Preserve existing base args that are valid in the schema.
+	// 1. base.Args valid in schema, except those colliding with an Essentials
+	//    key under their canonical long name.
 	for k, v := range base.Args {
+		if hasSchema {
+			if spec, ok := schema.Lookup(k); ok && essLong[spec.Long] {
+				continue // will be (re)written by Essentials under the long name
+			}
+		}
 		include(k, v)
 	}
 
-	// 2. Overlay generic draft args (edited in Advanced tab).
+	// 2. Draft.Args (Advanced tab).
 	for k, v := range d.Args {
 		include(k, v)
 	}
 
-	// 3. Overlay hardcoded Essentials fields (they take precedence).
-	include("port", float64(port))
-	include("ngl", float64(ngl))
-	include("ctx-size", float64(ctx))
-	if d.FlashAttn != "" {
-		include("flash-attn", d.FlashAttn)
-	}
-	if v, err := strconv.Atoi(d.BatchSize); err == nil {
-		include("batch-size", float64(v))
-	}
-	if v, err := strconv.Atoi(d.UBatchSize); err == nil {
-		include("ubatch-size", float64(v))
-	}
-	if d.CacheTypeK != "" {
-		include("cache-type-k", d.CacheTypeK)
-	}
-	if d.CacheTypeV != "" {
-		include("cache-type-v", d.CacheTypeV)
+	// 3. Essentials, under canonical long name, parsed per schema type.
+	for long, raw := range d.Essentials {
+		if strings.TrimSpace(raw) == "" {
+			continue // empty = use backend default / unset
+		}
+		if !hasSchema {
+			args[long] = raw
+			continue
+		}
+		spec, ok := schema.Lookup(long)
+		if !ok {
+			continue
+		}
+		val, err := parseFlagValue(raw, schema, long)
+		if err != nil {
+			continue // validator already gated; defensive
+		}
+		args[spec.Long] = val
 	}
 
 	out := base
@@ -230,52 +244,131 @@ func FlashAttnToString(v any) string {
 	}
 }
 
-func buildForm(d *Draft, schema domain.FlagSchema, backendOpts []huh.Option[string], kind domain.BackendKind) *huh.Form {
-	cacheOpts := selectOptions(schema, "cache-type-k", []string{"f16", "q8_0", "q4_0"})
-	groups := []*huh.Group{
-		huh.NewGroup(
-			huh.NewInput().Title("Name").Description("Unique profile identifier").Value(&d.Name),
-			huh.NewInput().Title("Description").Value(&d.Description),
-			huh.NewInput().Title("Tags").Description("comma-separated").Value(&d.Tags),
-			huh.NewInput().Title("Model path (.gguf)").Description("Path to the GGUF model file (ctrl+p to pick)").Value(&d.Model),
-		),
+func buildForm(d *Draft, schema domain.FlagSchema, backendOpts []huh.Option[string], kind domain.BackendKind) (*huh.Form, map[string]*string, map[string]huh.Field) {
+	ptrs := map[string]*string{}
+	fieldMap := map[string]huh.Field{}
+
+	g1Fields := []huh.Field{
+		setFieldKey(huh.NewInput().Title("Name").Description("Unique profile identifier").Value(&d.Name), "name"),
+		setFieldKey(huh.NewInput().Title("Description").Value(&d.Description), "description"),
+		setFieldKey(huh.NewInput().Title("Tags").Description("comma-separated").Value(&d.Tags), "tags"),
+		setFieldKey(huh.NewInput().Title(modelLabel(kind)).Description(modelDesc(kind)).Value(&d.Model), "model"),
 	}
 	if len(backendOpts) > 0 {
-		groups[0] = huh.NewGroup(
-			huh.NewInput().Title("Name").Description("Unique profile identifier").Value(&d.Name),
-			huh.NewInput().Title("Description").Value(&d.Description),
-			huh.NewInput().Title("Tags").Description("comma-separated").Value(&d.Tags),
-			huh.NewInput().Title("Model path (.gguf)").Description("Path to the GGUF model file (ctrl+p to pick)").Value(&d.Model),
-			huh.NewSelect[string]().
-				Title("Backend").
-				Description("Which backend engine to use").
-				Options(backendOpts...).
-				Value(&d.BackendID),
-		)
+		g1Fields = append(g1Fields, setFieldKey(huh.NewSelect[string]().
+			Title("Backend").
+			Description("Which backend engine to use").
+			Options(backendOpts...).
+			Value(&d.BackendID), "backend"))
 	}
-	if kind == domain.BackendKindLlamaServer || kind == "" {
-		groups = append(groups, huh.NewGroup(
-			huh.NewInput().Title(labelWithHelp(schema, "n-gpu-layers", "ngl (gpu layers)")).Description("Number of GPU layers to offload").Value(&d.NGL).Validate(intRange(-1, 9999, false)),
-			huh.NewInput().Title(labelWithHelp(schema, "ctx-size", "ctx-size")).Description("Context window size in tokens").Value(&d.CtxSize).Validate(intRange(0, 1024*1024, false)),
-			huh.NewInput().Title(labelWithHelp(schema, "batch-size", "batch-size")).Description("Prompt processing batch size").Value(&d.BatchSize).Validate(intRange(0, 1024*1024, true)),
-			huh.NewInput().Title(labelWithHelp(schema, "ubatch-size", "ubatch-size")).Description("Physical batch size for split operations").Value(&d.UBatchSize).Validate(intRange(0, 1024*1024, true)),
-			huh.NewInput().Title(labelWithHelp(schema, "port", "port")).Description("Port to bind the inference server").Value(&d.Port).Validate(portValidator()),
-			huh.NewSelect[string]().Title(labelWithHelp(schema, "flash-attn", "flash-attn")).Description("Enable FlashAttention for faster inference").Options(toOptions(selectOptions(schema, "flash-attn", []string{"on", "off", "auto"}))...).Value(&d.FlashAttn),
-			huh.NewSelect[string]().Title("cache-type-k").Description("Key cache quantization type").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeK),
-			huh.NewSelect[string]().Title("cache-type-v").Description("Value cache quantization type").Options(toOptions(cacheOpts)...).Value(&d.CacheTypeV),
-		))
+	groups := []*huh.Group{huh.NewGroup(g1Fields...)}
+
+	if ess := essentialsFor(kind, schema); len(ess) > 0 {
+		fields := make([]huh.Field, 0, len(ess))
+		for _, f := range ess {
+			spec, _ := schema.Lookup(f.Flag)
+			val := d.Essentials[spec.Long]
+			p := &val
+			ptrs[spec.Long] = p
+			fld := setFieldKey(essentialField(f, spec, p), spec.Long)
+			fields = append(fields, fld)
+			fieldMap[spec.Long] = fld
+		}
+		groups = append(groups, huh.NewGroup(fields...))
 	}
+
 	restartOpts := []huh.Option[string]{
 		huh.NewOption("none", string(domain.RestartPolicyNone)),
 		huh.NewOption("on-failure", string(domain.RestartPolicyOnFailure)),
 		huh.NewOption("always", string(domain.RestartPolicyAlways)),
 	}
 	groups = append(groups, huh.NewGroup(
-		huh.NewSelect[string]().Title("Restart policy").Description("Auto-restart behaviour on crash").Options(restartOpts...).Value(&d.RestartPolicy),
-		huh.NewInput().Title("Max restarts").Description("Maximum consecutive restarts (0 = unlimited)").Value(&d.MaxRestarts).Validate(intRange(0, 100, false)),
-		huh.NewInput().Title("Backoff seconds").Description("Base delay before first restart attempt").Value(&d.BackoffSeconds).Validate(intRange(1, 3600, false)),
+		setFieldKey(huh.NewSelect[string]().Title("Restart policy").Description("Auto-restart behaviour on crash").Options(restartOpts...).Value(&d.RestartPolicy), "restart_policy"),
+		setFieldKey(huh.NewInput().Title("Max restarts").Description("Maximum consecutive restarts (0 = unlimited)").Value(&d.MaxRestarts).Validate(intRange(0, 100, false)), "max_restarts"),
+		setFieldKey(huh.NewInput().Title("Backoff seconds").Description("Base delay before first restart attempt").Value(&d.BackoffSeconds).Validate(intRange(1, 3600, false)), "backoff_seconds"),
 	))
-	return huh.NewForm(groups...).WithShowHelp(true)
+	return huh.NewForm(groups...).WithShowHelp(true), ptrs, fieldMap
+}
+
+func setFieldKey(f huh.Field, key string) huh.Field {
+	switch v := f.(type) {
+	case *huh.Input:
+		return v.Key(key)
+	case *huh.Select[string]:
+		return v.Key(key)
+	}
+	return f
+}
+
+func essentialField(f EssentialField, spec domain.FlagSpec, p *string) huh.Field {
+	title := f.Label
+	if title == "" {
+		title = spec.Long
+	}
+	title = decorateLabel(title, spec)
+	desc := f.Description
+	if desc == "" {
+		desc = spec.HelpText
+	}
+	switch spec.Type {
+	case domain.FlagTypeEnum:
+		return huh.NewSelect[string]().Title(title).Description(desc).Options(toOptions(spec.EnumValues)...).Value(p)
+	case domain.FlagTypeBool:
+		return huh.NewSelect[string]().Title(title).Description(desc).Options(toOptions([]string{"true", "false"})...).Value(p)
+	case domain.FlagTypeFloat:
+		return huh.NewInput().Title(title).Description(desc).Value(p).Validate(floatValidator(f.AllowEmpty))
+	case domain.FlagTypeInt:
+		return huh.NewInput().Title(title).Description(desc).Value(p).Validate(intValidatorFor(f))
+	default:
+		return huh.NewInput().Title(title).Description(desc).Value(p)
+	}
+}
+
+func intValidatorFor(f EssentialField) func(string) error {
+	if f.IsPort {
+		return portValidator()
+	}
+	min, max := -1<<31, 1<<31-1
+	if f.Min != nil {
+		min = *f.Min
+	}
+	if f.Max != nil {
+		max = *f.Max
+	}
+	return intRange(min, max, f.AllowEmpty)
+}
+
+func floatValidator(allowEmpty bool) func(string) error {
+	return func(s string) error {
+		if s == "" {
+			if allowEmpty {
+				return nil
+			}
+			return fmt.Errorf("required")
+		}
+		if _, err := strconv.ParseFloat(s, 64); err != nil {
+			return fmt.Errorf("must be a number")
+		}
+		return nil
+	}
+}
+
+func modelLabel(kind domain.BackendKind) string {
+	switch kind {
+	case domain.BackendKindVLLM, domain.BackendKindSGLang:
+		return "Model (HF repo id or local path)"
+	default:
+		return "Model path (.gguf)"
+	}
+}
+
+func modelDesc(kind domain.BackendKind) string {
+	switch kind {
+	case domain.BackendKindVLLM, domain.BackendKindSGLang:
+		return "HuggingFace repo id (e.g., meta-llama/Llama-3-8B) or local path (Ctrl+P to browse)"
+	default:
+		return "Absolute path to a .gguf file (Ctrl+P to browse)"
+	}
 }
 
 // intRange returns a huh validator for integer fields in [min,max].
@@ -317,21 +410,14 @@ func portValidator() func(string) error {
 	}
 }
 
-func labelWithHelp(schema domain.FlagSchema, name, fallback string) string {
-	if spec, ok := schema.Lookup(name); ok && spec.HelpText != "" {
+func decorateLabel(title string, spec domain.FlagSpec) string {
+	if spec.HelpText != "" {
 		if spec.Default != nil {
-			return fmt.Sprintf("%s — %s (default %v)", fallback, spec.HelpText, spec.Default)
+			return fmt.Sprintf("%s — %s (default %v)", title, spec.HelpText, spec.Default)
 		}
-		return fmt.Sprintf("%s — %s", fallback, spec.HelpText)
+		return fmt.Sprintf("%s — %s", title, spec.HelpText)
 	}
-	return fallback
-}
-
-func selectOptions(schema domain.FlagSchema, name string, fallback []string) []string {
-	if spec, ok := schema.Lookup(name); ok && len(spec.EnumValues) > 0 {
-		return spec.EnumValues
-	}
-	return fallback
+	return title
 }
 
 func toOptions(values []string) []huh.Option[string] {
@@ -359,7 +445,7 @@ func newEnvTable(envs []domain.EnvVar) table.Model {
 	)
 }
 
-func newAdvancedTable(schema domain.FlagSchema, args map[string]any, width, height int) table.Model {
+func newAdvancedTable(schema domain.FlagSchema, args map[string]any, kind domain.BackendKind, width, height int) table.Model {
 	flagWidth := 22
 	typeWidth := 8
 	valWidth := 14
@@ -373,12 +459,19 @@ func newAdvancedTable(schema domain.FlagSchema, args map[string]any, width, heig
 		{Title: "Value", Width: valWidth},
 		{Title: "Help", Width: helpWidth},
 	}
-	rows := schemaRows(schema, args)
+	rows := schemaRows(schema, args, kind)
 	t := table.New(table.WithColumns(cols), table.WithRows(rows), table.WithFocused(true), table.WithHeight(height))
 	return t
 }
 
-func schemaRows(schema domain.FlagSchema, args map[string]any) []table.Row {
+func schemaRows(schema domain.FlagSchema, args map[string]any, kind domain.BackendKind) []table.Row {
+	essential := make(map[string]bool)
+	for _, f := range essentialsFor(kind, schema) {
+		if spec, ok := schema.Lookup(f.Flag); ok {
+			essential[spec.Long] = true
+		}
+	}
+
 	names := make([]string, 0, len(schema.Flags))
 	for k := range schema.Flags {
 		names = append(names, k)
@@ -392,6 +485,9 @@ func schemaRows(schema domain.FlagSchema, args map[string]any) []table.Row {
 			continue
 		}
 		spec := schema.Flags[name]
+		if essential[spec.Long] {
+			continue
+		}
 		val := ""
 		if args != nil {
 			val = ArgString(args[name])

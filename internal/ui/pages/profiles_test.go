@@ -151,11 +151,13 @@ func TestProfilesPage_NewProfileSavesViaStore(t *testing.T) {
 // owned by validator, not by ProfilesPage.
 func TestProfilesPage_ValidationDetectsUbatchOverBatch(t *testing.T) {
 	d := profile_editor.Draft{
-		ID:         "x",
-		Name:       "X",
-		BatchSize:  "2048",
-		UBatchSize: "4096",
-		IsNew:      true,
+		ID:    "x",
+		Name:  "X",
+		IsNew: true,
+		Essentials: map[string]string{
+			"batch-size":  "2048",
+			"ubatch-size": "4096",
+		},
 	}
 	pr := d.ToProfile()
 	report := validator.New(log.Nop()).Validate(pr, domain.FlagSchema{})

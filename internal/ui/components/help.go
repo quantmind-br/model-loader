@@ -28,7 +28,7 @@ _Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or
 - ` + "`I`" + ` — import profiles from JSON bundle
 - ` + "`u`" + ` — undo last import
 - ` + "`e`" + ` — export all profiles to JSON bundle
-- ` + "`ctrl+t`" + ` — toggle Essentials / Advanced sub-tab while editing
+- ` + "`ctrl+t`" + ` — cycle Essentials → Advanced → Environment → Sizing sub-tabs while editing
 - ` + "`/`" + ` — filter
 
 ## Server tab

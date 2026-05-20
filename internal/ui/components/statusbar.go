@@ -57,7 +57,7 @@ const (
 var modeHints = map[FooterMode]string{
 	ModeProfilesSelected:  "enter:launch E:edit n:new d:dup /:filter",
 	ModeProfilesFiltering: "↑↓:nav enter:apply esc:cancel",
-	ModeProfilesEditing:   "ctrl+t:sub-tab ctrl+p:pick esc:cancel",
+	ModeProfilesEditing:   "ctrl+t:cycle ctrl+p:pick esc:cancel",
 	ModeProfilesPicker:    "↑↓:move enter:pick esc:cancel",
 	ModeProfilesConfirm:   "←→:choose enter:confirm esc:cancel",
 
@@ -140,9 +140,13 @@ func (s StatusBar) renderMode(width int) string {
 		hints = string(s.Mode)
 	}
 	hints += "  ?"
-	styled := theme.Subtitle.Render(hints)
 	msg := s.styledMessage()
 	badge := s.restartBadge()
+	avail := width - lipgloss.Width(msg) - lipgloss.Width(badge) - 1
+	if avail > 0 && lipgloss.Width(theme.Subtitle.Render(hints)) > avail {
+		hints = truncateString(hints, avail)
+	}
+	styled := theme.Subtitle.Render(hints)
 	total := lipgloss.Width(styled) + lipgloss.Width(msg) + lipgloss.Width(badge)
 	gap := width - total
 	if gap < 1 {

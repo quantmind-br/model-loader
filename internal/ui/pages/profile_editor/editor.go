@@ -55,8 +55,10 @@ type Editor struct {
 
 	active bool
 
-	form  *huh.Form
-	draft *Draft
+	form          *huh.Form
+	essentialPtrs map[string]*string
+	fieldMap      map[string]huh.Field
+	draft         *Draft
 
 	openSnapshot  Draft
 	lastBackendID string
@@ -109,7 +111,7 @@ var envKeyRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 // schema seeds the advanced flag-reference table and labels Essentials
 // inputs with --help text. Active() is false until Open is called.
 func New(schema domain.FlagSchema) Editor {
-	tbl := newAdvancedTable(schema, nil, 100, 12)
+	tbl := newAdvancedTable(schema, nil, "", 100, 12)
 	return Editor{
 		schema:      schema,
 		validator:   validator.New(log.Nop()),
@@ -159,10 +161,10 @@ func (e Editor) Open(d Draft) (Editor, tea.Cmd) {
 		dp.BackoffSeconds = "5"
 	}
 	e.draft = &dp
-	e.openSnapshot = dp
 	e.lastBackendID = dp.BackendID
 	e = e.loadSchemaForDraft()
-	e.form = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
+	e = e.hydrateEssentials()
+	e.form, e.essentialPtrs, e.fieldMap = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
 	e.active = true
 	e.subTab = subTabEssentials
 	e.advancedFilter = ""
@@ -194,8 +196,8 @@ func (e Editor) SetModelPath(path string) (Editor, tea.Cmd) {
 		return e, nil
 	}
 	e.draft.Model = path
-	e.form = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
-	return e, e.form.Init()
+	e = e.rebuildFormAndRestoreFocus()
+	return e, nil
 }
 
 // SetSubTabSizing switches the editor to the Sizing sub-tab. No-op when
@@ -295,7 +297,15 @@ func (e Editor) Update(msg tea.Msg) (Editor, tea.Cmd) {
 	}
 	if suggest, ok := msg.(suggestAppliedMsg); ok {
 		if e.draft != nil {
-			e.draft.NGL = fmt.Sprintf("%d", suggest.ngl)
+			if e.draft.Essentials == nil {
+				e.draft.Essentials = map[string]string{}
+			}
+			val := fmt.Sprintf("%d", suggest.ngl)
+			e.draft.Essentials["n-gpu-layers"] = val
+			if p := e.essentialPtrs["n-gpu-layers"]; p != nil {
+				*p = val
+			}
+			e = e.rebuildFormAndRestoreFocus()
 		}
 		return e, nil
 	}
@@ -406,7 +416,7 @@ func (e Editor) saveAdvancedEdit() (Editor, tea.Cmd) {
 			}
 			e.draft.Args[e.advancedEditFlag] = val
 		}
-		tbl := newAdvancedTable(e.schema, e.draft.Args, 100, 12)
+		tbl := newAdvancedTable(e.schema, e.draft.Args, e.backendKind, 100, 12)
 		e.advanced = tbl
 		e.advancedAll = tbl.Rows()
 		if e.advancedFilter != "" {
@@ -425,7 +435,7 @@ func (e Editor) startAdvancedEdit() (Editor, tea.Cmd) {
 		return e, nil
 	}
 	row := e.advanced.SelectedRow()
-	if row == nil || len(row) == 0 {
+	if len(row) == 0 {
 		return e, nil
 	}
 	flag := string(row[0])
@@ -622,6 +632,25 @@ func (e Editor) handleEnvKey(msg tea.KeyMsg) (Editor, tea.Cmd) {
 	return e, cmd
 }
 
+func (e Editor) rebuildFormAndRestoreFocus() Editor {
+	focusedKey := ""
+	if e.form != nil {
+		if f := e.form.GetFocusedField(); f != nil {
+			focusedKey = f.GetKey()
+		}
+	}
+	e.form, e.essentialPtrs, e.fieldMap = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
+	if e.form != nil && focusedKey != "" && focusedKey != "name" {
+		for i := 0; i < 20; i++ {
+			if e.form.GetFocusedField().GetKey() == focusedKey {
+				break
+			}
+			_ = e.form.NextField()
+		}
+	}
+	return e
+}
+
 func (e Editor) forwardToForm(msg tea.Msg) (Editor, tea.Cmd) {
 	if e.form == nil {
 		return e, nil
@@ -630,22 +659,23 @@ func (e Editor) forwardToForm(msg tea.Msg) (Editor, tea.Cmd) {
 	if f, ok := updated.(*huh.Form); ok {
 		e.form = f
 	}
+	e = e.syncEssentials()
 	if e.draft != nil && e.draft.BackendID != e.lastBackendID {
 		e.lastBackendID = e.draft.BackendID
 		e = e.reloadSchema()
-		cmd = tea.Batch(cmd, e.form.Init())
+		e = e.rebuildFormAndRestoreFocus()
 	}
 	if e.form != nil && e.form.State == huh.StateCompleted {
 		if e.schemaError != "" {
 			e.submitError = "Cannot save: " + e.schemaError
-			e.form = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
-			return e, tea.Batch(cmd, e.form.Init())
+			e = e.rebuildFormAndRestoreFocus()
+			return e, cmd
 		}
 		report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema)
 		if report.HasBlockingErrors() {
 			e.submitError = fmt.Sprintf("Cannot save: %d validation errors", len(report.Errors))
-			e.form = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
-			return e, tea.Batch(cmd, e.form.Init())
+			e = e.rebuildFormAndRestoreFocus()
+			return e, cmd
 		}
 		committed := *e.draft
 		e = e.close()
@@ -654,6 +684,102 @@ func (e Editor) forwardToForm(msg tea.Msg) (Editor, tea.Cmd) {
 	}
 	e.submitError = ""
 	return e, cmd
+}
+
+func (e Editor) syncEssentials() Editor {
+	if e.draft == nil || len(e.essentialPtrs) == 0 {
+		return e
+	}
+	if e.draft.Essentials == nil {
+		e.draft.Essentials = map[string]string{}
+	}
+	for long, p := range e.essentialPtrs {
+		if p == nil {
+			continue
+		}
+		e.draft.Essentials[long] = *p
+	}
+	return e
+}
+
+// hydrateEssentials promotes schema-driven essential flags from
+// draft.Args into draft.Essentials, seeds defaults for missing fields,
+// and peels the migrated keys out of Args so they do not double-render
+// in the Advanced tab. The post-hydration draft is re-snapshotted so
+// the dirty-check baseline matches what the user actually sees, which
+// prevents a freshly-opened profile from appearing dirty just because
+// defaults were seeded. Safe to call when draft, Args, or Essentials
+// are nil.
+func (e Editor) hydrateEssentials() Editor {
+	e = e.hydrateEssentialsCore()
+	if e.draft != nil {
+		e.openSnapshot = *e.draft
+	}
+	return e
+}
+
+// hydrateEssentialsForSwitch performs the same peel/seed as
+// hydrateEssentials but intentionally does NOT re-snapshot. Use when
+// the user is switching backends mid-edit: the backend change itself
+// is a legitimate dirty mutation and the snapshot must keep pointing
+// at the pre-switch draft so esc/Cancel/discard still detect dirt.
+func (e Editor) hydrateEssentialsForSwitch() Editor {
+	return e.hydrateEssentialsCore()
+}
+
+// hydrateEssentialsCore is the shared peel/seed engine. For each
+// registered essential field on the current backend that exists in
+// the active schema:
+//
+//  1. Walk the candidate keys (canonical long, short, then aliases)
+//     and, on the first present hit, migrate the value into
+//     Essentials[spec.Long] (only if not already set, so the canonical
+//     wins over later legacy aliases).
+//  2. Delete every present candidate from Args so legacy duplicates
+//     do not survive into the Advanced tab.
+//  3. If no candidate matched and the field declares a non-empty
+//     Default, seed Essentials[spec.Long] with that default.
+//
+// Maps are created if nil to keep the rest of the editor pipeline
+// (binders, suggesters, validators) from having to nil-check.
+func (e Editor) hydrateEssentialsCore() Editor {
+	if e.draft == nil {
+		return e
+	}
+	if e.draft.Essentials == nil {
+		e.draft.Essentials = map[string]string{}
+	}
+	if e.draft.Args == nil {
+		e.draft.Args = map[string]any{}
+	}
+	for _, f := range essentialsFor(e.backendKind, e.schema) {
+		spec, ok := e.schema.Lookup(f.Flag)
+		if !ok {
+			continue
+		}
+		candidates := append([]string{spec.Long, spec.Short}, spec.Aliases...)
+		found := false
+		for _, key := range candidates {
+			if key == "" {
+				continue
+			}
+			v, present := e.draft.Args[key]
+			if !present {
+				continue
+			}
+			if _, set := e.draft.Essentials[spec.Long]; !set {
+				e.draft.Essentials[spec.Long] = f.coerce(v)
+			}
+			delete(e.draft.Args, key)
+			found = true
+		}
+		if !found {
+			if _, set := e.draft.Essentials[spec.Long]; !set && f.Default != "" {
+				e.draft.Essentials[spec.Long] = f.Default
+			}
+		}
+	}
+	return e
 }
 
 func (e Editor) reloadSchema() Editor {
@@ -669,12 +795,12 @@ func (e Editor) reloadSchema() Editor {
 	e.schemaError = ""
 	e.schema = schema.ToFlagSchema()
 	e.backendKind = backend.Kind
-	e.form = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
+	e = e.hydrateEssentialsForSwitch()
 	var args map[string]any
 	if e.draft != nil {
 		args = e.draft.Args
 	}
-	tbl := newAdvancedTable(e.schema, args, 100, 12)
+	tbl := newAdvancedTable(e.schema, args, e.backendKind, 100, 12)
 	e.advanced = tbl
 	e.advancedAll = tbl.Rows()
 	if e.advancedFilter != "" {
@@ -701,7 +827,7 @@ func (e Editor) loadSchemaForDraft() Editor {
 	if e.draft != nil {
 		args = e.draft.Args
 	}
-	tbl := newAdvancedTable(e.schema, args, 100, 12)
+	tbl := newAdvancedTable(e.schema, args, e.backendKind, 100, 12)
 	e.advanced = tbl
 	e.advancedAll = tbl.Rows()
 	if e.advancedFilter != "" {

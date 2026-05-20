@@ -40,7 +40,12 @@ type globalShortcut struct {
 
 var rootShortcuts = []globalShortcut{
 	{Keys: []string{"ctrl+c"}, Captures: true, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m, tea.Quit }},
-	{Keys: []string{"?"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { m.helpOpen = true; m = m.ensureHelpViewport(); return m, nil }},
+	{Keys: []string{"?"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) {
+		m.helpOpen = true
+		m = m.ensureHelpViewport()
+		m.helpViewport.GotoTop()
+		return m, nil
+	}},
 	{Keys: []string{"esc"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m, nil }},
 	{Keys: []string{"q"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m, tea.Quit }},
 	{Keys: []string{"1"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate(TabProfiles) }},
@@ -368,9 +373,9 @@ func (m RootModel) ensureHelpViewport() RootModel {
 // viewport, accounting for the modal box border + padding so the scroll
 // area always fits inside the terminal.
 func helpViewportSize(width, height int) (int, int) {
-	w := width - 12
-	if w < 20 {
-		w = 20
+	w := width - 16
+	if w < 16 {
+		w = 16
 	}
 	h := height - 8
 	if h < 5 {
@@ -460,7 +465,11 @@ func (m RootModel) View() string {
 			return components.Modal("Keybindings", body, m.width, m.height)
 		}
 		m = m.ensureHelpViewport()
-		return components.Modal("Keybindings (↑/↓/PgUp/PgDn/k/j/g/G to scroll · ? to toggle · esc to close)", m.helpViewport.View(), m.width, m.height)
+		title := "Keybindings (↑/↓/PgUp/PgDn/k/j/g/G to scroll · ? to toggle · esc to close)"
+		if m.width < 80 {
+			title = "Keybindings"
+		}
+		return components.Modal(title, m.helpViewport.View(), m.width, m.height)
 	}
 	header := m.renderTabs()
 	status := m.status.Render(m.width)

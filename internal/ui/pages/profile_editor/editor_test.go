@@ -89,12 +89,7 @@ func TestEditor_CancelExits(t *testing.T) {
 // so the snapshot matches the post-Open draft state until the test mutates
 // fields explicitly.
 func cleanDraft() Draft {
-	return Draft{
-		Name:       "X",
-		FlashAttn:  "on",
-		CacheTypeK: "f16",
-		CacheTypeV: "f16",
-	}
+	return Draft{Name: "X"}
 }
 
 // TestEditor_EscOnUnchangedClosesAndEmitsCancelled verifies the esc key
@@ -373,13 +368,17 @@ func TestEditor_PortValidator(t *testing.T) {
 }
 
 func TestDraft_ToProfileDefaults(t *testing.T) {
-	d := Draft{Name: "n", NGL: "5", CtxSize: "10", Port: "1234"}
+	d := Draft{Name: "n", Essentials: map[string]string{
+		"n-gpu-layers": "5",
+		"ctx-size":     "10",
+		"port":         "1234",
+	}}
 	pr := d.ToProfile()
-	if pr.Args["ngl"] != float64(5) {
-		t.Errorf("ngl = %v, want 5", pr.Args["ngl"])
+	if pr.Args["n-gpu-layers"] != "5" {
+		t.Errorf("n-gpu-layers = %v, want \"5\"", pr.Args["n-gpu-layers"])
 	}
-	if pr.Args["port"] != float64(1234) {
-		t.Errorf("port = %v, want 1234", pr.Args["port"])
+	if pr.Args["port"] != "1234" {
+		t.Errorf("port = %v, want \"1234\"", pr.Args["port"])
 	}
 	if !pr.Launch.DefaultBackground {
 		t.Errorf("DefaultBackground should be true")
@@ -397,9 +396,11 @@ func TestDraft_ApplyToSetsBinaryPath(t *testing.T) {
 		ID:        "x",
 		Name:      "X",
 		BackendID: "llama-cpp-custom",
-		NGL:       "99",
-		CtxSize:   "8192",
-		Port:      "4321",
+		Essentials: map[string]string{
+			"n-gpu-layers": "99",
+			"ctx-size":     "8192",
+			"port":         "4321",
+		},
 	}
 
 	out := d.ApplyTo(base)
@@ -437,18 +438,20 @@ func TestArgString_Variants(t *testing.T) {
 
 func TestDraft_ToProfileWithSchema_FiltersByBackend(t *testing.T) {
 	d := Draft{
-		Name:       "n",
-		NGL:        "99",
-		CtxSize:    "8192",
-		BatchSize:  "2048",
-		UBatchSize: "512",
-		Port:       "4321",
-		FlashAttn:  "on",
-		CacheTypeK: "q8_0",
-		CacheTypeV: "q8_0",
+		Name: "n",
+		Essentials: map[string]string{
+			"n-gpu-layers": "99",
+			"ctx-size":     "8192",
+			"batch-size":   "2048",
+			"ubatch-size":  "512",
+			"port":         "4321",
+			"flash-attn":   "on",
+			"cache-type-k": "q8_0",
+			"cache-type-v": "q8_0",
+		},
 	}
 
-	// Empty schema (fallback) includes everything.
+	// Empty schema (pass-through) includes every Essentials key as a raw string.
 	prAll := d.ToProfileWithSchema(domain.FlagSchema{})
 	if len(prAll.Args) != 8 {
 		t.Errorf("empty schema: want 8 args, got %d %v", len(prAll.Args), prAll.Args)
@@ -528,7 +531,7 @@ func TestEditor_BlocksCommitWhenSchemaMissing(t *testing.T) {
 func TestEditor_BlocksCommitWhenValidationFails(t *testing.T) {
 	schema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{}}
 	e := New(schema)
-	e, _ = e.Open(Draft{ID: "x", Name: "Y", NGL: "99"})
+	e, _ = e.Open(Draft{ID: "x", Name: "Y", Essentials: map[string]string{"n-gpu-layers": "99"}})
 
 	e.form.State = huh.StateCompleted
 	e, cmd := e.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -556,9 +559,9 @@ func TestEditor_FixesValidationErrorThenSaves(t *testing.T) {
 		"cache-type-v": {Long: "cache-type-v", Type: domain.FlagTypeEnum, EnumValues: []string{"f16", "q8_0"}},
 	}}
 	e := New(schema)
-	e, _ = e.Open(Draft{ID: "x", Name: "Y", NGL: "99"})
+	e, _ = e.Open(Draft{ID: "x", Name: "Y", Essentials: map[string]string{"n-gpu-layers": "99"}})
 
-	// First attempt: blocked due to unknown flag (NGL "99" is fine, but let's make it fail)
+	// First attempt: blocked due to unknown flag (n-gpu-layers "99" is fine, but let's make it fail)
 	e.schema = domain.FlagSchema{Flags: map[string]domain.FlagSpec{}}
 	e.form.State = huh.StateCompleted
 	e, _ = e.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -667,11 +670,66 @@ func TestEditor_SwitchesBackendAndSchema(t *testing.T) {
 	}
 }
 
+func TestEditor_SwitchesBackendPreservesFocus(t *testing.T) {
+	catalogDir := t.TempDir()
+	catalogStore := backendcatalog.NewFSStore(catalogDir)
+	schemaStore := backendcatalog.NewFSSchemaStore(catalogDir)
+
+	schemaA := domain.BackendValidationSchema{
+		SchemaVersion: 1,
+		BackendID:     "backend-a",
+		BackendKind:   domain.BackendKindLlamaServer,
+		Flags: map[string]domain.FlagSpec{
+			"custom-flag-a": {Long: "custom-flag-a", Type: domain.FlagTypeBool},
+		},
+	}
+	schemaB := domain.BackendValidationSchema{
+		SchemaVersion: 1,
+		BackendID:     "backend-b",
+		BackendKind:   domain.BackendKindLlamaServer,
+		Flags: map[string]domain.FlagSpec{
+			"custom-flag-b": {Long: "custom-flag-b", Type: domain.FlagTypeBool},
+		},
+	}
+	_ = schemaStore.Save("backend-a.json", schemaA)
+	_ = schemaStore.Save("backend-b.json", schemaB)
+
+	e := New(domain.FlagSchema{}).
+		SetCatalogStore(catalogStore).
+		SetSchemaStore(schemaStore).
+		SetBackendOptions([]huh.Option[string]{
+			huh.NewOption("Backend A", "backend-a"),
+			huh.NewOption("Backend B", "backend-b"),
+		})
+
+	e, _ = e.Open(Draft{ID: "x", Name: "Y", BackendID: "backend-a"})
+	if e.form == nil {
+		t.Fatal("expected form to be initialized")
+	}
+
+	for i := 0; i < 4; i++ {
+		_ = e.form.NextField()
+	}
+	if got := e.form.GetFocusedField().GetKey(); got != "backend" {
+		t.Fatalf("expected focus on backend, got %s", got)
+	}
+
+	e.draft.BackendID = "backend-b"
+	e, _ = e.Update(struct{}{})
+
+	if e.form == nil {
+		t.Fatal("expected form after backend switch")
+	}
+	if got := e.form.GetFocusedField().GetKey(); got != "backend" {
+		t.Fatalf("expected focus to remain on backend after switch, got %s", got)
+	}
+}
+
 func TestDraft_ApplyToWithSchema_PreservesExistingArgs(t *testing.T) {
 	sglangSchema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
-		"port":              {Long: "port", Type: domain.FlagTypeInt},
-		"tp-size":           {Long: "tp-size", Type: domain.FlagTypeInt},
-		"dtype":             {Long: "dtype", Type: domain.FlagTypeEnum, EnumValues: []string{"float16", "bfloat16", "float32"}},
+		"port":                {Long: "port", Type: domain.FlagTypeInt},
+		"tp-size":             {Long: "tp-size", Type: domain.FlagTypeInt},
+		"dtype":               {Long: "dtype", Type: domain.FlagTypeEnum, EnumValues: []string{"float16", "bfloat16", "float32"}},
 		"mem-fraction-static": {Long: "mem-fraction-static", Type: domain.FlagTypeFloat},
 	}}
 	base := domain.Profile{
@@ -681,7 +739,10 @@ func TestDraft_ApplyToWithSchema_PreservesExistingArgs(t *testing.T) {
 			"mem-fraction-static": float64(0.85),
 		},
 	}
-	d := Draft{Port: "30000", Args: map[string]any{"tp-size": float64(4)}}
+	d := Draft{
+		Essentials: map[string]string{"port": "30000"},
+		Args:       map[string]any{"tp-size": float64(4)},
+	}
 	pr := d.ApplyToWithSchema(base, sglangSchema)
 
 	if pr.Args["tp-size"] != float64(4) {
@@ -864,7 +925,6 @@ func TestDraft_ApplyToPersistsTags(t *testing.T) {
 		ID:   "x",
 		Name: "X",
 		Tags: "coding, 32b, ",
-		Port: "4321",
 	}
 	out := d.ApplyTo(domain.Profile{})
 	want := []string{"coding", "32b"}
@@ -874,7 +934,7 @@ func TestDraft_ApplyToPersistsTags(t *testing.T) {
 }
 
 func TestDraft_ApplyToEmptyTagsYieldsNil(t *testing.T) {
-	d := Draft{ID: "x", Name: "X", Tags: "   ", Port: "4321"}
+	d := Draft{ID: "x", Name: "X", Tags: "   "}
 	out := d.ApplyTo(domain.Profile{})
 	if out.Tags != nil {
 		t.Fatalf("Tags = %v, want nil for whitespace-only input", out.Tags)
@@ -883,7 +943,7 @@ func TestDraft_ApplyToEmptyTagsYieldsNil(t *testing.T) {
 
 func TestDraft_ApplyToTagsRoundTripsExisting(t *testing.T) {
 	base := domain.Profile{Tags: []string{"stale"}}
-	d := Draft{ID: "x", Name: "X", Tags: FormatTags([]string{"fresh", "tag"}), Port: "4321"}
+	d := Draft{ID: "x", Name: "X", Tags: FormatTags([]string{"fresh", "tag"})}
 	out := d.ApplyTo(base)
 	want := []string{"fresh", "tag"}
 	if !reflect.DeepEqual(out.Tags, want) {
@@ -893,7 +953,7 @@ func TestDraft_ApplyToTagsRoundTripsExisting(t *testing.T) {
 
 func TestDraft_ApplyToPersistsEnv(t *testing.T) {
 	d := Draft{
-		ID: "x", Name: "X", Port: "8080",
+		ID: "x", Name: "X",
 		Env: []domain.EnvVar{
 			{Key: "GGML_CUDA_FORCE_CUBLAS_COMPUTE_16F", Value: "1"},
 			{Key: "CUDA_VISIBLE_DEVICES", Value: "0"},
@@ -914,7 +974,7 @@ func TestDraft_ApplyToPersistsEnv(t *testing.T) {
 }
 
 func TestDraft_ApplyToEmptyEnvYieldsNil(t *testing.T) {
-	d := Draft{ID: "x", Name: "X", Port: "8080"}
+	d := Draft{ID: "x", Name: "X"}
 	out := d.ApplyTo(domain.Profile{})
 	if out.Launch.Env != nil {
 		t.Errorf("Env = %v, want nil for empty Draft.Env", out.Launch.Env)
@@ -1066,5 +1126,96 @@ func TestEditor_EnvTab_EditExistingRow(t *testing.T) {
 	got := e.CurrentDraft().Env
 	if len(got) != 1 || got[0].Key != "FOO" || got[0].Value != "new" {
 		t.Errorf("Env = %+v, want [{FOO new}]", got)
+	}
+}
+
+func TestEditor_OpenLegacyProfileHydratesEssentials(t *testing.T) {
+	schema := llamaTestSchema()
+	e := New(schema)
+	e.backendKind = domain.BackendKindLlamaServer
+	e, _ = e.Open(Draft{ID: "x", Name: "Y", Args: map[string]any{
+		"ngl":        float64(42),
+		"ctx-size":   float64(16384),
+		"flash-attn": true,
+		"custom":     "keep",
+	}})
+
+	if got := e.draft.Essentials["n-gpu-layers"]; got != "42" {
+		t.Fatalf("Essentials[n-gpu-layers] = %q, want 42", got)
+	}
+	if _, ok := e.draft.Args["ngl"]; ok {
+		t.Fatal("legacy ngl should be peeled out of Args")
+	}
+	if got := e.draft.Args["custom"]; got != "keep" {
+		t.Fatalf("custom Arg = %v, want keep", got)
+	}
+	if e.Dirty() {
+		t.Fatal("Open should re-snapshot after hydration; legacy profile must start clean")
+	}
+}
+
+func TestEditor_SwitchBackendHydratesWithoutResnapshot(t *testing.T) {
+	catalogDir := t.TempDir()
+	catalogStore := backendcatalog.NewFSStore(catalogDir)
+	schemaStore := backendcatalog.NewFSSchemaStore(catalogDir)
+
+	schemaA := domain.BackendValidationSchema{SchemaVersion: 1, BackendID: "llama", BackendKind: domain.BackendKindLlamaServer, Flags: llamaTestSchema().Flags}
+	schemaB := domain.BackendValidationSchema{SchemaVersion: 1, BackendID: "vllm", BackendKind: domain.BackendKindVLLM, Flags: vllmTestSchema().Flags}
+	if err := schemaStore.Save("llama.json", schemaA); err != nil {
+		t.Fatal(err)
+	}
+	if err := schemaStore.Save("vllm.json", schemaB); err != nil {
+		t.Fatal(err)
+	}
+	if err := catalogStore.Save(domain.BackendCatalog{SchemaVersion: 1, DefaultBackendID: "llama", Backends: []domain.Backend{
+		{ID: "llama", Name: "Llama", Kind: domain.BackendKindLlamaServer, Executable: "llama-server", SchemaRef: "schemas/llama.json"},
+		{ID: "vllm", Name: "vLLM", Kind: domain.BackendKindVLLM, Executable: "vllm", SchemaRef: "schemas/vllm.json"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	e := New(domain.FlagSchema{}).SetCatalogStore(catalogStore).SetSchemaStore(schemaStore)
+	e, _ = e.Open(Draft{ID: "x", Name: "Y", BackendID: "llama"})
+	e.draft.BackendID = "vllm"
+	e, _ = e.Update(struct{}{})
+
+	if got := e.draft.Essentials["tensor-parallel-size"]; got != "1" {
+		t.Fatalf("vLLM default tensor-parallel-size = %q, want 1", got)
+	}
+	if !e.Dirty() {
+		t.Fatal("backend switch should remain dirty; reload must not re-snapshot")
+	}
+}
+
+func TestEditor_SyncEssentialsAfterPointerTyping(t *testing.T) {
+	schema := llamaTestSchema()
+	e := New(schema)
+	e.backendKind = domain.BackendKindLlamaServer
+	e, _ = e.Open(Draft{ID: "x", Name: "Y"})
+	p := e.essentialPtrs["n-gpu-layers"]
+	if p == nil {
+		t.Fatal("missing n-gpu-layers pointer")
+	}
+	*p = "123"
+	e = e.syncEssentials()
+	if got := e.draft.Essentials["n-gpu-layers"]; got != "123" {
+		t.Fatalf("Essentials[n-gpu-layers] = %q, want 123", got)
+	}
+}
+
+func TestEditor_SuggestWritesEssentialsAndRefreshesForm(t *testing.T) {
+	schema := llamaTestSchema()
+	e := New(schema)
+	e.backendKind = domain.BackendKindLlamaServer
+	e, _ = e.Open(Draft{ID: "x", Name: "Y"})
+	e, _ = e.Update(suggestAppliedMsg{ngl: 77})
+	if got := e.draft.Essentials["n-gpu-layers"]; got != "77" {
+		t.Fatalf("Essentials[n-gpu-layers] = %q, want 77", got)
+	}
+	if p := e.essentialPtrs["n-gpu-layers"]; p == nil || *p != "77" {
+		t.Fatalf("n-gpu-layers pointer = %v, want 77", p)
+	}
+	if e.form == nil {
+		t.Fatal("form should be rebuilt after suggest")
 	}
 }

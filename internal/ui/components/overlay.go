@@ -3,7 +3,7 @@ package components
 import (
 	"strings"
 
-	"github.com/quantmind-br/model-loader/internal/ui/theme"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Overlay places foreground on top of background at the center of the screen.
@@ -39,26 +39,27 @@ func overlayLine(bg, fg string, width int) string {
 	if width <= 0 {
 		return fg
 	}
-	bgRunes := []rune(bg)
-	fgRunes := []rune(fg)
-	fgWidth := theme.RuneWidth(fg)
-
+	fgWidth := ansi.StringWidth(fg)
 	startX := (width - fgWidth) / 2
 	if startX < 0 {
 		startX = 0
 	}
-
-	var out []rune
-	cursor := 0
-	for i := 0; i < width; i++ {
-		if i >= startX && cursor < len(fgRunes) {
-			out = append(out, fgRunes[cursor])
-			cursor++
-		} else if i < len(bgRunes) {
-			out = append(out, bgRunes[i])
-		} else {
-			out = append(out, ' ')
-		}
+	if startX == 0 && fgWidth >= width {
+		return ansi.Truncate(fg, width, "")
 	}
-	return string(out)
+
+	left := ansi.Cut(bg, 0, startX)
+	leftWidth := ansi.StringWidth(left)
+	if leftWidth < startX {
+		left += strings.Repeat(" ", startX-leftWidth)
+	}
+
+	mid := fg
+	if fgWidth > width-startX {
+		mid = ansi.Truncate(fg, width-startX, "")
+	}
+
+	right := ansi.Cut(bg, startX+fgWidth, ansi.StringWidth(bg))
+
+	return left + mid + right
 }

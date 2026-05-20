@@ -59,6 +59,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 | Proxy lifecycle | internal/service/proxysupervisor/ | state machine driving httpproxy |
 | TUI pages | internal/ui/pages/ | 4 tabs + profile_editor sub-package |
 | Profile editing | internal/ui/pages/profile_editor/ | huh forms, draft state machine |
+| Essentials registry | internal/ui/pages/profile_editor/essentials.go | curated per-backend flag list (8 llama / 7 vLLM / 8 SGLang) |
 | Config | internal/config/ | Viper TOML at ~/.config/model-loader/ |
 | Logging | internal/log/ | file-only slog, rotate-by-session |
 
@@ -68,7 +69,16 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 - **Embedded schema**: Pinned to llama.cpp build "v7376 (380b4c9)" — refresh in embedded.go
 - **Instance recovery**: Background llama-server processes survive TUI exit; processmgr.Reconcile restores at boot
 
+## ESSENTIALS REGISTRY CONTRACT
+- `essentialFields` in `essentials.go` is a `map[domain.BackendKind][]EssentialField` — curated UX layer, not a generic form abstraction. See `DYNAMIC_FORM_PLAN.md` for authoritative design.
+- `Draft.Essentials map[string]string` stores long-keyed flag values as value types (not pointers), making the Draft copyable for snapshot/dirty-check.
+- `Editor.essentialPtrs` is a `map[string]*string` of heap-allocated pointers, one per essential field, bound to huh form inputs.
+- `syncEssentials()` drains `essentialPtrs` back into `Draft.Essentials` after every `form.Update`.
+- `hydrateEssentials()` peels matching values from `Draft.Args` into `Draft.Essentials` and seeds defaults — called with re-snapshot in `Open()`, without re-snapshot on backend switch.
+- `hydrateEssentialsForSwitch()` is the no-snapshot variant used during backend kind changes so the dirty flag reflects legitimate mutation.
+
 ## ANTI-PATTERNS (THIS PROJECT)
+- DO NOT add fields to `essentialFields` without explicit user request — it's a curated UX layer, not a generic form abstraction
 - DO NOT run `llama-server` manually while TUI is managing instances
 - DO NOT edit `testdata/help-v7376.golden.json` directly — regenerate via golden test update
 - DO NOT assume process cleanup on TUI exit — processes are intentionally orphaned

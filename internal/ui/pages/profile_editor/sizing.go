@@ -27,7 +27,7 @@ func newSizingTabForDraft(d Draft) SizingTab {
 		modelSizeBytes = uint64(info.Size())
 	}
 	var totalLayers uint64
-	if ngl, err := strconv.ParseUint(d.NGL, 10, 64); err == nil {
+	if ngl, err := strconv.ParseUint(d.Essentials["n-gpu-layers"], 10, 64); err == nil {
 		totalLayers = ngl
 	}
 	return SizingTab{
@@ -48,7 +48,7 @@ func NewSizingTab(modelSizeBytes, totalLayers, freeVRAMBytes uint64, onSuggest f
 	}
 }
 
-func (s SizingTab) Active() bool { return s.active }
+func (s SizingTab) Active() bool      { return s.active }
 func (s *SizingTab) SetActive(v bool) { s.active = v }
 
 func (s SizingTab) Update(msg tea.Msg) (SizingTab, tea.Cmd) {

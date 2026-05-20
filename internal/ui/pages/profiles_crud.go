@@ -132,6 +132,12 @@ func (p ProfilesPage) togglePinSelected() (tea.Model, tea.Cmd) {
 		p, fc := p.withFlashError("pin failed: " + err.Error())
 		return p, fc
 	}
+	// Optimistically update the selected item so the pin emoji appears
+	// immediately, before the async reload completes.
+	idx := p.list.Index()
+	if idx >= 0 {
+		p.list.SetItem(idx, item{p: pr})
+	}
 	return p, p.loadCmd()
 }
 
@@ -161,14 +167,6 @@ func (p ProfilesPage) newDraftDefaults() profile_editor.Draft {
 	d := profile_editor.Draft{
 		Name:           "New Profile",
 		Tags:           "",
-		NGL:            "99",
-		CtxSize:        "8192",
-		BatchSize:      "2048",
-		UBatchSize:     "512",
-		Port:           "4321",
-		FlashAttn:      "auto",
-		CacheTypeK:     "q8_0",
-		CacheTypeV:     "q8_0",
 		RestartPolicy:  string(domain.RestartPolicyNone),
 		MaxRestarts:    "3",
 		BackoffSeconds: "5",
@@ -229,33 +227,24 @@ func (p ProfilesPage) startEditSelected() (tea.Model, tea.Cmd) {
 		Tags:           profile_editor.FormatTags(pr.Tags),
 		Model:          pr.Model,
 		BackendID:      pr.Launch.BackendID,
-		NGL:            profile_editor.ArgString(pr.Args["ngl"]),
-		CtxSize:        profile_editor.ArgString(pr.Args["ctx-size"]),
-		BatchSize:      profile_editor.ArgString(pr.Args["batch-size"]),
-		UBatchSize:     profile_editor.ArgString(pr.Args["ubatch-size"]),
-		Port:           profile_editor.ArgString(pr.Args["port"]),
-		FlashAttn:      profile_editor.FlashAttnToString(pr.Args["flash-attn"]),
-		CacheTypeK:     profile_editor.ArgString(pr.Args["cache-type-k"]),
-		CacheTypeV:     profile_editor.ArgString(pr.Args["cache-type-v"]),
 		Env:            append([]domain.EnvVar(nil), pr.Launch.Env...),
 		RestartPolicy:  string(pr.Launch.RestartPolicy),
 		MaxRestarts:    strconv.Itoa(pr.Launch.MaxRestarts),
 		BackoffSeconds: strconv.Itoa(pr.Launch.BackoffSeconds),
-	}
-	// Copy remaining args not mapped to hardcoded Essentials fields into
-	// the generic Args map so the Advanced tab can edit them.
-	d.Args = map[string]any{}
-	for k, v := range pr.Args {
-		switch k {
-		case "ngl", "ctx-size", "batch-size", "ubatch-size", "port", "flash-attn", "cache-type-k", "cache-type-v":
-			continue
-		}
-		d.Args[k] = v
+		Args:           copyArgs(pr.Args),
 	}
 	p.editor = p.prepareEditor()
 	var cmd tea.Cmd
 	p.editor, cmd = p.editor.Open(d)
 	return p, cmd
+}
+
+func copyArgs(args map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range args {
+		out[k] = v
+	}
+	return out
 }
 
 func (p ProfilesPage) duplicateSelected() (tea.Model, tea.Cmd) {
