@@ -50,6 +50,16 @@ var essentialFields = map[domain.BackendKind][]EssentialField{
 		{Flag: "port", Label: "port", Description: "Server port", IsPort: true, Default: "30000"},
 		{Flag: "served-model-name", Label: "served-model-name", Description: "Name exposed in the API"},
 	},
+	domain.BackendKindDFlash: {
+		{Flag: "draft", Label: "draft (model)", Description: "Path to the DFlash draft model"},
+		{Flag: "max-ctx", Label: "max-ctx", Description: "Max context length (>16k can slow attention 20x+)", Min: iptr(0), Max: iptr(1024 * 1024), Default: "16384"},
+		{Flag: "budget", Label: "budget", Description: "Speculative decode token budget per step", Min: iptr(1), Max: iptr(512), Default: "22"},
+		{Flag: "verify-mode", Label: "verify-mode", Description: "Daemon verify mode (ddtree/fast/seq/replay)", Default: "ddtree"},
+		{Flag: "cache-type-k", Label: "cache-type-k", Description: "KV cache type for keys", Default: "q8_0"},
+		{Flag: "cache-type-v", Label: "cache-type-v", Description: "KV cache type for values", Default: "q8_0"},
+		{Flag: "fa-window", Label: "fa-window", Description: "Sliding-window flash attention (0 = full)", Min: iptr(0), Max: iptr(1024 * 1024), Default: "2048"},
+		{Flag: "port", Label: "port", Description: "Server port", IsPort: true, Default: "8080"},
+	},
 }
 
 // essentialsFor returns the essential fields for a kind that exist in the schema.
