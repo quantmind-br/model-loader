@@ -24,6 +24,12 @@ type ChatRequest struct {
 	Messages    []ChatMessage `json:"messages"`
 	Temperature float64       `json:"temperature"`
 	MaxTokens   int           `json:"max_tokens"`
+	// IgnoreEOS asks the backend to keep generating until MaxTokens is reached,
+	// suppressing the end-of-sequence stop. llama.cpp, vLLM and SGLang all honor
+	// "ignore_eos"; the throughput probe sets it so every sample generates a
+	// fixed tg-token length and runs stay comparable. Standard OpenAI servers
+	// ignore the unknown field harmlessly.
+	IgnoreEOS bool `json:"-"`
 }
 
 // CompletionResult holds the model output plus the per-request metrics the
@@ -61,6 +67,13 @@ func Complete(ctx context.Context, doer httpDoer, base, apiKey string, req ChatR
 		"stream_options": map[string]any{
 			"include_usage": true,
 		},
+	}
+	if req.IgnoreEOS {
+		// llama.cpp / vLLM / SGLang all read "ignore_eos"; vLLM additionally honors
+		// "min_tokens" to refuse stopping short. Both are no-ops on servers that
+		// don't recognize them.
+		payload["ignore_eos"] = true
+		payload["min_tokens"] = req.MaxTokens
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {

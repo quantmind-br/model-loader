@@ -13,6 +13,10 @@ const (
 	// diagnostic (not judged) measuring whether KV-cache quantization degrades
 	// deep-context recall + prompt/gen speed.
 	ModeLongContext Mode = "longctx"
+	// ModeLlamaBench: throughput probe in the style of the official llama-bench —
+	// fixed-size prompts (pp tokens in / tg tokens out) measuring TTFT and
+	// tokens/second. Not judged; the target metric is generation speed.
+	ModeLlamaBench Mode = "llama-bench"
 )
 
 // Title returns a short human label for the mode.
@@ -22,6 +26,8 @@ func (m Mode) Title() string {
 		return "LLM judge (SWE-bench Lite)"
 	case ModeLongContext:
 		return "Long-context needle"
+	case ModeLlamaBench:
+		return "Throughput (llama-bench)"
 	default:
 		return string(m)
 	}

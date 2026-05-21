@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,48 @@ type Config struct {
 	LongContextTokens int           // target prompt size for the needle probe (0 → default)
 	SaveTranscripts   bool          // capture raw model/judge I/O for debugging
 	Judge             JudgeEndpoint
+
+	// LlamaBenchPresets are "pp/tg" strings (prompt tokens / generation tokens)
+	// for ModeLlamaBench. Empty → default {512/128, 4096/256}.
+	LlamaBenchPresets []string
+	// LlamaBenchReps is how many times each preset is measured and averaged.
+	// <=0 → default 3.
+	LlamaBenchReps int
+}
+
+// tpPreset is one parsed throughput configuration: pp tokens in, tg tokens out.
+type tpPreset struct {
+	PromptTokens int
+	GenTokens    int
+}
+
+func (p tpPreset) name() string { return fmt.Sprintf("pp %d / tg %d", p.PromptTokens, p.GenTokens) }
+func (p tpPreset) id() string   { return fmt.Sprintf("tp-%d-%d", p.PromptTokens, p.GenTokens) }
+
+var defaultPresets = []tpPreset{{PromptTokens: 512, GenTokens: 128}, {PromptTokens: 4096, GenTokens: 256}}
+
+// parsePresets parses "pp/tg" strings into tpPresets. Empty input → defaults.
+func parsePresets(raw []string) ([]tpPreset, error) {
+	if len(raw) == 0 {
+		return append([]tpPreset(nil), defaultPresets...), nil
+	}
+	out := make([]tpPreset, 0, len(raw))
+	for _, s := range raw {
+		parts := strings.SplitN(strings.TrimSpace(s), "/", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid llama-bench preset %q (want \"pp/tg\", e.g. \"512/128\")", s)
+		}
+		pp, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+		if err != nil || pp <= 0 {
+			return nil, fmt.Errorf("invalid prompt size in preset %q (want \"pp/tg\" with positive ints)", s)
+		}
+		tg, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+		if err != nil || tg <= 0 {
+			return nil, fmt.Errorf("invalid gen size in preset %q (want \"pp/tg\" with positive ints)", s)
+		}
+		out = append(out, tpPreset{PromptTokens: pp, GenTokens: tg})
+	}
+	return out, nil
 }
 
 // JudgeEndpoint is the OpenAI-compatible endpoint used by ModeJudge.
@@ -63,7 +106,9 @@ type Runner struct {
 	mon      monitor.Manager
 	resolver backendcatalog.Resolver
 	cfg      Config
-	problems []Problem // embedded SWE-bench Lite coding set
+	problems []Problem  // embedded SWE-bench Lite coding set
+	presets  []tpPreset // parsed ModeLlamaBench configs
+	reps     int        // ModeLlamaBench repetitions per preset
 }
 
 // NewRunner builds a Runner and loads the embedded dataset.
@@ -78,7 +123,15 @@ func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Mana
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 120 * time.Second
 	}
-	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems}, nil
+	presets, err := parsePresets(cfg.LlamaBenchPresets)
+	if err != nil {
+		return nil, err
+	}
+	reps := cfg.LlamaBenchReps
+	if reps <= 0 {
+		reps = 3
+	}
+	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, presets: presets, reps: reps}, nil
 }
 
 // problemSet returns the dataset a given mode evaluates.
@@ -93,7 +146,12 @@ func (r *Runner) problemSet(mode Mode) []Problem {
 func (r *Runner) ProblemCount() int { return len(r.problems) }
 
 // CountForMode reports how many problems a given mode will run.
-func (r *Runner) CountForMode(mode Mode) int { return len(r.problemSet(mode)) }
+func (r *Runner) CountForMode(mode Mode) int {
+	if mode == ModeLlamaBench {
+		return len(r.presets)
+	}
+	return len(r.problemSet(mode))
+}
 
 // Run executes the benchmark. It launches (or reuses) the profile's backend,
 // runs every problem through the selected scorer, samples GPU stats, then
@@ -117,12 +175,21 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 	// Validate the mode and build the scorer BEFORE launching an expensive
 	// backend, so missing pytest/git or missing judge config fails fast
 	// instead of after a multi-minute model load.
+	// Validate the mode (and build the judge scorer) BEFORE launching an
+	// expensive backend, so an unknown mode or missing judge config fails fast
+	// instead of after a multi-minute model load — and never reaches the default
+	// problem loop with a nil scorer.
 	var scorer Scorer
-	if rc.Mode != ModeLongContext {
+	switch rc.Mode {
+	case ModeJudge:
 		scorer, err = r.newScorer(rc.Mode)
 		if err != nil {
 			return Run{}, err
 		}
+	case ModeLongContext, ModeLlamaBench:
+		// objective probes — no scorer
+	default:
+		return Run{}, fmt.Errorf("unsupported benchmark mode %q", rc.Mode)
 	}
 
 	send(progress, Progress{Total: len(r.problems), Phase: "launch"})
@@ -147,6 +214,20 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 		run.Problems = append(run.Problems, pr)
 		if r.cfg.SaveTranscripts {
 			run.Transcript = append(run.Transcript, tr)
+		}
+	} else if rc.Mode == ModeLlamaBench {
+		for i, ps := range r.presets {
+			select {
+			case <-ctx.Done():
+				return run, ctx.Err()
+			default:
+			}
+			send(progress, Progress{Index: i + 1, Total: len(r.presets), ProblemID: ps.id(), ProblemName: ps.name(), Phase: "infer"})
+			pr, tr := r.runLlamaBench(ctx, base, model, ps)
+			run.Problems = append(run.Problems, pr)
+			if r.cfg.SaveTranscripts {
+				run.Transcript = append(run.Transcript, tr)
+			}
 		}
 	} else {
 		problems := r.problemSet(rc.Mode)
@@ -365,6 +446,101 @@ func buildHaystack(targetTokens int) string {
 	}
 	if !inserted {
 		b.WriteString(needleBlock)
+	}
+	return b.String()
+}
+
+// --- llama-bench throughput probe ------------------------------------------
+
+// runLlamaBench measures generation throughput for one preset: it sends a
+// fixed-size prompt asking for tg tokens, repeated r.reps times, and averages
+// TTFT / tokens-per-second across the successful repetitions. The model field,
+// streaming and timing all come from Complete, so it works against any
+// OpenAI-compatible backend (llama-server / vLLM / SGLang).
+func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPreset) (ProblemResult, ProblemTranscript) {
+	res := ProblemResult{ProblemID: ps.id(), ProblemName: ps.name()}
+	tr := ProblemTranscript{ProblemID: ps.id(), ProblemName: ps.name()}
+
+	prompt := buildFixedPrompt(ps.PromptTokens)
+	msgs := []ChatMessage{
+		{Role: "system", Content: "You are a verbose writing assistant. Continue at length."},
+		{Role: "user", Content: prompt},
+	}
+
+	var ttftSum, tpsSum, totalSum float64
+	var ppSum, tgSum, ok, short int
+	var lastContent string
+	for i := 0; i < r.reps; i++ {
+		select {
+		case <-ctx.Done():
+			res.Err = ctx.Err().Error()
+			tr.Error = res.Err
+			return res, tr
+		default:
+		}
+		reqCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout)
+		comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
+			Model:       model,
+			Temperature: 0,
+			MaxTokens:   ps.GenTokens,
+			IgnoreEOS:   true, // force exactly tg tokens so samples stay comparable
+			Messages:    msgs,
+		})
+		cancel()
+		if err != nil {
+			res.Err = err.Error()
+			tr.Error = err.Error()
+			return res, tr
+		}
+		lastContent = comp.Content
+		// Only average full-length samples: a backend that ignored ignore_eos and
+		// stopped early would otherwise skew tok/s and make the preset
+		// incomparable across profiles.
+		if comp.CompletionTokens < ps.GenTokens {
+			short++
+			continue
+		}
+		ttftSum += float64(comp.TTFT.Milliseconds())
+		tpsSum += comp.TokensPerSecond
+		totalSum += float64(comp.Total.Milliseconds())
+		ppSum += comp.PromptTokens
+		tgSum += comp.CompletionTokens
+		ok++
+	}
+
+	tr.ModelResponse = lastContent
+	if ok == 0 {
+		// Every sample stopped before tg tokens — the backend doesn't honor
+		// ignore_eos, so this preset can't be measured reliably here.
+		res.Detail = fmt.Sprintf("no full-length sample: all %d stopped before %d gen tokens (backend ignored ignore_eos?)", short, ps.GenTokens)
+		return res, tr
+	}
+	n := float64(ok)
+	res.Resolved = true
+	res.TTFTms = int64(ttftSum / n)
+	res.TokensPerSecond = tpsSum / n
+	res.TotalMs = int64(totalSum / n)
+	res.PromptTokens = ppSum / ok
+	res.CompletionTokens = tgSum / ok
+	res.Detail = fmt.Sprintf("pp≈%d tg=%d; tok/s %.1f; TTFT %dms (n=%d)",
+		res.PromptTokens, ps.GenTokens, res.TokensPerSecond, res.TTFTms, ok)
+	if short > 0 {
+		res.Detail += fmt.Sprintf("; %d short dropped", short)
+	}
+	return res, tr
+}
+
+// buildFixedPrompt generates ~promptTokens of deterministic filler prose
+// (≈4 chars/token) to drive a fixed prompt-processing load.
+func buildFixedPrompt(promptTokens int) string {
+	charBudget := promptTokens * 4
+	var b strings.Builder
+	b.WriteString("Summarize and then continue the following technical log in detail.\n\n")
+	i := 0
+	for b.Len() < charBudget {
+		fmt.Fprintf(&b, "event %04d: subsystem %d processed batch of %d items in %dms; status=ok retries=%d\n",
+			i, i%13, (i%97)+1, (i*7)%500, i%4)
+		i++
 	}
 	return b.String()
 }

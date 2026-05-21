@@ -79,24 +79,47 @@ func (p BenchmarkPage) viewHistory() string {
 			r.StartedAt.Format("2006-01-02 15:04"), truncate(r.Mode.Title(), 16),
 			a.SolveRate*100, a.AvgScore, a.AvgTokensPerSecond, a.AvgTTFTms, a.PeakVRAMMB))
 	}
-	spark := sparkSolveRate(p.historyRuns)
+	spark := sparkTrend(p.historyRuns)
 	return lipgloss.JoinVertical(lipgloss.Left, title, strings.Join(rows, "\n"), "", spark)
 }
 
-// sparkSolveRate renders an oldest→newest solve-rate trend line.
-func sparkSolveRate(runs []benchmark.Run) string {
+// sparkTrend renders an oldest→newest trend line. The metric depends on the most
+// recent run's mode: throughput (llama-bench) runs trend on tokens/second
+// (normalized by the series max), every other mode trends on solve-rate (0..1).
+func sparkTrend(runs []benchmark.Run) string {
 	if len(runs) < 2 {
 		return ""
 	}
+	throughput := runs[0].Mode == benchmark.ModeLlamaBench
+
+	// Collect the metric per run and the normalization scale.
+	vals := make([]float64, len(runs))
+	scale := 1.0
+	label := "solve-rate trend (old→new): "
+	if throughput {
+		label = "tok/s trend (old→new): "
+		for i, r := range runs {
+			vals[i] = r.Aggregate.AvgTokensPerSecond
+			if vals[i] > scale {
+				scale = vals[i]
+			}
+		}
+	} else {
+		for i, r := range runs {
+			vals[i] = r.Aggregate.SolveRate
+		}
+	}
+
 	// bars are multibyte runes: index against the rune slice length, never the
-	// byte length, or WriteRune panics for solve rates above ~30%.
+	// byte length, or WriteRune panics for fractions above ~30%.
 	bars := []rune("▁▂▃▄▅▆▇█")
 	var b strings.Builder
 	// runs is newest-first; walk in reverse for chronological order.
 	for i := len(runs) - 1; i >= 0; i-- {
-		idx := int(runs[i].Aggregate.SolveRate * float64(len(bars)-1))
+		frac := vals[i] / scale
+		idx := int(frac * float64(len(bars)-1))
 		idx = max(0, min(idx, len(bars)-1))
 		b.WriteRune(bars[idx])
 	}
-	return theme.Subtitle.Render("solve-rate trend (old→new): " + b.String())
+	return theme.Subtitle.Render(label + b.String())
 }

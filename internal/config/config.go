@@ -22,12 +22,20 @@ type AppConfig struct {
 
 // BenchmarkConfig controls the Benchmark tab's evaluation engine.
 type BenchmarkConfig struct {
-	MaxTokens         int         `mapstructure:"max_tokens"`          // generation cap per problem
-	Temperature       float64     `mapstructure:"temperature"`         // sampling temperature
-	TimeoutSec        int         `mapstructure:"timeout_sec"`         // per-problem inference timeout
-	LongContextTokens int         `mapstructure:"long_context_tokens"` // target prompt size for needle probe (0 → 8000)
-	SaveTranscripts   bool        `mapstructure:"save_transcripts"`    // capture raw model/judge I/O per run for debugging
-	Judge             JudgeConfig `mapstructure:"judge"`
+	MaxTokens         int              `mapstructure:"max_tokens"`          // generation cap per problem
+	Temperature       float64          `mapstructure:"temperature"`         // sampling temperature
+	TimeoutSec        int              `mapstructure:"timeout_sec"`         // per-problem inference timeout
+	LongContextTokens int              `mapstructure:"long_context_tokens"` // target prompt size for needle probe (0 → 8000)
+	SaveTranscripts   bool             `mapstructure:"save_transcripts"`    // capture raw model/judge I/O per run for debugging
+	Judge             JudgeConfig      `mapstructure:"judge"`
+	LlamaBench        LlamaBenchConfig `mapstructure:"llamabench"`
+}
+
+// LlamaBenchConfig tunes the throughput (llama-bench) scoring mode. Empty values
+// fall back to engine defaults (presets 512/128 + 4096/256, 3 repetitions).
+type LlamaBenchConfig struct {
+	Presets     []string `mapstructure:"presets"`     // "pp/tg" pairs, e.g. ["512/128","4096/256"]
+	Repetitions int      `mapstructure:"repetitions"` // measurements per preset; 0 → 3
 }
 
 // JudgeConfig is the OpenAI-compatible endpoint used by the LLM-as-judge
@@ -177,4 +185,6 @@ func applyDefaults(v *viper.Viper) {
 	v.SetDefault("benchmark.judge.api_key", "")
 	v.SetDefault("benchmark.judge.model", "")
 	v.SetDefault("benchmark.judge.samples", 3)
+	v.SetDefault("benchmark.llamabench.presets", []string{"512/128", "4096/256"})
+	v.SetDefault("benchmark.llamabench.repetitions", 3)
 }

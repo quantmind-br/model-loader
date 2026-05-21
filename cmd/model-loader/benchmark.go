@@ -55,7 +55,7 @@ func runBenchmark() int {
 	}
 	if *profileID == "" {
 		fmt.Fprintln(os.Stderr, "usage:")
-		fmt.Fprintln(os.Stderr, "  model-loader benchmark --profile <id> [--mode judge|longctx] [--json] [--min-solve N]")
+		fmt.Fprintln(os.Stderr, "  model-loader benchmark --profile <id> [--mode judge|longctx|llama-bench] [--json] [--min-solve N]")
 		fmt.Fprintln(os.Stderr, "  model-loader benchmark --list [--json]")
 		fmt.Fprintln(os.Stderr, "  model-loader benchmark --compare [--profile <id>] [--json]")
 		fmt.Fprintln(os.Stderr, "  model-loader benchmark --transcript <run-id> [--json]")
@@ -67,7 +67,7 @@ func runBenchmark() int {
 
 	mode, ok := parseBenchMode(*modeStr)
 	if !ok {
-		fmt.Fprintf(os.Stderr, "unknown mode %q (want judge|longctx)\n", *modeStr)
+		fmt.Fprintf(os.Stderr, "unknown mode %q (want judge|longctx|llama-bench)\n", *modeStr)
 		return 1
 	}
 
@@ -106,6 +106,8 @@ func runBenchmark() int {
 			Model:   cfg.Benchmark.Judge.Model,
 			Samples: cfg.Benchmark.Judge.Samples,
 		},
+		LlamaBenchPresets: cfg.Benchmark.LlamaBench.Presets,
+		LlamaBenchReps:    cfg.Benchmark.LlamaBench.Repetitions,
 	})
 	if err != nil {
 		logger.Error("benchmark_engine_init_failed", "err", err)
@@ -163,6 +165,8 @@ func parseBenchMode(s string) (benchmark.Mode, bool) {
 		return benchmark.ModeJudge, true
 	case "longctx", "long-context":
 		return benchmark.ModeLongContext, true
+	case "llama-bench", "llamabench", "throughput":
+		return benchmark.ModeLlamaBench, true
 	}
 	return "", false
 }

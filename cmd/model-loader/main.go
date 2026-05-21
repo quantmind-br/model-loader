@@ -145,6 +145,8 @@ func runTUI() int {
 			Model:   cfg.Benchmark.Judge.Model,
 			Samples: cfg.Benchmark.Judge.Samples,
 		},
+		LlamaBenchPresets: cfg.Benchmark.LlamaBench.Presets,
+		LlamaBenchReps:    cfg.Benchmark.LlamaBench.Repetitions,
 	})
 	if err != nil {
 		logger.Error("benchmark_dataset_load_failed", "err", err)

@@ -15,14 +15,29 @@ func TestSparkSolveRate_NoPanicOnHighRates(t *testing.T) {
 		{Aggregate: benchmark.Aggregate{SolveRate: 0.8}},
 		{Aggregate: benchmark.Aggregate{SolveRate: 0.5}},
 	}
-	got := sparkSolveRate(runs) // would panic before the rune-length fix
+	got := sparkTrend(runs) // would panic before the rune-length fix
 	if got == "" {
 		t.Fatal("expected a rendered trend, got empty")
 	}
 }
 
 func TestSparkSolveRate_EmptyWhenSingleRun(t *testing.T) {
-	if got := sparkSolveRate([]benchmark.Run{{}}); got != "" {
+	if got := sparkTrend([]benchmark.Run{{}}); got != "" {
 		t.Errorf("want empty for <2 runs, got %q", got)
+	}
+}
+
+// llama-bench history trends on tokens/second (normalized by the series max),
+// not solve-rate. Must render one bar per run without panicking even when
+// tok/s exceeds 1.0 (it always does).
+func TestSparkTrend_ThroughputUsesTokensPerSecond(t *testing.T) {
+	runs := []benchmark.Run{
+		{Mode: benchmark.ModeLlamaBench, Aggregate: benchmark.Aggregate{AvgTokensPerSecond: 120}},
+		{Mode: benchmark.ModeLlamaBench, Aggregate: benchmark.Aggregate{AvgTokensPerSecond: 60}},
+		{Mode: benchmark.ModeLlamaBench, Aggregate: benchmark.Aggregate{AvgTokensPerSecond: 30}},
+	}
+	got := sparkTrend(runs)
+	if got == "" {
+		t.Fatal("expected a rendered tok/s trend, got empty")
 	}
 }
