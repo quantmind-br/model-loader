@@ -52,6 +52,10 @@ type Editor struct {
 	backendOptions []huh.Option[string]
 	schemaStore    backendcatalog.SchemaStore
 	catalogStore   backendcatalog.Store
+	// idTaken reports whether a profile id already exists (set via
+	// SetExistingIDs). Used by the ID field's slug validator to reject
+	// collisions. Nil = no collision checking.
+	idTaken func(string) bool
 
 	active bool
 
@@ -145,6 +149,18 @@ func (e Editor) SetCatalogStore(s backendcatalog.Store) Editor {
 	return e
 }
 
+// SetExistingIDs configures the set of profile ids that already exist so the
+// editable ID field can reject collisions. The current draft's own id is
+// always allowed (handled by the validator via Draft.OrigID).
+func (e Editor) SetExistingIDs(ids []string) Editor {
+	set := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		set[id] = true
+	}
+	e.idTaken = func(s string) bool { return set[s] }
+	return e
+}
+
 // Open starts editing the given draft. Resets sub-tab to Essentials and
 // clears any advanced-filter state from a previous session. Loads the
 // schema for the draft's BackendID before building the form so existing
@@ -164,7 +180,7 @@ func (e Editor) Open(d Draft) (Editor, tea.Cmd) {
 	e.lastBackendID = dp.BackendID
 	e = e.loadSchemaForDraft()
 	e = e.hydrateEssentials()
-	e.form, e.essentialPtrs, e.fieldMap = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
+	e.form, e.essentialPtrs, e.fieldMap = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind, e.idTaken)
 	e.active = true
 	e.subTab = subTabEssentials
 	e.advancedFilter = ""
@@ -253,7 +269,7 @@ func (e Editor) View() string {
 	default:
 		body = e.advanced.View()
 	}
-	report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema)
+	report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema, e.backendKind)
 	var lines []string
 	if e.schemaError != "" {
 		lines = append(lines, theme.Error.Render("✗ schema: "+e.schemaError))
@@ -639,8 +655,8 @@ func (e Editor) rebuildFormAndRestoreFocus() Editor {
 			focusedKey = f.GetKey()
 		}
 	}
-	e.form, e.essentialPtrs, e.fieldMap = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind)
-	if e.form != nil && focusedKey != "" && focusedKey != "name" {
+	e.form, e.essentialPtrs, e.fieldMap = buildForm(e.draft, e.schema, e.backendOptions, e.backendKind, e.idTaken)
+	if e.form != nil && focusedKey != "" && focusedKey != "id" {
 		for i := 0; i < 20; i++ {
 			if e.form.GetFocusedField().GetKey() == focusedKey {
 				break
@@ -671,7 +687,7 @@ func (e Editor) forwardToForm(msg tea.Msg) (Editor, tea.Cmd) {
 			e = e.rebuildFormAndRestoreFocus()
 			return e, cmd
 		}
-		report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema)
+		report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema, e.backendKind)
 		if report.HasBlockingErrors() {
 			e.submitError = fmt.Sprintf("Cannot save: %d validation errors", len(report.Errors))
 			e = e.rebuildFormAndRestoreFocus()

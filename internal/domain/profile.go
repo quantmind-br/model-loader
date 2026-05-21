@@ -2,6 +2,7 @@
 package domain
 
 import (
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -93,4 +94,17 @@ func Slugify(s string) string {
 		}
 	}
 	return strings.Trim(b.String(), "-")
+}
+
+// validSlugRE matches a filename- and model-id-safe identifier: lowercase
+// alphanumeric groups joined by single "." "_" or "-" separators, with no
+// leading/trailing/double separator. Dots and underscores are allowed because
+// they are common in model ids (e.g. "qwen3.6") and safe in filenames.
+var validSlugRE = regexp.MustCompile(`^[a-z0-9]+([._-][a-z0-9]+)*$`)
+
+// IsValidSlug reports whether s is a valid profile ID: lowercase, made of
+// a-z/0-9 separated by single "." "_" or "-". Used to validate user-entered IDs.
+// Note this is broader than Slugify's output (which collapses "." to "-").
+func IsValidSlug(s string) bool {
+	return validSlugRE.MatchString(s)
 }

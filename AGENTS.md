@@ -1,16 +1,16 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-05-20
-**Commit:** c7fc0c0
+**Generated:** 2026-05-21
+**Commit:** 0bd3ab5
 **Branch:** main
 
 ## OVERVIEW
-TUI application for managing llama.cpp profiles and llama-server processes. Built with Go 1.26.2 + Charmbracelet bubbletea.
+TUI application for managing llama.cpp profiles and llama-server processes. Built with Go 1.26.2 + Charmbracelet bubbletea. 5-tab interface.
 
 ## STRUCTURE
 ```
 ./
-├── cmd/model-loader/   # Entry point
+├── cmd/model-loader/   # Entry point (subcommand dispatch)
 ├── internal/
 │   ├── config/             # Viper TOML loader
 │   ├── domain/             # Profile, Instance, Model, FlagSchema
@@ -18,27 +18,31 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 │   ├── service/
 │   │   ├── backendcatalog/ # Multi-backend catalog + resolver
 │   │   ├── backendschema/  # Schema generation orchestrator
-│   │   ├── benchmark/      # Profile eval engine (embedded SWE-bench-style mini-set)
+│   │   ├── benchmark/      # Profile eval engine (SWE-bench Lite + needle probe)
 │   │   ├── benchmarkstore/ # Benchmark run persistence (1 JSON per run)
 │   │   ├── downloadmgr/    # HuggingFace file downloader with progress
 │   │   ├── hfhub/          # HuggingFace Hub API client
 │   │   ├── httpproxy/      # OpenAI-shaped reverse proxy
 │   │   ├── llamahelp/      # --help parser + embedded schema
 │   │   ├── llamabin/       # Binary path resolver
+│   │   ├── metricsstore/   # Rolling metrics persistence (Append/Read/Compact)
+│   │   ├── migration/      # One-time config/state migrations
 │   │   ├── modelscanner/   # GGUF model scanning
+│   │   ├── monitor/        # GPU metrics via nvidia-smi
+│   │   ├── playground/     # OpenAI-compatible chat streaming client
+│   │   ├── processmgr/     # Process lifecycle + instance recovery
+│   │   ├── profilestore/   # Profile persistence (FS)
 │   │   ├── proxysupervisor/ # HTTP proxy lifecycle manager
-│   │   ├── monitor/       # GPU metrics via nvidia-smi
-│   │   ├── processmgr/    # Process lifecycle + instance recovery
-│   │   ├── profilestore/  # Profile persistence (FS)
-│   │   ├── sglanghelp/    # Embedded schema for sglang
-│   │   ├── validator/     # Flag validation rules
-│   │   └── vllmhelp/      # Embedded schema for vLLM
+│   │   ├── sglanghelp/     # Embedded schema for SGLang
+│   │   ├── sizing/         # GPU memory fit calculator
+│   │   ├── validator/      # Flag validation rules
+│   │   └── vllmhelp/       # Embedded schema for vLLM
 │   └── ui/
 │       ├── components/    # Help, Modal, Picker, Sparkline, Statusbar
-│       ├── pages/         # 5 tabs (Profiles/Server/Models/Backends/Benchmark) + profile_editor sub-package
+│       ├── pages/         # 5 tabs + profile_editor sub-package
 │       │   └── profile_editor/  # huh-based profile editing
 │       └── theme/
-├── testdata/              # Golden test fixtures (help-v7376.txt, .golden.json)
+├── testdata/              # Golden test fixtures
 ├── docs/superpowers/      # Design specs
 └── Makefile
 ```
@@ -59,13 +63,12 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 | HF Hub API client | internal/service/hfhub/ | model search, file listing |
 | Binary resolution | internal/service/llamabin/ | PATH lookup + Python fallback |
 | Proxy lifecycle | internal/service/proxysupervisor/ | state machine driving httpproxy |
+| Benchmark engine | internal/service/benchmark/ | SWE-bench Lite + long-context needle probe |
+| Benchmark store | internal/service/benchmarkstore/ | 1 JSON per run |
+| Metrics persistence | internal/service/metricsstore/ | per-profile JSONL |
 | TUI pages | internal/ui/pages/ | 5 tabs + profile_editor sub-package |
-| Benchmark engine | internal/service/benchmark/ | embedded SWE-bench Lite set with **oracle context** (full pre-fix source of patched files, SWE-bench prompt_style_3); modes: judge (reference-guided LLM judge, median of N samples — only quality scorer) + longctx (objective needle KV-decay probe). Judge endpoint in `[benchmark.judge]`; `max_tokens` default 32768 |
-| Benchmark run store | internal/service/benchmarkstore/ | 1 JSON per run in state_dir/benchmark/runs |
-| Benchmark tab | internal/ui/pages/benchmark*.go | tab 5: pick profile, run, view metrics/compare/history |
-| Benchmark CLI | cmd/model-loader/benchmark.go | `model-loader benchmark --profile <id> [--mode ...] [--json] [--min-solve N]`, `--list`, `--compare` |
 | Profile editing | internal/ui/pages/profile_editor/ | huh forms, draft state machine |
-| Essentials registry | internal/ui/pages/profile_editor/essentials.go | curated per-backend flag list (8 llama / 7 vLLM / 8 SGLang) |
+| Essentials registry | internal/ui/pages/profile_editor/essentials.go | curated per-backend flag list |
 | Config | internal/config/ | Viper TOML at ~/.config/model-loader/ |
 | Logging | internal/log/ | file-only slog, rotate-by-session |
 
@@ -97,7 +100,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 - **Tests**: any new global shortcut MUST have a paired test using the `capturingPage` test double in `internal/ui/root_test.go` proving the key is forwarded (not consumed) when the active page captures input.
 
 ## UNIQUE STYLES
-- Charmbracelet TUI with 4-tab model (tea.Program)
+- Charmbracelet TUI with 5-tab model (tea.Program)
 - Viper config with mapstructure tags
 - Domain-driven service layer under internal/service/
 - Embedded fallback schema for llama-server --help (parses at runtime if binary present)
@@ -121,7 +124,7 @@ go test ./... -update  # Update golden test fixtures
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **model-loader** (7011 symbols, 24716 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **model-loader** (7144 symbols, 25334 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

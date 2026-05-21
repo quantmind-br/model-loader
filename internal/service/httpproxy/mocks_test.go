@@ -53,6 +53,16 @@ func (s *stubStore) Get(id string) (domain.Profile, error) {
 	return p, nil
 }
 
+func (s *stubStore) Create(p domain.Profile) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.profiles[p.ID]; ok {
+		return profilestore.ErrDuplicateID
+	}
+	s.profiles[p.ID] = p
+	return nil
+}
+
 func (s *stubStore) Save(p domain.Profile) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -71,6 +81,10 @@ func (s *stubStore) Duplicate(srcID, newID string) (domain.Profile, error) {
 	return domain.Profile{}, errors.New("not implemented in stub")
 }
 
+func (s *stubStore) Rename(oldID string, p domain.Profile) error {
+	return errors.New("not implemented in stub")
+}
+
 // stubManager is a minimal processmgr.Manager that hands out deterministic
 // PIDs and records every call. Backends never actually run; tests configure
 // healthFn to choose whether WaitHealthy returns nil or an error.
@@ -87,8 +101,8 @@ type stubManager struct {
 
 func newStubManager() *stubManager {
 	return &stubManager{
-		nextPID: 1000,
-		tracked: map[int]domain.RunningInstance{},
+		nextPID:  1000,
+		tracked:  map[int]domain.RunningInstance{},
 		healthFn: func(int, int) error { return nil },
 	}
 }

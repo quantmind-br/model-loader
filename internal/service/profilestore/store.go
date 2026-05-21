@@ -20,9 +20,11 @@ type Store interface {
 	List() ([]domain.Profile, error)
 	ListWithDiagnostics() ([]domain.Profile, []ListDiagnostic, error)
 	Get(id string) (domain.Profile, error)
+	Create(p domain.Profile) error
 	Save(p domain.Profile) error
 	Delete(id string) error
 	Duplicate(srcID, newID string) (domain.Profile, error)
+	Rename(oldID string, p domain.Profile) error
 }
 
 // Sentinel errors returned by Store implementations.

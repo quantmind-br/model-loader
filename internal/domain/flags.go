@@ -8,6 +8,16 @@ package domain
 // working without a migration.
 var shortToLong = map[string]string{
 	"ngl": "n-gpu-layers",
+	"c":   "ctx-size",
+	"b":   "batch-size",
+	"ub":  "ubatch-size",
+	"fa":  "flash-attn",
+	"t":   "threads",
+	"np":  "parallel",
+	"ctk": "cache-type-k",
+	"ctv": "cache-type-v",
+	"sm":  "split-mode",
+	"ts":  "tensor-split",
 }
 
 // CanonicalFlag returns the long-form name for a Profile.Args key.

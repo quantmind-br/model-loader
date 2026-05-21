@@ -16,7 +16,7 @@ func TestValidator_EmptySchemaProducesNoTypeIssues(t *testing.T) {
 		Model: "", // Fixed: was /tmp/nonexistent.gguf, now trips existence rule
 		Args:  map[string]any{},
 	}
-	rep := v.Validate(p, domain.FlagSchema{Flags: map[string]domain.FlagSpec{}})
+	rep := v.Validate(p, domain.FlagSchema{Flags: map[string]domain.FlagSpec{}}, domain.BackendKindLlamaServer)
 	// At this stage, with no schema and no rules wired, Errors should be empty.
 	if len(rep.Errors) != 0 {
 		t.Errorf("Errors=%v, want empty", rep.Errors)
@@ -49,7 +49,7 @@ func TestValidator_TypeRule(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			p := domain.Profile{ID: "x", Args: tc.args}
-			rep := v.Validate(p, schema)
+			rep := v.Validate(p, schema, domain.BackendKindLlamaServer)
 			if got := len(rep.Errors); got != tc.wantErrs {
 				t.Fatalf("Errors=%d (%v), want %d", got, rep.Errors, tc.wantErrs)
 			}
@@ -79,7 +79,7 @@ func TestValidator_ModelExistence(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			p := domain.Profile{ID: "x", Model: tc.model}
-			rep := v.Validate(p, domain.FlagSchema{})
+			rep := v.Validate(p, domain.FlagSchema{}, domain.BackendKindLlamaServer)
 			if got := len(rep.Errors); got != tc.wantErrs {
 				t.Errorf("Errors=%d (%v), want %d", got, rep.Errors, tc.wantErrs)
 			}
@@ -94,14 +94,59 @@ func TestValidator_HFRepoIDNoExistenceError(t *testing.T) {
 		model   string
 		wantErr bool
 	}{
-		{"dotted HF repo ID", "Qwen/Qwen2.5-7B-Instruct", false},
-		{"dotted HF repo ID 2", "meta-llama/Llama-3.1-8B-Instruct", false},
+		{"dotted HF repo ID rejected for llama-server", "Qwen/Qwen2.5-7B-Instruct", true},
+		{"dotted HF repo ID 2 rejected for llama-server", "meta-llama/Llama-3.1-8B-Instruct", true},
 		{"local gguf file missing", "models/model.gguf", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			p := domain.Profile{ID: "x", Model: tc.model}
-			rep := v.Validate(p, domain.FlagSchema{})
+			rep := v.Validate(p, domain.FlagSchema{}, domain.BackendKindLlamaServer)
+			gotErr := len(rep.Errors) > 0
+			if gotErr != tc.wantErr {
+				t.Errorf("Errors=%v, wantErr=%v", rep.Errors, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidator_HFRepoIDAllowedForVLLM(t *testing.T) {
+	v := New(log.Nop())
+	cases := []struct {
+		name    string
+		model   string
+		wantErr bool
+	}{
+		{"dotted HF repo ID allowed for vLLM", "Qwen/Qwen2.5-7B-Instruct", false},
+		{"local gguf file missing still errors", "models/model.gguf", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := domain.Profile{ID: "x", Model: tc.model}
+			rep := v.Validate(p, domain.FlagSchema{}, domain.BackendKindVLLM)
+			gotErr := len(rep.Errors) > 0
+			if gotErr != tc.wantErr {
+				t.Errorf("Errors=%v, wantErr=%v", rep.Errors, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidator_HFRepoIDErrorsForLlamaServer(t *testing.T) {
+	v := New(log.Nop())
+	cases := []struct {
+		name    string
+		model   string
+		wantErr bool
+	}{
+		{"dotted HF repo ID", "Qwen/Qwen2.5-7B-Instruct", true},
+		{"dotted HF repo ID 2", "meta-llama/Llama-3.1-8B-Instruct", true},
+		{"local gguf file missing", "models/model.gguf", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := domain.Profile{ID: "x", Model: tc.model}
+			rep := v.Validate(p, domain.FlagSchema{}, domain.BackendKindLlamaServer)
 			gotErr := len(rep.Errors) > 0
 			if gotErr != tc.wantErr {
 				t.Errorf("Errors=%v, wantErr=%v", rep.Errors, tc.wantErr)
@@ -120,7 +165,7 @@ func TestValidator_ExistingLocalPathNotTreatedAsHFRepo(t *testing.T) {
 	// A local path like "models/llama3" that exists should be validated
 	// as a local path, not treated as a HF repo ID.
 	p := domain.Profile{ID: "x", Model: existingDir}
-	rep := v.Validate(p, domain.FlagSchema{})
+	rep := v.Validate(p, domain.FlagSchema{}, domain.BackendKindLlamaServer)
 	if len(rep.Errors) != 0 {
 		t.Errorf("existing local dir should not error; got %v", rep.Errors)
 	}

@@ -48,6 +48,8 @@ func (f *fakeModelsStore) Get(id string) (domain.Profile, error) {
 	return domain.Profile{}, profilestore.ErrNotFound
 }
 
+func (f *fakeModelsStore) Create(p domain.Profile) error { return f.Save(p) }
+
 func (f *fakeModelsStore) Save(p domain.Profile) error {
 	if f.saveErr != nil {
 		return f.saveErr
@@ -68,6 +70,7 @@ func (f *fakeModelsStore) Delete(_ string) error { return nil }
 func (f *fakeModelsStore) Duplicate(_, _ string) (domain.Profile, error) {
 	return domain.Profile{}, nil
 }
+func (f *fakeModelsStore) Rename(_ string, _ domain.Profile) error { return nil }
 
 // fakeScanner emits a fixed sequence of events for tests.
 type fakeScanner struct {

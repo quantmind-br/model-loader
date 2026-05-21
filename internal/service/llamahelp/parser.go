@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
@@ -156,8 +157,16 @@ func parseFlagLine(line string) (domain.FlagSpec, bool) {
 	if spec.Type == domain.FlagTypeEnum {
 		spec.EnumValues = parseEnumPlaceholder(placeholder)
 	}
-	if d := extractDefault(descChunk); d != nil {
-		spec.Default = coerceDefault(spec.Type, d)
+	rawDefault := extractDefault(descChunk)
+	// llama-server overloads the "N" placeholder for both ints and floats
+	// (e.g. --top-k N is int, --top-p N is float). When the inferred type is int
+	// but the documented default is a decimal, trust the default and treat the
+	// flag as a float — otherwise the validator rejects values like 0.95.
+	if spec.Type == domain.FlagTypeInt && looksFloat(rawDefault) {
+		spec.Type = domain.FlagTypeFloat
+	}
+	if rawDefault != nil {
+		spec.Default = coerceDefault(spec.Type, rawDefault)
 	}
 	spec = hardcodedFlagOverrides(spec)
 	return spec, true
@@ -241,6 +250,23 @@ func extractDefault(desc string) any {
 	return strings.TrimSpace(m[1])
 }
 
+// looksFloat reports whether the raw default value is a decimal number (i.e.
+// parses as a float and carries a fractional part / decimal point). Used to
+// disambiguate the overloaded "N" placeholder. Integer-looking defaults such as
+// "40" return false so genuine int flags keep their type.
+func looksFloat(raw any) bool {
+	s, ok := raw.(string)
+	if !ok {
+		return false
+	}
+	s = strings.TrimSpace(s)
+	if !strings.Contains(s, ".") {
+		return false
+	}
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
+}
+
 // coerceDefault converts the raw default string to the FlagSpec's typed value.
 // Falls back to the original string on parse failure.
 func coerceDefault(t domain.FlagType, raw any) any {
@@ -256,10 +282,14 @@ func coerceDefault(t domain.FlagType, raw any) any {
 		}
 	case domain.FlagTypeBool:
 		switch strings.ToLower(s) {
-		case "true", "yes", "1":
+		case "true", "yes", "1", "on":
 			return true
-		case "false", "no", "0":
+		case "false", "no", "0", "off":
 			return false
+		}
+	case domain.FlagTypeFloat:
+		if f, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil {
+			return f
 		}
 	case domain.FlagTypeEnum:
 		return strings.Trim(s, "'\"")

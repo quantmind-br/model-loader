@@ -90,11 +90,85 @@ func checkEnum(spec domain.FlagSpec, val any) string {
 
 func checkType(spec domain.FlagSpec, val any) string {
 	switch spec.Type {
-	case domain.FlagTypeInt:    return checkInt(val)
-	case domain.FlagTypeFloat:  return checkFloat(val)
+	case domain.FlagTypeInt:
+		if msg := checkInt(val); msg != "" {
+			return msg
+		}
+		return checkIntRange(spec, val)
+	case domain.FlagTypeFloat:
+		if msg := checkFloat(val); msg != "" {
+			return msg
+		}
+		return checkFloatRange(spec, val)
 	case domain.FlagTypeBool:   return checkBool(val)
 	case domain.FlagTypeString: return checkString(val)
 	case domain.FlagTypeEnum:   return checkEnum(spec, val)
+	}
+	return ""
+}
+
+func toInt64(val any) (int64, bool) {
+	switch v := val.(type) {
+	case int:
+		return int64(v), true
+	case int32:
+		return int64(v), true
+	case int64:
+		return v, true
+	case float64:
+		if v == math.Trunc(v) && !math.IsInf(v, 0) && !math.IsNaN(v) {
+			return int64(v), true
+		}
+	}
+	return 0, false
+}
+
+func toFloat64(val any) (float64, bool) {
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int32:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	}
+	return 0, false
+}
+
+func checkIntRange(spec domain.FlagSpec, val any) string {
+	n, ok := toInt64(val)
+	if !ok {
+		return ""
+	}
+	if spec.IsPort {
+		if n < 1 || n > 65535 {
+			return fmt.Sprintf("expected valid port (1-65535), got %d", n)
+		}
+		return ""
+	}
+	if spec.Min != nil && n < int64(*spec.Min) {
+		return fmt.Sprintf("expected >= %d, got %d", *spec.Min, n)
+	}
+	if spec.Max != nil && n > int64(*spec.Max) {
+		return fmt.Sprintf("expected <= %d, got %d", *spec.Max, n)
+	}
+	return ""
+}
+
+func checkFloatRange(spec domain.FlagSpec, val any) string {
+	f, ok := toFloat64(val)
+	if !ok {
+		return ""
+	}
+	if spec.FloatMin != nil && f < *spec.FloatMin {
+		return fmt.Sprintf("expected >= %v, got %v", *spec.FloatMin, f)
+	}
+	if spec.FloatMax != nil && f > *spec.FloatMax {
+		return fmt.Sprintf("expected <= %v, got %v", *spec.FloatMax, f)
 	}
 	return ""
 }
@@ -171,13 +245,17 @@ func parseExtraArg(arg string) (flag string, value string, hasValue bool) {
 func checkExtraArgType(spec domain.FlagSpec, val string) string {
 	switch spec.Type {
 	case domain.FlagTypeInt:
-		if _, err := strconv.Atoi(val); err != nil {
+		n, err := strconv.Atoi(val)
+		if err != nil {
 			return fmt.Sprintf("expected int, got %q", val)
 		}
+		return checkIntRange(spec, int64(n))
 	case domain.FlagTypeFloat:
-		if _, err := strconv.ParseFloat(val, 64); err != nil {
+		f, err := strconv.ParseFloat(val, 64)
+		if err != nil {
 			return fmt.Sprintf("expected float, got %q", val)
 		}
+		return checkFloatRange(spec, f)
 	case domain.FlagTypeEnum:
 		for _, v := range spec.EnumValues {
 			if v == val {
@@ -189,7 +267,7 @@ func checkExtraArgType(spec domain.FlagSpec, val string) string {
 	return ""
 }
 
-func applyExistenceRules(p domain.Profile, rep Report) Report {
+func applyExistenceRules(p domain.Profile, kind domain.BackendKind, rep Report) Report {
 	if p.Model == "" {
 		return rep
 	}
@@ -199,10 +277,10 @@ func applyExistenceRules(p domain.Profile, rep Report) Report {
 	}
 	// File does not exist locally. Only skip the error for
 	// HuggingFace-style repo IDs (e.g. "meta-llama/Llama-3-8B")
-	// so that sglang and other HF-capable backends can use them.
+	// on backends that support them natively (vLLM, SGLang, TabbyAPI).
 	// Local paths that happen to match the heuristic but exist
 	// are caught by the os.Stat success path above.
-	if domain.LooksLikeHFRepo(p.Model) {
+	if domain.LooksLikeHFRepo(p.Model) && supportsHFRepo(kind) {
 		return rep
 	}
 	if os.IsNotExist(err) {
@@ -212,11 +290,26 @@ func applyExistenceRules(p domain.Profile, rep Report) Report {
 			Severity: SeverityError,
 		})
 	}
+	if os.IsPermission(err) {
+		return appendIssue(rep, FieldIssue{
+			Field:    "model",
+			Message:  "permission denied for model path",
+			Severity: SeverityError,
+		})
+	}
 	return appendIssue(rep, FieldIssue{
 		Field:    "model",
 		Message:  "model path stat failed: " + err.Error(),
 		Severity: SeverityError,
 	})
+}
+
+func supportsHFRepo(kind domain.BackendKind) bool {
+	switch kind {
+	case domain.BackendKindVLLM, domain.BackendKindSGLang, domain.BackendKindTabbyAPI:
+		return true
+	}
+	return false
 }
 
 

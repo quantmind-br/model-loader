@@ -55,6 +55,12 @@ func buildLlamaArgs(p domain.Profile) []string {
 			}
 		case string:
 			args = append(args, flag, v)
+		case int:
+			args = append(args, flag, strconv.Itoa(v))
+		case int32:
+			args = append(args, flag, strconv.FormatInt(int64(v), 10))
+		case int64:
+			args = append(args, flag, strconv.FormatInt(v, 10))
 		case float64:
 			args = append(args, flag, formatFloat(v))
 		case []any:
@@ -92,6 +98,12 @@ func buildSGLangArgs(p domain.Profile) []string {
 			}
 		case string:
 			args = append(args, flag, v)
+		case int:
+			args = append(args, flag, strconv.Itoa(v))
+		case int32:
+			args = append(args, flag, strconv.FormatInt(int64(v), 10))
+		case int64:
+			args = append(args, flag, strconv.FormatInt(v, 10))
 		case float64:
 			args = append(args, flag, formatFloat(v))
 		case []any:
@@ -138,6 +150,12 @@ func buildVLLMArgs(p domain.Profile, executable string) []string {
 			}
 		case string:
 			args = append(args, flag, v)
+		case int:
+			args = append(args, flag, strconv.Itoa(v))
+		case int32:
+			args = append(args, flag, strconv.FormatInt(int64(v), 10))
+		case int64:
+			args = append(args, flag, strconv.FormatInt(v, 10))
 		case float64:
 			args = append(args, flag, formatFloat(v))
 		case []any:

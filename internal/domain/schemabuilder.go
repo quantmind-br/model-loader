@@ -11,6 +11,11 @@ type FlagSpecRow struct {
 	Default    any
 	HelpText   string
 	Group      string
+	Min        *int
+	Max        *int
+	FloatMin   *float64
+	FloatMax   *float64
+	IsPort     bool
 }
 
 // BuildFlagSchema converts a slice of FlagSpecRow into a FlagSchema.
@@ -26,6 +31,11 @@ func BuildFlagSchema(version string, rows []FlagSpecRow) FlagSchema {
 			Default:    r.Default,
 			HelpText:   r.HelpText,
 			Group:      r.Group,
+			Min:        r.Min,
+			Max:        r.Max,
+			FloatMin:   r.FloatMin,
+			FloatMax:   r.FloatMax,
+			IsPort:     r.IsPort,
 		}
 	}
 	return FlagSchema{Version: version, Flags: flags}

@@ -199,6 +199,59 @@ func TestParseFlagLine_EnumPlaceholders(t *testing.T) {
 	}
 }
 
+// TestParseFlagLine_NPlaceholderFloatByDefault covers sampling params whose
+// placeholder is the ambiguous "N" but whose default value is a decimal. These
+// are floats (temp, top-p, min-p, ...); inferring int makes the validator reject
+// legitimate values like 0.95 with "expected int, got 0.95".
+func TestParseFlagLine_NPlaceholderFloatByDefault(t *testing.T) {
+	cases := []struct {
+		name        string
+		line        string
+		wantLong    string
+		wantType    domain.FlagType
+		wantDefault any
+	}{
+		{
+			name:        "temp float default",
+			line:        "--temp, --temperature N                 temperature (default: 0.80)",
+			wantLong:    "temperature",
+			wantType:    domain.FlagTypeFloat,
+			wantDefault: 0.80,
+		},
+		{
+			name:        "top-p float default with trailing note",
+			line:        "--top-p N                               top-p sampling (default: 0.95, 1.0 = disabled)",
+			wantLong:    "top-p",
+			wantType:    domain.FlagTypeFloat,
+			wantDefault: 0.95,
+		},
+		{
+			name:        "top-k stays int",
+			line:        "--top-k N                               top-k sampling (default: 40)",
+			wantLong:    "top-k",
+			wantType:    domain.FlagTypeInt,
+			wantDefault: 40,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := parseFlagLine(tc.line)
+			if !ok {
+				t.Fatalf("!ok for %q", tc.line)
+			}
+			if got.Long != tc.wantLong {
+				t.Errorf("long=%q, want %q", got.Long, tc.wantLong)
+			}
+			if got.Type != tc.wantType {
+				t.Errorf("type=%v, want %v", got.Type, tc.wantType)
+			}
+			if got.Default != tc.wantDefault {
+				t.Errorf("default=%v (%T), want %v (%T)", got.Default, got.Default, tc.wantDefault, tc.wantDefault)
+			}
+		})
+	}
+}
+
 func TestParseFlagLine_CacheTypeHardcodedEnum(t *testing.T) {
 	cases := []struct {
 		name string

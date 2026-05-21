@@ -18,9 +18,9 @@ func TestProfile_JSONRoundtrip(t *testing.T) {
 		Tags:          []string{"coding", "32b"},
 		Model:         "/models/qwen.gguf",
 		Args: map[string]any{
-			"ngl":         float64(99),
-			"ctx-size":    float64(16384),
-			"flash-attn":  true,
+			"ngl":          float64(99),
+			"ctx-size":     float64(16384),
+			"flash-attn":   true,
 			"cache-type-k": "q8_0",
 		},
 		ExtraArgs: []string{},
@@ -135,6 +135,35 @@ func TestSlugify(t *testing.T) {
 		got := Slugify(c.in)
 		if got != c.want {
 			t.Errorf("Slugify(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestIsValidSlug(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"qwen-coder", true},
+		{"llama-3-3-70b", true},
+		{"qwen3.6-35b-a3b-mtp-200k", true}, // dots allowed
+		{"q4_k_m", true},                   // underscores allowed
+		{"a", true},
+		{"", false},
+		{".qwen", false},   // leading separator
+		{"qwen.", false},   // trailing separator
+		{"qwen..6", false}, // double separator
+		{"qwen._6", false}, // mixed double separator
+		{"Qwen-Coder", false}, // uppercase
+		{"qwen coder", false}, // space
+		{"-qwen", false},      // leading dash
+		{"qwen-", false},      // trailing dash
+		{"qwen--coder", false},
+		{"café", false}, // non-ascii
+	}
+	for _, c := range cases {
+		if got := IsValidSlug(c.in); got != c.want {
+			t.Errorf("IsValidSlug(%q) = %v, want %v", c.in, got, c.want)
 		}
 	}
 }

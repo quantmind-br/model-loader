@@ -36,7 +36,7 @@ func (r Report) HasBlockingErrors() bool {
 
 // Validator runs all configured rules on a Profile.
 type Validator interface {
-	Validate(p domain.Profile, schema domain.FlagSchema) Report
+	Validate(p domain.Profile, schema domain.FlagSchema, kind domain.BackendKind) Report
 }
 
 // New returns a default Validator with the standard rule set. logger may be
@@ -54,11 +54,11 @@ type defaultValidator struct {
 	logger *slog.Logger
 }
 
-func (v defaultValidator) Validate(p domain.Profile, schema domain.FlagSchema) Report {
+func (v defaultValidator) Validate(p domain.Profile, schema domain.FlagSchema, kind domain.BackendKind) Report {
 	rep := Report{}
 	rep = applyTypeRules(p, schema, rep)
 	rep = applyExtraArgsRules(p, schema, rep)
-	rep = applyExistenceRules(p, rep)
+	rep = applyExistenceRules(p, kind, rep)
 	if rep.HasBlockingErrors() {
 		v.logger.Info("validation_failed",
 			"profile_id", p.ID,

@@ -1,6 +1,7 @@
 package profilestore
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -266,6 +267,238 @@ func TestFSStore_Duplicate(t *testing.T) {
 	_, err = s.Duplicate("nope", "anywhere")
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+}
+
+// renamed returns the source profile re-keyed to newID with an edited name,
+// mimicking what the editor commits: final content under the new id.
+func renamed(src domain.Profile, newID, newName string) domain.Profile {
+	src.ID = newID
+	src.Name = newName
+	return src
+}
+
+func TestFSStore_Rename(t *testing.T) {
+	s, dir := newStore(t)
+	if err := s.Save(sampleProfile("orig", "Original")); err != nil {
+		t.Fatal(err)
+	}
+	src := mustGet(t, s, "orig")
+	created := src.Meta.CreatedAt
+
+	if err := s.Rename("orig", renamed(src, "renamed", "Edited")); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+
+	// Old file gone.
+	if _, err := s.Get("orig"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Get(orig) err = %v, want ErrNotFound", err)
+	}
+	// New file present with the FINAL edited content; Meta.CreatedAt preserved.
+	got := mustGet(t, s, "renamed")
+	if got.ID != "renamed" {
+		t.Errorf("got.ID = %q, want renamed", got.ID)
+	}
+	if got.Name != "Edited" {
+		t.Errorf("got.Name = %q, want Edited (final content)", got.Name)
+	}
+	if !got.Meta.CreatedAt.Equal(created) {
+		t.Errorf("CreatedAt = %v, want preserved %v", got.Meta.CreatedAt, created)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "orig.json")); !os.IsNotExist(err) {
+		t.Errorf("orig.json still exists: %v", err)
+	}
+}
+
+func TestFSStore_RenameCollision(t *testing.T) {
+	s, _ := newStore(t)
+	if err := s.Save(sampleProfile("a", "A")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Save(sampleProfile("b", "B")); err != nil {
+		t.Fatal(err)
+	}
+	src := mustGet(t, s, "a")
+	if err := s.Rename("a", renamed(src, "b", "A")); !errors.Is(err, ErrDuplicateID) {
+		t.Errorf("err = %v, want ErrDuplicateID", err)
+	}
+	// Both profiles untouched after a rejected rename (no data loss).
+	if _, err := s.Get("a"); err != nil {
+		t.Errorf("source removed after rejected rename: %v", err)
+	}
+	if got := mustGet(t, s, "b"); got.Name != "B" {
+		t.Errorf("collision target overwritten: Name = %q, want B", got.Name)
+	}
+}
+
+func TestFSStore_RenameDropsOldHistory(t *testing.T) {
+	s, dir := newStore(t)
+	if err := s.Save(sampleProfile("orig", "Original")); err != nil {
+		t.Fatal(err)
+	}
+	// A second Save creates the .previous.json history snapshot under orig.
+	if err := s.Save(sampleProfile("orig", "Original v2")); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := LoadPrevious(dir, "orig"); !ok {
+		t.Fatal("precondition: expected history snapshot for orig")
+	}
+
+	src := mustGet(t, s, "orig")
+	if err := s.Rename("orig", renamed(src, "renamed", "Edited")); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+
+	// Old history removed; the renamed file starts fresh (no stale undo).
+	if _, ok, _ := LoadPrevious(dir, "orig"); ok {
+		t.Error("old history snapshot should be gone")
+	}
+	if _, ok, _ := LoadPrevious(dir, "renamed"); ok {
+		t.Error("renamed profile should start without history")
+	}
+}
+
+func TestFSStore_RenameSameIDSaves(t *testing.T) {
+	s, _ := newStore(t)
+	if err := s.Save(sampleProfile("orig", "Original")); err != nil {
+		t.Fatal(err)
+	}
+	src := mustGet(t, s, "orig")
+	if err := s.Rename("orig", renamed(src, "orig", "Edited")); err != nil {
+		t.Errorf("Rename same id: %v", err)
+	}
+	got := mustGet(t, s, "orig")
+	if got.Name != "Edited" {
+		t.Errorf("same-id rename did not save edit: Name = %q, want Edited", got.Name)
+	}
+}
+
+func mustGet(t *testing.T, s *FSStore, id string) domain.Profile {
+	t.Helper()
+	p, err := s.Get(id)
+	if err != nil {
+		t.Fatalf("Get(%q): %v", id, err)
+	}
+	return p
+}
+
+// TestFSStore_HealKeepsHistoryUnderFilename guards the read-repair path: a
+// file whose embedded id diverges from its filename (a manual copy) must not,
+// when healed, write its undo snapshot under the stale embedded id and clobber
+// the unrelated profile that legitimately owns that id.
+func TestFSStore_HealKeepsHistoryUnderFilename(t *testing.T) {
+	s, dir := newStore(t)
+
+	// Real profile "bar" with an undo snapshot of its own content.
+	if err := s.Save(sampleProfile("bar", "Bar v1")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Save(sampleProfile("bar", "Bar v2")); err != nil {
+		t.Fatal(err)
+	}
+
+	// A divergent file foo.json whose embedded id is the stale "bar".
+	stray := sampleProfile("bar", "Stray content")
+	data, err := json.Marshal(stray)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "foo.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Get("foo") heals the id and re-saves; must not touch bar's history.
+	if _, err := s.Get("foo"); err != nil {
+		t.Fatalf("Get(foo): %v", err)
+	}
+
+	barPrev, ok, _ := LoadPrevious(dir, "bar")
+	if !ok {
+		t.Fatal("bar history snapshot disappeared")
+	}
+	if barPrev.Name != "Bar v1" {
+		t.Errorf("bar history clobbered: Name = %q, want Bar v1", barPrev.Name)
+	}
+	// foo's own snapshot (if any) is keyed by its filename, not the stale id.
+	if fooPrev, ok, _ := LoadPrevious(dir, "foo"); ok && fooPrev.ID != "foo" {
+		t.Errorf("foo snapshot id = %q, want foo", fooPrev.ID)
+	}
+}
+
+func TestFSStore_Create(t *testing.T) {
+	s, dir := newStore(t)
+	if err := s.Create(sampleProfile("fresh", "Fresh")); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "fresh.json")); err != nil {
+		t.Errorf("fresh.json not written: %v", err)
+	}
+	got := mustGet(t, s, "fresh")
+	if got.Meta.CreatedAt.IsZero() {
+		t.Error("Create did not stamp CreatedAt")
+	}
+}
+
+// TestFSStore_CreateRejectsExisting is the Codex finding-1 guard: a new-profile
+// commit must never silently overwrite a profile that claimed the id after the
+// editor's stale validator snapshot was taken. Create is exclusive.
+func TestFSStore_CreateRejectsExisting(t *testing.T) {
+	s, _ := newStore(t)
+	if err := s.Save(sampleProfile("dup", "Original")); err != nil {
+		t.Fatal(err)
+	}
+	clobber := sampleProfile("dup", "Clobber")
+	if err := s.Create(clobber); !errors.Is(err, ErrDuplicateID) {
+		t.Errorf("Create over existing id: err = %v, want ErrDuplicateID", err)
+	}
+	// The original profile's content must survive untouched.
+	if got := mustGet(t, s, "dup"); got.Name != "Original" {
+		t.Errorf("existing profile clobbered: Name = %q, want Original", got.Name)
+	}
+}
+
+// TestFSStore_RenameMissingSource is the Codex finding-2 guard (resurrection /
+// source-deletion race): renaming a profile whose source is absent — never
+// existed, or deleted out from under an open editor mid-rename — must fail with
+// ErrNotFound and roll back the target, never recreating it under the new id.
+// This drives the post-Create removal path: Create writes the target, the
+// source removal returns ErrNotExist, and the target is rolled back.
+func TestFSStore_RenameMissingSource(t *testing.T) {
+	s, dir := newStore(t)
+	ghost := sampleProfile("ghost", "Ghost")
+	if err := s.Rename("ghost", renamed(ghost, "revived", "Revived")); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Rename of missing source: err = %v, want ErrNotFound", err)
+	}
+	if _, err := s.Get("revived"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Get(revived) err = %v, want ErrNotFound (must not resurrect)", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "revived.json")); !os.IsNotExist(err) {
+		t.Errorf("revived.json should not exist: %v", err)
+	}
+}
+
+// TestFSStore_RenameRollsBackOnRemoveFailure is the Codex finding-2 guard
+// (split-state): if removing the old file fails after the new file is written,
+// the new file is rolled back so the store is not left holding two copies and
+// a retry does not trip over its own leftover target (ErrDuplicateID).
+func TestFSStore_RenameRollsBackOnRemoveFailure(t *testing.T) {
+	s, dir := newStore(t)
+	// Make the "old" path a non-empty directory: it exists (passes the source
+	// check) but os.Remove fails with ENOTEMPTY, forcing the rollback branch.
+	oldPath := filepath.Join(dir, "orig.json")
+	if err := os.Mkdir(oldPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(oldPath, "blocker"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := s.Rename("orig", sampleProfile("renamed", "Edited"))
+	if err == nil {
+		t.Fatal("Rename should fail when the old file cannot be removed")
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "renamed.json")); !os.IsNotExist(statErr) {
+		t.Errorf("new file not rolled back after remove failure: %v", statErr)
 	}
 }
 

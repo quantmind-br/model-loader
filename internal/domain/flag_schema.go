@@ -21,12 +21,19 @@ type FlagSpec struct {
 	Default    any
 	HelpText   string
 	Group      string // "common" | "sampling" | "example-specific" | "embedded"
+
+	Min      *int     `json:"min,omitempty"`
+	Max      *int     `json:"max,omitempty"`
+	FloatMin *float64 `json:"floatMin,omitempty"`
+	FloatMax *float64 `json:"floatMax,omitempty"`
+	IsPort   bool     `json:"isPort,omitempty"`
 }
 
 // FlagSchema is the parsed --help output keyed by long name.
 type FlagSchema struct {
-	Version string
-	Flags   map[string]FlagSpec
+	Version     string
+	BackendKind BackendKind
+	Flags       map[string]FlagSpec
 }
 
 // Lookup resolves a name (map key, long form, short form, or alias) to a FlagSpec.

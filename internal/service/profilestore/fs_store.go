@@ -126,8 +126,12 @@ func (s *FSStore) Save(p domain.Profile) error {
 	if _, err := os.Stat(s.path(p.ID)); err == nil {
 		var current domain.Profile
 		if data, err := os.ReadFile(s.path(p.ID)); err == nil {
-			_ = json.Unmarshal(data, &current)
-			if current.ID != "" {
+			if err := json.Unmarshal(data, &current); err == nil {
+				// Key the undo snapshot by the storage filename, not the
+				// possibly-stale embedded id (a manual copy / pre-heal file),
+				// so LoadPrevious(dir, p.ID) finds it and restore writes back
+				// to the same file.
+				current.ID = p.ID
 				_ = SavePrevious(s.dir, current)
 			}
 		}
@@ -135,6 +139,33 @@ func (s *FSStore) Save(p domain.Profile) error {
 
 	if err := fsx.WriteJSONAtomic(s.path(p.ID), p); err != nil {
 		return fmt.Errorf("save profile: %w", err)
+	}
+	return nil
+}
+
+// Create persists a brand-new profile, failing with ErrDuplicateID if a profile
+// already occupies p.ID. Unlike Save (an upsert), the create is exclusive: the
+// file is hard-linked into place, so a concurrent writer (another TUI, an import,
+// a manual file) that already claimed the id cannot be silently overwritten —
+// it loses no args/env/meta. Fills SchemaVersion, CreatedAt and UpdatedAt.
+func (s *FSStore) Create(p domain.Profile) error {
+	if p.ID == "" {
+		return ErrInvalidID
+	}
+	if p.SchemaVersion == 0 {
+		p.SchemaVersion = domain.SchemaVersion
+	}
+	now := time.Now().UTC()
+	if p.Meta.CreatedAt.IsZero() {
+		p.Meta.CreatedAt = now
+	}
+	p.Meta.UpdatedAt = now
+
+	if err := fsx.WriteJSONExclusive(s.path(p.ID), p); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return ErrDuplicateID
+		}
+		return fmt.Errorf("create profile: %w", err)
 	}
 	return nil
 }
@@ -200,6 +231,53 @@ func (s *FSStore) Duplicate(srcID, newID string) (domain.Profile, error) {
 		return domain.Profile{}, err
 	}
 	return dup, nil
+}
+
+// Rename persists the final profile p under its new id (p.ID) and removes the
+// old file at oldID. When oldID == p.ID it degrades to a plain Save.
+//
+// Failure semantics (Codex adversarial review):
+//   - The target is written via the exclusive Create, not Save: if p.ID was
+//     claimed concurrently (after the editor's stale validator snapshot) it
+//     fails atomically with ErrDuplicateID instead of clobbering that profile.
+//     There is no check-then-write TOCTOU gap a Stat+Save pair would leave open.
+//   - Source existence is proven by the removal itself, not a prior Stat (which
+//     would be its own TOCTOU window). If os.Remove finds nothing — the source
+//     never existed, or was deleted concurrently after the target was written —
+//     the new file is rolled back and ErrNotFound is returned, so a profile
+//     deleted mid-rename is never resurrected under the new id.
+//   - The new file is written BEFORE the old is removed, so a crash between the
+//     two steps leaves the original profile intact (no lost edits).
+//   - On any removal failure the freshly written new file is rolled back, so a
+//     retry starts from a clean single-file state instead of tripping over its
+//     own leftover target (ErrDuplicateID).
+//
+// The old profile's undo history is dropped (the renamed file starts fresh).
+func (s *FSStore) Rename(oldID string, p domain.Profile) error {
+	if oldID == "" || p.ID == "" {
+		return ErrInvalidID
+	}
+	if oldID == p.ID {
+		return s.Save(p)
+	}
+
+	// Exclusive write closes the concurrent-target race: a claimed target yields
+	// ErrDuplicateID here, with nothing written and the source left intact.
+	if err := s.Create(p); err != nil {
+		return err
+	}
+	// The removal is the authoritative source-existence check. Removing nothing
+	// means the source is gone (never existed or deleted concurrently): roll the
+	// new file back and report ErrNotFound rather than resurrecting it.
+	if err := os.Remove(s.path(oldID)); err != nil {
+		_ = os.Remove(s.path(p.ID))
+		if errors.Is(err, fs.ErrNotExist) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("remove old profile: %w", err)
+	}
+	_ = DeletePrevious(s.dir, oldID)
+	return nil
 }
 
 // usedPorts collects every "port" arg currently persisted in the store.

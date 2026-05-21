@@ -578,7 +578,7 @@ func TestEditor_FixesValidationErrorThenSaves(t *testing.T) {
 	}
 
 	// Verify commit would succeed by checking validation directly
-	report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema)
+	report := e.validator.Validate(e.CurrentDraft().ToProfileWithSchema(e.schema), e.schema, e.backendKind)
 	if report.HasBlockingErrors() {
 		t.Fatalf("expected no blocking errors after fix; got %v", report.Errors)
 	}
@@ -648,7 +648,7 @@ func TestEditor_SwitchesBackendAndSchema(t *testing.T) {
 	}
 
 	profileA := domain.Profile{ID: "x", Args: map[string]any{"custom-flag-a": true}, Launch: domain.LaunchConfig{BackendID: "backend-a"}}
-	report := e.validator.Validate(profileA, e.schema)
+	report := e.validator.Validate(profileA, e.schema, e.backendKind)
 	if report.HasBlockingErrors() {
 		t.Fatalf("expected no errors with backend-a schema; got %v", report.Errors)
 	}
@@ -661,12 +661,46 @@ func TestEditor_SwitchesBackendAndSchema(t *testing.T) {
 	}
 
 	profileB := domain.Profile{ID: "x", Args: map[string]any{"custom-flag-a": true}, Launch: domain.LaunchConfig{BackendID: "backend-b"}}
-	report = e.validator.Validate(profileB, e.schema)
+	report = e.validator.Validate(profileB, e.schema, e.backendKind)
 	if !report.HasBlockingErrors() {
 		t.Fatal("expected validation errors after switching to backend-b (custom-flag-a is unknown)")
 	}
 	if len(report.Errors) != 1 || report.Errors[0].Field != "custom-flag-a" {
 		t.Fatalf("expected error on custom-flag-a; got %v", report.Errors)
+	}
+}
+
+func TestEditor_OpenFocusesIDField(t *testing.T) {
+	e, _ := New(domain.FlagSchema{}).Open(Draft{ID: "x", Name: "Y"})
+	if e.form == nil {
+		t.Fatal("expected form")
+	}
+	if got := e.form.GetFocusedField().GetKey(); got != "id" {
+		t.Errorf("first focused field = %q, want id", got)
+	}
+}
+
+func TestSlugValidator(t *testing.T) {
+	taken := func(s string) bool { return s == "other" }
+	d := &Draft{OrigID: "orig"}
+	v := slugValidator(d, taken)
+
+	cases := []struct {
+		in     string
+		wantOK bool
+	}{
+		{"orig", true},    // unchanged own id
+		{"new-id", true},  // valid + free
+		{"other", false},  // collides with existing
+		{"Bad Id", false}, // not a slug
+		{"", false},       // empty
+		{"UPPER", false},  // uppercase
+	}
+	for _, c := range cases {
+		err := v(c.in)
+		if (err == nil) != c.wantOK {
+			t.Errorf("validate(%q) err=%v, wantOK=%v", c.in, err, c.wantOK)
+		}
 	}
 }
 
@@ -707,7 +741,7 @@ func TestEditor_SwitchesBackendPreservesFocus(t *testing.T) {
 		t.Fatal("expected form to be initialized")
 	}
 
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 5; i++ {
 		_ = e.form.NextField()
 	}
 	if got := e.form.GetFocusedField().GetKey(); got != "backend" {

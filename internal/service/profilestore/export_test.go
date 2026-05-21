@@ -166,9 +166,11 @@ func (e errorStore) List() ([]domain.Profile, error) { return nil, e.listErr }
 func (e errorStore) ListWithDiagnostics() ([]domain.Profile, []ListDiagnostic, error) {
 	return nil, nil, e.listErr
 }
-func (e errorStore) Get(string) (domain.Profile, error)    { return domain.Profile{}, ErrNotFound }
-func (e errorStore) Save(domain.Profile) error             { return nil }
-func (e errorStore) Delete(string) error                   { return nil }
+func (e errorStore) Get(string) (domain.Profile, error) { return domain.Profile{}, ErrNotFound }
+func (e errorStore) Create(domain.Profile) error        { return nil }
+func (e errorStore) Save(domain.Profile) error          { return nil }
+func (e errorStore) Delete(string) error                { return nil }
 func (e errorStore) Duplicate(string, string) (domain.Profile, error) {
 	return domain.Profile{}, nil
 }
+func (e errorStore) Rename(string, domain.Profile) error { return nil }

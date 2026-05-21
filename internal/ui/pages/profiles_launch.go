@@ -152,7 +152,7 @@ func (p ProfilesPage) launchProfileCmd(selected domain.Profile) tea.Cmd {
 		}
 		activeSchema := rb.Schema.ToFlagSchema()
 		if val != nil {
-			rep := val.Validate(selected, activeSchema)
+			rep := val.Validate(selected, activeSchema, rb.Schema.BackendKind)
 			if rep.HasBlockingErrors() {
 				evt.Error("launch_pipeline_failed",
 					"step", "validate", "err_count", len(rep.Errors))

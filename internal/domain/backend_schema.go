@@ -40,8 +40,9 @@ func (s BackendValidationSchema) ToFlagSchema() FlagSchema {
 		version += " (" + s.Source.SourceVersion + ")"
 	}
 	return FlagSchema{
-		Version: version,
-		Flags:   s.Flags,
+		Version:     version,
+		BackendKind: s.BackendKind,
+		Flags:       s.Flags,
 	}
 }
 

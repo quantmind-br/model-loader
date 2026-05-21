@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/pages/profile_editor"
 )
@@ -54,9 +56,23 @@ func (p ProfilesPage) handleEditorCommitted(msg profile_editor.EditorCommittedMs
 	}
 	schema := p.resolveSchemaForBackendID(d.BackendID)
 
+	renaming := !d.IsNew && d.OrigID != "" && d.ID != d.OrigID
+	if renaming {
+		for _, ri := range p.running {
+			if ri.ProfileID == d.OrigID {
+				p, fc := p.withFlashError("stop the running instance before renaming")
+				return p, fc
+			}
+		}
+	}
+
 	var pr domain.Profile
+	lookupID := d.ID
+	if renaming {
+		lookupID = d.OrigID
+	}
 	if !d.IsNew {
-		if existing, err := p.store.Get(d.ID); err == nil {
+		if existing, err := p.store.Get(lookupID); err == nil {
 			pr = d.ApplyToWithSchema(existing, schema)
 			pr.Meta = existing.Meta
 		} else {
@@ -67,10 +83,34 @@ func (p ProfilesPage) handleEditorCommitted(msg profile_editor.EditorCommittedMs
 	}
 
 	var fc tea.Cmd
-	if err := p.store.Save(pr); err != nil {
-		p, fc = p.withFlashError("save failed: " + err.Error())
-	} else {
-		p, fc = p.withFlash("saved " + pr.ID)
+	switch {
+	case renaming:
+		// Rename writes the final profile under the new id before removing the
+		// old file, so a failure leaves the original intact (no lost edits).
+		if err := p.store.Rename(d.OrigID, pr); err != nil {
+			p, fc = p.withFlashError("rename failed: " + err.Error())
+		} else {
+			p, fc = p.withFlash("saved " + pr.ID)
+		}
+	case d.IsNew:
+		// Create is exclusive: it refuses to overwrite a profile that claimed
+		// this id after the editor opened (the field validator's snapshot is
+		// stale by submit time), surfacing ErrDuplicateID instead of clobbering.
+		if err := p.store.Create(pr); err != nil {
+			if errors.Is(err, profilestore.ErrDuplicateID) {
+				p, fc = p.withFlashError("id already exists: " + pr.ID)
+			} else {
+				p, fc = p.withFlashError("save failed: " + err.Error())
+			}
+		} else {
+			p, fc = p.withFlash("saved " + pr.ID)
+		}
+	default:
+		if err := p.store.Save(pr); err != nil {
+			p, fc = p.withFlashError("save failed: " + err.Error())
+		} else {
+			p, fc = p.withFlash("saved " + pr.ID)
+		}
 	}
 	return p, tea.Batch(p.loadCmd(), fc)
 }
@@ -165,6 +205,7 @@ func (p ProfilesPage) performDelete(id string) (tea.Model, tea.Cmd) {
 // for new profiles. Shared by [n] (start new) and "use in new profile".
 func (p ProfilesPage) newDraftDefaults() profile_editor.Draft {
 	d := profile_editor.Draft{
+		ID:             domain.Slugify("New Profile"),
 		Name:           "New Profile",
 		Tags:           "",
 		RestartPolicy:  string(domain.RestartPolicyNone),
@@ -200,7 +241,22 @@ func (p ProfilesPage) prepareEditor() profile_editor.Editor {
 	return p.editor.
 		SetBackendOptions(p.backendOptions()).
 		SetCatalogStore(p.catalogStore).
-		SetSchemaStore(p.schemaStore)
+		SetSchemaStore(p.schemaStore).
+		SetExistingIDs(p.existingIDs())
+}
+
+// existingIDs lists every profile id currently in the store so the editor can
+// reject id collisions. I/O errors degrade to an empty list (best-effort).
+func (p ProfilesPage) existingIDs() []string {
+	profiles, err := p.store.List()
+	if err != nil {
+		return nil
+	}
+	ids := make([]string, 0, len(profiles))
+	for _, pr := range profiles {
+		ids = append(ids, pr.ID)
+	}
+	return ids
 }
 
 func (p ProfilesPage) startNew() (tea.Model, tea.Cmd) {
@@ -222,6 +278,7 @@ func (p ProfilesPage) startEditSelected() (tea.Model, tea.Cmd) {
 	pr := sel.p
 	d := profile_editor.Draft{
 		ID:             pr.ID,
+		OrigID:         pr.ID,
 		Name:           pr.Name,
 		Description:    pr.Description,
 		Tags:           profile_editor.FormatTags(pr.Tags),

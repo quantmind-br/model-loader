@@ -44,7 +44,11 @@ func (s subTab) String() string {
 }
 
 type Draft struct {
-	ID          string
+	ID string
+	// OrigID is the profile's id at edit-open time. Page-only metadata, never
+	// bound to a form field; empty for new profiles. Used to detect a rename
+	// (ID changed) so the commit handler can move the underlying file.
+	OrigID      string
 	Name        string
 	Description string
 	Tags        string
@@ -244,12 +248,13 @@ func FlashAttnToString(v any) string {
 	}
 }
 
-func buildForm(d *Draft, schema domain.FlagSchema, backendOpts []huh.Option[string], kind domain.BackendKind) (*huh.Form, map[string]*string, map[string]huh.Field) {
+func buildForm(d *Draft, schema domain.FlagSchema, backendOpts []huh.Option[string], kind domain.BackendKind, idTaken func(string) bool) (*huh.Form, map[string]*string, map[string]huh.Field) {
 	ptrs := map[string]*string{}
 	fieldMap := map[string]huh.Field{}
 
 	g1Fields := []huh.Field{
-		setFieldKey(huh.NewInput().Title("Name").Description("Unique profile identifier").Value(&d.Name), "name"),
+		setFieldKey(huh.NewInput().Title("ID (slug)").Description(`Filename + the "model" value clients send; lowercase a-z 0-9 . _ -`).Value(&d.ID).Validate(slugValidator(d, idTaken)), "id"),
+		setFieldKey(huh.NewInput().Title("Name").Description("Display name / label").Value(&d.Name), "name"),
 		setFieldKey(huh.NewInput().Title("Description").Value(&d.Description), "description"),
 		setFieldKey(huh.NewInput().Title("Tags").Description("comma-separated").Value(&d.Tags), "tags"),
 		setFieldKey(huh.NewInput().Title(modelLabel(kind)).Description(modelDesc(kind)).Value(&d.Model), "model"),
@@ -336,6 +341,21 @@ func intValidatorFor(f EssentialField) func(string) error {
 		max = *f.Max
 	}
 	return intRange(min, max, f.AllowEmpty)
+}
+
+// slugValidator gates the editable profile ID: must be canonical kebab-case
+// and not collide with another existing profile. The current id (d.OrigID) is
+// always allowed so an unchanged id passes during edit.
+func slugValidator(d *Draft, idTaken func(string) bool) func(string) error {
+	return func(s string) error {
+		if !domain.IsValidSlug(s) {
+			return fmt.Errorf("must be lowercase a-z, 0-9 separated by . _ or -")
+		}
+		if s != d.OrigID && idTaken != nil && idTaken(s) {
+			return fmt.Errorf("id already exists")
+		}
+		return nil
+	}
 }
 
 func floatValidator(allowEmpty bool) func(string) error {
