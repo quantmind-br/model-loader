@@ -7,10 +7,14 @@ Profile persistence as one JSON file per profile. Atomic writes, corruption diag
 | File | Purpose |
 |------|---------|
 | `store.go` | `Store` interface + `ListDiagnostic` + sentinel errors |
-| `fs_store.go` | `FSStore` implementation: atomic write, list, get, save, delete, duplicate |
+| `fs_store.go` | `FSStore` implementation: atomic write, list, get, save, delete, duplicate, `MarkLastUsed` |
+| `export.go` | `ExportBundle`, `ExportAll`, `ExportFilename` |
+| `import.go` | `ConflictMode`, `ImportResult`, `ImportBundle` |
+| `history.go` | `SavePrevious`/`LoadPrevious`/`DeletePrevious` undo snapshots |
+| `migration.go` | `MigrateProfile` schema v1→v2→v3 upgrade |
 
 ## CONVENTIONS
-- One profile = one `<id>.json` under `~/.local/share/model-loader/profiles/`
+- One profile = one `<id>.json` under the configured profiles dir (default `~/.config/model-loader/profiles/`)
 - `Save` uses temp-file + rename for atomicity
 - `ListWithDiagnostics` returns valid profiles + corrupt entries separately; never aborts on single-file errors
 - `Duplicate` auto-increments port to avoid conflicts (scans `usedPorts()`)

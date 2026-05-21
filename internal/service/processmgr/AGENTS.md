@@ -19,7 +19,7 @@ Process lifecycle service: spawns llama-server as background (detached) or foreg
 - **LaunchMode**: Background = detached + log file + registry persistence. Foreground = attached TUI stream, max 1 at a time.
 - **Logs**: Per-PID files under LogDir (`<pid>.log`), appended via os.OpenFile(O_APPEND).
 - **Health check**: TCP dial on the profile's port; timeout is configurable.
-- **Flag canonicalization**: `canonicalFlag()` maps user-friendly short keys (e.g. `"ngl"`) to long-form llama-server flags (`"n-gpu-layers"`) via `shortToLong` table.
+- **Flag canonicalization**: `BuildArgs` calls `domain.CanonicalFlag()` to map user-friendly short keys (e.g. `"ngl"`) to long-form llama-server flags (`"n-gpu-layers"`) via the `shortToLong` table in `domain/flags.go`.
 - **Tests**: Use `fakeBinary(t)` helper for a no-op executable; `freePort(t)` to avoid conflicts.
 
 ## ANTI-PATTERNS
@@ -120,4 +120,4 @@ survives, and the panic is grep-able in `model-loader.log`.
 ## NOTES
 
 - Log files are never rotated by processmgr; external cleanup required.
-- `Reconcile` runs at TUI boot after `NewWithCheck`.
+- `Reconcile` runs at TUI boot after `New(cfg)` (called from `bootstrap.go`).

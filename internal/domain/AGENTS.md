@@ -12,8 +12,11 @@ Zero-dependency shared types. Profile, Backend, Instance, Model, and FlagSchema 
 | `backend.go` | `Backend`, `BackendCatalog`, `BackendKind`, `BackendMeta` |
 | `flag_schema.go` | `FlagSchema`, `FlagSpec`, `FlagType`, `Lookup` |
 | `instance.go` | `Instance` (running process state) |
-| `model.go` | `ModelFile` (GGUF metadata) |
+| `model.go` | `ModelFile` (GGUF metadata), `ScanEvent`, `ScanEventType` |
 | `backend_schema.go` | `BackendValidationSchema`, `SchemaSource`, `FlagSchemaToBackend` |
+| `flags.go` | `CanonicalFlag` short→long flag-key mapping |
+| `modelpath.go` | `LooksLikeHFRepo` HF-repo-id heuristic |
+| `schemabuilder.go` | `FlagSpecRow`, `BuildFlagSchema` slice→FlagSchema helper |
 
 ## STRUCTURE
 ```
@@ -22,14 +25,17 @@ internal/domain/
 ├── backend.go         # Backend, BackendCatalog, BackendKind, BackendMeta
 ├── flag_schema.go     # FlagSchema, FlagSpec, FlagType, Lookup
 ├── instance.go        # Instance (running process state)
-├── model.go           # ModelFile (GGUF metadata)
+├── model.go           # ModelFile (GGUF metadata), ScanEvent, ScanEventType
 ├── backend_schema.go  # BackendValidationSchema, SchemaSource, FlagSchemaToBackend
+├── flags.go           # CanonicalFlag short→long flag-key mapping
+├── modelpath.go       # LooksLikeHFRepo HF-repo-id heuristic
+├── schemabuilder.go   # FlagSpecRow, BuildFlagSchema slice→FlagSchema helper
 └── *_test.go          # JSON roundtrip tests
 ```
 
 ## CONVENTIONS
 - **Zero deps**: No imports outside stdlib — domain is pure data
-- `SchemaVersion = 1` for Profile JSON
+- `SchemaVersion = 3` for Profile JSON
 - `Slugify` produces ASCII kebab-case safe for filenames
 - `FlagSchema.Lookup` resolves map key, long name, short name, and aliases
 - `LaunchConfig.ResolvedExecutable` is set at launch time (`json:"-"` — not persisted)

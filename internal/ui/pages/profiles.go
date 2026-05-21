@@ -119,10 +119,12 @@ func (p ProfilesPage) WithModelScanner(scanner components.ModelScanner, paths []
 	return p
 }
 
-// WithBackendCatalog injects the backend catalog so the editor can list backends.
+// WithBackendCatalog injects the backend catalog so the editor can list backends
+// and resolve per-profile schemas.
 func (p ProfilesPage) WithBackendCatalog(catalogStore backendcatalog.Store, schemaStore backendcatalog.SchemaStore) ProfilesPage {
 	p.catalogStore = catalogStore
 	p.schemaStore = schemaStore
+	p.editor = p.editor.SetCatalogStore(catalogStore).SetSchemaStore(schemaStore)
 	return p
 }
 

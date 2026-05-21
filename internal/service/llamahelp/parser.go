@@ -111,6 +111,9 @@ func hardcodedFlagOverrides(spec domain.FlagSpec) domain.FlagSpec {
 	case "cache-type-k", "cache-type-v", "cache-type-k-draft", "cache-type-v-draft":
 		spec.Type = domain.FlagTypeEnum
 		spec.EnumValues = cacheTypeEnum
+	case "defrag-thold":
+		// llama-server --help uses placeholder N but the flag accepts float values (0.0–1.0).
+		spec.Type = domain.FlagTypeFloat
 	}
 	return spec
 }

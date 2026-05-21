@@ -30,8 +30,9 @@ third-party dependencies; rotation is pure stdlib (rename-then-glob-prune).
   `backendcatalog.NewResolver`, `validator.New`) MUST accept a nil logger and
   substitute `Nop()`. Tests pass `log.Nop()` directly.
 - **`NewAttemptID()` is the canonical correlation ID source**: 8 chars,
-  base32, from `crypto/rand`. Use it in BOTH `LauncherPage.launchProfileCmd`
-  AND `MonitorPage.restartCmd` — symmetry matters because Manager.Launch
+  base32, from `crypto/rand`. Use it in BOTH the ProfilesPage launch path
+  (`profiles_launch.go`) AND the ServerPage restart path
+  (`server_restart.go`) — symmetry matters because Manager.Launch
   emits process_exited events without knowing which page spawned the launch.
 
 ## ANTI-PATTERNS

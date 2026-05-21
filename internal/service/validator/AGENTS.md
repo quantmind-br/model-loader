@@ -10,14 +10,14 @@ Profile validation against a `FlagSchema`. Checks type compatibility, extra-args
 | `rules.go` | Three rule sets: `applyTypeRules`, `applyExtraArgsRules`, `applyExistenceRules` |
 
 ## CONVENTIONS
-- `canonicalFlag()` maps short keys (`ngl` → `n-gpu-layers`) before schema lookup
+- `domain.CanonicalFlag()` maps short keys (`ngl` → `n-gpu-layers`) before schema lookup
 - Type rules: int accepts whole-number `float64`/`float32`; float accepts int; bool only `bool`; string only `string`; enum matches `EnumValues`
 - Extra-args rules: `--flag` prefix required; `=value` or space-separated; bool flags must not have values; non-bool flags must have values
-- Existence rule: `os.Stat` on `p.Model` — error = `SeverityError`
+- Existence rule: `os.Stat` on `p.Model` — error = `SeverityError`; skipped when the model looks like an HF repo ID (`domain.LooksLikeHFRepo`) and the backend kind supports it (`supportsHFRepo`: vLLM, SGLang, TabbyAPI)
 - `Report` separates `Errors` (blocking) and `Warnings` (non-blocking)
 
 ## ANTI-PATTERNS
-- Do not add new short-to-long mappings without updating `shortToLong` table in `rules.go`
+- Do not add new short-to-long mappings without updating the `shortToLong` table in `domain/flags.go`
 - Do not change type-checking float logic carelessly — `math.Trunc` + `math.IsInf`/`math.IsNaN` guards are required for JSON number edge cases
 - Do not expect `FlagSchema.Lookup` to find all aliases — it searches map keys, long, short, and aliases
 

@@ -2,19 +2,20 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/quantmind-br/model-loader/docs/profile-schema.json",
   "title": "model-loader Profile",
-  "description": "JSON schema for a model-loader llama-server profile. Each profile is persisted as a single .json file under the profiles directory.",
+  "description": "JSON schema for a model-loader backend profile. Each profile is persisted as a single .json file under the configured profiles directory (default: ~/.config/model-loader/profiles/).",
   "type": "object",
-  "required": ["schemaVersion", "id", "name", "model", "args", "launch", "meta"],
+  "required": ["schemaVersion", "id", "name", "model", "args", "launch", "meta", "pinned"],
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "const": 1,
-      "description": "Profile JSON schema version. Always 1 for current format."
+      "const": 3,
+      "description": "Profile JSON schema version. Always 3 for the current format."
     },
     "id": {
       "type": "string",
       "minLength": 1,
-      "description": "Unique identifier for the profile. Used as the filename (id.json). Must be kebab-case ASCII (letters, digits, hyphens only). Auto-generated from name via Slugify when not provided."
+      "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*$",
+      "description": "Unique filename-safe identifier for the profile. Used as the filename (id.json). Must be lowercase ASCII alphanumeric groups separated by single '.', '_', or '-'. Auto-generated from name via Slugify when not provided."
     },
     "name": {
       "type": "string",
@@ -27,23 +28,23 @@
     },
     "tags": {
       "type": "array",
-      "description": "Optional list of string tags for filtering/grouping in the UI.",
+      "description": "Optional list of string tags for filtering and grouping in the UI.",
       "items": { "type": "string" }
     },
     "model": {
       "type": "string",
       "minLength": 1,
-      "description": "Absolute or relative path to the GGUF model file. Validated at runtime: file must exist on disk."
+      "description": "Absolute or relative path to the model file (typically a .gguf file for llama-server backends). Validated at runtime: file must exist on disk."
     },
     "args": {
       "type": "object",
-      "description": "Structured backend flags as key/value pairs. Each key is a flag name (canonical long form, e.g. 'ctx-size', or short alias mapped by the validator). Values must match the type declared in the backend's FlagSchema.",
+      "description": "Structured backend command-line flags as key/value pairs. Each key is a flag name in canonical long form (e.g. 'ctx-size', 'flash-attn'). Values must match the type declared in the backend's FlagSchema (bool, int, float, or string). Note: due to JSON round-tripping, integer values may deserialize as float64; the validator accepts whole-number floats as integers.",
       "additionalProperties": {
         "anyOf": [
-          { "type": "boolean", "description": "FlagTypeBool: true/false flags (e.g. --flash-attn)." },
-          { "type": "integer", "description": "FlagTypeInt: whole numbers (e.g. ctx-size, port, ngl). JSON numbers without fraction." },
-          { "type": "number", "description": "FlagTypeFloat: floating-point values (e.g. temperature). Accepts both integers and floats." },
-          { "type": "string", "description": "FlagTypeString: free-text values (e.g. model alias, API key)." }
+          { "type": "boolean", "description": "FlagTypeBool: true/false flags (e.g. --flash-attn, --cont-batching)." },
+          { "type": "integer", "description": "FlagTypeInt: whole numbers (e.g. ctx-size, port, n-gpu-layers)." },
+          { "type": "number", "description": "FlagTypeFloat: floating-point values (e.g. temp, top-p, defrag-thold). Accepts both integers and floats." },
+          { "type": "string", "description": "FlagTypeString: free-text values (e.g. cache-type-k, host). FlagTypeEnum values are also strings restricted to a fixed set validated against the backend schema's EnumValues." }
         ]
       }
     },
@@ -58,7 +59,7 @@
     },
     "launch": {
       "type": "object",
-      "required": ["defaultBackground"],
+      "required": ["defaultBackground", "restart_policy", "max_restarts", "backoff_seconds"],
       "description": "Launch configuration for this profile.",
       "properties": {
         "defaultBackground": {
@@ -67,15 +68,35 @@
         },
         "logFilePath": {
           "type": "string",
-          "description": "Optional custom log file path for this profile's llama-server output. Falls back to global log directory if empty."
+          "description": "Optional custom log file path for this profile's backend output. Falls back to global log directory if empty."
         },
         "backendId": {
           "type": "string",
-          "description": "Optional ID of the backend to use for launching this profile. If empty, the default backend from the catalog is used."
+          "description": "Optional ID of the backend (from the backend catalog) to use for launching this profile. If empty, the default backend from the catalog is used."
+        },
+        "env": {
+          "type": "array",
+          "description": "Optional environment variables applied to the backend process at launch. Keys must match [A-Za-z_][A-Za-z0-9_]*. Last value wins on duplicate keys.",
+          "items": { "$ref": "#/$defs/envVar" }
         },
         "llamaServerBinaryPath": {
           "type": "string",
-          "description": "LEGACY: read-only migration field. Not written after migration. Use backend catalog instead."
+          "description": "LEGACY: read-only migration field. Not written after migration. Use the backend catalog instead."
+        },
+        "restart_policy": {
+          "type": "string",
+          "enum": ["", "none", "on-failure", "always"],
+          "description": "Restart policy for the backend process. '' or 'none' = never restart, 'on-failure' = restart only on non-zero exit, 'always' = restart unconditionally. An empty string is treated as 'none'."
+        },
+        "max_restarts": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of restart attempts. Only applies when restart_policy is 'on-failure' or 'always'."
+        },
+        "backoff_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Delay in seconds between restart attempts."
         }
       },
       "additionalProperties": false
@@ -83,7 +104,7 @@
     "meta": {
       "type": "object",
       "required": ["createdAt", "updatedAt"],
-      "description": "System-managed metadata. Populated automatically by the store on save.",
+      "description": "System-managed metadata. Populated automatically by the store on create/update.",
       "properties": {
         "createdAt": {
           "type": "string",
@@ -96,29 +117,53 @@
           "description": "ISO 8601 / RFC 3339 timestamp when the profile was last modified."
         },
         "lastUsedAt": {
-          "type": "string",
+          "type": ["string", "null"],
           "format": "date-time",
-          "description": "Optional ISO 8601 timestamp of the most recent launch. Null if never launched."
+          "description": "Optional ISO 8601 timestamp of the most recent launch. Null or absent if never launched."
         }
       },
       "additionalProperties": false
+    },
+    "pinned": {
+      "type": "boolean",
+      "description": "If true, the profile is pinned to the top of the profile list in the TUI."
     }
   },
   "additionalProperties": false,
 
   "$defs": {
+    "envVar": {
+      "type": "object",
+      "required": ["key", "value"],
+      "description": "A single KEY=VALUE environment variable applied to the backend process at launch.",
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "Environment variable name. Must match [A-Za-z_][A-Za-z0-9_]*."
+        },
+        "value": {
+          "type": "string",
+          "description": "Environment variable value. Used literally (no shell expansion)."
+        }
+      },
+      "additionalProperties": false
+    },
     "flagTypeNote": {
-      "description": "Flag value type semantics: boolean -> FlagTypeBool, integer -> FlagTypeInt, number -> FlagTypeFloat, string -> FlagTypeString. Enum flags are represented as strings restricted to a fixed set of values, validated against the backend schema's EnumValues."
+      "description": "Flag value type semantics: boolean -> FlagTypeBool, integer -> FlagTypeInt, number -> FlagTypeFloat, string -> FlagTypeString or FlagTypeEnum. Enum flags are represented as strings restricted to a fixed set of values, validated against the backend schema's EnumValues."
     },
     "argsExample": {
       "type": "object",
       "description": "Example args block for a typical llama-server profile.",
       "examples": [
         {
-          "ngl": 99,
-          "ctx-size": 8192,
-          "port": 8080,
+          "batch-size": 2048,
+          "ctx-size": 262144,
           "flash-attn": true,
+          "host": "127.0.0.1",
+          "n-gpu-layers": 99,
+          "port": 8080,
+          "temp": 1.0,
           "cache-type-k": "q8_0"
         }
       ]

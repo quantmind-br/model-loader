@@ -370,7 +370,7 @@
       "Long": "defrag-thold",
       "Short": "dt",
       "Aliases": null,
-      "Type": 1,
+      "Type": 2,
       "EnumValues": null,
       "Default": null,
       "HelpText": "KV cache defragmentation threshold (DEPRECATED)",

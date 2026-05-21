@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
 **Generated:** 2026-05-21
-**Commit:** 0bd3ab5
+**Commit:** 8b5e8f4
 **Branch:** main
 
 ## OVERVIEW
@@ -71,12 +71,14 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 | Essentials registry | internal/ui/pages/profile_editor/essentials.go | curated per-backend flag list |
 | Config | internal/config/ | Viper TOML at ~/.config/model-loader/ |
 | Logging | internal/log/ | file-only slog, rotate-by-session |
+| Profile config schema (canonical) | docs/profile-schema.json | JSON Schema for the persisted profile file format — authoritative reference, keep in sync with `domain.Profile` |
 
 ## CONVENTIONS
 - **Tests**: Golden tests in `testdata/` — update via `go test ./... -update`
 - **Build**: `make build` → `bin/model-loader`
 - **Embedded schema**: Pinned to llama.cpp build "v7376 (380b4c9)" — refresh in embedded.go
 - **Instance recovery**: Background llama-server processes survive TUI exit; processmgr.Reconcile restores at boot
+- **Profile config schema is canonical**: `docs/profile-schema.json` is the authoritative JSON Schema (draft 2020-12) for the persisted profile file format (envelope: `schemaVersion`/`id`/`name`/`model`/`args`/`extraArgs`/`launch`/`meta`/`pinned`). Treat it as the source of truth when authoring or validating profiles. ANY change to the persisted profile shape — adding/renaming/removing fields in `domain.Profile`, `launch`, or `meta`; bumping `schemaVersion`; changing accepted `args`/`extraArgs` value types — MUST update `docs/profile-schema.json` in the SAME change so the doc never drifts from the code.
 
 ## ESSENTIALS REGISTRY CONTRACT
 - `essentialFields` in `essentials.go` is a `map[domain.BackendKind][]EssentialField` — curated UX layer, not a generic form abstraction. See `DYNAMIC_FORM_PLAN.md` for authoritative design.
@@ -91,6 +93,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 - DO NOT run `llama-server` manually while TUI is managing instances
 - DO NOT edit `testdata/help-v7376.golden.json` directly — regenerate via golden test update
 - DO NOT assume process cleanup on TUI exit — processes are intentionally orphaned
+- DO NOT change the persisted profile structure (`domain.Profile` / profilestore JSON) without mirroring the change in `docs/profile-schema.json` — the schema doc and the code must never drift apart
 - DO NOT intercept printable runes (`q`, `1-5`, `?`, letters, digits) globally in `internal/ui/root.go` without first checking `activePageCapturesInput()`. Only `ctrl+c` may bypass this gate. Pages with active huh forms / pickers / inline modals must implement `InputCapture.IsCapturingInput() bool` returning `true` while in those states. Otherwise the global shortcut steals the keystroke from the editable field and the user can't type that character.
 
 ## TUI INPUT ROUTING RULES
@@ -118,7 +121,7 @@ go test ./... -update  # Update golden test fixtures
 - Binary managed: `llama-server` (not model-loader)
 - Config path: ~/.config/model-loader/config.toml
 - State path: ~/.local/state/model-loader/instances.json
-- Profiles dir: ~/.config/model-loader/profiles/ (config `paths.profiles_dir`; default in config.go:131)
+- Profiles dir: ~/.config/model-loader/profiles/ (config `paths.profiles_dir`; default in config.go:166)
 - Schema version: embedded-v7376
 
 <!-- gitnexus:start -->

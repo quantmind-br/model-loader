@@ -35,7 +35,7 @@ User interface preferences.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `default_tab` | `launcher` | Tab shown on startup. Values: `launcher`, `profiles`, `monitor`, `models`, `backends` |
+| `default_tab` | `launcher` | Tab shown on startup. Recognized values: `profiles`, `server`, `models`, `backends`, `benchmark` (any unrecognized value, including the written default `launcher`, falls back to `profiles`) |
 | `keybindings` | `default` | Keybinding preset. Currently only `default` is supported |
 
 ## Example

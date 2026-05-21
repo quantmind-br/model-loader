@@ -69,6 +69,7 @@ make install
 | `2` | Server tab |
 | `3` | Models tab |
 | `4` | Backends tab |
+| `5` | Benchmark tab |
 | `Tab` / `Shift+Tab` | Next / previous tab |
 | `q` | Quit |
 | `?` | Show help |
