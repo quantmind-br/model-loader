@@ -18,6 +18,8 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 │   ├── service/
 │   │   ├── backendcatalog/ # Multi-backend catalog + resolver
 │   │   ├── backendschema/  # Schema generation orchestrator
+│   │   ├── benchmark/      # Profile eval engine (embedded SWE-bench-style mini-set)
+│   │   ├── benchmarkstore/ # Benchmark run persistence (1 JSON per run)
 │   │   ├── downloadmgr/    # HuggingFace file downloader with progress
 │   │   ├── hfhub/          # HuggingFace Hub API client
 │   │   ├── httpproxy/      # OpenAI-shaped reverse proxy
@@ -33,7 +35,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 │   │   └── vllmhelp/      # Embedded schema for vLLM
 │   └── ui/
 │       ├── components/    # Help, Modal, Picker, Sparkline, Statusbar
-│       ├── pages/         # 4 tabs + profile_editor sub-package
+│       ├── pages/         # 5 tabs (Profiles/Server/Models/Backends/Benchmark) + profile_editor sub-package
 │       │   └── profile_editor/  # huh-based profile editing
 │       └── theme/
 ├── testdata/              # Golden test fixtures (help-v7376.txt, .golden.json)
@@ -57,7 +59,11 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 | HF Hub API client | internal/service/hfhub/ | model search, file listing |
 | Binary resolution | internal/service/llamabin/ | PATH lookup + Python fallback |
 | Proxy lifecycle | internal/service/proxysupervisor/ | state machine driving httpproxy |
-| TUI pages | internal/ui/pages/ | 4 tabs + profile_editor sub-package |
+| TUI pages | internal/ui/pages/ | 5 tabs + profile_editor sub-package |
+| Benchmark engine | internal/service/benchmark/ | embedded SWE-bench Lite set with **oracle context** (full pre-fix source of patched files, SWE-bench prompt_style_3); modes: judge (reference-guided LLM judge, median of N samples — only quality scorer) + longctx (objective needle KV-decay probe). Judge endpoint in `[benchmark.judge]`; `max_tokens` default 32768 |
+| Benchmark run store | internal/service/benchmarkstore/ | 1 JSON per run in state_dir/benchmark/runs |
+| Benchmark tab | internal/ui/pages/benchmark*.go | tab 5: pick profile, run, view metrics/compare/history |
+| Benchmark CLI | cmd/model-loader/benchmark.go | `model-loader benchmark --profile <id> [--mode ...] [--json] [--min-solve N]`, `--list`, `--compare` |
 | Profile editing | internal/ui/pages/profile_editor/ | huh forms, draft state machine |
 | Essentials registry | internal/ui/pages/profile_editor/essentials.go | curated per-backend flag list (8 llama / 7 vLLM / 8 SGLang) |
 | Config | internal/config/ | Viper TOML at ~/.config/model-loader/ |

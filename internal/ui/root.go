@@ -23,11 +23,12 @@ const (
 	TabServer
 	TabModels
 	TabBackends
+	TabBenchmark
 )
 
 // tabCount is the number of top-level tabs. Single source of truth for
 // keybinding ranges, modulo math, and array sizing.
-const tabCount = 4
+const tabCount = 5
 
 // globalShortcut registers a root-level keyboard shortcut. Entries with
 // Captures==false are skipped when the active page is capturing input
@@ -52,6 +53,7 @@ var rootShortcuts = []globalShortcut{
 	{Keys: []string{"2"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate(TabServer) }},
 	{Keys: []string{"3"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate(TabModels) }},
 	{Keys: []string{"4"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate(TabBackends) }},
+	{Keys: []string{"5"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate(TabBenchmark) }},
 	{Keys: []string{"tab"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate((m.active + 1) % tabCount) }},
 	{Keys: []string{"shift+tab"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate((m.active + tabCount - 1) % tabCount) }},
 }
@@ -66,6 +68,8 @@ func (t Tab) Title() string {
 		return "Models"
 	case TabBackends:
 		return "Backends"
+	case TabBenchmark:
+		return "Benchmark"
 	default:
 		return "?"
 	}
@@ -115,7 +119,7 @@ type Overlayer interface {
 }
 
 // globalHints is the prefix shown in every status bar line.
-const globalHints = "[1-4] tabs  [tab] next  [q] quit" + components.HelpToken
+const globalHints = "[1-5] tabs  [tab] next  [q] quit" + components.HelpToken
 
 // bootBlocker carrega o conteúdo de um modal bloqueante exibido sobre toda a UI.
 type bootBlocker struct {
@@ -147,6 +151,7 @@ func NewRoot(initial Tab) RootModel {
 			pages.Placeholder{TabName: TabServer.Title()},
 			pages.Placeholder{TabName: TabModels.Title()},
 			pages.Placeholder{TabName: TabBackends.Title()},
+			pages.Placeholder{TabName: TabBenchmark.Title()},
 		},
 		active: initial,
 		status: components.StatusBar{Hints: globalHints},
@@ -175,6 +180,12 @@ func (m RootModel) WithBackendsPage(p tea.Model) RootModel {
 // WithServerPage replaces the placeholder Server tab with a real model.
 func (m RootModel) WithServerPage(p tea.Model) RootModel {
 	m.pages[TabServer] = p
+	return m
+}
+
+// WithBenchmarkPage replaces the placeholder Benchmark tab with a real model.
+func (m RootModel) WithBenchmarkPage(p tea.Model) RootModel {
+	m.pages[TabBenchmark] = p
 	return m
 }
 

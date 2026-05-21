@@ -20,6 +20,8 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/backendschema"
+	"github.com/quantmind-br/model-loader/internal/service/benchmark"
+	"github.com/quantmind-br/model-loader/internal/service/benchmarkstore"
 	"github.com/quantmind-br/model-loader/internal/service/downloadmgr"
 	"github.com/quantmind-br/model-loader/internal/service/hfhub"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
@@ -46,6 +48,9 @@ func main() {
 		case "download":
 			os.Args = append(os.Args[:1], os.Args[2:]...)
 			os.Exit(runDownloadWorker())
+		case "benchmark":
+			os.Args = append(os.Args[:1], os.Args[2:]...)
+			os.Exit(runBenchmark())
 		}
 	}
 	os.Exit(runTUI())
@@ -127,11 +132,32 @@ func runTUI() int {
 	prober := backendcatalog.NewProber(svc.catalogStore, backendcatalog.ProbeConfig{Timeout: 10 * time.Second})
 	backendsPage := pages.NewBackendsPage(svc.schemaManager).WithProber(prober)
 
+	benchStore := benchmarkstore.New(filepath.Join(cfg.Paths.StateDir, "benchmark", "runs"))
+	benchRunner, err := benchmark.NewRunner(svc.store, svc.mgr, mon, svc.resolver, benchmark.Config{
+		MaxTokens:         cfg.Benchmark.MaxTokens,
+		Temperature:       cfg.Benchmark.Temperature,
+		Timeout:           time.Duration(cfg.Benchmark.TimeoutSec) * time.Second,
+		LongContextTokens: cfg.Benchmark.LongContextTokens,
+		SaveTranscripts:   cfg.Benchmark.SaveTranscripts,
+		Judge: benchmark.JudgeEndpoint{
+			BaseURL: cfg.Benchmark.Judge.BaseURL,
+			APIKey:  cfg.Benchmark.Judge.APIKey,
+			Model:   cfg.Benchmark.Judge.Model,
+			Samples: cfg.Benchmark.Judge.Samples,
+		},
+	})
+	if err != nil {
+		logger.Error("benchmark_dataset_load_failed", "err", err)
+		benchRunner = nil
+	}
+	benchmarkPage := pages.NewBenchmarkPage(svc.store, benchStore, benchRunner)
+
 	root := ui.NewRoot(parseTab(cfg.UI.DefaultTab)).
 		WithProfilesPage(profilesPage).
 		WithModelsPage(modelsPage).
 		WithServerPage(serverPage).
 		WithBackendsPage(backendsPage).
+		WithBenchmarkPage(benchmarkPage).
 		WithProcessManager(svc.mgr)
 
 	prog := tea.NewProgram(root, tea.WithAltScreen())
@@ -323,6 +349,8 @@ func parseTab(name string) ui.Tab {
 		return ui.TabModels
 	case "backends":
 		return ui.TabBackends
+	case "benchmark":
+		return ui.TabBenchmark
 	default:
 		return ui.TabProfiles
 	}

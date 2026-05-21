@@ -647,38 +647,24 @@ func TestRoot_BackendsTabSwitchByNumber(t *testing.T) {
 	}
 }
 
-func TestRoot_TabCyclesThroughBackends(t *testing.T) {
-	tm := teatest.NewTestModel(t, NewRoot(TabModels), teatest.WithInitialTermSize(120, 30))
-	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
-
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
-	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return strings.Contains(string(out), "Backends")
-	}, teatest.WithDuration(2*time.Second))
-
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
-	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return strings.Contains(string(out), "Profiles")
-	}, teatest.WithDuration(2*time.Second))
-
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
-	if err := tm.Quit(); err != nil {
-		t.Fatalf("Quit returned err: %v", err)
+func TestRoot_TabCyclesForwardThroughAllTabs(t *testing.T) {
+	r := NewRoot(TabModels)
+	want := []Tab{TabBackends, TabBenchmark, TabProfiles, TabServer, TabModels}
+	var m tea.Model = r
+	for i, expected := range want {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+		m = updated
+		if rm := m.(RootModel); rm.active != expected {
+			t.Fatalf("after %d Tab presses active = %v, want %v", i+1, rm.active, expected)
+		}
 	}
 }
 
-func TestRoot_ShiftTabFromProfilesGoesToBackends(t *testing.T) {
-	tm := teatest.NewTestModel(t, NewRoot(TabProfiles), teatest.WithInitialTermSize(120, 30))
-	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
-
-	tm.Send(tea.KeyMsg{Type: tea.KeyShiftTab})
-	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return strings.Contains(string(out), "Backends")
-	}, teatest.WithDuration(2*time.Second))
-
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
-	if err := tm.Quit(); err != nil {
-		t.Fatalf("Quit returned err: %v", err)
+func TestRoot_ShiftTabFromProfilesWrapsToBenchmark(t *testing.T) {
+	r := NewRoot(TabProfiles)
+	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	if rm := updated.(RootModel); rm.active != TabBenchmark {
+		t.Fatalf("active = %v, want TabBenchmark (wrap-around)", rm.active)
 	}
 }
 
@@ -744,3 +730,18 @@ func (r *recordingServer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return r, nil
 }
 func (r *recordingServer) View() string { return "" }
+
+func TestRoot_NumberFiveSwitchesToBenchmark(t *testing.T) {
+	r := NewRoot(TabProfiles).
+		WithProfilesPage(pages.Placeholder{TabName: "P"}).
+		WithServerPage(pages.Placeholder{TabName: "S"}).
+		WithModelsPage(pages.Placeholder{TabName: "M"}).
+		WithBackendsPage(pages.Placeholder{TabName: "B"}).
+		WithBenchmarkPage(pages.Placeholder{TabName: "BENCHMARK_PAGE"})
+
+	updated, _ := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'5'}})
+	rm := updated.(RootModel)
+	if rm.active != TabBenchmark {
+		t.Fatalf("active = %v, want TabBenchmark", rm.active)
+	}
+}

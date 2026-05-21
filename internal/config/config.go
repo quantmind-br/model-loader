@@ -12,11 +12,33 @@ import (
 
 // AppConfig is the in-memory representation of the user config.
 type AppConfig struct {
-	Paths   PathsConfig   `mapstructure:"paths"`
-	Models  ModelsConfig  `mapstructure:"models"`
-	UI      UIConfig      `mapstructure:"ui"`
-	Logging LoggingConfig `mapstructure:"logging"`
-	Serve   ServeConfig   `mapstructure:"serve"`
+	Paths     PathsConfig     `mapstructure:"paths"`
+	Models    ModelsConfig    `mapstructure:"models"`
+	UI        UIConfig        `mapstructure:"ui"`
+	Logging   LoggingConfig   `mapstructure:"logging"`
+	Serve     ServeConfig     `mapstructure:"serve"`
+	Benchmark BenchmarkConfig `mapstructure:"benchmark"`
+}
+
+// BenchmarkConfig controls the Benchmark tab's evaluation engine.
+type BenchmarkConfig struct {
+	MaxTokens         int         `mapstructure:"max_tokens"`          // generation cap per problem
+	Temperature       float64     `mapstructure:"temperature"`         // sampling temperature
+	TimeoutSec        int         `mapstructure:"timeout_sec"`         // per-problem inference timeout
+	LongContextTokens int         `mapstructure:"long_context_tokens"` // target prompt size for needle probe (0 → 8000)
+	SaveTranscripts   bool        `mapstructure:"save_transcripts"`    // capture raw model/judge I/O per run for debugging
+	Judge             JudgeConfig `mapstructure:"judge"`
+}
+
+// JudgeConfig is the OpenAI-compatible endpoint used by the LLM-as-judge
+// scoring mode. Left empty unless the user opts into judge mode.
+type JudgeConfig struct {
+	BaseURL string `mapstructure:"base_url"`
+	APIKey  string `mapstructure:"api_key"`
+	Model   string `mapstructure:"model"`
+	// Samples is how many times the judge grades each problem; the run uses the
+	// median score + majority resolved to reduce single-run noise.
+	Samples int `mapstructure:"samples"`
 }
 
 // ServeConfig controls the headless HTTP proxy server exposed by
@@ -111,6 +133,11 @@ func LoadFrom(path string) (AppConfig, error) {
 	for i, p := range cfg.Models.SearchPaths {
 		cfg.Models.SearchPaths[i] = expandTilde(p)
 	}
+	// Allow the judge endpoint to reference environment variables (e.g.
+	// api_key = "$QUANTMIND_API_KEY") so secrets need not be written to disk.
+	cfg.Benchmark.Judge.BaseURL = os.ExpandEnv(cfg.Benchmark.Judge.BaseURL)
+	cfg.Benchmark.Judge.APIKey = os.ExpandEnv(cfg.Benchmark.Judge.APIKey)
+	cfg.Benchmark.Judge.Model = os.ExpandEnv(cfg.Benchmark.Judge.Model)
 	return cfg, nil
 }
 
@@ -141,4 +168,13 @@ func applyDefaults(v *viper.Viper) {
 	v.SetDefault("logging.level", "info")
 	v.SetDefault("serve.host", "127.0.0.1")
 	v.SetDefault("serve.port", 4321)
+	v.SetDefault("benchmark.max_tokens", 32768)
+	v.SetDefault("benchmark.temperature", 0.0)
+	v.SetDefault("benchmark.timeout_sec", 120)
+	v.SetDefault("benchmark.long_context_tokens", 0)
+	v.SetDefault("benchmark.save_transcripts", true)
+	v.SetDefault("benchmark.judge.base_url", "")
+	v.SetDefault("benchmark.judge.api_key", "")
+	v.SetDefault("benchmark.judge.model", "")
+	v.SetDefault("benchmark.judge.samples", 3)
 }

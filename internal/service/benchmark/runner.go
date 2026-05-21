@@ -1,0 +1,533 @@
+package benchmark
+
+import (
+	"context"
+	"fmt"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/monitor"
+	"github.com/quantmind-br/model-loader/internal/service/processmgr"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+)
+
+// healthTimeout bounds how long Run waits for a freshly launched backend to
+// answer /health (model load can be slow for large GGUFs).
+const healthTimeout = 3 * time.Minute
+
+// Config tunes the engine. main.go maps config.BenchmarkConfig onto it so the
+// benchmark package stays decoupled from the config package.
+type Config struct {
+	MaxTokens         int
+	Temperature       float64
+	Timeout           time.Duration // per-problem inference timeout
+	LongContextTokens int           // target prompt size for the needle probe (0 → default)
+	SaveTranscripts   bool          // capture raw model/judge I/O for debugging
+	Judge             JudgeEndpoint
+}
+
+// JudgeEndpoint is the OpenAI-compatible endpoint used by ModeJudge.
+type JudgeEndpoint struct {
+	BaseURL string
+	APIKey  string
+	Model   string
+	// Samples is how many times the judge grades each problem; the run uses the
+	// median score + majority resolved (self-consistency) to fight noise.
+	Samples int
+}
+
+// RunConfig is the per-invocation request from the UI.
+type RunConfig struct {
+	ProfileID string
+	Mode      Mode
+}
+
+// Progress is streamed to the UI while a run executes.
+type Progress struct {
+	Index       int
+	Total       int
+	ProblemID   string
+	ProblemName string
+	Phase       string // "launch" | "infer" | "score" | "done"
+}
+
+// Runner orchestrates a full benchmark run against one profile.
+type Runner struct {
+	store    profilestore.Store
+	pm       processmgr.Manager
+	mon      monitor.Manager
+	resolver backendcatalog.Resolver
+	cfg      Config
+	problems []Problem // embedded SWE-bench Lite coding set
+}
+
+// NewRunner builds a Runner and loads the embedded dataset.
+func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Manager, resolver backendcatalog.Resolver, cfg Config) (*Runner, error) {
+	problems, err := Load()
+	if err != nil {
+		return nil, err
+	}
+	if cfg.MaxTokens <= 0 {
+		cfg.MaxTokens = 1024
+	}
+	if cfg.Timeout <= 0 {
+		cfg.Timeout = 120 * time.Second
+	}
+	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems}, nil
+}
+
+// problemSet returns the dataset a given mode evaluates.
+func (r *Runner) problemSet(mode Mode) []Problem {
+	if mode == ModeLongContext {
+		return []Problem{{ID: "long-context-needle", Name: "Long-context needle retrieval"}}
+	}
+	return r.problems
+}
+
+// ProblemCount reports how many problems the default executable set contains.
+func (r *Runner) ProblemCount() int { return len(r.problems) }
+
+// CountForMode reports how many problems a given mode will run.
+func (r *Runner) CountForMode(mode Mode) int { return len(r.problemSet(mode)) }
+
+// Run executes the benchmark. It launches (or reuses) the profile's backend,
+// runs every problem through the selected scorer, samples GPU stats, then
+// aggregates and returns the Run. The caller persists the result.
+func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress) (Run, error) {
+	started := time.Now()
+	profile, err := r.store.Get(rc.ProfileID)
+	if err != nil {
+		return Run{}, fmt.Errorf("load profile: %w", err)
+	}
+
+	run := Run{
+		ID:          fmt.Sprintf("%s-%d", profile.ID, started.UnixNano()),
+		ProfileID:   profile.ID,
+		ProfileName: profile.Name,
+		Mode:        rc.Mode,
+		StartedAt:   started,
+		Profile:     snapshotProfile(profile),
+	}
+
+	// Validate the mode and build the scorer BEFORE launching an expensive
+	// backend, so missing pytest/git or missing judge config fails fast
+	// instead of after a multi-minute model load.
+	var scorer Scorer
+	if rc.Mode != ModeLongContext {
+		scorer, err = r.newScorer(rc.Mode)
+		if err != nil {
+			return Run{}, err
+		}
+	}
+
+	send(progress, Progress{Total: len(r.problems), Phase: "launch"})
+
+	port, logPath, pid, owned, err := r.ensureInstance(ctx, profile)
+	if err != nil {
+		return Run{}, err
+	}
+	if owned {
+		defer func() { _ = r.pm.Kill(pid) }()
+	}
+
+	gpu := r.startGPUSampler(pid, port, logPath)
+	defer gpu.stop()
+
+	base := fmt.Sprintf("http://127.0.0.1:%d", port)
+	model := requestModelName(profile)
+
+	if rc.Mode == ModeLongContext {
+		send(progress, Progress{Index: 1, Total: 1, ProblemID: "long-context-needle", ProblemName: "Long-context needle retrieval", Phase: "infer"})
+		pr, tr := r.runLongContext(ctx, base, model)
+		run.Problems = append(run.Problems, pr)
+		if r.cfg.SaveTranscripts {
+			run.Transcript = append(run.Transcript, tr)
+		}
+	} else {
+		problems := r.problemSet(rc.Mode)
+		for i, p := range problems {
+			select {
+			case <-ctx.Done():
+				return run, ctx.Err()
+			default:
+			}
+			send(progress, Progress{Index: i + 1, Total: len(problems), ProblemID: p.ID, ProblemName: p.Name, Phase: "infer"})
+			pr, tr := r.runProblem(ctx, scorer, base, model, p)
+			run.Problems = append(run.Problems, pr)
+			if r.cfg.SaveTranscripts {
+				run.Transcript = append(run.Transcript, tr)
+			}
+			send(progress, Progress{Index: i + 1, Total: len(problems), ProblemID: p.ID, ProblemName: p.Name, Phase: "score"})
+		}
+	}
+
+	run.FinishedAt = time.Now()
+	run.Aggregate = aggregate(run.Problems, gpu.peakVRAM(), gpu.avgUtil())
+	send(progress, Progress{Total: len(r.problems), Phase: "done"})
+	return run, nil
+}
+
+func (r *Runner) runProblem(ctx context.Context, scorer Scorer, base, model string, p Problem) (ProblemResult, ProblemTranscript) {
+	res := ProblemResult{ProblemID: p.ID, ProblemName: p.Name}
+	tr := ProblemTranscript{ProblemID: p.ID, ProblemName: p.Name}
+
+	reqCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout)
+	defer cancel()
+	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
+		Model:       model,
+		Temperature: r.cfg.Temperature,
+		MaxTokens:   r.cfg.MaxTokens,
+		Messages:    BuildPrompt(p),
+	})
+	if err != nil {
+		res.Err = err.Error()
+		tr.Error = err.Error()
+		return res, tr
+	}
+	res.TTFTms = comp.TTFT.Milliseconds()
+	res.TotalMs = comp.Total.Milliseconds()
+	res.TokensPerSecond = comp.TokensPerSecond
+	res.PromptTokens = comp.PromptTokens
+	res.CompletionTokens = comp.CompletionTokens
+	tr.ModelResponse = comp.Content
+	_, tr.DiffFound = ExtractDiff(comp.Content)
+
+	// Bound scoring too: a stalled judge endpoint must not hang the run. Allow
+	// up to one per-problem timeout per judge sample.
+	scoreCtx, scancel := context.WithTimeout(ctx, time.Duration(max(r.cfg.Judge.Samples, 1))*r.cfg.Timeout)
+	score, err := scorer.Score(scoreCtx, p, comp.Content)
+	scancel()
+	tr.JudgeRaw = score.Raw
+	if err != nil {
+		res.Err = err.Error()
+		tr.Error = err.Error()
+		return res, tr
+	}
+	res.Resolved = score.Resolved
+	res.Score = score.Score
+	res.Detail = score.Detail
+	return res, tr
+}
+
+// ensureInstance reuses a live instance for the profile or launches a new one.
+// Returns the port, log path, pid, and whether Run owns (must kill) it. It is
+// cancellation-aware: a cancelled ctx aborts before launch and kills a
+// just-launched backend instead of blocking on the health timeout.
+func (r *Runner) ensureInstance(ctx context.Context, profile domain.Profile) (port int, logPath string, pid int, owned bool, err error) {
+	for _, inst := range r.pm.List() {
+		if inst.ProfileID == profile.ID && !inst.Crashed {
+			return inst.Port, inst.LogPath, inst.PID, false, nil
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, "", 0, false, err
+	}
+	rb, err := r.resolver.Resolve(profile)
+	if err != nil {
+		return 0, "", 0, false, fmt.Errorf("resolve backend: %w", err)
+	}
+	profile.Launch.ResolvedExecutable = rb.ExecutablePath
+	profile.Launch.ResolvedBackendKind = rb.Backend.Kind
+
+	attemptID := fmt.Sprintf("bench-%d", time.Now().UnixNano())
+	inst, err := r.pm.Launch(profile, processmgr.LaunchBackground, attemptID)
+	if err != nil {
+		return 0, "", 0, false, fmt.Errorf("launch backend: %w", err)
+	}
+	if err := r.waitHealthy(ctx, inst.PID, inst.Port, attemptID); err != nil {
+		_ = r.pm.Kill(inst.PID)
+		return 0, "", 0, false, err
+	}
+	return inst.Port, inst.LogPath, inst.PID, true, nil
+}
+
+// waitHealthy runs the (context-unaware) processmgr health poll in a goroutine
+// and races it against ctx cancellation. On cancel it kills the PID so a
+// launched-but-not-yet-ready backend doesn't keep consuming GPU/VRAM.
+func (r *Runner) waitHealthy(ctx context.Context, pid, port int, attemptID string) error {
+	done := make(chan error, 1)
+	go func() { done <- r.pm.WaitHealthy(pid, port, healthTimeout, attemptID) }()
+	select {
+	case <-ctx.Done():
+		_ = r.pm.Kill(pid)
+		return ctx.Err()
+	case err := <-done:
+		if err != nil {
+			return fmt.Errorf("backend not healthy: %w", err)
+		}
+		return nil
+	}
+}
+
+func (r *Runner) newScorer(mode Mode) (Scorer, error) {
+	switch mode {
+	case ModeJudge:
+		j := r.cfg.Judge
+		if j.BaseURL == "" || j.Model == "" {
+			return nil, fmt.Errorf("judge mode requires benchmark.judge.base_url and benchmark.judge.model in config")
+		}
+		return judgeScorer{base: j.BaseURL, apiKey: j.APIKey, model: j.Model, maxTok: r.cfg.MaxTokens, samples: j.Samples}, nil
+	default:
+		return nil, fmt.Errorf("unsupported scoring mode %q", mode)
+	}
+}
+
+// --- long-context needle probe --------------------------------------------
+
+const longNeedle = "WIDGETKEY_NEEDLE_91743X"
+
+// runLongContext packs a large synthetic code corpus with a unique needle deep
+// inside, then asks the model to retrieve it. Pass/fail + prompt/gen speed at
+// depth is the single most direct signal of KV-cache-quantization degradation.
+func (r *Runner) runLongContext(ctx context.Context, base, model string) (ProblemResult, ProblemTranscript) {
+	res := ProblemResult{ProblemID: "long-context-needle", ProblemName: "Long-context needle retrieval"}
+	tr := ProblemTranscript{ProblemID: res.ProblemID, ProblemName: res.ProblemName}
+
+	targetTokens := r.cfg.LongContextTokens
+	if targetTokens <= 0 {
+		targetTokens = 8000
+	}
+	haystack := buildHaystack(targetTokens)
+	user := "Below is a dump of a Python codebase. Read it carefully.\n\n" + haystack +
+		"\n\nQuestion: in the file `widget_registry.py`, what is the value of `WIDGET_PRODUCTION_KEY`? " +
+		"Reply with just the literal value, no explanation."
+
+	reqCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout)
+	defer cancel()
+	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
+		Model:       model,
+		Temperature: 0,
+		MaxTokens:   64,
+		Messages: []ChatMessage{
+			{Role: "system", Content: "You are a careful code-reading assistant. Answer literally."},
+			{Role: "user", Content: user},
+		},
+	})
+	if err != nil {
+		res.Err = err.Error()
+		tr.Error = err.Error()
+		return res, tr
+	}
+	res.TTFTms = comp.TTFT.Milliseconds()
+	res.TotalMs = comp.Total.Milliseconds()
+	res.TokensPerSecond = comp.TokensPerSecond
+	res.PromptTokens = comp.PromptTokens
+	res.CompletionTokens = comp.CompletionTokens
+	tr.ModelResponse = comp.Content
+
+	found := strings.Contains(comp.Content, longNeedle)
+	if found {
+		res.Resolved = true
+		res.Score = 1
+	}
+	ppTps := 0.0
+	if comp.TTFT.Seconds() > 0 {
+		ppTps = float64(comp.PromptTokens) / comp.TTFT.Seconds()
+	}
+	verdict := "missed"
+	if found {
+		verdict = "found"
+	}
+	res.Detail = fmt.Sprintf("needle %s; prompt≈%d tok; pp %.0f t/s; tg %.0f t/s",
+		verdict, comp.PromptTokens, ppTps, comp.TokensPerSecond)
+	return res, tr
+}
+
+// buildHaystack generates ~targetTokens of varied pseudo-code (≈4 chars/token)
+// with the needle block inserted in the middle.
+func buildHaystack(targetTokens int) string {
+	charBudget := targetTokens * 4
+	var b strings.Builder
+	needleBlock := "\n# === FILE: widget_registry.py ===\n" +
+		"# Internal widget registration table.\n" +
+		"WIDGET_PRODUCTION_KEY = '" + longNeedle + "'\n" +
+		"# End of widget registry.\n\n"
+
+	i := 0
+	inserted := false
+	for b.Len() < charBudget {
+		if !inserted && b.Len() >= charBudget/2 {
+			b.WriteString(needleBlock)
+			inserted = true
+		}
+		fmt.Fprintf(&b, "\n# === FILE: module_%04d.py ===\n", i)
+		fmt.Fprintf(&b, "def handler_%04d(state, payload, retries=%d):\n", i, i%7)
+		fmt.Fprintf(&b, "    \"\"\"Process payload %04d for subsystem %d.\"\"\"\n", i, i%13)
+		fmt.Fprintf(&b, "    total = 0\n    for item in payload.get('items_%d', []):\n", i%5)
+		fmt.Fprintf(&b, "        total += item.weight * %d\n", (i%9)+1)
+		fmt.Fprintf(&b, "    return Result(total=total, code=%d, ok=total > %d)\n", i%256, i%50)
+		i++
+	}
+	if !inserted {
+		b.WriteString(needleBlock)
+	}
+	return b.String()
+}
+
+// --- GPU sampling ----------------------------------------------------------
+
+type gpuSampler struct {
+	mu      sync.Mutex
+	peak    uint64
+	utilSum float64
+	utilN   int
+	stopFn  func() error
+}
+
+func (g *gpuSampler) peakVRAM() uint64 {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.peak
+}
+
+func (g *gpuSampler) avgUtil() float64 {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.utilN == 0 {
+		return 0
+	}
+	return g.utilSum / float64(g.utilN)
+}
+
+func (g *gpuSampler) stop() {
+	if g.stopFn != nil {
+		_ = g.stopFn()
+	}
+}
+
+// startGPUSampler subscribes to the monitor and accumulates GPU stats in the
+// background. Failures are non-fatal: the sampler simply records nothing.
+func (r *Runner) startGPUSampler(pid, port int, logPath string) *gpuSampler {
+	g := &gpuSampler{}
+	ch, cancel, err := r.mon.Subscribe(pid, port, logPath)
+	if err != nil {
+		return g
+	}
+	g.stopFn = cancel
+	go func() {
+		for evt := range ch {
+			if evt.Source != monitor.SourceGPU {
+				continue
+			}
+			stats, ok := evt.Data.(monitor.GPUStats)
+			if !ok {
+				continue
+			}
+			g.mu.Lock()
+			if stats.VRAMUsedMB > g.peak {
+				g.peak = stats.VRAMUsedMB
+			}
+			g.utilSum += stats.Utilization
+			g.utilN++
+			g.mu.Unlock()
+		}
+	}()
+	return g
+}
+
+// --- helpers ---------------------------------------------------------------
+
+func send(ch chan<- Progress, p Progress) {
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- p:
+	default:
+	}
+}
+
+func aggregate(results []ProblemResult, peakVRAM uint64, avgUtil float64) Aggregate {
+	a := Aggregate{Total: len(results), PeakVRAMMB: peakVRAM, AvgGPUUtil: avgUtil}
+	var scoreSum, tpsSum, ttftSum float64
+	var tpsN, ttftN int
+	for _, r := range results {
+		if r.Resolved {
+			a.Resolved++
+		}
+		scoreSum += r.Score
+		a.TotalPromptTokens += r.PromptTokens
+		a.TotalCompletionTokens += r.CompletionTokens
+		a.TotalMs += r.TotalMs
+		if r.TokensPerSecond > 0 {
+			tpsSum += r.TokensPerSecond
+			tpsN++
+		}
+		if r.TTFTms > 0 {
+			ttftSum += float64(r.TTFTms)
+			ttftN++
+		}
+	}
+	if a.Total > 0 {
+		a.SolveRate = float64(a.Resolved) / float64(a.Total)
+		a.AvgScore = scoreSum / float64(a.Total)
+	}
+	if tpsN > 0 {
+		a.AvgTokensPerSecond = tpsSum / float64(tpsN)
+	}
+	if ttftN > 0 {
+		a.AvgTTFTms = ttftSum / float64(ttftN)
+	}
+	return a
+}
+
+var quantRe = regexp.MustCompile(`(?i)(IQ?\d+(_[A-Z0-9]+)*|Q\d+_[A-Z0-9_]+|Q\d+|F16|BF16|F32)`)
+
+// snapshotProfile records the quantization-relevant config so comparisons make
+// explicit what changed between runs.
+func snapshotProfile(p domain.Profile) ProfileSnapshot {
+	s := ProfileSnapshot{Model: p.Model, KeyArgs: map[string]string{}}
+	if m := quantRe.FindString(filepath.Base(p.Model)); m != "" {
+		s.Quantization = strings.ToUpper(m)
+	}
+	s.CacheTypeK = argString(p.Args, "cache-type-k")
+	s.CacheTypeV = argString(p.Args, "cache-type-v")
+	if v := argString(p.Args, "ctx-size"); v != "" {
+		fmt.Sscanf(v, "%d", &s.CtxSize)
+	}
+	for _, k := range []string{"cache-type-k", "cache-type-v", "ctx-size", "n-gpu-layers", "flash-attn", "threads"} {
+		if v := argString(p.Args, k); v != "" {
+			s.KeyArgs[k] = v
+		}
+	}
+	return s
+}
+
+func argString(args map[string]any, key string) string {
+	v, ok := args[key]
+	if !ok {
+		return ""
+	}
+	switch t := v.(type) {
+	case string:
+		return t
+	case float64:
+		return strings.TrimSuffix(fmt.Sprintf("%v", t), ".0")
+	case bool:
+		if t {
+			return "true"
+		}
+		return "false"
+	default:
+		return fmt.Sprintf("%v", t)
+	}
+}
+
+// requestModelName picks the model field sent in the chat request. llama.cpp
+// ignores it, but vLLM/SGLang validate it against the served model id — which
+// is the full repo ID/path the server was launched with, so send p.Model whole
+// (not its basename).
+func requestModelName(p domain.Profile) string {
+	if v := argString(p.Args, "served-model-name"); v != "" {
+		return v
+	}
+	if p.Model != "" {
+		return p.Model
+	}
+	return "default"
+}
