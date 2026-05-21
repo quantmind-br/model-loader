@@ -1,8 +1,9 @@
 # Architecture
 
-**Project:** model-loader
-**Generated:** 2026-05-20 (from GitNexus knowledge graph, fresh index)
-**Stats:** 220 files · 6268 symbols · 22121 relationships · 300 execution flows · 24 functional modules
+**Project:** model-loader  
+**Generated:** 2026-05-21 from GitNexus knowledge graph (fresh index)  
+**Stats:** 267 files · 7011 symbols · 24716 relationships · 236 communities · 300 execution flows  
+**Indexed commit:** 0bd3ab5
 
 ## Overview
 
@@ -12,11 +13,11 @@ The codebase follows a domain-driven layout: a thin TUI layer (`internal/ui/`) d
 
 ## Functional Areas
 
-GitNexus clusters the codebase into 24 modules. The most significant by symbol count and role:
+GitNexus clusters the codebase into 236 communities (functional modules). The most significant by symbol count and cohesion:
 
 | Module | Symbols | Cohesion | Responsibility |
 |--------|---------|----------|----------------|
-| **Pages** | 373 | 73% | The 4 TUI tabs (profiles, models, server, monitor) + routing |
+| **Pages** | 373 | 73% | 5 TUI tabs (Profiles, Server, Models, Backends, Benchmark) + routing |
 | **Components** | 265 | 80% | Reusable UI widgets: Help, Modal, Picker, Sparkline, Statusbar |
 | **Processmgr** | 107 | 79% | `llama-server` process lifecycle + instance recovery |
 | **Profile_editor** | 87 | 72% | `huh`-based profile editing with draft state machine |
@@ -27,56 +28,88 @@ GitNexus clusters the codebase into 24 modules. The most significant by symbol c
 | **Monitor** | 46 | 88% | GPU metrics via `nvidia-smi` |
 | **Httpproxy** | 42 | 87% | OpenAI-shaped reverse proxy |
 | **Modelscanner** | 34 | 88% | GGUF model scanning + metadata parsing |
-| **Llamahelp** | 33 | 89% | `llama-server --help` parser + embedded schema |
+| **Llamahelp** | 33 | 89% | `llama-server --help` parser + embedded schema (v7376) |
 | **Hfhub** | 21 | 74% | HuggingFace Hub API client (search, file listing) |
 | **Backendcatalog** | 20 | 67% | Multi-backend catalog + executable resolver |
 | **Validator** | 19 | 87% | Flag validation rules |
 | **Llamabin** | 16 | 93% | Binary path resolution (PATH + Python fallback) |
 | **Proxysupervisor** | 14 | 98% | HTTP proxy lifecycle state machine |
-| **Domain** | 14 | 74% | Profile, Instance, Model, FlagSchema types |
+| **Domain** | 14 | 74% | Core types: Profile, Instance, Model, FlagSchema |
 | **Theme** | 9 | 71% | TUI styling |
 | **Metricsstore** | 9 | 57% | Metrics buffer |
 
-Plus smaller modules: Sizing and embedded-schema providers (sglanghelp, vllmhelp).
+Plus smaller modules: Sizing, Config, Filter, Playground, and embedded-schema providers (`sglanghelp`, `vllmhelp`).
 
 ## Key Execution Flows
 
-The graph holds 300 flows / 50 named processes. The most central:
+The graph holds 300 flows. The top 5 by step count and cross-community impact:
 
-### 1. Download poll — reap completed (`RunTUI → Pending`)
-Boot wires the download manager's poll loop; each tick reaps finished workers and recomputes the pending queue.
+### 1. Profile Picker Scan — `Update → PickerScanClosedMsg` (7 steps)
+
+Cross-community flow triggered when a user starts a directory scan from the **Profiles** page.
+
+```
+ProfilesPage.Update (ui/pages/profiles_update.go)
+  → handlePickerScan
+    → updatePicker (profiles_picker.go)
+      → picker.Update (ui/components/picker.go)
+        → handleScanStarted
+          → pickerWaitForEvent
+            → PickerScanClosedMsg
+```
+
+### 2. Backend Binary Probing — `Probe → SplitCommandLine` (7 steps)
+
+Intra-community flow inside **Backendcatalog** + **Llamabin**. Resolves the correct backend executable at runtime.
+
+```
+Probe (backendcatalog/probe.go)
+  → probeOne
+    → resolveExecutable (resolver.go)
+      → ResolveCommandWithPythonFallback (llamabin/resolver.go)
+        → Resolve
+          → splitCommand
+            → splitCommandLine
+```
+
+### 3. GGUF Model Scanning — `Scan → GgufHeader` (7 steps)
+
+Cross-community flow spanning **Modelscanner** communities. Reads GGUF metadata from disk into the model catalog.
+
+```
+Scan (modelscanner/scanner.go)
+  → scanRoot
+    → buildModelFile
+      → readMetaFromFile
+        → readGGUFMeta (gguf.go)
+          → readGGUFHeader
+            → ggufHeader
+```
+
+### 4. TUI Boot & Download Polling — `RunTUI → Pending` (6 steps)
+
+Cross-community flow connecting **CLI entry** to **Downloadmgr**. Starts the TUI and background download queue.
+
 ```
 runTUI (cmd/model-loader/main.go)
   → StartPolling (downloadmgr/manager.go)
-    → pollLoop → tick → reapCompleted → pending
+    → pollLoop
+      → tick
+        → reapCompleted
+          → pending
 ```
 
-### 2. Download poll — liveness check (`RunTUI → PidAlive`)
-Same loop; `reapCompleted` probes worker PIDs to detect dead downloads.
-```
-runTUI → StartPolling → pollLoop → tick → reapCompleted → pidAlive
-```
+### 5. Profile Bundle Import — `HandleKey → ProfileExists` (6 steps)
 
-### 3. Download progress fan-out (`RunTUI → Broadcast`)
-Same loop; each tick emits progress events to subscribers.
-```
-runTUI → StartPolling → pollLoop → tick → emitEvents → broadcast
-```
+Cross-community flow connecting **Pages** → **Profilestore**. Imports a profile bundle from disk with ID collision check.
 
-### 4. GGUF model scan (`Scan → GgufHeader`)
-Model discovery walks a root, builds model files, and parses GGUF headers for metadata.
 ```
-Scan (modelscanner/scanner.go)
-  → scanRoot → buildModelFile → readMetaFromFile
-    → readGGUFMeta (gguf.go) → readGGUFHeader → ggufHeader
-```
-
-### 5. Profile bundle import (`HandleKey → ProfileExists`)
-A keystroke in the Profiles tab triggers an import command that allocates a non-colliding ID.
-```
-handleKey (ui/pages/profiles.go)
-  → startImportWithPath → importBundleCmd
-    → ImportBundle (profilestore/import.go) → nextImportedID → profileExists
+handleKey (ui/pages/profiles_update.go)
+  → startImportWithPath (profiles_importexport.go)
+    → importBundleCmd
+      → ImportBundle (profilestore/import.go)
+        → nextImportedID
+          → profileExists
 ```
 
 ## Architecture Diagram
@@ -87,7 +120,7 @@ graph TD
 
     subgraph UI["UI Layer (internal/ui)"]
         Root["Ui / Root model<br/>tab routing + input gate"]
-        Pages["Pages<br/>4 tabs"]
+        Pages["Pages<br/>5 tabs"]
         Editor["Profile_editor<br/>huh forms"]
         Components["Components<br/>Modal · Picker · Sparkline"]
         Theme["Theme"]
@@ -95,7 +128,7 @@ graph TD
 
     subgraph Services["Service Layer (internal/service)"]
         ProcMgr["Processmgr<br/>process lifecycle + recovery"]
-        ProfStore["Profilestore<br/>FS CRUD + import"]
+        ProfStore["Profilestore<br/>FS CRUD + import/export"]
         DownloadMgr["Downloadmgr<br/>queued HF downloads"]
         HfHub["Hfhub<br/>HF API client"]
         ModelScan["Modelscanner<br/>GGUF metadata"]
@@ -146,4 +179,5 @@ graph TD
 - **Process survival:** background `llama-server` processes are intentionally orphaned on TUI exit; `processmgr.Reconcile` restores them from `~/.local/state/model-loader/instances.json` at boot.
 - **Input routing:** every global shortcut consuming a printable rune must be gated behind `activePageCapturesInput()`; pages with active `huh` forms / pickers implement `InputCapture`. See `CLAUDE.md` → TUI INPUT ROUTING RULES.
 - **Embedded schema:** `llama-server --help` schema is pinned to build `v7376 (380b4c9)`; parsed at runtime if the binary is present, falling back to the embedded copy.
-- **Config / state paths:** config at `~/.config/model-loader/config.toml`, state at `~/.local/state/model-loader/`, profiles at `~/.local/share/model-loader/profiles/`.
+- **Config / state paths:** config at `~/.config/model-loader/config.toml`, state at `~/.local/state/model-loader/`, profiles at `~/.config/model-loader/profiles/`.
+- **Benchmark:** the Benchmark tab + CLI command (`model-loader benchmark`) live inside `Pages` / `Services` communities; they do not form separate top-level clusters because they heavily reuse the existing profile-store and process-manager machinery.
