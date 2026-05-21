@@ -1,8 +1,18 @@
 {
   "version": "1.0.0",
-  "gitCommitHash": "5cf898bc7279cd3603365a6883cb193f8de2e696",
-  "generatedAt": "2026-05-21T16:45:23.720Z",
+  "gitCommitHash": "56e71c49a738debb385bf0eae0b90e0cec4c7949",
+  "generatedAt": "2026-05-21T20:51:09.740Z",
   "files": {
+    ".understand-anything/.understandignore": {
+      "filePath": ".understand-anything/.understandignore",
+      "contentHash": "7a05dbc19746dc84388f1a52e72c7cb586215994062bf6cd671aacd01372b0f3",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 56,
+      "hasStructuralAnalysis": false
+    },
     "cmd/model-loader/benchmark.go": {
       "filePath": "cmd/model-loader/benchmark.go",
       "contentHash": "c2f0c0a06e043f403d6afc0d4eac496061414aab5819d543a3a93884a13c5cdb",
@@ -739,6 +749,16 @@
       "exports": [],
       "totalLines": 53,
       "hasStructuralAnalysis": true
+    },
+    "go.sum": {
+      "filePath": "go.sum",
+      "contentHash": "e9c08a071b3e94cc054bf77a646ad4135e3f21519e5b807320b14b06d537e3bc",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 159,
+      "hasStructuralAnalysis": false
     },
     "internal/config/config_test.go": {
       "filePath": "internal/config/config_test.go",
@@ -9122,7 +9142,7 @@
     },
     "internal/service/llamahelp/parser_test.go": {
       "filePath": "internal/service/llamahelp/parser_test.go",
-      "contentHash": "7d581f3dfc865b0bb839341230d97bcc584c6b8afccbecf98ba3870a83e2afdd",
+      "contentHash": "003a3a5d5fc33ca4b4a58aaf5eaa8a0fc4d1d1a39c4494d3e13d1a991105c249",
       "functions": [
         {
           "name": "TestParseSectionHeader",
@@ -9179,6 +9199,14 @@
           ],
           "exported": true,
           "lineCount": 41
+        },
+        {
+          "name": "TestParseHelp_CacheTypeAllowedValuesContinuation",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 23
         },
         {
           "name": "TestParseFlagLine_MultiAlias",
@@ -9299,18 +9327,19 @@
         "TestParseFlagLine_EnumPlaceholders",
         "TestParseFlagLine_NPlaceholderFloatByDefault",
         "TestParseFlagLine_CacheTypeHardcodedEnum",
+        "TestParseHelp_CacheTypeAllowedValuesContinuation",
         "TestParseFlagLine_MultiAlias",
         "TestParseFlagLine_NegationPairCanonicalIsPositive",
         "TestParseHelp_SmokeOnFixture",
         "TestParseHelp_WrappedFlagDescription",
         "TestParseHelp_Golden"
       ],
-      "totalLines": 479,
+      "totalLines": 503,
       "hasStructuralAnalysis": true
     },
     "internal/service/llamahelp/parser.go": {
       "filePath": "internal/service/llamahelp/parser.go",
-      "contentHash": "dbd7e5f83f608598c291de17f4714303fb42f9405e1d8044b4a48230fc61ee6f",
+      "contentHash": "efaab127c3ee754becff7ab49992e352aaead9b04e27879c821249882285631d",
       "functions": [
         {
           "name": "ParseHelp",
@@ -9319,7 +9348,7 @@
           ],
           "returnType": "(domain.FlagSchema, error)",
           "exported": true,
-          "lineCount": 44
+          "lineCount": 48
         },
         {
           "name": "isFlagDefLine",
@@ -9346,7 +9375,7 @@
           ],
           "returnType": "domain.FlagSpec",
           "exported": false,
-          "lineCount": 8
+          "lineCount": 11
         },
         {
           "name": "parseFlagLine",
@@ -9384,6 +9413,25 @@
           "returnType": "[]string",
           "exported": false,
           "lineCount": 8
+        },
+        {
+          "name": "allowedValuesFromContinuations",
+          "params": [
+            "lines",
+            "start"
+          ],
+          "returnType": "[]string",
+          "exported": false,
+          "lineCount": 24
+        },
+        {
+          "name": "parseAllowedValues",
+          "params": [
+            "raw"
+          ],
+          "returnType": "[]string",
+          "exported": false,
+          "lineCount": 14
         },
         {
           "name": "inferType",
@@ -9471,7 +9519,7 @@
       "exports": [
         "ParseHelp"
       ],
-      "totalLines": 299,
+      "totalLines": 348,
       "hasStructuralAnalysis": true
     },
     "internal/service/metricsstore/store_test.go": {
@@ -29357,7 +29405,7 @@
     },
     "internal/ui/pages/profiles.go": {
       "filePath": "internal/ui/pages/profiles.go",
-      "contentHash": "3b55694bc70d3a0962ffa098f7ae9ee48ee95a986a57f51cb28e07fbe5b61efa",
+      "contentHash": "62a5c1257c5265d7530e877277f2f400e39b4f8cae82e535b80cb0394e8d02e5",
       "functions": [
         {
           "name": "NewProfilesPage",
@@ -29415,7 +29463,7 @@
           ],
           "returnType": "ProfilesPage",
           "exported": true,
-          "lineCount": 5
+          "lineCount": 6
         },
         {
           "name": "WithExportDir",
@@ -29651,7 +29699,7 @@
         "OverlayView",
         "Hints"
       ],
-      "totalLines": 289,
+      "totalLines": 291,
       "hasStructuralAnalysis": true
     },
     "internal/ui/pages/server_monitor.go": {
