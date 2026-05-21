@@ -20,6 +20,7 @@ Directory paths used by the application. All paths support `~` expansion.
 | `backends_dir` | `~/.config/model-loader/backends` | Directory for backend catalog (`catalog.json`) and per-backend validation schemas |
 | `log_dir` | `~/.local/state/model-loader/logs` | Directory for captured llama-server stdout/stderr logs |
 | `state_dir` | `~/.local/state/model-loader` | Parent directory for runtime state (instances.json) |
+| `llama_server_binary_path` | `""` | **Legacy.** Fallback `llama-server` binary path, read only during the one-time migration to the backend catalog. Not used at runtime afterwards — register binaries via the backend catalog instead |
 
 ### `[models]`
 
@@ -37,6 +38,55 @@ User interface preferences.
 |-----|---------|-------------|
 | `default_tab` | `launcher` | Tab shown on startup. Recognized values: `profiles`, `server`, `models`, `backends`, `benchmark` (any unrecognized value, including the written default `launcher`, falls back to `profiles`) |
 | `keybindings` | `default` | Keybinding preset. Currently only `default` is supported |
+
+### `[logging]`
+
+Debug logging settings. Logs are written to files only (never stdout) under `log_dir`.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `level` | `info` | Log level: `debug`, `info`, `warn`, `error`. Overridden by the `--log-level` CLI flag or the `MODEL_LOADER_LOG_LEVEL` environment variable (in that precedence order) |
+
+### `[serve]`
+
+Bind address for the headless HTTP proxy started by `model-loader serve` (an OpenAI-shaped reverse proxy in front of running instances).
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `host` | `127.0.0.1` | Bind host for the headless proxy. Overridable with `serve --host` |
+| `port` | `4321` | Bind port for the headless proxy. Overridable with `serve --port` |
+
+### `[benchmark]`
+
+Profile evaluation engine settings (Benchmark tab and `model-loader benchmark`).
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `max_tokens` | `32768` | Generation cap per problem |
+| `temperature` | `0.0` | Sampling temperature for benchmark runs |
+| `timeout_sec` | `120` | Per-problem inference timeout, in seconds |
+| `long_context_tokens` | `0` | Target prompt size for the long-context needle probe (`0` → 8000) |
+| `save_transcripts` | `true` | Capture raw model/judge I/O per run for debugging |
+
+#### `[benchmark.judge]`
+
+Optional LLM-as-judge endpoint (OpenAI-compatible) used to grade open-ended answers.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `base_url` | `""` | Base URL of the judge endpoint (empty disables LLM judging) |
+| `api_key` | `""` | API key for the judge endpoint |
+| `model` | `""` | Judge model name |
+| `samples` | `3` | Number of judge samples per evaluation |
+
+#### `[benchmark.llamabench]`
+
+Throughput-mode (`llama-bench`) settings.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `presets` | `["512/128", "4096/256"]` | `pp/tg` token pairs (prompt / generation) to measure |
+| `repetitions` | `3` | Measurements per preset (`0` → 3) |
 
 ## Example
 
@@ -57,6 +107,30 @@ search_paths = [
 [ui]
 default_tab = "launcher"
 keybindings = "default"
+
+[logging]
+level = "info"
+
+[serve]
+host = "127.0.0.1"
+port = 4321
+
+[benchmark]
+max_tokens = 32768
+temperature = 0.0
+timeout_sec = 120
+long_context_tokens = 0
+save_transcripts = true
+
+[benchmark.judge]
+base_url = ""
+api_key = ""
+model = ""
+samples = 3
+
+[benchmark.llamabench]
+presets = ["512/128", "4096/256"]
+repetitions = 3
 ```
 
 ## Backend Catalog
@@ -161,5 +235,6 @@ Example:
 
 - The application creates missing directories automatically
 - Changes to `config.toml` require a restart to take effect
+- The log level can be overridden at launch without editing the file: `--log-level=debug` or `MODEL_LOADER_LOG_LEVEL=debug`
 - `search_paths` that do not exist are silently skipped during model scanning
 - Schema files with `source.editable: true` are never overwritten by auto-generation

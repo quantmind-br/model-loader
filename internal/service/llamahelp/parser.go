@@ -60,6 +60,10 @@ func ParseHelp(data []byte) (domain.FlagSchema, error) {
 		if !ok {
 			continue
 		}
+		if values := allowedValuesFromContinuations(lines, i+1); len(values) > 0 {
+			spec.Type = domain.FlagTypeEnum
+			spec.EnumValues = values
+		}
 		spec.Group = currentGroup
 		schema.Flags[spec.Long] = spec
 	}
@@ -103,6 +107,8 @@ var flagLineRe = regexp.MustCompile(`^(.*[^ ])\s{2,}(\S.*)$`)
 // defaultRe extracts "(default: X)" or ", default: X" — first occurrence wins.
 // The opening paren is optional because enums may use ", default: X" format.
 var defaultRe = regexp.MustCompile(`\(?default:\s*([^,)]+)`)
+
+var allowedValuesPrefix = "allowed values:"
 
 // hardcodedFlagOverrides applies post-parse fixes for flags whose --help
 // representation does not expose enum values.
@@ -220,6 +226,46 @@ func splitAndTrim(s, sep string) []string {
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
 		out = append(out, strings.TrimSpace(p))
+	}
+	return out
+}
+
+func allowedValuesFromContinuations(lines []string, start int) []string {
+	var chunks []string
+	for j := start; j < len(lines); j++ {
+		trimmed := strings.TrimSpace(lines[j])
+		switch {
+		case trimmed == "":
+			continue
+		case strings.HasPrefix(trimmed, "-"):
+			return parseAllowedValues(strings.Join(chunks, " "))
+		case parseSectionHeader(trimmed) != "":
+			return parseAllowedValues(strings.Join(chunks, " "))
+		case strings.HasPrefix(trimmed, "(env:"), strings.HasPrefix(trimmed, "(default:"):
+			return parseAllowedValues(strings.Join(chunks, " "))
+		}
+		if _, values, ok := strings.Cut(trimmed, allowedValuesPrefix); ok {
+			chunks = append(chunks, strings.TrimSpace(values))
+			continue
+		}
+		if len(chunks) > 0 {
+			chunks = append(chunks, trimmed)
+		}
+	}
+	return parseAllowedValues(strings.Join(chunks, " "))
+}
+
+func parseAllowedValues(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(strings.Trim(part, "'\""))
+		if part != "" {
+			out = append(out, part)
+		}
 	}
 	return out
 }

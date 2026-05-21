@@ -10,9 +10,11 @@ A terminal UI (TUI) for managing [llama.cpp](https://github.com/ggerganov/llama.
 - **Monitor** — Real-time monitoring of running instances: logs, health status, slot usage, GPU metrics, and throughput
 - **Multi-instance** — Run multiple llama-server instances concurrently, each with its own PID and port
 - **Instance Recovery** — Background instances survive TUI exit and are recovered on restart
-- **Backend Catalog** — Manage multiple llama-server forks/versions with per-backend validation schemas
+- **Backend Catalog** — Manage multiple backends — `llama-server` forks/versions plus other server kinds (vLLM, SGLang) — each with per-backend validation schemas
 - **Schema-driven Validation** — Each backend has its own validation schema (auto-generated from `--help`, editable by user)
 - **Per-Profile Backend Selection** — Each profile selects a backend from the catalog; validation uses that backend's schema exclusively
+- **Hugging Face Integration** — Search the Hub and download `.gguf` files with queued, progress-tracked downloads
+- **Benchmark** — Evaluate profiles with a built-in engine: SWE-bench Lite coding tasks, a long-context needle probe, and `llama-bench` throughput measurement (optional LLM-as-judge grading)
 
 ## Requirements
 

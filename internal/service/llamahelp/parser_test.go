@@ -294,6 +294,30 @@ func TestParseFlagLine_CacheTypeHardcodedEnum(t *testing.T) {
 	}
 }
 
+func TestParseHelp_CacheTypeAllowedValuesContinuation(t *testing.T) {
+	help := []byte(`----- common params -----
+-ctkd, --cache-type-k-draft TYPE        KV cache data type for K for the draft model
+                                        allowed values: f32, f16, bf16, q8_0, q4_0, q4_1, iq4_nl, q5_0, q5_1,
+                                        turbo2, turbo3, turbo4
+                                        (env: LLAMA_ARG_CACHE_TYPE_K_DRAFT)
+`)
+	schema, err := ParseHelp(help)
+	if err != nil {
+		t.Fatalf("ParseHelp: %v", err)
+	}
+	spec, ok := schema.Lookup("cache-type-k-draft")
+	if !ok {
+		t.Fatal("cache-type-k-draft not parsed")
+	}
+	want := []string{"f32", "f16", "bf16", "q8_0", "q4_0", "q4_1", "iq4_nl", "q5_0", "q5_1", "turbo2", "turbo3", "turbo4"}
+	if spec.Type != domain.FlagTypeEnum {
+		t.Fatalf("type=%v, want %v", spec.Type, domain.FlagTypeEnum)
+	}
+	if !reflect.DeepEqual(spec.EnumValues, want) {
+		t.Fatalf("enum=%v, want %v", spec.EnumValues, want)
+	}
+}
+
 func TestParseFlagLine_MultiAlias(t *testing.T) {
 	line := "-ngl,  --gpu-layers, --n-gpu-layers N   max. number of layers to store in VRAM (default: -1)"
 	got, ok := parseFlagLine(line)
