@@ -1,61 +1,60 @@
 # Architecture
 
 **Project:** model-loader  
-**Generated:** 2026-05-21 from GitNexus knowledge graph (fresh index)  
-**Stats:** 268 files · 7157 symbols · 25366 relationships · 248 communities · 300 execution flows  
-**Indexed commit:** 8b5e8f4
+**Generated:** 2026-05-21 from GitNexus knowledge graph  
+**Stats:** 268 files · 7158 symbols · 25373 relationships · 300 execution flows  
+**Indexed commit:** f32c804
 
 ## Overview
 
-`model-loader` is a terminal UI (TUI) application for managing llama.cpp profiles and `llama-server` processes. It is built with **Go 1.26.2** and the **Charmbracelet bubbletea** stack (Elm-style `Update`/`View` loop, `huh` forms).
+`model-loader` is a terminal UI (TUI) application for managing llama.cpp profiles and `llama-server` processes. Built with **Go 1.26.2** and the **Charmbracelet bubbletea** stack, it provides a 5-tab interface for model discovery, profile editing, server lifecycle management, benchmarking, and an OpenAI-compatible HTTP proxy.
 
-The codebase follows a domain-driven layout: a thin TUI layer (`internal/ui/`) drives a set of focused services (`internal/service/`) over a shared domain model (`internal/domain/`). Background `llama-server` processes intentionally survive TUI exit and are recovered at boot from persisted state.
+The codebase follows a domain-driven layout: a thin TUI layer (`internal/ui/`) drives focused services (`internal/service/`) over a shared domain model (`internal/domain/`). Background `llama-server` processes intentionally survive TUI exit and are recovered at boot from persisted state in `~/.local/state/model-loader/instances.json`.
 
 ## Functional Areas
 
-GitNexus clusters the codebase into 248 communities (functional modules). The most significant by symbol count and cohesion:
+GitNexus clusters the codebase into 27 functional modules. The most significant by symbol count and cohesion:
 
 | Module | Symbols | Cohesion | Responsibility |
 |--------|---------|----------|----------------|
-| **Pages** | 373 | 73% | 5 TUI tabs (Profiles, Server, Models, Backends, Benchmark) + routing |
-| **Components** | 265 | 80% | Reusable UI widgets: Help, Modal, Picker, Sparkline, Statusbar |
+| **Pages** | 432 | 72% | 5 TUI tabs (Profiles, Models, Server, Benchmark, Downloads) + page logic |
+| **Components** | 257 | 80% | Reusable UI widgets: Help, Modal, Picker, Sparkline, Statusbar |
+| **Profile_editor** | 144 | 77% | `huh`-based profile editing with essentials registry + draft state machine |
 | **Processmgr** | 107 | 79% | `llama-server` process lifecycle + instance recovery |
-| **Profile_editor** | 87 | 72% | `huh`-based profile editing with draft state machine |
-| **Downloadmgr** | 70 | 79% | HuggingFace file downloader, queued with progress events |
-| **Ui** | 69 | 83% | Root model, tab orchestration, global input routing |
-| **Profilestore** | 63 | 79% | FS-based profile CRUD + bundle import/export |
-| **Backendschema** | 52 | 82% | Schema generation orchestrator across all backend kinds (llama-server, vLLM, SGLang, tabbyapi) |
+| **Profilestore** | 81 | 82% | FS-based profile CRUD |
+| **Ui** | 72 | 84% | Root model, tab orchestration, global input routing |
+| **Backendschema** | 63 | 81% | Schema generation orchestrator across all backend kinds |
+| **Downloadmgr** | 61 | 83% | HuggingFace file downloader with progress events + state |
+| **Benchmark** | 51 | 86% | SWE-bench Lite + long-context needle probe engine |
 | **Monitor** | 46 | 88% | GPU metrics via `nvidia-smi` |
-| **Httpproxy** | 42 | 87% | OpenAI-shaped reverse proxy |
-| **Modelscanner** | 34 | 88% | GGUF model scanning + metadata parsing |
-| **Llamahelp** | 33 | 89% | `llama-server --help` parser + embedded schema (v7376) |
+| **Httpproxy** | 42 | 88% | OpenAI-shaped reverse proxy |
+| **Modelscanner** | 34 | 88% | GGUF model metadata extraction |
+| **Llamahelp** | 31 | 89% | `llama-server --help` parser + embedded schema (v7376) |
+| **Validator** | 24 | 80% | Flag validation rules |
 | **Hfhub** | 21 | 74% | HuggingFace Hub API client (search, file listing) |
-| **Backendcatalog** | 20 | 67% | Multi-backend catalog (kinds: llama-server, vllm, sglang, tabbyapi) + executable resolver |
-| **Validator** | 19 | 87% | Schema-aware flag validation rules (`Validate(profile, FlagSchema, BackendKind)`) |
-| **Llamabin** | 16 | 93% | Binary path resolution (PATH + Python fallback for `python -m …` launchers) |
+| **Backendcatalog** | 20 | 67% | Multi-backend catalog + binary resolver |
+| **Llamabin** | 19 | 91% | Binary path resolution (PATH + Python fallback) |
 | **Proxysupervisor** | 14 | 98% | HTTP proxy lifecycle state machine |
-| **Domain** | 14 | 74% | Core types: Profile (`SchemaVersion 3`), Instance, Model, FlagSchema, BackendKind, SchemaBuilder |
-| **Theme** | 9 | 71% | TUI styling |
-| **Metricsstore** | 9 | 57% | Metrics buffer |
+| **Benchmarkstore** | 14 | 82% | Benchmark run persistence (1 JSON per run) |
 
-Plus smaller modules: Sizing, Config, Filter, Migration, Benchmarkstore, an internal `fsx` atomic-write helper, and embedded-schema providers (`sglanghelp`, `vllmhelp`). A `Playground` package (OpenAI-compatible chat streaming client) exists but its TUI surface — `internal/ui/components/playground_modal.go` — is currently inert.
+Plus smaller modules: Config, Domain, Log, Migration, Metricsstore, Playground, SGLang/vLLM help embeds, and an internal `fsx` atomic-write helper.
 
 ## Key Execution Flows
 
 The graph holds 300 flows. The top 5 by step count and cross-community impact:
 
-### 1. Profile Picker Scan — `Update → PickerScanClosedMsg` (7 steps)
+### 1. GGUF Model Scanning — `Scan → GgufHeader` (7 steps)
 
-Cross-community flow triggered when a user starts a directory scan from the **Profiles** page.
+Cross-community flow spanning **Modelscanner** communities. Reads GGUF metadata from disk into the model catalog.
 
 ```
-ProfilesPage.Update (ui/pages/profiles_update.go)
-  → handlePickerScan
-    → updatePicker (profiles_picker.go)
-      → picker.Update (ui/components/picker.go)
-        → handleScanStarted
-          → pickerWaitForEvent
-            → PickerScanClosedMsg
+Scan (modelscanner/scanner.go)
+  → scanRoot
+    → buildModelFile
+      → readMetaFromFile
+        → readGGUFMeta (gguf.go)
+          → readGGUFHeader
+            → ggufHeader
 ```
 
 ### 2. Backend Binary Probing — `Probe → SplitCommandLine` (7 steps)
@@ -72,44 +71,53 @@ Probe (backendcatalog/probe.go)
             → splitCommandLine
 ```
 
-### 3. GGUF Model Scanning — `Scan → GgufHeader` (7 steps)
+### 3. Backend Binary Resolution — `Resolve → CheckExecutable` (6 steps)
 
-Cross-community flow spanning **Modelscanner** communities. Reads GGUF metadata from disk into the model catalog.
+Intra-community flow for backend catalog binary resolution. Supports PATH lookup and Python-module fallback.
 
 ```
-Scan (modelscanner/scanner.go)
-  → scanRoot
-    → buildModelFile
-      → readMetaFromFile
-        → readGGUFMeta (gguf.go)
-          → readGGUFHeader
-            → ggufHeader
+Resolve (backendcatalog/resolver.go)
+  → resolveExecutable
+    → ResolveCommandWithPythonFallback (llamabin/resolver.go)
+      → Resolve
+        → resolveInPATH
+          → checkExecutable
 ```
 
-### 4. TUI Boot & Download Polling — `RunTUI → Pending` (6 steps)
+### 4. TUI Startup & Download Recovery — `RunTUI → DownloadRecord` (5 steps)
 
-Cross-community flow connecting **CLI entry** to **Downloadmgr**. Starts the TUI and background download queue.
+Cross-community flow connecting **CLI entry** to **Downloadmgr**. Reconciles persisted download state when the TUI boots.
 
 ```
 runTUI (cmd/model-loader/main.go)
-  → StartPolling (downloadmgr/manager.go)
-    → pollLoop
-      → tick
-        → reapCompleted
-          → pending
+  → Reconcile (downloadmgr/manager.go)
+    → ListRecords (downloadmgr/state.go)
+      → LoadRecord
+        → DownloadRecord
 ```
 
-### 5. Profile Bundle Import — `HandleKey → ProfileExists` (6 steps)
+### 5. Server Launch Bootstrap — `RunServe → ApplyDefaults` (5 steps)
 
-Cross-community flow connecting **Pages** → **Profilestore**. Imports a profile bundle from disk with ID collision check.
+Cross-community flow initializing the CLI `serve` subcommand.
 
 ```
-handleKey (ui/pages/profiles_update.go)
-  → startImportWithPath (profiles_importexport.go)
-    → importBundleCmd
-      → ImportBundle (profilestore/import.go)
-        → nextImportedID
-          → profileExists
+runServe (cmd/model-loader/main.go)
+  → bootstrap (cmd/model-loader/bootstrap.go)
+    → Load (internal/config/config.go)
+      → LoadFrom
+        → applyDefaults
+```
+
+### Bonus: Schema Generation — `Generate → FlagSpec` (5 steps)
+
+Cross-community flow that produces flag schemas from `--help` output at runtime.
+
+```
+Generate (backendschema/generator.go)
+  → Parse (llamahelp/exec_parser.go)
+    → ParseHelp (llamahelp/parser.go)
+      → parseFlagLine
+        → FlagSpec (domain/flag_schema.go)
 ```
 
 ## Architecture Diagram
@@ -121,24 +129,24 @@ graph TD
     subgraph UI["UI Layer (internal/ui)"]
         Root["Ui / Root model<br/>tab routing + input gate"]
         Pages["Pages<br/>5 tabs"]
-        Editor["Profile_editor<br/>huh forms"]
-        Components["Components<br/>Modal · Picker · Sparkline"]
+        Editor["Profile_editor<br/>huh forms + draft state"]
+        Components["Components<br/>Modal · Picker · Sparkline · Statusbar"]
         Theme["Theme"]
     end
 
     subgraph Services["Service Layer (internal/service)"]
         ProcMgr["Processmgr<br/>process lifecycle + recovery"]
-        ProfStore["Profilestore<br/>FS CRUD + import/export"]
+        ProfStore["Profilestore<br/>FS CRUD"]
         DownloadMgr["Downloadmgr<br/>queued HF downloads"]
         HfHub["Hfhub<br/>HF API client"]
         ModelScan["Modelscanner<br/>GGUF metadata"]
         Monitor["Monitor<br/>nvidia-smi GPU"]
-        Metrics["Metricsstore"]
         Proxy["Httpproxy +<br/>Proxysupervisor"]
         Catalog["Backendcatalog +<br/>Backendschema"]
         LlamaBin["Llamabin<br/>binary resolver"]
         LlamaHelp["Llamahelp<br/>--help parser"]
-        Validator["Validator"]
+        Validator["Validator<br/>flag validation"]
+        BenchmarkSvc["Benchmark<br/>+ benchmarkstore"]
     end
 
     Domain["Domain<br/>Profile · Instance · Model · FlagSchema"]
@@ -146,6 +154,7 @@ graph TD
     Main --> Root
     Main --> DownloadMgr
     Main --> ProcMgr
+    Main --> Catalog
 
     Root --> Pages
     Pages --> Editor
@@ -158,7 +167,7 @@ graph TD
     Pages --> ProcMgr
     Pages --> Monitor
     Pages --> Proxy
-    Monitor --> Metrics
+    Pages --> BenchmarkSvc
 
     Editor --> Validator
     Editor --> Catalog
@@ -167,18 +176,21 @@ graph TD
     Catalog --> LlamaBin
     Catalog --> LlamaHelp
     Proxy --> ProcMgr
+    BenchmarkSvc --> ProcMgr
 
     ProfStore --> Domain
     ProcMgr --> Domain
     ModelScan --> Domain
     Catalog --> Domain
+    Validator --> Domain
 ```
 
-## Notes
+## Notable Design Decisions
 
 - **Process survival:** background `llama-server` processes are intentionally orphaned on TUI exit; `processmgr.Reconcile` restores them from `~/.local/state/model-loader/instances.json` at boot.
 - **Input routing:** every global shortcut consuming a printable rune must be gated behind `activePageCapturesInput()`; pages with active `huh` forms / pickers implement `InputCapture`. See `CLAUDE.md` → TUI INPUT ROUTING RULES.
-- **Embedded schema:** the `llama-server --help` schema is pinned to build `v7376 (380b4c9)`; parsed at runtime if the binary is present, falling back to the embedded copy. SGLang and vLLM ship embedded schemas only (`sglanghelp`, `vllmhelp`).
-- **Schema-driven profiles:** Profiles are now schema-aware (domain `SchemaVersion 3`). A `SchemaBuilder` (domain layer) constructs structured `FlagSchema`/`BackendValidationSchema` per backend kind; the profile editor maps drafts via `ApplyToWithSchema`/`ToProfileWithSchema`, and the validator runs `Validate(profile, FlagSchema, BackendKind)` so flag checks adapt to the selected backend. Profile-store writes go through an atomic-write helper (`internal/service/internal/fsx`).
-- **Config / state paths:** config at `~/.config/model-loader/config.toml`, profiles at `~/.config/model-loader/profiles/`, backends at `~/.config/model-loader/backends/`, state at `~/.local/state/model-loader/` (instances + logs under `…/logs/`).
-- **Benchmark:** the Benchmark tab + CLI command (`model-loader benchmark`) live inside `Pages` / `Services` communities; they reuse the profile-store and process-manager machinery rather than forming separate top-level clusters. The engine (`internal/service/benchmark/runner.go`) supports three modes: `ModeJudge` (SWE-bench Lite coding problems graded by an LLM judge), `ModeLongContext` (objective long-context needle-retrieval probe), and `ModeLlamaBench` (llama-bench-style throughput, configurable `pp/tg` presets reporting prompt/generation tokens-per-second).
+- **Embedded schema:** the `llama-server --help` schema is pinned to build `v7376 (380b4c9)`; parsed at runtime if the binary is present, falling back to the embedded copy.
+- **Schema-driven profiles:** Profiles are schema-aware. A `SchemaBuilder` constructs structured `FlagSchema` per backend kind; the profile editor maps drafts via `ApplyToWithSchema`/`ToProfileWithSchema`, and the validator runs `Validate(profile, FlagSchema, BackendKind)` so flag checks adapt to the selected backend.
+- **Essentials registry is curated UX:** `essentialFields` in `profile_editor/essentials.go` is a hand-picked list of per-backend flags — not a generic form abstraction.
+- **Profile schema is canonical:** `docs/profile-schema.json` is the authoritative JSON Schema for the persisted profile file format. Any change to `domain.Profile` must mirror it there.
+- **Config / state paths:** config at `~/.config/model-loader/config.toml`, profiles at `~/.config/model-loader/profiles/`, backends at `~/.config/model-loader/backends/`, state at `~/.local/state/model-loader/`.

@@ -15,6 +15,7 @@ Parses llama-server --help into domain.FlagSchema and supplies a curated embedde
 ## CONVENTIONS
 
 - **Type inference** is best-effort from placeholder tokens: `N`, `INDEX`, `PORT` → int; `F`, `RATE` → float; `[a|b|c]` / `{a,b,c}` → enum; missing placeholder → bool.
+- **Enum extraction from continuations**: lines following a flag that start with `allowed values:` are parsed and injected into `spec.EnumValues`.
 - **Hardcoded overrides** in `hardcodedFlagOverrides()` patch flags whose --help text does not expose enum values (e.g., `--cache-type-k`).
 - **Embedded schema** covers only essential flags; it is intentionally smaller than a full parsed schema.
 - Enum values for KV-cache quant types are hardcoded in `cacheTypeEnum` because --help renders them as opaque `TYPE`.

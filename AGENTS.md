@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
 **Generated:** 2026-05-21
-**Commit:** 8b5e8f4
+**Commit:** f32c804
 **Branch:** main
 
 ## OVERVIEW
@@ -127,7 +127,7 @@ go test ./... -update  # Update golden test fixtures
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **model-loader** (7157 symbols, 25366 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **model-loader** (7158 symbols, 25373 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
