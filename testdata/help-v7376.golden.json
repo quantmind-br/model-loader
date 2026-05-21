@@ -171,6 +171,16 @@
       "HelpText": "set custom jinja chat template (default: template taken from model's",
       "Group": "example-specific"
     },
+    "chat-template-file": {
+      "Long": "chat-template-file",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "template taken from",
+      "HelpText": "set custom jinja chat template file (default: template taken from",
+      "Group": "example-specific"
+    },
     "chat-template-kwargs": {
       "Long": "chat-template-kwargs",
       "Short": "",
@@ -233,6 +243,16 @@
       "EnumValues": null,
       "Default": null,
       "HelpText": "add a control vector",
+      "Group": "common"
+    },
+    "control-vector-layer-range": {
+      "Long": "control-vector-layer-range",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "layer range to apply the control vector(s) to, start and end inclusive",
       "Group": "common"
     },
     "control-vector-scaled": {
@@ -374,6 +394,16 @@
       "Default": null,
       "HelpText": "comma-separated list of devices to use for offloading the draft model",
       "Group": "example-specific"
+    },
+    "docker-repo": {
+      "Long": "docker-repo",
+      "Short": "dr",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Docker Hub model repository. repo is optional, default to ai/. quant",
+      "Group": "common"
     },
     "draft-n": {
       "Long": "draft-n",
@@ -656,6 +686,36 @@
       "EnumValues": null,
       "Default": "unused",
       "HelpText": "Hugging Face model file for the vocoder model (default: unused)",
+      "Group": "common"
+    },
+    "hf-repo": {
+      "Long": "hf-repo",
+      "Short": "hf",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Hugging Face model repository; quant is optional, case-insensitive,",
+      "Group": "common"
+    },
+    "hf-repo-draft": {
+      "Long": "hf-repo-draft",
+      "Short": "hfd",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "unused",
+      "HelpText": "Same as --hf-repo, but for the draft model (default: unused)",
+      "Group": "common"
+    },
+    "hf-repo-v": {
+      "Long": "hf-repo-v",
+      "Short": "hfv",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "unused",
+      "HelpText": "Hugging Face model repository for the vocoder model (default: unused)",
       "Group": "common"
     },
     "hf-token": {
@@ -1151,6 +1211,18 @@
       "HelpText": "max. number of layers to store in VRAM (default: -1)",
       "Group": "common"
     },
+    "n-gpu-layers-draft": {
+      "Long": "n-gpu-layers-draft",
+      "Short": "ngld",
+      "Aliases": [
+        "gpu-layers-draft"
+      ],
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "number of layers to store in VRAM for the draft model",
+      "Group": "example-specific"
+    },
     "n-predict": {
       "Long": "n-predict",
       "Short": "n",
@@ -1171,16 +1243,6 @@
       "EnumValues": null,
       "Default": null,
       "HelpText": "bypass host buffer allowing extra buffers to be used",
-      "Group": "common"
-    },
-    "no-mmproj": {
-      "Long": "no-mmproj",
-      "Short": "",
-      "Aliases": null,
-      "Type": 0,
-      "EnumValues": null,
-      "Default": null,
-      "HelpText": "example: unsloth/phi-4-GGUF:q4_k_m",
       "Group": "common"
     },
     "numa": {
@@ -1224,6 +1286,26 @@
       "Default": null,
       "HelpText": "advanced option to override model metadata by key. may be specified",
       "Group": "common"
+    },
+    "override-tensor": {
+      "Long": "override-tensor",
+      "Short": "ot",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "override tensor buffer type",
+      "Group": "common"
+    },
+    "override-tensor-draft": {
+      "Long": "override-tensor-draft",
+      "Short": "otd",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "override tensor buffer type for draft model",
+      "Group": "example-specific"
     },
     "parallel": {
       "Long": "parallel",
@@ -1483,6 +1565,18 @@
       "HelpText": "comma separated list of RPC servers",
       "Group": "common"
     },
+    "sampler-seq": {
+      "Long": "sampler-seq",
+      "Short": "",
+      "Aliases": [
+        "sampling-seq"
+      ],
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "simplified sequence for samplers that will be used (default:",
+      "Group": "sampling"
+    },
     "samplers": {
       "Long": "samplers",
       "Short": "",
@@ -1502,6 +1596,16 @@
       "Default": "-1",
       "HelpText": "RNG seed (default: -1, use random seed for -1)",
       "Group": "sampling"
+    },
+    "slot-prompt-similarity": {
+      "Long": "slot-prompt-similarity",
+      "Short": "sps",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "how much the prompt of a request must match the prompt of a slot in",
+      "Group": "example-specific"
     },
     "slot-save-path": {
       "Long": "slot-save-path",
@@ -1587,6 +1691,18 @@
       "EnumValues": null,
       "Default": null,
       "HelpText": "path to file a PEM-encoded SSL private key",
+      "Group": "example-specific"
+    },
+    "swa-checkpoints": {
+      "Long": "swa-checkpoints",
+      "Short": "",
+      "Aliases": [
+        "ctx-checkpoints"
+      ],
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 8,
+      "HelpText": "max number of context checkpoints to create per slot (default: 8)",
       "Group": "example-specific"
     },
     "swa-full": {

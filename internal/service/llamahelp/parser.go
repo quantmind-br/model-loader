@@ -43,7 +43,7 @@ func ParseHelp(data []byte) (domain.FlagSchema, error) {
 			continue
 		}
 		spec, ok := parseFlagLine(line)
-		if !ok && isAliasOnlyLine(line) {
+		if !ok && isFlagDefLine(line) {
 			for j := i + 1; j < len(lines); j++ {
 				next := strings.TrimSpace(lines[j])
 				if next == "" {
@@ -65,20 +65,15 @@ func ParseHelp(data []byte) (domain.FlagSchema, error) {
 	return schema, nil
 }
 
-// isAliasOnlyLine reports whether the line consists of nothing but flag aliases
-// (every whitespace-delimited token starts with '-'). Used to detect help-text
-// entries whose description lives on a continuation line.
-func isAliasOnlyLine(line string) bool {
-	fields := strings.Fields(line)
-	if len(fields) == 0 {
-		return false
-	}
-	for _, f := range fields {
-		if !strings.HasPrefix(f, "-") {
-			return false
-		}
-	}
-	return true
+// isFlagDefLine reports whether the line begins a flag definition: a token at
+// column 0 starting with '-'. Such a line is a flag whose description (if any)
+// lives on the following continuation line — description and wrapped lines are
+// always indented, so they never start at column 0. This covers multi-alias
+// lines ending in a placeholder ("--threads-draft N") and inline value lists
+// ("--spec-type none,draft-simple,...") that the older alias-only heuristic
+// dropped because their trailing token does not start with '-'.
+func isFlagDefLine(line string) bool {
+	return strings.HasPrefix(line, "-")
 }
 
 var sectionHeaderRe = regexp.MustCompile(`^-{5}\s+(.+?)\s+params\s+-{5}$`)

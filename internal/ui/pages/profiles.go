@@ -282,5 +282,7 @@ func (p ProfilesPage) renderLaunchStatus() string {
 		}
 		return theme.Subtitle.Render(statusLine)
 	}
-	return p.flash.View()
+	// The flash is already rendered once in View(); returning it here too
+	// double-printed every success/error message (e.g. "deleted X" twice).
+	return ""
 }

@@ -88,9 +88,20 @@ func (s *FSStore) Get(id string) (domain.Profile, error) {
 	if err := json.Unmarshal(data, &p); err != nil {
 		return domain.Profile{}, fmt.Errorf("%w: %v", ErrInvalidJSON, err)
 	}
+	// The filename is the authoritative storage key: List enumerates by it,
+	// path() rebuilds it, and Save/Delete address files by p.ID. A profile
+	// whose JSON "id" field diverges from its filename (a manual copy or an
+	// older import) would otherwise be reported under the content id and could
+	// never be deleted/edited — Delete(contentID) targets dir/contentID.json,
+	// a different file. Force the reported id to match the filename so every
+	// store operation round-trips to the same file.
+	idChanged := p.ID != id
+	p.ID = id
 	oldVersion := p.SchemaVersion
 	MigrateProfile(&p)
-	if p.SchemaVersion != oldVersion {
+	// Persist back when either the id was healed or a migration bumped the
+	// schema version, so the divergence/old version doesn't resurface.
+	if idChanged || p.SchemaVersion != oldVersion {
 		_ = s.Save(p)
 	}
 	return p, nil

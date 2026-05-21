@@ -164,6 +164,81 @@ func TestFSStore_Delete(t *testing.T) {
 	}
 }
 
+// TestFSStore_FilenameIsAuthoritativeForID reproduces the delete-never-works
+// bug: when a profile file's name diverges from the "id" embedded in its JSON
+// (e.g. a manual copy / old import), the store must report the FILENAME-derived
+// id from List/Get so that Delete(reportedID) -> os.Remove(dir/reportedID.json)
+// hits the real file. Before the fix, List reported the content id, Delete
+// removed the wrong (or non-existent) file, and the profile could never be
+// deleted through the UI.
+func TestFSStore_FilenameIsAuthoritativeForID(t *testing.T) {
+	s, dir := newStore(t)
+	// File named "actual-file.json" but content claims id "other-id".
+	raw := []byte(`{"id":"other-id","name":"Mismatch","schema_version":3,"model":"/m.gguf"}`)
+	if err := os.WriteFile(filepath.Join(dir, "actual-file.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	profiles, err := s.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(profiles) != 1 {
+		t.Fatalf("List len = %d, want 1", len(profiles))
+	}
+	if profiles[0].ID != "actual-file" {
+		t.Fatalf("reported ID = %q, want filename-derived %q", profiles[0].ID, "actual-file")
+	}
+
+	// Deleting via the id the store reported must remove the real file.
+	if err := s.Delete(profiles[0].ID); err != nil {
+		t.Fatalf("Delete(%q): %v", profiles[0].ID, err)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "actual-file.json")); !os.IsNotExist(statErr) {
+		t.Errorf("file still present after delete: stat err = %v", statErr)
+	}
+}
+
+// TestFSStore_DuplicateIDsAcrossFilesAreIndependentlyDeletable covers the
+// exact production scenario: two files share the same content id but have
+// distinct filenames. Each must be addressable and deletable on its own.
+func TestFSStore_DuplicateIDsAcrossFilesAreIndependentlyDeletable(t *testing.T) {
+	s, dir := newStore(t)
+	body := `{"id":"dup","name":"Dup","schema_version":3,"model":"/m.gguf"}`
+	if err := os.WriteFile(filepath.Join(dir, "dup.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "dup-copy.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	profiles, err := s.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(profiles) != 2 {
+		t.Fatalf("List len = %d, want 2", len(profiles))
+	}
+
+	// The two list entries must report DISTINCT ids (their filenames) so the
+	// UI can target each independently. Before the fix both reported "dup".
+	ids := map[string]bool{profiles[0].ID: true, profiles[1].ID: true}
+	if len(ids) != 2 || !ids["dup"] || !ids["dup-copy"] {
+		t.Fatalf("reported ids = %v, want distinct {dup, dup-copy}", ids)
+	}
+
+	// Deleting by the reported id removes exactly that file, leaving the other.
+	if err := s.Delete("dup-copy"); err != nil {
+		t.Fatalf("Delete(dup-copy): %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "dup-copy.json")); !os.IsNotExist(statErr) {
+		t.Errorf("dup-copy.json still present after delete")
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "dup.json")); statErr != nil {
+		t.Errorf("dup.json wrongly removed: %v", statErr)
+	}
+}
+
 func TestFSStore_Duplicate(t *testing.T) {
 	s, _ := newStore(t)
 	if err := s.Save(sampleProfile("orig", "Original")); err != nil {

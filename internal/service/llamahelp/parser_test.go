@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
@@ -321,6 +322,72 @@ func TestParseHelp_SmokeOnFixture(t *testing.T) {
 	if spec, ok := schema.Flags["ctx-size"]; ok && spec.Group != "common" {
 		t.Errorf("ctx-size group=%q, want %q", spec.Group, "common")
 	}
+}
+
+// TestParseHelp_WrappedFlagDescription covers flag-definition lines whose
+// description wraps onto the next line. Two shapes regressed: a multi-alias
+// line ending in a placeholder token ("... N") and a flag whose value list is
+// rendered inline ("--spec-type none,draft-simple,..."). Both previously failed
+// the alias-only continuation gate and were dropped from the schema entirely.
+func TestParseHelp_WrappedFlagDescription(t *testing.T) {
+	in := `----- speculative params -----
+
+--spec-draft-threads, -td, --threads-draft N
+                                        number of threads to use during generation (default: same as
+                                        --threads)
+--spec-type none,draft-simple,draft-eagle3
+                                        comma-separated list of types of speculative decoding to use (default:
+                                        none)
+                                        (env: LLAMA_ARG_SPEC_TYPE)
+`
+	schema, err := ParseHelp([]byte(in))
+	if err != nil {
+		t.Fatalf("ParseHelp: %v", err)
+	}
+
+	// Canonical key is the last long alias ("threads-draft"); "spec-draft-threads"
+	// rides along as an alias. The flag must no longer be dropped entirely.
+	td, ok := schema.Flags["threads-draft"]
+	if !ok {
+		t.Fatalf("wrapped multi-alias flag missing from schema (keys: %v)", flagKeys(schema))
+	}
+	if td.Short != "td" {
+		t.Errorf("threads-draft short=%q, want %q", td.Short, "td")
+	}
+	if td.Type != domain.FlagTypeInt {
+		t.Errorf("threads-draft type=%v, want int", td.Type)
+	}
+	if !strings.HasPrefix(td.HelpText, "number of threads") {
+		t.Errorf("threads-draft help=%q, want prefix %q", td.HelpText, "number of threads")
+	}
+	if !contains(td.Aliases, "spec-draft-threads") {
+		t.Errorf("threads-draft aliases=%v, want to include spec-draft-threads", td.Aliases)
+	}
+
+	st, ok := schema.Flags["spec-type"]
+	if !ok {
+		t.Fatalf("spec-type missing from schema")
+	}
+	if !strings.HasPrefix(st.HelpText, "comma-separated list") {
+		t.Errorf("spec-type help=%q, want prefix %q", st.HelpText, "comma-separated list")
+	}
+}
+
+func flagKeys(s domain.FlagSchema) []string {
+	keys := make([]string, 0, len(s.Flags))
+	for k := range s.Flags {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func contains(ss []string, want string) bool {
+	for _, s := range ss {
+		if s == want {
+			return true
+		}
+	}
+	return false
 }
 
 // TestGenerateGolden runs only with -update flag; commits the parsed schema
