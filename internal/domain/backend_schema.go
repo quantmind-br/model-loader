@@ -58,3 +58,17 @@ func FlagSchemaToBackend(fs FlagSchema, kind BackendKind, backendID string, src 
 		Flags:         fs.Flags,
 	}
 }
+
+// Presentation is the editable per-backend UI layout for the config web GUI.
+// It controls which flags are shown, in what groups, and in what order. The
+// first group with Highlighted=true renders at the top as "Essentials".
+type Presentation struct {
+	Groups []PresentationGroup `json:"groups"`
+}
+
+// PresentationGroup is an ordered set of flags rendered together.
+type PresentationGroup struct {
+	Name        string   `json:"name"`
+	Highlighted bool     `json:"highlighted,omitempty"`
+	Flags       []string `json:"flags"` // ordered flag long-names
+}
