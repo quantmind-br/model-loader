@@ -34,7 +34,9 @@ type BenchmarkConfig struct {
 // LlamaBenchConfig tunes the throughput (llama-bench) scoring mode. Empty values
 // fall back to engine defaults (presets 512/128 + 4096/256, 3 repetitions).
 type LlamaBenchConfig struct {
-	Presets     []string `mapstructure:"presets"`     // "pp/tg" pairs, e.g. ["512/128","4096/256"]
+	// Presets are "pp/tg" pairs, e.g. ["128/512","512/128","2048/256","4096/256","8192/128","16384/64"].
+	// Keep in sync with benchmark.defaultPresets in runner.go.
+	Presets     []string `mapstructure:"presets"`
 	Repetitions int      `mapstructure:"repetitions"` // measurements per preset; 0 → 3
 	Warmup      int      `mapstructure:"warmup"`      // discarded warmup reps before measurement; <0 → 1; 0 disables
 }

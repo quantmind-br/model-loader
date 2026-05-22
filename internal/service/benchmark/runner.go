@@ -52,6 +52,7 @@ type tpPreset struct {
 func (p tpPreset) name() string { return fmt.Sprintf("pp %d / tg %d", p.PromptTokens, p.GenTokens) }
 func (p tpPreset) id() string   { return fmt.Sprintf("tp-%d-%d", p.PromptTokens, p.GenTokens) }
 
+// defaultPresets must stay in sync with the benchmark.llamabench.presets default in internal/config/config.go.
 var defaultPresets = []tpPreset{
 	{PromptTokens: 128, GenTokens: 512}, // chat-like: short prefill, long gen
 	{PromptTokens: 512, GenTokens: 128},
