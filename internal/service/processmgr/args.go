@@ -33,6 +33,8 @@ func BuildArgsForBackend(p domain.Profile, kind domain.BackendKind, executable s
 		return buildVLLMArgs(p, executable), nil
 	case domain.BackendKindDFlash:
 		return buildDFlashArgs(p), nil
+	case domain.BackendKindBuunLlamaCpp:
+		return buildLlamaArgs(p), nil
 	default:
 		return nil, fmt.Errorf("unsupported backend kind for arg building: %s", kind)
 	}
