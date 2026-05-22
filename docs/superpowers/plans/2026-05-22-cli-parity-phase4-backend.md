@@ -1,5 +1,20 @@
 # CLI Parity Phase 4 — `backend` Command Tree Implementation Plan
 
+> **STATUS: ✅ COMPLETE (2026-05-22)** — All 8 tasks implemented via subagent-driven-development (TDD + per-task spec & quality review + final holistic review "Ready to merge"). Verified at integration: `go build ./...` clean, `go vet ./...` clean, `go test ./...` = 991 passed across 43 packages.
+>
+> | Task | Commit |
+> |------|--------|
+> | 1 — Extract `RegisterDefaults`, rewire bootstrap | `4e4ce21` |
+> | 2 — `backend` parent + builders + `resolveBackend` | `db5fbc2` |
+> | 3 — `backend list` | `549298f` |
+> | 4 — `backend show` | `52a1407` |
+> | 5 — `backend probe` | `13477d6` |
+> | 6 — `backend schema show` | `8350a82` |
+> | 7 — `backend schema refresh` + `apply` | `80e0d84` |
+> | 8 — full command-tree integration test | `5e7da30` |
+>
+> Commits live on `feat/benchmark-engine-expansion` (intermixed with a concurrent benchmark effort); a unified merge is owned by the maintainer. Caveat: `feat/backend-definitions` is a conflicting registry-only rewrite that removes the schema store/generators/llamahelp this CLI depends on — if it lands, `backend schema {show,refresh,apply}` must be readapted.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a cobra `backend` command tree to the CLI — `backend list`, `backend show <id>`, `backend probe [id]`, and a `backend schema` subtree (`schema show <id>`, `schema refresh <id>`, `schema apply <id> -f <file>`) — exposing the backend catalog / schema services headlessly and scriptably.
