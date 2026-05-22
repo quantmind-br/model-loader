@@ -1,0 +1,65 @@
+{{define "backend"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{if .Draft.Name}}{{.Draft.Name}}{{else}}New Backend{{end}} · model-loader</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js"></script>
+<script defer src="/static/alpine.min.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="title">{{if .Draft.Name}}{{.Draft.Name}}{{else}}New Backend{{end}} <span class="muted">· backend</span></div>
+  <div class="actions">
+    <button class="ghost" hx-post="/backend/cancel">Cancel</button>
+    <button class="primary" form="backend-form" hx-post="/backend/save" hx-target="#issues">Save</button>
+  </div>
+</header>
+<main class="layout">
+  <section class="content">
+    <form id="backend-form" hx-post="/backend/validate" hx-trigger="input changed delay:300ms" hx-target="#issues">
+      <input type="hidden" name="id" value="{{.Draft.ID}}">
+      <input type="hidden" name="origId" value="{{.Draft.OrigID}}">
+      <input type="hidden" name="isNew" value="{{if .Draft.IsNew}}true{{else}}false{{end}}">
+
+      <div class="top-fields">
+        <div class="field">
+          <label>Name <span class="req">*</span></label>
+          <input name="name" value="{{.Draft.Name}}" placeholder="backend name" required>
+        </div>
+        {{if .IsNew}}
+        <div class="field">
+          <label>Kind <span class="req">*</span></label>
+          <select name="kind" required>
+            {{range .Kinds}}
+            <option value="{{.}}"{{if eq . $.Draft.Kind}} selected{{end}}>{{.}}</option>
+            {{end}}
+          </select>
+        </div>
+        {{else}}
+        <input type="hidden" name="kind" value="{{.Draft.Kind}}">
+        <div class="field">
+          <label>Kind</label>
+          <input value="{{.Draft.Kind}}" disabled readonly>
+        </div>
+        {{end}}
+        <div class="field">
+          <label>Executable <span class="req">*</span></label>
+          <input name="executable" value="{{.Draft.Executable}}" placeholder="path to executable" required>
+        </div>
+        <div class="field">
+          <label>Description</label>
+          <input name="description" value="{{.Draft.Description}}" placeholder="short description">
+        </div>
+        <div class="field">
+          <label>Tags</label>
+          <input name="tags" value="{{range $i, $t := .Draft.Tags}}{{if $i}}, {{end}}{{$t}}{{end}}" placeholder="comma-separated tags">
+        </div>
+      </div>
+    </form>
+  </section>
+</main>
+<footer class="statusbar"><div id="issues"><span class="ok">✓ valid</span></div></footer>
+</body>
+</html>{{end}}
