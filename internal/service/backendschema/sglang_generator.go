@@ -1,27 +1,39 @@
 package backendschema
 
 import (
+	"fmt"
+
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
-	"github.com/quantmind-br/model-loader/internal/service/llamabin"
-	"github.com/quantmind-br/model-loader/internal/service/sglanghelp"
 )
 
-// SGLangGenerator generates schemas from the embedded sglang flag catalog.
-// Unlike llama-server, sglang is a Python module whose --help output is not
-// stable enough to parse at runtime, so we use a hand-curated embedded schema.
+// SGLangGenerator generates schemas from the hand-curated sglang serve flag catalog.
 type SGLangGenerator struct {
-	*embeddedGenerator
+	schemaStore backendcatalog.SchemaStore
 }
 
 // NewSGLangGenerator returns a generator that writes schemas to store.
 func NewSGLangGenerator(schemaStore backendcatalog.SchemaStore) *SGLangGenerator {
-	return &SGLangGenerator{
-		embeddedGenerator: &embeddedGenerator{
-			kind:        domain.BackendKindSGLang,
-			schemaFn:    sglanghelp.EmbeddedSchema,
-			schemaStore: schemaStore,
-			resolveFn:   llamabin.ResolveCommandWithPythonFallback,
-		},
+	return &SGLangGenerator{schemaStore: schemaStore}
+}
+
+// Generate returns the hand-curated sglang serve schema without runtime --help parsing.
+// If the existing schema has source.editable=true, generation is skipped to preserve manual edits.
+func (g *SGLangGenerator) Generate(backend domain.Backend) (domain.BackendValidationSchema, error) {
+	if backend.Kind != domain.BackendKindSGLang {
+		return domain.BackendValidationSchema{}, fmt.Errorf("unsupported backend kind: %s", backend.Kind)
 	}
+
+	ref := schemaStoreRef(backend.SchemaRef)
+	existing, err := g.schemaStore.Load(ref)
+	if err == nil && existing.Source.Editable {
+		return existing, nil
+	}
+
+	schema := CuratedSGLangSchema()
+	schema.BackendID = backend.ID
+	if err := g.schemaStore.Save(ref, schema); err != nil {
+		return domain.BackendValidationSchema{}, fmt.Errorf("save schema: %w", err)
+	}
+	return schema, nil
 }
