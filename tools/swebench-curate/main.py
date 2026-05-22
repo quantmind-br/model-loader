@@ -22,6 +22,7 @@ import requests
 from datasets import load_dataset
 
 SEED = 20260522
+DATASET_REVISION = "main"  # pin to a tag/commit for a frozen snapshot; "main" tracks latest
 DIFF_PATH_RE = re.compile(r"^\+\+\+ b/(.+)$", re.MULTILINE)
 
 
@@ -31,7 +32,10 @@ def touched_files(patch: str) -> list:
 
 def fetch_raw(repo: str, commit: str, path: str):
     url = f"https://raw.githubusercontent.com/{repo}/{commit}/{path}"
-    r = requests.get(url, timeout=30)
+    try:
+        r = requests.get(url, timeout=30, headers={"User-Agent": "model-loader-swebench-curate"})
+    except requests.RequestException:
+        return None
     return r.text if r.status_code == 200 else None
 
 
@@ -53,7 +57,8 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
-    ds = load_dataset("princeton-nlp/SWE-bench_Lite", split="test")
+    # Pin revision here to a specific commit/tag to freeze the selection; "main" tracks latest.
+    ds = load_dataset("princeton-nlp/SWE-bench_Lite", split="test", revision=DATASET_REVISION)
     by_repo = defaultdict(list)
     for row in ds:
         by_repo[row["repo"]].append(row)
