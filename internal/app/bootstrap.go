@@ -100,11 +100,7 @@ func Bootstrap(cliLevel string) (*Services, error) {
 	schemaStore := backendcatalog.NewFSSchemaStore(cfg.Paths.BackendsDir)
 
 	schemaManager := backendschema.NewManager(catalogStore, schemaStore)
-	schemaManager.Register(domain.BackendKindLlamaServer, backendschema.NewLlamaServerGenerator(schemaStore))
-	schemaManager.Register(domain.BackendKindSGLang, backendschema.NewSGLangGenerator(schemaStore))
-	schemaManager.Register(domain.BackendKindVLLM, backendschema.NewVLLMGenerator(schemaStore))
-	schemaManager.Register(domain.BackendKindDFlash, backendschema.NewDFlashGenerator(schemaStore))
-	schemaManager.Register(domain.BackendKindBuunLlamaCpp, backendschema.NewBuunServerGenerator(schemaStore))
+	backendschema.RegisterDefaults(schemaManager, schemaStore)
 
 	migrator := migration.NewService(cfg, store, catalogStore, schemaStore, schemaManager)
 	migReport, mErr := migrator.Run(context.Background())
