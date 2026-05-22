@@ -96,6 +96,7 @@ func bootstrap(cliLevel string) (cfg config.AppConfig, logger *slog.Logger, clos
 	schemaManager.Register(domain.BackendKindSGLang, backendschema.NewSGLangGenerator(schemaStore))
 	schemaManager.Register(domain.BackendKindVLLM, backendschema.NewVLLMGenerator(schemaStore))
 	schemaManager.Register(domain.BackendKindDFlash, backendschema.NewDFlashGenerator(schemaStore))
+	schemaManager.Register(domain.BackendKindBuunLlamaCpp, backendschema.NewBuunServerGenerator(schemaStore))
 
 	migrator := migration.NewService(cfg, store, catalogStore, schemaStore, schemaManager)
 	migReport, mErr := migrator.Run(context.Background())
