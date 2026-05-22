@@ -3,28 +3,28 @@ package backendschema
 import "github.com/quantmind-br/model-loader/internal/domain"
 
 const (
-	buunGroupEssentials  = "Essenciais"
-	buunGroupModelLoad   = "1. Carregamento do modelo"
-	buunGroupContext     = "2. Contexto e geração"
-	buunGroupCPU         = "3. Threads e CPU"
-	buunGroupMemory      = "4. Memória e I-O"
-	buunGroupDevice      = "5. Dispositivos e GPU"
-	buunGroupKV          = "6. KV cache"
-	buunGroupRope        = "7. RoPE e YaRN"
-	buunGroupShift       = "8. Context shift e SWA"
-	buunGroupCacheRAM    = "9. Cache RAM, slots e KV unificado"
-	buunGroupSamplers    = "10. Samplers e amostragem"
-	buunGroupPenalties   = "11. Penalidades e técnicas avançadas de sampling"
-	buunGroupGrammar     = "12. Gramática e schema"
-	buunGroupChat        = "13. Chat template, Jinja e reasoning"
-	buunGroupHTTP        = "14. Servidor HTTP"
-	buunGroupMultimodal  = "15. Multimodal (vision)"
-	buunGroupRouter      = "16. Router server (multi-modelo)"
-	buunGroupTools       = "17. Tools de agente embutidas"
-	buunGroupEmbeddings  = "18. Embeddings e reranking"
-	buunGroupLora        = "19. LoRA e control vectors"
-	buunGroupSpeculative = "20. Speculative decoding"
-	buunGroupTTS         = "21. TTS e vocoder"
+	buunGroupEssentials  = "Essentials"
+	buunGroupModelLoad   = "1. Model Loading"
+	buunGroupContext     = "2. Context and Generation"
+	buunGroupCPU         = "3. Threads and CPU"
+	buunGroupMemory      = "4. Memory and I/O"
+	buunGroupDevice      = "5. Devices and GPU"
+	buunGroupKV          = "6. KV Cache"
+	buunGroupRope        = "7. RoPE and YaRN"
+	buunGroupShift       = "8. Context Shift and SWA"
+	buunGroupCacheRAM    = "9. RAM Cache, Slots, and Unified KV"
+	buunGroupSamplers    = "10. Samplers and Sampling"
+	buunGroupPenalties   = "11. Penalties and Advanced Sampling Techniques"
+	buunGroupGrammar     = "12. Grammar and Schema"
+	buunGroupChat        = "13. Chat Template, Jinja, and Reasoning"
+	buunGroupHTTP        = "14. HTTP Server"
+	buunGroupMultimodal  = "15. Multimodal (Vision)"
+	buunGroupRouter      = "16. Router Server (Multi-Model)"
+	buunGroupTools       = "17. Built-in Agent Tools"
+	buunGroupEmbeddings  = "18. Embeddings and Reranking"
+	buunGroupLora        = "19. LoRA and Control Vectors"
+	buunGroupSpeculative = "20. Speculative Decoding"
+	buunGroupTTS         = "21. TTS and Vocoder"
 )
 
 // CuratedBuunSchema returns the hand-curated buun-llama-cpp schema. The fork is
@@ -37,184 +37,184 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 	}
 
 	for _, spec := range []domain.FlagSpec{
-		strFlag("hf-repo", "hf", nil, nil, "Baixa/carrega um modelo direto do Hugging Face; o quant é opcional.", buunGroupModelLoad, false),
-		strFlag("hf-file", "hff", nil, nil, "Arquivo específico dentro do repositório HF, sobrescrevendo o quant automático.", buunGroupModelLoad, false),
-		strFlag("hf-token", "", nil, nil, "Token de autenticação do Hugging Face para repositórios privados.", buunGroupModelLoad, false),
-		strFlag("model-url", "mu", nil, nil, "URL de download do modelo.", buunGroupModelLoad, false),
-		strFlag("docker-repo", "", nil, nil, "Repositório Docker usado por fluxos integrados da fork buun.", buunGroupModelLoad, false),
-		boolFlag("offline", "", nil, false, "Força modo offline usando apenas o cache local, sem rede.", buunGroupModelLoad),
+		strFlag("hf-repo", "hf", nil, nil, "Downloads/loads a model directly from Hugging Face; quant is optional.", buunGroupModelLoad, false),
+		strFlag("hf-file", "hff", nil, nil, "Specific file inside the HF repository, overriding automatic quant selection.", buunGroupModelLoad, false),
+		strFlag("hf-token", "", nil, nil, "Hugging Face authentication token for private repositories.", buunGroupModelLoad, false),
+		strFlag("model-url", "mu", nil, nil, "Model download URL.", buunGroupModelLoad, false),
+		strFlag("docker-repo", "", nil, nil, "Docker repository used by integrated buun fork flows.", buunGroupModelLoad, false),
+		boolFlag("offline", "", nil, false, "Forces offline mode using only local cache, with no network.", buunGroupModelLoad),
 
-		intFlag("ctx-size", "c", nil, 4096, "Tamanho da janela de contexto; 0 usa o valor carregado do modelo.", buunGroupContext, intPtr(0), nil),
-		intFlag("n-predict", "n", []string{"predict"}, -1, "Quantos tokens gerar; -1 = geração infinita.", buunGroupContext, nil, nil),
-		intFlag("batch-size", "b", nil, 2048, "Tamanho lógico máximo do batch no processamento do prompt.", buunGroupContext, intPtr(1), nil),
-		intFlag("ubatch-size", "ub", nil, 512, "Tamanho físico máximo do micro-batch (ajuste de throughput/memória).", buunGroupContext, intPtr(1), nil),
-		intFlag("keep", "", nil, 0, "Tokens iniciais do prompt a manter ao fazer shifting/reuso; -1 mantém todos.", buunGroupContext, nil, nil),
+		intFlag("ctx-size", "c", nil, 4096, "Context window size; 0 uses the value loaded from the model.", buunGroupContext, intPtr(0), nil),
+		intFlag("n-predict", "n", []string{"predict"}, -1, "Number of tokens to generate; -1 = infinite generation.", buunGroupContext, nil, nil),
+		intFlag("batch-size", "b", nil, 2048, "Maximum logical batch size for prompt processing.", buunGroupContext, intPtr(1), nil),
+		intFlag("ubatch-size", "ub", nil, 512, "Maximum physical micro-batch size (throughput/memory tuning).", buunGroupContext, intPtr(1), nil),
+		intFlag("keep", "", nil, 0, "Initial prompt tokens to keep during shifting/reuse; -1 keeps all.", buunGroupContext, nil, nil),
 
-		intFlag("threads", "t", nil, nil, "Threads de CPU usadas na geração.", buunGroupCPU, intPtr(0), nil),
-		intFlag("threads-batch", "tb", nil, nil, "Threads no processamento de batch/prefill; herda --threads por padrão.", buunGroupCPU, intPtr(0), nil),
-		intFlag("poll", "", nil, 50, "Nível de polling ao esperar trabalho; 0 desliga.", buunGroupCPU, intPtr(0), intPtr(100)),
-		enumFlag("prio", "", nil, []string{"-1", "0", "1", "2", "3"}, 0, "Prioridade do processo/thread: low, normal, medium, high, realtime.", buunGroupCPU),
-		enumFlag("numa", "", nil, []string{"distribute", "isolate", "numactl"}, nil, "Otimizações para máquinas NUMA.", buunGroupCPU),
+		intFlag("threads", "t", nil, nil, "CPU threads used for generation.", buunGroupCPU, intPtr(0), nil),
+		intFlag("threads-batch", "tb", nil, nil, "Threads for batch/prefill processing; inherits --threads by default.", buunGroupCPU, intPtr(0), nil),
+		intFlag("poll", "", nil, 50, "Polling level while waiting for work; 0 disables it.", buunGroupCPU, intPtr(0), intPtr(100)),
+		enumFlag("prio", "", nil, []string{"-1", "0", "1", "2", "3"}, 0, "Process/thread priority: low, normal, medium, high, realtime.", buunGroupCPU),
+		enumFlag("numa", "", nil, []string{"distribute", "isolate", "numactl"}, nil, "Optimizations for NUMA machines.", buunGroupCPU),
 
-		boolFlag("mlock", "", nil, false, "Mantém o modelo em RAM, evitando swap.", buunGroupMemory),
-		boolFlag("mmap", "", []string{"no-mmap"}, true, "Memory mapping do modelo; desligar pode reduzir pageouts, mas torna o load mais lento.", buunGroupMemory),
-		boolFlag("direct-io", "dio", []string{"no-direct-io"}, false, "Usa Direct I/O quando disponível.", buunGroupMemory),
-		boolFlag("repack", "", []string{"no-repack"}, true, "Liga/desliga repacking dos pesos.", buunGroupMemory),
-		boolFlag("op-offload", "", []string{"no-op-offload"}, true, "Offload de operações de tensores do host para o device.", buunGroupMemory),
-		boolFlag("no-host", "", nil, false, "Bypassa o host buffer para permitir buffers extras.", buunGroupMemory),
-		boolFlag("check-tensors", "", nil, false, "Verifica tensores do modelo em busca de valores inválidos.", buunGroupMemory),
+		boolFlag("mlock", "", nil, false, "Keeps the model in RAM, avoiding swap.", buunGroupMemory),
+		boolFlag("mmap", "", []string{"no-mmap"}, true, "Model memory mapping; disabling it may reduce pageouts but makes loading slower.", buunGroupMemory),
+		boolFlag("direct-io", "dio", []string{"no-direct-io"}, false, "Uses Direct I/O when available.", buunGroupMemory),
+		boolFlag("repack", "", []string{"no-repack"}, true, "Enables/disables weight repacking.", buunGroupMemory),
+		boolFlag("op-offload", "", []string{"no-op-offload"}, true, "Offloads tensor operations from host to device.", buunGroupMemory),
+		boolFlag("no-host", "", nil, false, "Bypasses the host buffer to allow extra buffers.", buunGroupMemory),
+		boolFlag("check-tensors", "", nil, false, "Checks model tensors for invalid values.", buunGroupMemory),
 
-		strFlag("device", "dev", nil, nil, "Seleciona os dispositivos usados para offload.", buunGroupDevice, false),
-		boolFlag("list-devices", "", nil, false, "Lista os dispositivos disponíveis e sai.", buunGroupDevice),
-		strFlag("n-gpu-layers", "ngl", []string{"gpu-layers"}, 0, "Quantas camadas do modelo vão para a VRAM; aceita inteiro, auto ou all.", buunGroupDevice, false),
-		enumFlag("split-mode", "sm", nil, []string{"none", "layer", "row", "tensor"}, "layer", "Como dividir o modelo entre múltiplas GPUs.", buunGroupDevice),
-		strFlag("tensor-split", "ts", nil, nil, "Proporção de offload entre GPUs (ex.: 3,1).", buunGroupDevice, false),
-		intFlag("main-gpu", "mg", nil, 0, "GPU principal para o modelo/resultados intermediários (depende do split mode).", buunGroupDevice, intPtr(0), nil),
-		enumFlag("fit", "fit", nil, []string{"on", "off"}, "on", "Ajusta parâmetros não definidos para caber na memória do dispositivo.", buunGroupDevice),
-		strFlag("fit-target", "fitt", nil, nil, "Margem alvo de memória por dispositivo usada por --fit.", buunGroupDevice, false),
-		intFlag("fit-ctx", "fitc", nil, nil, "Contexto mínimo que --fit pode configurar.", buunGroupDevice, intPtr(0), nil),
+		strFlag("device", "dev", nil, nil, "Selects the devices used for offload.", buunGroupDevice, false),
+		boolFlag("list-devices", "", nil, false, "Lists available devices and exits.", buunGroupDevice),
+		strFlag("n-gpu-layers", "ngl", []string{"gpu-layers"}, 0, "Number of model layers moved to VRAM; accepts integer, auto, or all.", buunGroupDevice, false),
+		enumFlag("split-mode", "sm", nil, []string{"none", "layer", "row", "tensor"}, "layer", "How to split the model across multiple GPUs.", buunGroupDevice),
+		strFlag("tensor-split", "ts", nil, nil, "Offload ratio across GPUs (e.g. 3,1).", buunGroupDevice, false),
+		intFlag("main-gpu", "mg", nil, 0, "Main GPU for the model/intermediate results (depends on split mode).", buunGroupDevice, intPtr(0), nil),
+		enumFlag("fit", "fit", nil, []string{"on", "off"}, "on", "Adjusts unset parameters to fit device memory.", buunGroupDevice),
+		strFlag("fit-target", "fitt", nil, nil, "Target memory margin per device used by --fit.", buunGroupDevice, false),
+		intFlag("fit-ctx", "fitc", nil, nil, "Minimum context that --fit may configure.", buunGroupDevice, intPtr(0), nil),
 
-		boolFlag("kv-offload", "kvo", []string{"no-kv-offload"}, true, "Controla o offload do KV cache.", buunGroupKV),
-		enumFlag("cache-type-k", "ctk", nil, buunCacheTypes(), "f16", "Tipo de dado do cache K, incluindo formatos turbo da fork buun.", buunGroupKV),
-		enumFlag("cache-type-v", "ctv", nil, buunCacheTypes(), "f16", "Tipo de dado do cache V, incluindo formatos turbo da fork buun.", buunGroupKV),
+		boolFlag("kv-offload", "kvo", []string{"no-kv-offload"}, true, "Controls KV cache offload.", buunGroupKV),
+		enumFlag("cache-type-k", "ctk", nil, buunCacheTypes(), "f16", "K cache data type, including buun fork turbo formats.", buunGroupKV),
+		enumFlag("cache-type-v", "ctv", nil, buunCacheTypes(), "f16", "V cache data type, including buun fork turbo formats.", buunGroupKV),
 
-		enumFlag("rope-scaling", "", nil, []string{"none", "linear", "yarn"}, "none", "Método de scaling de frequência do RoPE.", buunGroupRope),
-		floatFlag("rope-scale", "", nil, nil, "Fator de expansão do contexto via RoPE.", buunGroupRope, nil, nil),
-		floatFlag("rope-freq-base", "", nil, nil, "Frequência base do RoPE (scaling NTK-aware).", buunGroupRope, nil, nil),
-		floatFlag("rope-freq-scale", "", nil, nil, "Fator de scaling da frequência; expande contexto por 1/N.", buunGroupRope, nil, nil),
-		intFlag("yarn-orig-ctx", "", nil, 0, "Contexto original do modelo para YaRN; 0 usa o de treino.", buunGroupRope, intPtr(0), nil),
-		floatFlag("yarn-ext-factor", "", nil, -1.0, "Fator de extrapolação/interpolação do YaRN.", buunGroupRope, nil, nil),
-		floatFlag("yarn-attn-factor", "", nil, 1.0, "Ajuste da magnitude da atenção no YaRN.", buunGroupRope, nil, nil),
-		floatFlag("yarn-beta-slow", "", nil, 1.0, "Parâmetro slow/high correction dim do YaRN.", buunGroupRope, nil, nil),
-		floatFlag("yarn-beta-fast", "", nil, 32.0, "Parâmetro fast/low correction dim do YaRN.", buunGroupRope, nil, nil),
+		enumFlag("rope-scaling", "", nil, []string{"none", "linear", "yarn"}, "none", "RoPE frequency scaling method.", buunGroupRope),
+		floatFlag("rope-scale", "", nil, nil, "Context expansion factor via RoPE.", buunGroupRope, nil, nil),
+		floatFlag("rope-freq-base", "", nil, nil, "RoPE base frequency (NTK-aware scaling).", buunGroupRope, nil, nil),
+		floatFlag("rope-freq-scale", "", nil, nil, "Frequency scaling factor; expands context by 1/N.", buunGroupRope, nil, nil),
+		intFlag("yarn-orig-ctx", "", nil, 0, "Original model context for YaRN; 0 uses the training value.", buunGroupRope, intPtr(0), nil),
+		floatFlag("yarn-ext-factor", "", nil, -1.0, "YaRN extrapolation/interpolation factor.", buunGroupRope, nil, nil),
+		floatFlag("yarn-attn-factor", "", nil, 1.0, "Attention magnitude adjustment in YaRN.", buunGroupRope, nil, nil),
+		floatFlag("yarn-beta-slow", "", nil, 1.0, "YaRN slow/high correction dim parameter.", buunGroupRope, nil, nil),
+		floatFlag("yarn-beta-fast", "", nil, 32.0, "YaRN fast/low correction dim parameter.", buunGroupRope, nil, nil),
 
-		boolFlag("swa-full", "", nil, false, "Usa cache SWA em tamanho completo.", buunGroupShift),
-		boolFlag("context-shift", "", []string{"no-context-shift"}, false, "Controla o context shift em geração infinita.", buunGroupShift),
+		boolFlag("swa-full", "", nil, false, "Uses full-size SWA cache.", buunGroupShift),
+		boolFlag("context-shift", "", []string{"no-context-shift"}, false, "Controls context shift during infinite generation.", buunGroupShift),
 
-		boolFlag("cache-ram", "", []string{"no-cache-ram"}, false, "Habilita cache em RAM para acelerar reuso de KV/prompt.", buunGroupCacheRAM),
-		boolFlag("kv-unified", "", []string{"no-kv-unified"}, false, "Usa KV cache unificado entre slots/modelos quando suportado.", buunGroupCacheRAM),
-		intFlag("cache-idle-slots", "", nil, nil, "Quantidade de slots ociosos mantidos em cache.", buunGroupCacheRAM, intPtr(0), nil),
-		intFlag("sleep-idle-seconds", "", nil, nil, "Tempo ocioso antes de reduzir atividade/suspender slots.", buunGroupCacheRAM, intPtr(0), nil),
+		boolFlag("cache-ram", "", []string{"no-cache-ram"}, false, "Enables RAM cache to speed up KV/prompt reuse.", buunGroupCacheRAM),
+		boolFlag("kv-unified", "", []string{"no-kv-unified"}, false, "Uses unified KV cache across slots/models when supported.", buunGroupCacheRAM),
+		intFlag("cache-idle-slots", "", nil, nil, "Number of idle slots kept in cache.", buunGroupCacheRAM, intPtr(0), nil),
+		intFlag("sleep-idle-seconds", "", nil, nil, "Idle time before reducing activity/suspending slots.", buunGroupCacheRAM, intPtr(0), nil),
 
-		strFlag("samplers", "", nil, "penalties;dry;top_n_sigma;top_k;typ_p;top_p;min_p;xtc;temperature", "Ordem dos samplers aplicados na geração.", buunGroupSamplers, false),
-		intFlag("seed", "s", nil, -1, "Seed do RNG; -1 = aleatória.", buunGroupSamplers, nil, nil),
-		floatFlag("temperature", "", []string{"temp"}, 0.8, "Temperatura da amostragem; maior = mais diversidade.", buunGroupSamplers, floatPtr(0), nil),
-		intFlag("top-k", "", nil, 40, "Mantém os k tokens mais prováveis; 0 desativa.", buunGroupSamplers, intPtr(0), nil),
-		floatFlag("top-p", "", nil, 0.9, "Nucleus sampling; 1.0 desativa.", buunGroupSamplers, floatPtr(0), floatPtr(1)),
-		floatFlag("min-p", "", nil, 0.1, "Mantém tokens acima de uma probabilidade mínima relativa.", buunGroupSamplers, floatPtr(0), floatPtr(1)),
-		floatFlag("typical-p", "", []string{"typical"}, 1.0, "Locally typical sampling; 1.0 desativa.", buunGroupSamplers, floatPtr(0), floatPtr(1)),
-		floatFlag("top-n-sigma", "", nil, -1.0, "Top-n-sigma sampling; -1.0 desativa.", buunGroupSamplers, nil, nil),
-		boolFlag("ignore-eos", "", nil, false, "Ignora o token EOS e continua gerando.", buunGroupSamplers),
-		strFlag("logit-bias", "l", nil, nil, "Aumenta/reduz a chance de tokens específicos no formato TOKEN_ID(+/-)BIAS.", buunGroupSamplers, false),
-		boolFlag("backend-sampling", "", []string{"no-backend-sampling"}, false, "Executa sampling no backend quando suportado pela fork buun.", buunGroupSamplers),
+		strFlag("samplers", "", nil, "penalties;dry;top_n_sigma;top_k;typ_p;top_p;min_p;xtc;temperature", "Order of samplers applied during generation.", buunGroupSamplers, false),
+		intFlag("seed", "s", nil, -1, "RNG seed; -1 = random.", buunGroupSamplers, nil, nil),
+		floatFlag("temperature", "", []string{"temp"}, 0.8, "Sampling temperature; higher = more diversity.", buunGroupSamplers, floatPtr(0), nil),
+		intFlag("top-k", "", nil, 40, "Keeps the k most likely tokens; 0 disables it.", buunGroupSamplers, intPtr(0), nil),
+		floatFlag("top-p", "", nil, 0.9, "Nucleus sampling; 1.0 disables it.", buunGroupSamplers, floatPtr(0), floatPtr(1)),
+		floatFlag("min-p", "", nil, 0.1, "Keeps tokens above a relative minimum probability.", buunGroupSamplers, floatPtr(0), floatPtr(1)),
+		floatFlag("typical-p", "", []string{"typical"}, 1.0, "Locally typical sampling; 1.0 disables it.", buunGroupSamplers, floatPtr(0), floatPtr(1)),
+		floatFlag("top-n-sigma", "", nil, -1.0, "Top-n-sigma sampling; -1.0 disables it.", buunGroupSamplers, nil, nil),
+		boolFlag("ignore-eos", "", nil, false, "Ignores the EOS token and continues generating.", buunGroupSamplers),
+		strFlag("logit-bias", "l", nil, nil, "Increases/decreases the chance of specific tokens in TOKEN_ID(+/-)BIAS format.", buunGroupSamplers, false),
+		boolFlag("backend-sampling", "", []string{"no-backend-sampling"}, false, "Runs sampling in the backend when supported by the buun fork.", buunGroupSamplers),
 
-		intFlag("repeat-last-n", "", nil, 64, "Tokens recentes considerados para penalidade de repetição; -1 = ctx-size.", buunGroupPenalties, nil, nil),
-		floatFlag("repeat-penalty", "", nil, 1.0, "Penalidade de repetição; 1.0 desativa.", buunGroupPenalties, nil, nil),
-		floatFlag("presence-penalty", "", nil, 0.0, "Penalidade por presença; aumenta custo de tokens já vistos.", buunGroupPenalties, nil, nil),
-		floatFlag("frequency-penalty", "", nil, 0.0, "Penalidade proporcional à frequência dos tokens já vistos.", buunGroupPenalties, nil, nil),
-		floatFlag("dry-multiplier", "", nil, 0.0, "Intensidade do DRY; 0.0 desativa.", buunGroupPenalties, floatPtr(0), nil),
-		floatFlag("dry-base", "", nil, 1.75, "Base do DRY para penalizar sequências repetitivas.", buunGroupPenalties, nil, nil),
-		intFlag("dry-allowed-length", "", nil, 2, "Comprimento tolerado antes do DRY.", buunGroupPenalties, intPtr(0), nil),
-		intFlag("dry-penalty-last-n", "", nil, -1, "Janela do DRY; -1 = contexto inteiro.", buunGroupPenalties, nil, nil),
-		strFlag("dry-sequence-breaker", "", nil, "\\n, :, \", *", "Quebras que resetam o DRY.", buunGroupPenalties, false),
-		enumFlag("mirostat", "", nil, []string{"0", "1", "2"}, 0, "Modo Mirostat; 0 desativa.", buunGroupPenalties),
+		intFlag("repeat-last-n", "", nil, 64, "Recent tokens considered for repetition penalty; -1 = ctx-size.", buunGroupPenalties, nil, nil),
+		floatFlag("repeat-penalty", "", nil, 1.0, "Repetition penalty; 1.0 disables it.", buunGroupPenalties, nil, nil),
+		floatFlag("presence-penalty", "", nil, 0.0, "Presence penalty; increases the cost of already-seen tokens.", buunGroupPenalties, nil, nil),
+		floatFlag("frequency-penalty", "", nil, 0.0, "Penalty proportional to the frequency of already-seen tokens.", buunGroupPenalties, nil, nil),
+		floatFlag("dry-multiplier", "", nil, 0.0, "DRY intensity; 0.0 disables it.", buunGroupPenalties, floatPtr(0), nil),
+		floatFlag("dry-base", "", nil, 1.75, "DRY base for penalizing repetitive sequences.", buunGroupPenalties, nil, nil),
+		intFlag("dry-allowed-length", "", nil, 2, "Tolerated length before DRY applies.", buunGroupPenalties, intPtr(0), nil),
+		intFlag("dry-penalty-last-n", "", nil, -1, "DRY window; -1 = full context.", buunGroupPenalties, nil, nil),
+		strFlag("dry-sequence-breaker", "", nil, "\\n, :, \", *", "Breaks that reset DRY.", buunGroupPenalties, false),
+		enumFlag("mirostat", "", nil, []string{"0", "1", "2"}, 0, "Mirostat mode; 0 disables it.", buunGroupPenalties),
 		floatFlag("mirostat-lr", "", nil, 0.1, "Learning rate (eta) do Mirostat.", buunGroupPenalties, nil, nil),
 		floatFlag("mirostat-ent", "", nil, 5.0, "Entropia alvo (tau) do Mirostat.", buunGroupPenalties, nil, nil),
-		floatFlag("dynatemp-range", "", nil, 0.0, "Faixa de temperatura dinâmica; 0.0 desativa.", buunGroupPenalties, floatPtr(0), nil),
-		floatFlag("dynatemp-exp", "", nil, 1.0, "Expoente da temperatura dinâmica.", buunGroupPenalties, nil, nil),
+		floatFlag("dynatemp-range", "", nil, 0.0, "Dynamic temperature range; 0.0 disables it.", buunGroupPenalties, floatPtr(0), nil),
+		floatFlag("dynatemp-exp", "", nil, 1.0, "Dynamic temperature exponent.", buunGroupPenalties, nil, nil),
 		floatFlag("adaptive-target", "", nil, nil, "Alvo do adaptive-p; valores negativos desativam.", buunGroupPenalties, nil, floatPtr(1)),
 		floatFlag("adaptive-decay", "", nil, nil, "Decaimento do adaptive-p.", buunGroupPenalties, floatPtr(0), floatPtr(0.99)),
 
-		strFlag("grammar", "", nil, "", "Restringe a saída por gramática GBNF.", buunGroupGrammar, false),
-		strFlag("grammar-file", "", nil, nil, "Lê gramática de arquivo.", buunGroupGrammar, false),
-		strFlag("json-schema", "j", nil, nil, "Restringe a saída a um JSON Schema.", buunGroupGrammar, false),
-		strFlag("json-schema-file", "jf", nil, nil, "Carrega JSON Schema de arquivo.", buunGroupGrammar, false),
+		strFlag("grammar", "", nil, "", "Constrains output with GBNF grammar.", buunGroupGrammar, false),
+		strFlag("grammar-file", "", nil, nil, "Reads grammar from a file.", buunGroupGrammar, false),
+		strFlag("json-schema", "j", nil, nil, "Constrains output to a JSON Schema.", buunGroupGrammar, false),
+		strFlag("json-schema-file", "jf", nil, nil, "Loads JSON Schema from a file.", buunGroupGrammar, false),
 
 		strFlag("chat-template", "", nil, nil, "Define o template de chat (embutido ou customizado).", buunGroupChat, false),
-		strFlag("chat-template-file", "", nil, nil, "Lê o template de chat de um arquivo Jinja.", buunGroupChat, false),
+		strFlag("chat-template-file", "", nil, nil, "Reads the chat template from a Jinja file.", buunGroupChat, false),
 		strFlag("chat-template-kwargs", "", nil, nil, "Argumentos extras em JSON para o parser do template.", buunGroupChat, false),
 		boolFlag("jinja", "", []string{"no-jinja"}, false, "Liga/desliga o engine Jinja para chat.", buunGroupChat),
-		boolFlag("skip-chat-parsing", "", nil, false, "Força parser puro de conteúdo, sem parsing estrutural.", buunGroupChat),
-		boolFlag("prefill-assistant", "", []string{"no-prefill-assistant"}, true, "Controla o prefill da resposta quando a última mensagem já é do assistant.", buunGroupChat),
-		enumFlag("reasoning-format", "", nil, []string{"none", "deepseek", "deepseek-legacy", "auto"}, "auto", "Formato usado para extrair blocos de reasoning.", buunGroupChat),
-		enumFlag("reasoning", "", nil, []string{"on", "off", "auto"}, "auto", "Controla emissão/uso de reasoning quando o modelo suporta.", buunGroupChat),
-		intFlag("reasoning-budget", "", nil, nil, "Orçamento de tokens para reasoning.", buunGroupChat, intPtr(0), nil),
-		strFlag("reasoning-budget-message", "", nil, nil, "Mensagem/instrução usada para comunicar o orçamento de reasoning ao modelo.", buunGroupChat, false),
+		boolFlag("skip-chat-parsing", "", nil, false, "Forces pure content parsing, without structural parsing.", buunGroupChat),
+		boolFlag("prefill-assistant", "", []string{"no-prefill-assistant"}, true, "Controls response prefill when the last message is already from the assistant.", buunGroupChat),
+		enumFlag("reasoning-format", "", nil, []string{"none", "deepseek", "deepseek-legacy", "auto"}, "auto", "Format used to extract reasoning blocks.", buunGroupChat),
+		enumFlag("reasoning", "", nil, []string{"on", "off", "auto"}, "auto", "Controls reasoning emission/use when the model supports it.", buunGroupChat),
+		intFlag("reasoning-budget", "", nil, nil, "Token budget for reasoning.", buunGroupChat, intPtr(0), nil),
+		strFlag("reasoning-budget-message", "", nil, nil, "Message/instruction used to communicate the reasoning budget to the model.", buunGroupChat, false),
 
-		strFlag("host", "", nil, "127.0.0.1", "Endereço de escuta do servidor.", buunGroupHTTP, false),
-		portFlag("port", "", 8080, "Porta HTTP do servidor.", buunGroupHTTP),
-		boolFlag("reuse-port", "", nil, false, "Permite múltiplos sockets no mesmo porto.", buunGroupHTTP),
+		strFlag("host", "", nil, "127.0.0.1", "Server listen address.", buunGroupHTTP, false),
+		portFlag("port", "", 8080, "HTTP server port.", buunGroupHTTP),
+		boolFlag("reuse-port", "", nil, false, "Allows multiple sockets on the same port.", buunGroupHTTP),
 		strFlag("api-prefix", "", nil, "", "Prefixo de rota da API (sem barra final).", buunGroupHTTP, false),
-		strFlag("path", "", nil, nil, "Diretório de arquivos estáticos a servir.", buunGroupHTTP, false),
+		strFlag("path", "", nil, nil, "Directory of static files to serve.", buunGroupHTTP, false),
 		boolFlag("ui", "", []string{"no-ui"}, true, "Liga/desliga a interface web.", buunGroupHTTP),
-		strFlag("ui-config", "", nil, nil, "Sobrescreve configurações padrão da UI.", buunGroupHTTP, false),
-		strFlag("ui-config-file", "", nil, nil, "Carrega configurações da UI de um arquivo JSON.", buunGroupHTTP, false),
-		strFlag("api-key", "", nil, nil, "Define chaves de autenticação da API.", buunGroupHTTP, false),
-		strFlag("api-key-file", "", nil, nil, "Lê chaves de autenticação de um arquivo.", buunGroupHTTP, false),
+		strFlag("ui-config", "", nil, nil, "Overrides default UI settings.", buunGroupHTTP, false),
+		strFlag("ui-config-file", "", nil, nil, "Loads UI settings from a JSON file.", buunGroupHTTP, false),
+		strFlag("api-key", "", nil, nil, "Sets API authentication keys.", buunGroupHTTP, false),
+		strFlag("api-key-file", "", nil, nil, "Reads authentication keys from a file.", buunGroupHTTP, false),
 		strFlag("ssl-key-file", "", nil, nil, "Chave privada SSL.", buunGroupHTTP, false),
-		strFlag("ssl-cert-file", "", nil, nil, "Certificado SSL.", buunGroupHTTP, false),
+		strFlag("ssl-cert-file", "", nil, nil, "SSL certificate.", buunGroupHTTP, false),
 		intFlag("timeout", "to", nil, 600, "Timeout de leitura/escrita (segundos).", buunGroupHTTP, intPtr(0), nil),
-		intFlag("threads-http", "", nil, -1, "Threads para requisições HTTP; -1 = automático.", buunGroupHTTP, nil, nil),
-		boolFlag("metrics", "", nil, false, "Endpoint de métricas compatível com Prometheus.", buunGroupHTTP),
-		boolFlag("slots", "", []string{"no-slots"}, true, "Expõe endpoint de monitoramento de slots.", buunGroupHTTP),
-		boolFlag("props", "", nil, false, "Permite alterar propriedades globais via POST /props.", buunGroupHTTP),
-		intFlag("parallel", "np", nil, 1, "Slots paralelos do servidor; -1 = automático.", buunGroupHTTP, nil, nil),
+		intFlag("threads-http", "", nil, -1, "Threads for HTTP requests; -1 = automatic.", buunGroupHTTP, nil, nil),
+		boolFlag("metrics", "", nil, false, "Prometheus-compatible metrics endpoint.", buunGroupHTTP),
+		boolFlag("slots", "", []string{"no-slots"}, true, "Exposes slot monitoring endpoint.", buunGroupHTTP),
+		boolFlag("props", "", nil, false, "Allows changing global properties via POST /props.", buunGroupHTTP),
+		intFlag("parallel", "np", nil, 1, "Parallel server slots; -1 = automatic.", buunGroupHTTP, nil, nil),
 		boolFlag("cont-batching", "cb", []string{"no-cont-batching"}, true, "Liga/desliga continuous batching.", buunGroupHTTP),
-		boolFlag("cache-prompt", "", []string{"no-cache-prompt"}, true, "Ativa reuso/cache de prompt.", buunGroupHTTP),
-		intFlag("cache-reuse", "", nil, 0, "Chunk mínimo para tentar reuso via KV shifting.", buunGroupHTTP, intPtr(0), nil),
-		strFlag("alias", "a", nil, nil, "Aliases de nome do modelo (API), separados por vírgula.", buunGroupHTTP, false),
+		boolFlag("cache-prompt", "", []string{"no-cache-prompt"}, true, "Enables prompt reuse/cache.", buunGroupHTTP),
+		intFlag("cache-reuse", "", nil, 0, "Minimum chunk size for attempting reuse via KV shifting.", buunGroupHTTP, intPtr(0), nil),
+		strFlag("alias", "a", nil, nil, "Model name aliases (API), comma-separated.", buunGroupHTTP, false),
 
 		strFlag("mmproj", "mm", nil, nil, "Projector multimodal.", buunGroupMultimodal, false),
 		strFlag("mmproj-url", "mmu", nil, nil, "URL do projector multimodal.", buunGroupMultimodal, false),
-		boolFlag("mmproj-auto", "", []string{"no-mmproj-auto", "no-mmproj"}, true, "Uso automático do projector multimodal.", buunGroupMultimodal),
+		boolFlag("mmproj-auto", "", []string{"no-mmproj-auto", "no-mmproj"}, true, "Automatic multimodal projector use.", buunGroupMultimodal),
 		boolFlag("mmproj-offload", "", []string{"no-mmproj-offload"}, true, "Offload do projector para GPU.", buunGroupMultimodal),
-		intFlag("image-min-tokens", "", nil, nil, "Mínimo de tokens por imagem.", buunGroupMultimodal, intPtr(0), nil),
-		intFlag("image-max-tokens", "", nil, nil, "Máximo de tokens por imagem.", buunGroupMultimodal, intPtr(0), nil),
+		intFlag("image-min-tokens", "", nil, nil, "Minimum tokens per image.", buunGroupMultimodal, intPtr(0), nil),
+		intFlag("image-max-tokens", "", nil, nil, "Maximum tokens per image.", buunGroupMultimodal, intPtr(0), nil),
 
-		strFlag("models-dir", "", nil, nil, "Diretório monitorado pelo router multi-modelo.", buunGroupRouter, false),
+		strFlag("models-dir", "", nil, nil, "Directory monitored by the multi-model router.", buunGroupRouter, false),
 		strFlag("models-preset", "", nil, nil, "Preset de modelos carregado pelo router multi-modelo.", buunGroupRouter, false),
-		intFlag("models-max", "", nil, nil, "Número máximo de modelos gerenciados/carregados pelo router.", buunGroupRouter, intPtr(1), nil),
-		boolFlag("models-autoload", "", []string{"no-models-autoload"}, false, "Carrega modelos automaticamente a partir do diretório/preset.", buunGroupRouter),
+		intFlag("models-max", "", nil, nil, "Maximum number of models managed/loaded by the router.", buunGroupRouter, intPtr(1), nil),
+		boolFlag("models-autoload", "", []string{"no-models-autoload"}, false, "Automatically loads models from the directory/preset.", buunGroupRouter),
 
-		strFlag("tools", "", nil, nil, "Lista/configuração de tools de agente embutidas expostas pelo servidor.", buunGroupTools, false),
+		strFlag("tools", "", nil, nil, "List/configuration of built-in agent tools exposed by the server.", buunGroupTools, false),
 
-		boolFlag("embeddings", "", []string{"embedding"}, false, "Modo embeddings.", buunGroupEmbeddings),
-		enumFlag("pooling", "", nil, []string{"none", "mean", "cls", "last", "rank"}, nil, "Pooling de embeddings.", buunGroupEmbeddings),
-		intFlag("embd-normalize", "", nil, 2, "Normalização; 2 = euclidiana.", buunGroupEmbeddings, nil, nil),
-		boolFlag("reranking", "", []string{"rerank"}, false, "Endpoint de reranking.", buunGroupEmbeddings),
+		boolFlag("embeddings", "", []string{"embedding"}, false, "Embeddings mode.", buunGroupEmbeddings),
+		enumFlag("pooling", "", nil, []string{"none", "mean", "cls", "last", "rank"}, nil, "Embedding pooling.", buunGroupEmbeddings),
+		intFlag("embd-normalize", "", nil, 2, "Normalization; 2 = Euclidean.", buunGroupEmbeddings, nil, nil),
+		boolFlag("reranking", "", []string{"rerank"}, false, "Reranking endpoint.", buunGroupEmbeddings),
 
-		strFlag("lora", "", nil, nil, "Adapters LoRA.", buunGroupLora, false),
-		strFlag("lora-scaled", "", nil, nil, "LoRA com escala manual no formato ARQUIVO:SCALE.", buunGroupLora, false),
-		boolFlag("lora-init-without-apply", "", nil, false, "Carrega LoRA sem aplicar.", buunGroupLora),
+		strFlag("lora", "", nil, nil, "LoRA adapters.", buunGroupLora, false),
+		strFlag("lora-scaled", "", nil, nil, "LoRA with manual scale in FILE:SCALE format.", buunGroupLora, false),
+		boolFlag("lora-init-without-apply", "", nil, false, "Loads LoRA without applying it.", buunGroupLora),
 		strFlag("control-vector", "", nil, nil, "Control vector(s).", buunGroupLora, false),
-		strFlag("control-vector-scaled", "", nil, nil, "Control vector com escala no formato ARQUIVO:SCALE.", buunGroupLora, false),
-		strFlag("control-vector-layer-range", "", nil, nil, "Intervalo de camadas aplicado aos control vectors.", buunGroupLora, false),
+		strFlag("control-vector-scaled", "", nil, nil, "Control vector with scale in FILE:SCALE format.", buunGroupLora, false),
+		strFlag("control-vector-layer-range", "", nil, nil, "Layer range applied to control vectors.", buunGroupLora, false),
 
-		enumFlag("spec-type", "", nil, []string{"none", "draft-simple", "draft-eagle3", "draft-mtp", "ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod", "ngram-cache", "suffix", "copyspec", "recycle", "dflash"}, "none", "Tipo de speculative decoding.", buunGroupSpeculative),
-		strFlag("spec-draft-model", "md", nil, nil, "Modelo draft.", buunGroupSpeculative, false),
-		strFlag("spec-draft-hf", "", nil, nil, "Repo HF do draft.", buunGroupSpeculative, false),
-		intFlag("spec-draft-n-max", "", nil, 16, "Máximo de tokens propostos pelo draft.", buunGroupSpeculative, intPtr(0), nil),
-		intFlag("spec-draft-n-min", "", nil, 0, "Mínimo de tokens draft.", buunGroupSpeculative, intPtr(0), nil),
-		floatFlag("spec-draft-p-split", "", nil, 0.1, "Probabilidade de split.", buunGroupSpeculative, floatPtr(0), floatPtr(1)),
-		floatFlag("spec-draft-p-min", "", nil, 0.75, "Probabilidade mínima do caminho guloso.", buunGroupSpeculative, floatPtr(0), floatPtr(1)),
-		strFlag("spec-draft-device", "", nil, nil, "Dispositivos do draft; por padrão acompanha --device.", buunGroupSpeculative, false),
-		strFlag("spec-draft-ngl", "", nil, 0, "Camadas do draft na VRAM; aceita inteiro, auto ou all.", buunGroupSpeculative, false),
-		intFlag("spec-draft-threads", "", nil, nil, "Threads de CPU do draft; por padrão acompanha --threads.", buunGroupSpeculative, intPtr(0), nil),
-		boolFlag("spec-draft-backend-sampling", "", []string{"no-spec-draft-backend-sampling"}, false, "Sampling do draft no backend.", buunGroupSpeculative),
-		enumFlag("cache-type-k-draft", "", nil, buunCacheTypes(), "f16", "Tipo de dado do cache K usado pelo modelo draft.", buunGroupSpeculative),
-		enumFlag("cache-type-v-draft", "", nil, buunCacheTypes(), "f16", "Tipo de dado do cache V usado pelo modelo draft.", buunGroupSpeculative),
-		intFlag("spec-ngram-mod-n-min", "", nil, nil, "Mínimo de tokens para speculative n-gram.", buunGroupSpeculative, intPtr(0), nil),
-		intFlag("spec-ngram-mod-n-max", "", nil, nil, "Máximo de tokens para speculative n-gram.", buunGroupSpeculative, intPtr(0), nil),
-		intFlag("spec-ngram-mod-n-match", "", nil, nil, "Comprimento de lookup para ngram-mod.", buunGroupSpeculative, intPtr(0), nil),
-		intFlag("spec-ngram-min", "", nil, nil, "Mínimo de tokens para modos ngram da fork buun.", buunGroupSpeculative, intPtr(0), nil),
-		intFlag("spec-ngram-max", "", nil, nil, "Máximo de tokens para modos ngram da fork buun.", buunGroupSpeculative, intPtr(0), nil),
-		intFlag("spec-ngram-match", "", nil, nil, "Comprimento de match para modos ngram da fork buun.", buunGroupSpeculative, intPtr(0), nil),
-		intFlag("spec-ngram-cache-size", "", nil, nil, "Tamanho do cache usado por speculative ngram-cache.", buunGroupSpeculative, intPtr(0), nil),
-		boolFlag("spec-dflash-default", "", nil, false, "Habilita configuração/default do modo speculative DFlash.", buunGroupSpeculative),
-		intFlag("dflash-max-slots", "", nil, nil, "Número máximo de slots usados pelo DFlash.", buunGroupSpeculative, intPtr(1), nil),
+		enumFlag("spec-type", "", nil, []string{"none", "draft-simple", "draft-eagle3", "draft-mtp", "ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod", "ngram-cache", "suffix", "copyspec", "recycle", "dflash"}, "none", "Speculative decoding type.", buunGroupSpeculative),
+		strFlag("spec-draft-model", "md", nil, nil, "Draft model.", buunGroupSpeculative, false),
+		strFlag("spec-draft-hf", "", nil, nil, "HF repo for the draft model.", buunGroupSpeculative, false),
+		intFlag("spec-draft-n-max", "", nil, 16, "Maximum tokens proposed by the draft model.", buunGroupSpeculative, intPtr(0), nil),
+		intFlag("spec-draft-n-min", "", nil, 0, "Minimum draft tokens.", buunGroupSpeculative, intPtr(0), nil),
+		floatFlag("spec-draft-p-split", "", nil, 0.1, "Split probability.", buunGroupSpeculative, floatPtr(0), floatPtr(1)),
+		floatFlag("spec-draft-p-min", "", nil, 0.75, "Minimum probability for the greedy path.", buunGroupSpeculative, floatPtr(0), floatPtr(1)),
+		strFlag("spec-draft-device", "", nil, nil, "Draft devices; follows --device by default.", buunGroupSpeculative, false),
+		strFlag("spec-draft-ngl", "", nil, 0, "Draft layers in VRAM; accepts integer, auto, or all.", buunGroupSpeculative, false),
+		intFlag("spec-draft-threads", "", nil, nil, "Draft CPU threads; follows --threads by default.", buunGroupSpeculative, intPtr(0), nil),
+		boolFlag("spec-draft-backend-sampling", "", []string{"no-spec-draft-backend-sampling"}, false, "Draft sampling in the backend.", buunGroupSpeculative),
+		enumFlag("cache-type-k-draft", "", nil, buunCacheTypes(), "f16", "K cache data type used by the draft model.", buunGroupSpeculative),
+		enumFlag("cache-type-v-draft", "", nil, buunCacheTypes(), "f16", "V cache data type used by the draft model.", buunGroupSpeculative),
+		intFlag("spec-ngram-mod-n-min", "", nil, nil, "Minimum tokens for speculative n-gram.", buunGroupSpeculative, intPtr(0), nil),
+		intFlag("spec-ngram-mod-n-max", "", nil, nil, "Maximum tokens for speculative n-gram.", buunGroupSpeculative, intPtr(0), nil),
+		intFlag("spec-ngram-mod-n-match", "", nil, nil, "Lookup length for ngram-mod.", buunGroupSpeculative, intPtr(0), nil),
+		intFlag("spec-ngram-min", "", nil, nil, "Minimum tokens for buun fork ngram modes.", buunGroupSpeculative, intPtr(0), nil),
+		intFlag("spec-ngram-max", "", nil, nil, "Maximum tokens for buun fork ngram modes.", buunGroupSpeculative, intPtr(0), nil),
+		intFlag("spec-ngram-match", "", nil, nil, "Match length for buun fork ngram modes.", buunGroupSpeculative, intPtr(0), nil),
+		intFlag("spec-ngram-cache-size", "", nil, nil, "Cache size used by speculative ngram-cache.", buunGroupSpeculative, intPtr(0), nil),
+		boolFlag("spec-dflash-default", "", nil, false, "Enables configuration/defaults for speculative DFlash mode.", buunGroupSpeculative),
+		intFlag("dflash-max-slots", "", nil, nil, "Maximum number of slots used by DFlash.", buunGroupSpeculative, intPtr(1), nil),
 
-		strFlag("model-vocoder", "", nil, nil, "Modelo vocoder usado para TTS.", buunGroupTTS, false),
-		boolFlag("tts-use-guide-tokens", "", []string{"no-tts-use-guide-tokens"}, false, "Usa guide tokens no fluxo TTS.", buunGroupTTS),
+		strFlag("model-vocoder", "", nil, nil, "Vocoder model used for TTS.", buunGroupTTS, false),
+		boolFlag("tts-use-guide-tokens", "", []string{"no-tts-use-guide-tokens"}, false, "Uses guide tokens in the TTS flow.", buunGroupTTS),
 	} {
 		add(spec)
 	}
