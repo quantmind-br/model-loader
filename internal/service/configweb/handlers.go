@@ -2,6 +2,7 @@ package configweb
 
 import (
 	"encoding/json"
+	"html"
 	"net/http"
 	"strconv"
 	"strings"
@@ -88,8 +89,7 @@ func renderIssues(w http.ResponseWriter, rep validator.Report) {
 }
 
 func htmlEscape(s string) string {
-	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
-	return r.Replace(s)
+	return html.EscapeString(s)
 }
 
 func (s *Session) handleSave(w http.ResponseWriter, r *http.Request) {

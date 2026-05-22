@@ -49,6 +49,15 @@ func waitForWebEdit(sess *configweb.Session) tea.Cmd {
 	}
 }
 
+// Cleanup cancels any active web-edit session. Called by the root model before
+// tea.Quit so the configweb HTTP server is shut down and waitForWebEdit
+// goroutine unblocks even when the TUI exits via ctrl+c or q.
+func (p ProfilesPage) Cleanup() {
+	if p.webSession != nil {
+		p.webSession.Cancel()
+	}
+}
+
 func openBrowser(url string) {
 	var cmd string
 	var args []string

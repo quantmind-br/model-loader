@@ -2,10 +2,12 @@ package pages
 
 import (
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/configweb"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 )
 
@@ -102,5 +104,33 @@ func TestProfilesPage_WebEditKeySwallowedWhileEditing(t *testing.T) {
 		if !p.webEditing {
 			t.Errorf("key %q: webEditing cleared unexpectedly", key.String())
 		}
+	}
+}
+
+// TestProfilesPage_CleanupCancelsActiveWebSession verifies that Cleanup() on a
+// page with an active webSession calls Cancel(), which unblocks Done() and
+// delivers Saved=false. This proves the TUI quit paths don't leak the goroutine
+// or leave the configweb HTTP server bound after process would otherwise exit.
+func TestProfilesPage_CleanupCancelsActiveWebSession(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := profilestore.NewFSStore(dir)
+	page := NewProfilesPage(store, domain.FlagSchema{})
+
+	sess := configweb.NewSession(configweb.Deps{})
+	if _, err := sess.Start(); err != nil {
+		t.Fatalf("session start: %v", err)
+	}
+	page.webSession = sess
+	page.webEditing = true
+
+	page.Cleanup()
+
+	select {
+	case res := <-sess.Done():
+		if res.Saved {
+			t.Errorf("Cleanup() delivered Saved=true; want false (cancel)")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout: Cleanup() did not cancel session within 2s")
 	}
 }
