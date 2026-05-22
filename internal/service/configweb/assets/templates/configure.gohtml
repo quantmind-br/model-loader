@@ -45,6 +45,23 @@
     </div>
   </div>
 
+  <div class="env-section" x-data="{ envVars: {{if .Draft.Env}}{{toJSON .Draft.Env}}{{else}}[]{{end}} }">
+    <div class="section-header">
+      <h3>Environment Variables</h3>
+      <span class="muted">KEY=VALUE pairs applied to the backend process at launch</span>
+    </div>
+    <div class="env-list">
+      <template x-for="(ev, index) in envVars" :key="index">
+        <div class="env-row">
+          <input :name="'envKey_' + index" x-model="ev.Key" placeholder="KEY" class="env-key">
+          <input :name="'envValue_' + index" x-model="ev.Value" placeholder="VALUE" class="env-value">
+          <button type="button" @click="envVars.splice(index, 1)" class="ghost">×</button>
+        </div>
+      </template>
+    </div>
+    <button type="button" @click="envVars.push({Key:'', Value:''})" class="secondary">+ Add env var</button>
+  </div>
+
   <div class="search-box">
     <input type="text" x-model="search" placeholder="🔍 Search parameter..." class="search-input">
     <button type="button" x-show="search.length > 0" @click="search=''" class="clear-btn">×</button>
