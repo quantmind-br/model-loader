@@ -52,6 +52,20 @@ func (g *LlamaServerGenerator) Generate(backend domain.Backend) (domain.BackendV
 		return domain.BackendValidationSchema{}, fmt.Errorf("resolve executable: %w", err)
 	}
 
+	schema, err := parseHelpSchema(backend, resolved)
+	if err != nil {
+		return domain.BackendValidationSchema{}, err
+	}
+	if err := g.schemaStore.Save(ref, schema); err != nil {
+		return domain.BackendValidationSchema{}, fmt.Errorf("save schema: %w", err)
+	}
+	return schema, nil
+}
+
+// parseHelpSchema runs --help on a resolved binary and converts the parsed
+// flags into a backend validation schema. Shared by the llama-server and
+// buun-llama-cpp generators (the fork's --help is format-identical).
+func parseHelpSchema(backend domain.Backend, resolved string) (domain.BackendValidationSchema, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -67,12 +81,7 @@ func (g *LlamaServerGenerator) Generate(backend domain.Backend) (domain.BackendV
 		SourceVersion: fs.Version,
 		Editable:      true,
 	}
-
-	schema := domain.FlagSchemaToBackend(fs, backend.Kind, backend.ID, src)
-	if err := g.schemaStore.Save(ref, schema); err != nil {
-		return domain.BackendValidationSchema{}, fmt.Errorf("save schema: %w", err)
-	}
-	return schema, nil
+	return domain.FlagSchemaToBackend(fs, backend.Kind, backend.ID, src), nil
 }
 
 // WriteEmbeddedFallback writes the embedded fallback schema to the store.
