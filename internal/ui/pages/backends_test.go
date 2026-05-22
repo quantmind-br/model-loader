@@ -7,7 +7,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
@@ -128,10 +127,10 @@ func TestBackendsPage_HintsVaryByMode(t *testing.T) {
 	}
 	model, _ := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
 	p = model.(BackendsPage)
-	if got := p.Hints(); got != "[enter] submit  [esc] cancel" {
-		t.Fatalf("form hints = %q", got)
+	if got := p.Hints(); got != "editing in browser…  [esc] cancel" {
+		t.Fatalf("web edit hints = %q", got)
 	}
-	p.form = nil
+	p.webEditing = false
 	model, _ = p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	p = model.(BackendsPage)
 	if got := p.Hints(); got != "[←→] choose  [enter] confirm  [esc] cancel" {
@@ -139,7 +138,7 @@ func TestBackendsPage_HintsVaryByMode(t *testing.T) {
 	}
 }
 
-func TestBackendsPage_IsCapturingInputDuringFormAndConfirm(t *testing.T) {
+func TestBackendsPage_IsCapturingInputDuringWebEditAndConfirm(t *testing.T) {
 	p, mgr, _ := newBackendsPageHarness(t)
 	addBackendForPage(t, mgr, "Capture Backend", "/bin/echo")
 	p = loadBackendsPage(t, p)
@@ -150,9 +149,9 @@ func TestBackendsPage_IsCapturingInputDuringFormAndConfirm(t *testing.T) {
 	model, _ := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
 	p = model.(BackendsPage)
 	if !p.IsCapturingInput() {
-		t.Fatal("form mode should capture input")
+		t.Fatal("web edit mode should capture input")
 	}
-	p.form = nil
+	p.webEditing = false
 	model, _ = p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	p = model.(BackendsPage)
 	if !p.IsCapturingInput() {
@@ -160,56 +159,47 @@ func TestBackendsPage_IsCapturingInputDuringFormAndConfirm(t *testing.T) {
 	}
 }
 
-func TestBackendsPage_AddBackendForm(t *testing.T) {
-	p, mgr, _ := newBackendsPageHarness(t)
+func TestBackendsPage_AddBackendViaWebEdit(t *testing.T) {
+	p, _, _ := newBackendsPageHarness(t)
 	p = loadBackendsPage(t, p)
 	model, _ := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
 	p = model.(BackendsPage)
 
-	p.draft.Name = "Added Backend"
-	p.draft.Kind = string(domain.BackendKindLlamaServer)
-	p.draft.Executable = "/bin/echo"
-	p.draft.Description = "new desc"
-	p.draft.Tags = "alpha, beta"
-	p.form.State = huh.StateCompleted
-	model, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	p = model.(BackendsPage)
-	if cmd != nil {
-		_ = cmd()
+	if !p.webEditing {
+		t.Fatal("expected webEditing after startAdd")
 	}
 
-	b, err := mgr.GetBackend("added-backend")
-	if err != nil {
-		t.Fatalf("GetBackend: %v", err)
-	}
-	if b.Description != "new desc" || strings.Join(b.Tags, ",") != "alpha,beta" {
-		t.Fatalf("backend metadata = %q %v", b.Description, b.Tags)
+	model, _ = p.Update(backendWebEditDoneMsg{saved: true, backendID: "added-backend"})
+	p = model.(BackendsPage)
+	if p.webEditing {
+		t.Fatal("expected webEditing=false after done")
 	}
 }
 
-func TestBackendsPage_EditBackendForm(t *testing.T) {
+func TestBackendsPage_EditBackendViaWebEdit(t *testing.T) {
 	p, mgr, _ := newBackendsPageHarness(t)
 	b := addBackendForPage(t, mgr, "Edit Backend", "/bin/echo")
+	_, _ = mgr.UpdateBackend(b.ID, domain.Backend{Name: b.Name, Executable: b.Executable, Description: "old desc"})
 	p = loadBackendsPage(t, p)
 	model, _ := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	p = model.(BackendsPage)
 
-	p.draft.Name = "Edited Backend"
-	p.draft.Executable = "/bin/cat"
-	p.draft.Description = "edited desc"
-	p.draft.Tags = "stable"
-	p.form.State = huh.StateCompleted
-	model, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !p.webEditing {
+		t.Fatal("expected webEditing after startEditSelected")
+	}
+
+	_, _ = mgr.UpdateBackend(b.ID, domain.Backend{Name: "Edited Backend", Executable: "/bin/cat", Description: "edited desc", Tags: []string{"stable"}})
+	model, _ = p.Update(backendWebEditDoneMsg{saved: true, backendID: b.ID})
 	p = model.(BackendsPage)
-	if cmd != nil {
-		_ = cmd()
+	if p.webEditing {
+		t.Fatal("expected webEditing=false after done")
 	}
 
 	got, err := mgr.GetBackend(b.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Name != "Edited Backend" || got.Executable != "/bin/cat" || got.Kind != domain.BackendKindLlamaServer || got.Description != "edited desc" {
+	if got.Name != "Edited Backend" || got.Executable != "/bin/cat" || got.Description != "edited desc" || strings.Join(got.Tags, ",") != "stable" {
 		t.Fatalf("updated backend = %+v", got)
 	}
 }
@@ -309,20 +299,16 @@ func TestBackendsPage_Reload(t *testing.T) {
 	}
 }
 
-func TestBackendsPage_ForwardsNonKeyToActiveForm(t *testing.T) {
+func TestBackendsPage_IgnoresNonKeyDuringWebEdit(t *testing.T) {
 	p, _, _ := newBackendsPageHarness(t)
 	p = loadBackendsPage(t, p)
 	model, _ := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
 	p = model.(BackendsPage)
-	old := p.form
 
 	model, _ = p.Update(list.FilterMatchesMsg{})
 	p = model.(BackendsPage)
-	if p.form == nil {
-		t.Fatal("form closed after non-key msg")
-	}
-	if p.form != old {
-		t.Fatal("form pointer changed unexpectedly")
+	if !p.webEditing {
+		t.Fatal("webEditing should stay true during non-key msg")
 	}
 }
 
