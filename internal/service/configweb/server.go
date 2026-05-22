@@ -22,4 +22,9 @@ func (s *Session) routes(mux *http.ServeMux) {
 	mux.HandleFunc("/customize/presentation", s.handleCustomizePresentation)
 	mux.HandleFunc("/customize/rules", s.handleCustomizeRules)
 	mux.HandleFunc("/switch-backend", s.handleSwitchBackend)
+	mux.HandleFunc("/backend/", s.handleBackendIndex)
+	mux.HandleFunc("/backend/save", s.handleBackendSave)
+	mux.HandleFunc("/backend/cancel", s.handleBackendCancel)
+	mux.HandleFunc("/backend/validate", s.handleBackendValidate)
+	mux.HandleFunc("/backend/closed", s.handleBackendClosed)
 }

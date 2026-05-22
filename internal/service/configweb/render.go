@@ -18,6 +18,7 @@ var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
 	"templates/base.gohtml",
 	"templates/configure.gohtml",
 	"templates/customize.gohtml",
+	"templates/backend.gohtml",
 ))
 
 func (s *Session) handleIndex(w http.ResponseWriter, r *http.Request) {
