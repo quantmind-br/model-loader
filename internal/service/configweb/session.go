@@ -8,21 +8,25 @@ import (
 	"sync"
 
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/backendschema"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 )
 
 // Deps are the stores/services the session needs to read and persist data.
 type Deps struct {
-	Profiles     profilestore.Store
-	Catalog      backendcatalog.Store
-	Schemas      backendcatalog.SchemaStore
-	InitialDraft Draft
+	Profiles             profilestore.Store
+	Catalog              backendcatalog.Store
+	Schemas              backendcatalog.SchemaStore
+	Manager              *backendschema.Manager
+	InitialDraft         Draft
+	InitialBackendDraft  BackendDraft
 }
 
 // Result is delivered on Done() when the session finishes.
 type Result struct {
 	Saved     bool
 	ProfileID string
+	BackendID string
 	Err       error
 }
 
