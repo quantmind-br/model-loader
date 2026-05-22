@@ -174,3 +174,29 @@ func TestValidator_ExistingLocalPathNotTreatedAsHFRepo(t *testing.T) {
 func cacheTypes() []string {
 	return []string{"f32", "f16", "bf16", "q8_0", "q4_0"}
 }
+
+func TestValidate_RequiredFlagMissing(t *testing.T) {
+	sch := domain.FlagSchema{
+		Flags: map[string]domain.FlagSpec{
+			"port": {Long: "port", Type: domain.FlagTypeInt, Required: true},
+		},
+	}
+	p := domain.Profile{Args: map[string]any{}} // port absent
+	rep := New(nil).Validate(p, sch, domain.BackendKindLlamaServer)
+	if !rep.HasBlockingErrors() {
+		t.Fatalf("expected error for missing required flag")
+	}
+}
+
+func TestValidate_RequiredFlagPresent(t *testing.T) {
+	sch := domain.FlagSchema{
+		Flags: map[string]domain.FlagSpec{
+			"port": {Long: "port", Type: domain.FlagTypeInt, Required: true},
+		},
+	}
+	p := domain.Profile{Args: map[string]any{"port": 4321}}
+	rep := New(nil).Validate(p, sch, domain.BackendKindLlamaServer)
+	if rep.HasBlockingErrors() {
+		t.Fatalf("unexpected errors: %+v", rep.Errors)
+	}
+}

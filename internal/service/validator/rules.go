@@ -312,5 +312,44 @@ func supportsHFRepo(kind domain.BackendKind) bool {
 	return false
 }
 
+// applyRequiredRules flags any schema flag marked Required that is absent from
+// both Args and ExtraArgs.
+func applyRequiredRules(p domain.Profile, schema domain.FlagSchema, rep Report) Report {
+	for long, spec := range schema.Flags {
+		if !spec.Required {
+			continue
+		}
+		if _, ok := p.Args[long]; ok {
+			continue
+		}
+		if _, ok := p.Args[domain.CanonicalFlag(spec.Short)]; spec.Short != "" && ok {
+			continue
+		}
+		if extraArgsContain(p.ExtraArgs, spec) {
+			continue
+		}
+		rep = appendIssue(rep, FieldIssue{
+			Field:    long,
+			Message:  "required flag is missing",
+			Severity: SeverityError,
+		})
+	}
+	return rep
+}
 
+func extraArgsContain(extra []string, spec domain.FlagSpec) bool {
+	for _, a := range extra {
+		flag, _, _ := parseExtraArg(a)
+		c := domain.CanonicalFlag(flag)
+		if c == spec.Long || c == spec.Short {
+			return true
+		}
+		for _, al := range spec.Aliases {
+			if c == al {
+				return true
+			}
+		}
+	}
+	return false
+}
 
