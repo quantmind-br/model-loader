@@ -29,6 +29,35 @@ func TestBuildPresentation_HighlightsEssentialsFirst(t *testing.T) {
 	}
 }
 
+func TestEssentialSeed_MatchesCuratedBackends(t *testing.T) {
+	// Guards against the seed drifting from the curated essentials UX.
+	wantDFlashHasPort := false
+	for _, f := range essentialSeed[domain.BackendKindDFlash] {
+		if f == "port" {
+			wantDFlashHasPort = true
+		}
+	}
+	if !wantDFlashHasPort {
+		t.Fatal("dflash seed must include port")
+	}
+	for _, f := range essentialSeed[domain.BackendKindBuunLlamaCpp] {
+		if f == "batch-size" || f == "ubatch-size" {
+			t.Fatalf("buun seed must not contain llama-only flag %q", f)
+		}
+	}
+	for _, want := range []string{"spec-type", "spec-draft-model"} {
+		found := false
+		for _, f := range essentialSeed[domain.BackendKindBuunLlamaCpp] {
+			if f == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("buun seed missing curated flag %q", want)
+		}
+	}
+}
+
 func containsStr(xs []string, s string) bool {
 	for _, x := range xs {
 		if x == s {
