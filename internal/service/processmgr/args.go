@@ -31,6 +31,8 @@ func BuildArgsForBackend(p domain.Profile, kind domain.BackendKind, executable s
 		return buildSGLangArgs(p), nil
 	case domain.BackendKindVLLM:
 		return buildVLLMArgs(p, executable), nil
+	case domain.BackendKindDFlash:
+		return buildDFlashArgs(p), nil
 	default:
 		return nil, fmt.Errorf("unsupported backend kind for arg building: %s", kind)
 	}
@@ -140,6 +142,52 @@ func buildVLLMArgs(p domain.Profile, executable string) []string {
 	for _, k := range keys {
 		// model is already emitted from p.Model above.
 		if k == "model" {
+			continue
+		}
+		flag := "--" + k
+		switch v := p.Args[k].(type) {
+		case bool:
+			if v {
+				args = append(args, flag)
+			}
+		case string:
+			args = append(args, flag, v)
+		case int:
+			args = append(args, flag, strconv.Itoa(v))
+		case int32:
+			args = append(args, flag, strconv.FormatInt(int64(v), 10))
+		case int64:
+			args = append(args, flag, strconv.FormatInt(v, 10))
+		case float64:
+			args = append(args, flag, formatFloat(v))
+		case []any:
+			parts := make([]string, len(v))
+			for i, x := range v {
+				parts[i] = fmt.Sprint(x)
+			}
+			args = append(args, flag, strings.Join(parts, ","))
+		}
+	}
+	args = append(args, p.ExtraArgs...)
+	return args
+}
+
+// buildDFlashArgs builds args for the DFlash runtime (lucebox-hub server.py).
+// The model maps to --target; every other flag in p.Args is emitted verbatim
+// as --<key> <value>. The draft model is expected as the "draft" key in p.Args.
+func buildDFlashArgs(p domain.Profile) []string {
+	args := make([]string, 0, 2+2*len(p.Args)+len(p.ExtraArgs))
+	args = append(args, "--target", p.Model)
+
+	keys := make([]string, 0, len(p.Args))
+	for k := range p.Args {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		// target is already emitted from p.Model above; "model" is an alias guard.
+		if k == "target" || k == "model" {
 			continue
 		}
 		flag := "--" + k

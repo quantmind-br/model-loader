@@ -36,7 +36,7 @@ func newTestManager(t *testing.T) (*fsManager, string) {
 	dir := t.TempDir()
 	fb := fakeBinary(t)
 	mgr := New(Config{
-		Resolver:     func(_ domain.Profile) (string, error) { return fb, nil },
+		Resolver:     func(_ domain.Profile) (string, domain.BackendKind, error) { return fb, "", nil },
 		LogDir:       filepath.Join(dir, "logs"),
 		RegistryPath: filepath.Join(dir, "instances.json"),
 	})
@@ -85,7 +85,7 @@ func TestManager_LaunchBackground_ProfileOverrideUsesEffectiveBinary(t *testing.
 	dir := t.TempDir()
 	overrideBinary := fakeBinary(t)
 	mgr := New(Config{
-		Resolver:     func(_ domain.Profile) (string, error) { return overrideBinary, nil },
+		Resolver:     func(_ domain.Profile) (string, domain.BackendKind, error) { return overrideBinary, "", nil },
 		LogDir:       filepath.Join(dir, "logs"),
 		RegistryPath: filepath.Join(dir, "instances.json"),
 	})
@@ -197,7 +197,7 @@ func TestManager_LaunchBackground_NoOverrideUsesDefaultBinary(t *testing.T) {
 func TestManager_LaunchBackground_InvalidEffectiveBinary(t *testing.T) {
 	badBinary := filepath.Join(t.TempDir(), "does-not-exist")
 	mgr := New(Config{
-		Resolver:     func(_ domain.Profile) (string, error) { return badBinary, nil },
+		Resolver:     func(_ domain.Profile) (string, domain.BackendKind, error) { return badBinary, "", nil },
 		LogDir:       filepath.Join(t.TempDir(), "logs"),
 		RegistryPath: filepath.Join(t.TempDir(), "instances.json"),
 	})
@@ -283,7 +283,7 @@ func TestManager_Launch_NotifiesLastUsedSink(t *testing.T) {
 	dir := t.TempDir()
 	spy := &sinkSpy{}
 	mgr := New(Config{
-		Resolver:     func(_ domain.Profile) (string, error) { return fakeBinary(t), nil },
+		Resolver:     func(_ domain.Profile) (string, domain.BackendKind, error) { return fakeBinary(t), "", nil },
 		LogDir:       filepath.Join(dir, "logs"),
 		RegistryPath: filepath.Join(dir, "instances.json"),
 		LastUsedSink: spy,
@@ -345,7 +345,7 @@ func TestTailLogs_UnknownPID(t *testing.T) {
 
 func TestManager_ResolverError(t *testing.T) {
 	cfg := Config{
-		Resolver:     func(_ domain.Profile) (string, error) { return "", ErrBinaryNotFound },
+		Resolver:     func(_ domain.Profile) (string, domain.BackendKind, error) { return "", "", ErrBinaryNotFound },
 		LogDir:       t.TempDir(),
 		RegistryPath: filepath.Join(t.TempDir(), "i.json"),
 	}

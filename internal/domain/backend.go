@@ -10,6 +10,7 @@ const (
 	BackendKindVLLM        BackendKind = "vllm"
 	BackendKindTabbyAPI    BackendKind = "tabbyapi"
 	BackendKindSGLang      BackendKind = "sglang"
+	BackendKindDFlash      BackendKind = "dflash"
 )
 
 // BackendMeta holds timestamps and bookkeeping for a backend entry.
