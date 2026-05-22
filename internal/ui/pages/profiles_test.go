@@ -133,15 +133,6 @@ func TestProfilesPage_NewProfileSavesViaStore(t *testing.T) {
 	}
 }
 
-func mustGetProfile(t *testing.T, s profilestore.Store, id string) domain.Profile {
-	t.Helper()
-	p, err := s.Get(id)
-	if err != nil {
-		t.Fatalf("Get(%q): %v", id, err)
-	}
-	return p
-}
-
 type stubScanner struct{}
 
 func (stubScanner) Scan(ctx context.Context, paths []string) (<-chan domain.ScanEvent, error) {
