@@ -18,6 +18,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/backendschema"
+	"github.com/quantmind-br/model-loader/internal/service/configweb"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
@@ -64,9 +65,11 @@ func defaultBackendsKeys() backendsKeyMap {
 
 // BackendsPage is the master-detail page for backend catalog CRUD.
 type BackendsPage struct {
-	manager *backendschema.Manager
-	list    list.Model
-	keys    backendsKeyMap
+	manager      *backendschema.Manager
+	catalogStore backendcatalog.Store
+	schemaStore  backendcatalog.SchemaStore
+	list         list.Model
+	keys         backendsKeyMap
 
 	width  int
 	height int
@@ -91,6 +94,10 @@ type BackendsPage struct {
 	probeEpoch   int
 	probeCh      <-chan backendcatalog.ProbeEvent
 	probeResults map[string]backendProbeResult
+
+	webEditing bool
+	webURL     string
+	webSession *configweb.Session
 }
 
 type backendsLoadedMsg struct {
@@ -140,6 +147,12 @@ func (p BackendsPage) WithProber(prober backendProberIface) BackendsPage {
 	return p
 }
 
+func (p BackendsPage) WithStores(catalog backendcatalog.Store, schema backendcatalog.SchemaStore) BackendsPage {
+	p.catalogStore = catalog
+	p.schemaStore = schema
+	return p
+}
+
 func (p BackendsPage) Init() tea.Cmd {
 	return tea.Batch(p.loadCmd(), p.spinnerModel.Tick)
 }
@@ -183,6 +196,29 @@ func (p BackendsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.handleProbeEvent(m)
 	case spinner.TickMsg:
 		return p.handleSpinnerTick(m)
+	case backendWebEditStartedMsg:
+		p.webSession = m.session
+		p.webURL = m.url
+		return p, waitForBackendWebEdit(m.session)
+	case backendWebEditDoneMsg:
+		p.webEditing = false
+		p.webSession = nil
+		p.webURL = ""
+		var fc tea.Cmd
+		if m.err != nil {
+			p, fc = p.withFlashError("backend edit failed: " + m.err.Error())
+		} else if m.saved {
+			p, fc = p.withFlash("saved backend " + m.backendID)
+		} else {
+			p, fc = p.withFlash("backend edit cancelled")
+		}
+		return p, tea.Batch(p.loadCmd(), fc)
+	case backendWebEditFailedMsg:
+		p.webEditing = false
+		p.webSession = nil
+		p.webURL = ""
+		p, fc := p.withFlashError("backend edit failed: " + m.err.Error())
+		return p, fc
 	case tea.KeyMsg:
 		return p.handleKey(m)
 	}
@@ -204,6 +240,17 @@ func (p BackendsPage) handleLoaded(msg backendsLoadedMsg) (tea.Model, tea.Cmd) {
 }
 
 func (p BackendsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if p.webEditing {
+		if msg.String() == "esc" {
+			p.cleanupBackendWebEdit()
+			p.webEditing = false
+			p.webSession = nil
+			p.webURL = ""
+			p, fc := p.withFlash("backend edit cancelled")
+			return p, fc
+		}
+		return p, nil
+	}
 	if p.form != nil {
 		if msg.String() == "esc" {
 			p.form = nil
@@ -228,6 +275,9 @@ func (p BackendsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (p BackendsPage) forwardNonKey(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if p.webEditing {
+		return p, nil
+	}
 	if p.form != nil {
 		return p.forwardToForm(msg)
 	}
@@ -281,7 +331,14 @@ func (p BackendsPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return p, cmd
 }
 
+func (p BackendsPage) renderWebEditModal() string {
+	return "\n  Editing backend in browser…\n\n  " + p.webURL + "\n\n  Save or cancel on the page. (esc cancels)\n"
+}
+
 func (p BackendsPage) View() string {
+	if p.webEditing {
+		return p.renderWebEditModal()
+	}
 	if p.form != nil {
 		return components.Modal("Backend", p.form.View(), p.width, p.height)
 	}
@@ -382,6 +439,8 @@ func (p BackendsPage) detailView() string {
 
 func (p BackendsPage) Hints() string {
 	switch {
+	case p.webEditing:
+		return "editing in browser…  [esc] cancel"
 	case p.form != nil:
 		return "[enter] submit  [esc] cancel"
 	case p.refreshConfirm.Active():
@@ -404,6 +463,7 @@ func (p BackendsPage) IsCapturingInput() bool {
 		func() bool { return p.refreshConfirm.Active() },
 		func() bool { return p.deleteConfirm.Active() },
 		func() bool { return p.list.FilterState() != list.Unfiltered },
+		func() bool { return p.webEditing },
 	)
 }
 
@@ -428,16 +488,17 @@ func (p BackendsPage) startAdd() (tea.Model, tea.Cmd) {
 		p, fc := p.withFlashError("no backend generators registered")
 		return p, fc
 	}
-	p.formMode = formModeAdd
-	p.draft = &backendDraft{Kind: string(domain.BackendKindLlamaServer)}
-	if p.draft.Kind == "" || !p.hasKind(domain.BackendKind(p.draft.Kind)) {
-		opts := p.sortedKinds()
-		if len(opts) > 0 {
-			p.draft.Kind = string(opts[0])
-		}
+	opts := p.sortedKinds()
+	kind := domain.BackendKindLlamaServer
+	if !p.hasKind(kind) && len(opts) > 0 {
+		kind = opts[0]
 	}
-	p.form = p.buildAddForm()
-	return p, p.form.Init()
+	d := configweb.BackendDraft{
+		IsNew: true,
+		Kind:  kind,
+	}
+	p.webEditing = true
+	return p, p.startBackendWebEdit(d)
 }
 
 func (p BackendsPage) startEditSelected() (tea.Model, tea.Cmd) {
@@ -445,17 +506,18 @@ func (p BackendsPage) startEditSelected() (tea.Model, tea.Cmd) {
 	if !ok {
 		return p, nil
 	}
-	p.formMode = formModeEdit
-	p.draft = &backendDraft{
+	d := configweb.BackendDraft{
 		ID:          b.ID,
+		OrigID:      b.ID,
+		IsNew:       false,
 		Name:        b.Name,
-		Kind:        string(b.Kind),
+		Kind:        b.Kind,
 		Executable:  b.Executable,
 		Description: b.Description,
-		Tags:        strings.Join(b.Tags, ", "),
+		Tags:        b.Tags,
 	}
-	p.form = p.buildEditForm()
-	return p, p.form.Init()
+	p.webEditing = true
+	return p, p.startBackendWebEdit(d)
 }
 
 func (p BackendsPage) buildAddForm() *huh.Form {
