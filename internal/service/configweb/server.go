@@ -1,8 +1,14 @@
 package configweb
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/quantmind-br/model-loader/internal/service/configweb/assets"
+)
 
 func (s *Session) routes(mux *http.ServeMux) {
+	mux.HandleFunc("/", s.handleIndex)
+	mux.Handle("/static/", http.FileServer(http.FS(assets.FS)))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
