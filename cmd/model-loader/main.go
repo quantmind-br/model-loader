@@ -3,70 +3,42 @@
 package main
 
 import (
-	"context"
-	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/quantmind-br/model-loader/internal/app"
+	"github.com/quantmind-br/model-loader/internal/cli"
 	"github.com/quantmind-br/model-loader/internal/config"
-	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
-	"github.com/quantmind-br/model-loader/internal/service/backendschema"
 	"github.com/quantmind-br/model-loader/internal/service/benchmark"
 	"github.com/quantmind-br/model-loader/internal/service/benchmarkstore"
 	"github.com/quantmind-br/model-loader/internal/service/downloadmgr"
 	"github.com/quantmind-br/model-loader/internal/service/hfhub"
-	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/modelscanner"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
-	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/service/proxysupervisor"
 	"github.com/quantmind-br/model-loader/internal/ui"
 	"github.com/quantmind-br/model-loader/internal/ui/pages"
 )
 
 func main() {
-	// Dispatch on the first positional argument. We strip the subcommand
-	// from os.Args so the downstream flag.Parse only sees flags, which
-	// keeps `model-loader serve --log-level=debug` working.
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "serve":
-			os.Args = append(os.Args[:1], os.Args[2:]...)
-			os.Exit(runServe())
-		case "import":
-			os.Args = append(os.Args[:1], os.Args[2:]...)
-			os.Exit(runImport())
-		case "download":
-			os.Args = append(os.Args[:1], os.Args[2:]...)
-			os.Exit(runDownloadWorker())
-		case "benchmark":
-			os.Args = append(os.Args[:1], os.Args[2:]...)
-			os.Exit(runBenchmark())
-		}
-	}
-	os.Exit(runTUI())
+	cli.TUIRunner = runTUI
+	os.Exit(cli.Execute())
 }
 
-func runTUI() int {
-	cliLevel := flag.String("log-level", "", "override log level (debug|info|warn|error); also reads $MODEL_LOADER_LOG_LEVEL and config logging.level")
-	flag.Parse()
-
-	// Single-instance guard (ENV-01): a second interactive TUI sharing the
-	// same state dir would race on instances.json / proxy-state.json. Acquire
-	// the advisory lock before bootstrap so we don't even run the boot-time
-	// reconcile from a duplicate session. Config-load failures are non-fatal
-	// here — bootstrap reports them properly.
+func runTUI(cliLevel string) int {
+	// Single-instance guard: a second interactive TUI sharing the same state
+	// dir would race on instances.json / proxy-state.json. Acquire the lock
+	// before bootstrap so we don't run the boot-time reconcile from a duplicate
+	// session. Config-load failures here are non-fatal — Bootstrap reports them.
 	if early, cErr := config.Load(); cErr == nil {
-		release, acquired, lErr := acquireSingleInstanceLock(early.Paths.StateDir)
+		release, acquired, lErr := app.AcquireSingleInstanceLock(early.Paths.StateDir)
 		if lErr != nil {
 			fmt.Fprintf(os.Stderr, "single-instance lock: %v\n", lErr)
 		}
@@ -80,165 +52,105 @@ func runTUI() int {
 		}
 	}
 
-	cfg, logger, closeLog, svc, err := bootstrap(*cliLevel)
+	svc, err := app.Bootstrap(cliLevel)
 	if err != nil {
 		return 1
 	}
-	defer closeLog()
-	defer svc.mgr.Close()
+	defer svc.Close()
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	hfClient := hfhub.NewClient(httpClient, "model-loader/dev")
-	dlStateDir := filepath.Join(cfg.Paths.StateDir, "downloads")
+	dlStateDir := filepath.Join(svc.Cfg.Paths.StateDir, "downloads")
 	dlManager := downloadmgr.NewManager(dlStateDir, 3).WithUserAgent("model-loader/dev")
 	if err := dlManager.Reconcile(); err != nil {
-		logger.Error("download_reconcile_failed", "err", err)
+		svc.Logger.Error("download_reconcile_failed", "err", err)
 	}
 	dlManager.StartPolling()
 	defer dlManager.Close()
 
 	scanner := modelscanner.New()
-	exportDir := resolveExportDir(cfg.Paths.StateDir, logger)
+	exportDir := resolveExportDir(svc.Cfg.Paths.StateDir, svc.Logger)
 
 	supervisor := proxysupervisor.New(proxysupervisor.Config{
-		StatePath: filepath.Join(cfg.Paths.StateDir, "proxy-state.json"),
-		LogDir:    cfg.Paths.LogDir,
-		Host:      cfg.Serve.Host,
-		Port:      cfg.Serve.Port,
-		Logger:    logger,
+		StatePath: filepath.Join(svc.Cfg.Paths.StateDir, "proxy-state.json"),
+		LogDir:    svc.Cfg.Paths.LogDir,
+		Host:      svc.Cfg.Serve.Host,
+		Port:      svc.Cfg.Serve.Port,
+		Logger:    svc.Logger,
 	})
 	if err := supervisor.Reconcile(); err != nil {
-		logger.Error("proxy_reconcile_failed", "err", err)
+		svc.Logger.Error("proxy_reconcile_failed", "err", err)
 	}
 
-	profilesPage := pages.NewProfilesPage(svc.store, svc.defaultSchema).
-		WithModelScanner(scanner, cfg.Models.SearchPaths).
-		WithBackendCatalog(svc.catalogStore, svc.schemaStore).
+	profilesPage := pages.NewProfilesPage(svc.Store, svc.DefaultSchema).
+		WithModelScanner(scanner, svc.Cfg.Models.SearchPaths).
+		WithBackendCatalog(svc.CatalogStore, svc.SchemaStore).
 		WithExportDir(exportDir)
-	modelsPage := pages.NewModelsPage(scanner, cfg.Models.SearchPaths).
-		WithProfileStore(svc.store).
+	modelsPage := pages.NewModelsPage(scanner, svc.Cfg.Models.SearchPaths).
+		WithProfileStore(svc.Store).
 		WithHFClient(hfClient).
 		WithDownloadManager(dlManager)
 	profilesPage = profilesPage.
-		WithProcessManager(svc.mgr, svc.val).
-		WithBackendResolver(svc.resolver).
-		WithLogger(logger)
+		WithProcessManager(svc.Mgr, svc.Val).
+		WithBackendResolver(svc.Resolver).
+		WithLogger(svc.Logger)
 
 	mon := monitor.New(monitor.Config{NvidiaSMIPath: "nvidia-smi"})
-	serverPage := pages.NewServerPage(svc.mgr, mon, svc.store).
-		WithMetricsDir(filepath.Join(cfg.Paths.StateDir, "metrics")).
-		SetBackendResolver(svc.resolver).
+	serverPage := pages.NewServerPage(svc.Mgr, mon, svc.Store).
+		WithMetricsDir(filepath.Join(svc.Cfg.Paths.StateDir, "metrics")).
+		SetBackendResolver(svc.Resolver).
 		WithProxy(supervisor)
-	prober := backendcatalog.NewProber(svc.catalogStore, backendcatalog.ProbeConfig{Timeout: 10 * time.Second})
-	backendsPage := pages.NewBackendsPage(svc.schemaManager).WithStores(svc.catalogStore, svc.schemaStore).WithProber(prober)
+	prober := backendcatalog.NewProber(svc.CatalogStore, backendcatalog.ProbeConfig{Timeout: 10 * time.Second})
+	backendsPage := pages.NewBackendsPage(svc.SchemaManager).WithStores(svc.CatalogStore, svc.SchemaStore).WithProber(prober)
 
-	benchStore := benchmarkstore.New(filepath.Join(cfg.Paths.StateDir, "benchmark", "runs"))
-	benchRunner, err := benchmark.NewRunner(svc.store, svc.mgr, mon, svc.resolver, benchmark.Config{
-		MaxTokens:         cfg.Benchmark.MaxTokens,
-		Temperature:       cfg.Benchmark.Temperature,
-		Timeout:           time.Duration(cfg.Benchmark.TimeoutSec) * time.Second,
-		LongContextTokens: cfg.Benchmark.LongContextTokens,
-		SaveTranscripts:   cfg.Benchmark.SaveTranscripts,
+	benchStore := benchmarkstore.New(filepath.Join(svc.Cfg.Paths.StateDir, "benchmark", "runs"))
+	benchRunner, err := benchmark.NewRunner(svc.Store, svc.Mgr, mon, svc.Resolver, benchmark.Config{
+		MaxTokens:         svc.Cfg.Benchmark.MaxTokens,
+		Temperature:       svc.Cfg.Benchmark.Temperature,
+		Timeout:           time.Duration(svc.Cfg.Benchmark.TimeoutSec) * time.Second,
+		LongContextTokens: svc.Cfg.Benchmark.LongContextTokens,
+		SaveTranscripts:   svc.Cfg.Benchmark.SaveTranscripts,
 		Judge: benchmark.JudgeEndpoint{
-			BaseURL: cfg.Benchmark.Judge.BaseURL,
-			APIKey:  cfg.Benchmark.Judge.APIKey,
-			Model:   cfg.Benchmark.Judge.Model,
-			Samples: cfg.Benchmark.Judge.Samples,
+			BaseURL: svc.Cfg.Benchmark.Judge.BaseURL,
+			APIKey:  svc.Cfg.Benchmark.Judge.APIKey,
+			Model:   svc.Cfg.Benchmark.Judge.Model,
+			Samples: svc.Cfg.Benchmark.Judge.Samples,
 		},
-		LlamaBenchPresets: cfg.Benchmark.LlamaBench.Presets,
-		LlamaBenchReps:    cfg.Benchmark.LlamaBench.Repetitions,
+		LlamaBenchPresets: svc.Cfg.Benchmark.LlamaBench.Presets,
+		LlamaBenchReps:    svc.Cfg.Benchmark.LlamaBench.Repetitions,
 	})
 	if err != nil {
-		logger.Error("benchmark_dataset_load_failed", "err", err)
+		svc.Logger.Error("benchmark_dataset_load_failed", "err", err)
 		benchRunner = nil
 	}
-	benchmarkPage := pages.NewBenchmarkPage(svc.store, benchStore, benchRunner)
+	benchmarkPage := pages.NewBenchmarkPage(svc.Store, benchStore, benchRunner)
 
-	root := ui.NewRoot(parseTab(cfg.UI.DefaultTab)).
+	root := ui.NewRoot(parseTab(svc.Cfg.UI.DefaultTab)).
 		WithProfilesPage(profilesPage).
 		WithModelsPage(modelsPage).
 		WithServerPage(serverPage).
 		WithBackendsPage(backendsPage).
 		WithBenchmarkPage(benchmarkPage).
-		WithProcessManager(svc.mgr)
+		WithProcessManager(svc.Mgr)
 
 	prog := tea.NewProgram(root, tea.WithAltScreen())
 	if _, err := prog.Run(); err != nil {
-		logger.Error("tui_error", "err", err)
+		svc.Logger.Error("tui_error", "err", err)
 		fmt.Fprintf(os.Stderr, "tui error: %v\n", err)
 		return 1
 	}
 
-	logger.Info("app_exit", "residual_instances", len(svc.mgr.List()))
-	if running := svc.mgr.List(); len(running) > 0 {
+	svc.Logger.Info("app_exit", "residual_instances", len(svc.Mgr.List()))
+	if running := svc.Mgr.List(); len(running) > 0 {
 		fmt.Fprintf(os.Stderr, "%d background instance(s) still running:\n", len(running))
-		logger.Warn("orphan_background_instances", "count", len(running))
+		svc.Logger.Warn("orphan_background_instances", "count", len(running))
 		for _, ri := range running {
 			fmt.Fprintf(os.Stderr, "  PID %d (port %d)\n", ri.PID, ri.Port)
-			logger.Warn("orphan_instance",
+			svc.Logger.Warn("orphan_instance",
 				"pid", ri.PID, "port", ri.Port, "profile_id", ri.ProfileID)
 		}
 		fmt.Fprintln(os.Stderr, "Restart the TUI to manage them.")
-		logger.Warn("orphan_remediation_hint", "hint", "Restart the TUI to manage them.")
-	}
-	return 0
-}
-
-func runServe() int {
-	cliLevel := flag.String("log-level", "", "override log level (debug|info|warn|error); also reads $MODEL_LOADER_LOG_LEVEL and config logging.level")
-	cliHost := flag.String("host", "", "override bind host")
-	cliPort := flag.Int("port", 0, "override bind port")
-	flag.Parse()
-
-	cfg, logger, closeLog, svc, err := bootstrap(*cliLevel)
-	if err != nil {
-		return 1
-	}
-	defer closeLog()
-	defer svc.mgr.Close()
-
-	if *cliHost != "" {
-		cfg.Serve.Host = *cliHost
-	}
-	if *cliPort != 0 {
-		cfg.Serve.Port = *cliPort
-	}
-
-	ctx, stop := signal.NotifyContext(context.Background(),
-		syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	srv := httpproxy.New(httpproxy.Config{
-		Host:                cfg.Serve.Host,
-		Port:                cfg.Serve.Port,
-		HealthCheckTimeout:  120 * time.Second,
-		MaxBodyBuffer:       8 << 20,
-		ShutdownGracePeriod: 10 * time.Second,
-	}, httpproxy.Deps{
-		ProfileStore: svc.store,
-		ProcessMgr:   svc.mgr,
-		Logger:       logger,
-	})
-
-	if err := srv.Start(ctx); err != nil {
-		logger.Error("serve_start_failed", "err", err)
-		fmt.Fprintf(os.Stderr, "start: %v\n", err)
-		return 1
-	}
-	fmt.Printf("Listening on %s:%d (logs: %s)\n",
-		cfg.Serve.Host, cfg.Serve.Port, cfg.Paths.LogDir)
-	logger.Info("serve_listening",
-		"host", cfg.Serve.Host, "port", cfg.Serve.Port)
-
-	<-ctx.Done()
-	logger.Info("serve_signal_received")
-
-	shCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := srv.Stop(shCtx); err != nil {
-		logger.Error("serve_stop_failed", "err", err)
-		fmt.Fprintf(os.Stderr, "stop: %v\n", err)
-		return 1
+		svc.Logger.Warn("orphan_remediation_hint", "hint", "Restart the TUI to manage them.")
 	}
 	return 0
 }
@@ -247,40 +159,6 @@ func runServe() int {
 // bundles into. It lives under <state-dir>/exports and is created lazily.
 // On mkdir failure we log a warning and return "" so the [e] shortcut
 // degrades to a "not configured" flash instead of crashing boot.
-func runImport() int {
-	cliLevel := flag.String("log-level", "", "override log level")
-	modeFlag := flag.String("mode", "merge", "conflict resolution: merge|overwrite|rename")
-	flag.Parse()
-
-	if flag.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "usage: model-loader import <path> [--mode=merge|overwrite|rename]")
-		return 1
-	}
-	path := flag.Arg(0)
-
-	mode := profilestore.ConflictModeMerge
-	if *modeFlag != "" {
-		mode = profilestore.ConflictMode(*modeFlag)
-	}
-
-	_, logger, closeLog, svc, err := bootstrap(*cliLevel)
-	if err != nil {
-		return 1
-	}
-	defer closeLog()
-	defer svc.mgr.Close()
-
-	res, err := profilestore.ImportBundle(svc.store, path, mode)
-	if err != nil {
-		logger.Error("import_failed", "err", err)
-		fmt.Fprintf(os.Stderr, "import failed: %v\n", err)
-		return 1
-	}
-	fmt.Printf("Import result: added=%d skipped=%d renamed=%d replaced=%d\n",
-		res.Added, res.Skipped, res.Renamed, res.Replaced)
-	return 0
-}
-
 func resolveExportDir(stateDir string, logger *slog.Logger) string {
 	if stateDir == "" {
 		return ""
@@ -291,57 +169,6 @@ func resolveExportDir(stateDir string, logger *slog.Logger) string {
 		return ""
 	}
 	return dir
-}
-
-func ensureDefaultCatalog(catalogStore backendcatalog.Store, schemaStore backendcatalog.SchemaStore, _ *backendschema.Manager, fallbackBinary string, logger *slog.Logger) domain.FlagSchema {
-	catalog, err := catalogStore.Load()
-	if err != nil {
-		logger.Error("default_catalog_load_failed", "err", err)
-		fmt.Fprintf(os.Stderr, "backend catalog load error: %v\n", err)
-		fmt.Fprintln(os.Stderr, "fix catalog.json or remove it to recreate defaults")
-		logger.Warn("catalog_remediation_hint",
-			"hint", "fix catalog.json or remove it to recreate defaults")
-		return domain.BackendValidationSchema{}.ToFlagSchema()
-	}
-	if len(catalog.Backends) > 0 {
-		resolver := backendcatalog.NewResolver(catalogStore, schemaStore, logger)
-		if rb, err := resolver.Resolve(domain.Profile{}); err == nil {
-			return rb.Schema.ToFlagSchema()
-		}
-		logger.Warn("default_catalog_schema_missing",
-			"hint", "fix catalog.json or remove it to recreate defaults")
-		fmt.Fprintf(os.Stderr, "warning: default backend schema missing/invalid, using fallback\n")
-		return domain.BackendValidationSchema{}.ToFlagSchema()
-	}
-	if fallbackBinary == "" {
-		fallbackBinary = "llama-server"
-	}
-	catalog = backendcatalog.DefaultCatalog(fallbackBinary)
-	if err := catalogStore.Save(catalog); err != nil {
-		logger.Error("default_catalog_save_failed", "err", err)
-		fmt.Fprintf(os.Stderr, "save default catalog: %v\n", err)
-		return domain.BackendValidationSchema{}.ToFlagSchema()
-	}
-	backend := catalog.Backends[0]
-	schema := backendschema.CuratedLlamaSchema()
-	schema.BackendID = backend.ID
-	ref := backendcatalog.SchemaStoreRef(backend.SchemaRef)
-	_ = schemaStore.Save(ref, schema)
-	resolver := backendcatalog.NewResolver(catalogStore, schemaStore, logger)
-	if rb, err := resolver.Resolve(domain.Profile{}); err == nil {
-		return rb.Schema.ToFlagSchema()
-	}
-	return domain.BackendValidationSchema{}.ToFlagSchema()
-}
-
-func buildResolver(resolver backendcatalog.Resolver) func(domain.Profile) (string, domain.BackendKind, error) {
-	return func(p domain.Profile) (string, domain.BackendKind, error) {
-		rb, err := resolver.Resolve(p)
-		if err != nil {
-			return "", "", err
-		}
-		return rb.ExecutablePath, rb.Backend.Kind, nil
-	}
 }
 
 func parseTab(name string) ui.Tab {
