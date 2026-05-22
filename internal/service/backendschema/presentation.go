@@ -9,7 +9,7 @@ import (
 )
 
 // essentialSeed lists, per backend kind, the flag long-names that should land
-// in the highlighted "Essenciais" group when synthesizing a default
+// in the highlighted "Essentials" group when synthesizing a default
 // Presentation. Copied from the retired profile_editor essentials registry.
 var essentialSeed = map[domain.BackendKind][]string{
 	domain.BackendKindLlamaServer:  {"n-gpu-layers", "ctx-size", "batch-size", "ubatch-size", "port", "flash-attn", "cache-type-k", "cache-type-v"},
@@ -20,7 +20,7 @@ var essentialSeed = map[domain.BackendKind][]string{
 }
 
 // BuildPresentation synthesizes a default Presentation from a schema:
-// the highlighted "Essenciais" group holds the seed flags that exist in the
+// the highlighted "Essentials" group holds the seed flags that exist in the
 // schema (in seed order); remaining flags are grouped by FlagSpec.Group
 // (alphabetical group order, alphabetical flags within a group).
 func BuildPresentation(schema domain.BackendValidationSchema) domain.Presentation {
@@ -46,7 +46,7 @@ func BuildPresentation(schema domain.BackendValidationSchema) domain.Presentatio
 	}
 
 	groups := []domain.PresentationGroup{{
-		Name:        "Essenciais",
+		Name:        "Essentials",
 		Highlighted: true,
 		Flags:       essentials,
 	}}

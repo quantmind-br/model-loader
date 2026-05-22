@@ -12,7 +12,7 @@ func TestBackendValidationSchema_EnvelopeRoundTrip(t *testing.T) {
 		BackendKind:   BackendKindLlamaServer,
 		BackendID:     "llama",
 		Flags:         map[string]FlagSpec{"ctx-size": {Long: "ctx-size", Type: FlagTypeInt}},
-		Presentation:  &Presentation{Groups: []PresentationGroup{{Name: "Essenciais", Highlighted: true, Flags: []string{"ctx-size"}}}},
+		Presentation:  &Presentation{Groups: []PresentationGroup{{Name: "Essentials", Highlighted: true, Flags: []string{"ctx-size"}}}},
 		Rules: []CrossFieldRule{{
 			ID:       "r1",
 			When:     Cond{Flag: "flash-attn", Op: "eq", Value: "on"},
@@ -49,7 +49,7 @@ func TestToFlagSchema_CarriesRules(t *testing.T) {
 
 func TestPresentation_RoundTrip(t *testing.T) {
 	in := Presentation{Groups: []PresentationGroup{
-		{Name: "Essenciais", Highlighted: true, Flags: []string{"ctx-size", "port"}},
+		{Name: "Essentials", Highlighted: true, Flags: []string{"ctx-size", "port"}},
 		{Name: "Sampling", Flags: []string{"temp"}},
 	}}
 	b, err := json.Marshal(in)
@@ -60,7 +60,7 @@ func TestPresentation_RoundTrip(t *testing.T) {
 	if err := json.Unmarshal(b, &out); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(out.Groups) != 2 || out.Groups[0].Name != "Essenciais" || !out.Groups[0].Highlighted {
+	if len(out.Groups) != 2 || out.Groups[0].Name != "Essentials" || !out.Groups[0].Highlighted {
 		t.Fatalf("groups not preserved: %+v", out)
 	}
 	if len(out.Groups[0].Flags) != 2 || out.Groups[0].Flags[1] != "port" {
