@@ -130,7 +130,7 @@ func runTUI() int {
 		SetBackendResolver(svc.resolver).
 		WithProxy(supervisor)
 	prober := backendcatalog.NewProber(svc.catalogStore, backendcatalog.ProbeConfig{Timeout: 10 * time.Second})
-	backendsPage := pages.NewBackendsPage(svc.schemaManager).WithProber(prober)
+	backendsPage := pages.NewBackendsPage(svc.schemaManager).WithStores(svc.catalogStore, svc.schemaStore).WithProber(prober)
 
 	benchStore := benchmarkstore.New(filepath.Join(cfg.Paths.StateDir, "benchmark", "runs"))
 	benchRunner, err := benchmark.NewRunner(svc.store, svc.mgr, mon, svc.resolver, benchmark.Config{
