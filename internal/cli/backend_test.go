@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -122,5 +123,41 @@ func TestResolveBackend_AmbiguousPrefix(t *testing.T) {
 	}}
 	if _, err := resolveBackend(mgr, "vllm"); err == nil {
 		t.Fatal("expected ambiguous error")
+	}
+}
+
+func TestBackendCommandTree(t *testing.T) {
+	bc := childByName(rootCmd, "backend")
+	if bc == nil {
+		t.Fatal("backend not registered")
+	}
+	for _, name := range []string{"list", "show", "probe", "schema"} {
+		if childByName(bc, name) == nil {
+			t.Errorf("backend %s not registered", name)
+		}
+	}
+	sc := childByName(bc, "schema")
+	for _, name := range []string{"show", "refresh", "apply"} {
+		if childByName(sc, name) == nil {
+			t.Errorf("backend schema %s not registered", name)
+		}
+	}
+}
+
+func TestBackendShow_ArgValidation(t *testing.T) {
+	// `backend show` requires exactly one arg; zero args must be a usage error
+	// surfaced as a non-zero exit, without touching config/services.
+	rootCmd.SetArgs([]string{"backend", "show"})
+	var errb bytes.Buffer
+	rootCmd.SetErr(&errb)
+	rootCmd.SetOut(&errb)
+	t.Cleanup(func() {
+		rootCmd.SetArgs(nil)
+		rootCmd.SetErr(nil)
+		rootCmd.SetOut(nil)
+	})
+
+	if err := rootCmd.Execute(); err == nil {
+		t.Fatal("expected arg-validation error for `backend show` with no args")
 	}
 }
