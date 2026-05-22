@@ -13,11 +13,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var instanceCmd = &cobra.Command{
+	Use:   "instance",
+	Short: "Manage running llama-server instances",
+}
+
 func init() {
-	instanceCmd := &cobra.Command{
-		Use:   "instance",
-		Short: "Manage running llama-server instances",
-	}
 	instanceCmd.AddCommand(&cobra.Command{
 		Use:   "list",
 		Short: "List running instances",
