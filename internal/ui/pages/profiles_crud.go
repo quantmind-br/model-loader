@@ -135,6 +135,7 @@ func (p ProfilesPage) startEditSelected() (tea.Model, tea.Cmd) {
 		Model:       pr.Model,
 		BackendID:   pr.Launch.BackendID,
 		Args:        argsToStrings(pr.Args),
+		Env:         pr.Launch.Env,
 	}
 	if d.Tags == nil {
 		d.Tags = []string{}
