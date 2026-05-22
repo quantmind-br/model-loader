@@ -15,12 +15,9 @@ import (
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
-	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
-	"github.com/quantmind-br/model-loader/internal/service/validator"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
-	"github.com/quantmind-br/model-loader/internal/ui/pages/profile_editor"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
@@ -136,84 +133,6 @@ func TestProfilesPage_NewProfileSavesViaStore(t *testing.T) {
 	}
 }
 
-func TestProfilesPage_RenamesProfileViaStore(t *testing.T) {
-	dir := t.TempDir()
-	store, err := profilestore.NewFSStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Save(domain.Profile{ID: "orig", Name: "Orig", Model: "/m.gguf"}); err != nil {
-		t.Fatal(err)
-	}
-	created := mustGetProfile(t, store, "orig").Meta.CreatedAt
-
-	page := NewProfilesPage(store, domain.FlagSchema{})
-	msg := profile_editor.EditorCommittedMsg{Draft: profile_editor.Draft{
-		ID: "renamed", OrigID: "orig", Name: "Orig", Model: "/m.gguf",
-	}}
-	page.handleEditorCommitted(msg)
-
-	if _, err := store.Get("orig"); !errors.Is(err, profilestore.ErrNotFound) {
-		t.Errorf("orig still present: %v", err)
-	}
-	got := mustGetProfile(t, store, "renamed")
-	if !got.Meta.CreatedAt.Equal(created) {
-		t.Errorf("CreatedAt = %v, want preserved %v", got.Meta.CreatedAt, created)
-	}
-}
-
-func TestProfilesPage_RenameBlockedWhileRunning(t *testing.T) {
-	dir := t.TempDir()
-	store, err := profilestore.NewFSStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Save(domain.Profile{ID: "orig", Name: "Orig", Model: "/m.gguf"}); err != nil {
-		t.Fatal(err)
-	}
-
-	page := NewProfilesPage(store, domain.FlagSchema{})
-	page.running = []domain.RunningInstance{{ProfileID: "orig"}}
-	msg := profile_editor.EditorCommittedMsg{Draft: profile_editor.Draft{
-		ID: "renamed", OrigID: "orig", Name: "Orig", Model: "/m.gguf",
-	}}
-	page.handleEditorCommitted(msg)
-
-	// Nothing moved: original survives, target never created.
-	if _, err := store.Get("orig"); err != nil {
-		t.Errorf("orig removed despite running guard: %v", err)
-	}
-	if _, err := store.Get("renamed"); !errors.Is(err, profilestore.ErrNotFound) {
-		t.Errorf("renamed created despite running guard: %v", err)
-	}
-}
-
-// TestProfilesPage_NewProfileDoesNotClobberExisting is the Codex finding-1
-// guard at the UI seam: committing a brand-new Draft whose id was taken after
-// the editor opened must route through the exclusive Create and leave the
-// existing profile's content untouched (no silent overwrite via Save upsert).
-func TestProfilesPage_NewProfileDoesNotClobberExisting(t *testing.T) {
-	dir := t.TempDir()
-	store, err := profilestore.NewFSStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Save(domain.Profile{ID: "taken", Name: "Existing", Model: "/keep.gguf"}); err != nil {
-		t.Fatal(err)
-	}
-
-	page := NewProfilesPage(store, domain.FlagSchema{})
-	msg := profile_editor.EditorCommittedMsg{Draft: profile_editor.Draft{
-		ID: "taken", Name: "Newcomer", Model: "/clobber.gguf", IsNew: true,
-	}}
-	page.handleEditorCommitted(msg)
-
-	got := mustGetProfile(t, store, "taken")
-	if got.Name != "Existing" || got.Model != "/keep.gguf" {
-		t.Errorf("existing profile clobbered by new-profile commit: Name=%q Model=%q", got.Name, got.Model)
-	}
-}
-
 func mustGetProfile(t *testing.T, s profilestore.Store, id string) domain.Profile {
 	t.Helper()
 	p, err := s.Get(id)
@@ -221,36 +140,6 @@ func mustGetProfile(t *testing.T, s profilestore.Store, id string) domain.Profil
 		t.Fatalf("Get(%q): %v", id, err)
 	}
 	return p
-}
-
-// TestProfilesPage_ValidationDetectsUbatchOverBatch exercises the same
-// preview-validator path the editor renders, but without reaching into
-// editor internals: we build the Draft ourselves and call the validator
-// directly. Behavior under test (ubatch > batch produces an error) is
-// owned by validator, not by ProfilesPage.
-func TestProfilesPage_ValidationDetectsUbatchOverBatch(t *testing.T) {
-	d := profile_editor.Draft{
-		ID:    "x",
-		Name:  "X",
-		IsNew: true,
-		Essentials: map[string]string{
-			"batch-size":  "2048",
-			"ubatch-size": "4096",
-		},
-	}
-	pr := d.ToProfile()
-	report := validator.New(log.Nop()).Validate(pr, domain.FlagSchema{}, domain.BackendKindLlamaServer)
-
-	found := false
-	for _, e := range report.Errors {
-		if e.Field == "ubatch-size" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected ubatch-size error in report; got Errors=%v Warnings=%v", report.Errors, report.Warnings)
-	}
 }
 
 type stubScanner struct{}

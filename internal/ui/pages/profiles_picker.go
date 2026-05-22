@@ -32,9 +32,8 @@ func (p ProfilesPage) handleModelPicked(msg components.ModelPickedMsg) (tea.Mode
 	if c := p.picker.picker.Cancel(); c != nil {
 		c()
 	}
-	var cmd tea.Cmd
-	p.editor, cmd = p.editor.SetModelPath(msg.Path)
-	return p, cmd
+	_ = msg // model picker no longer used with huh editor; web editor receives model path via URL
+	return p, nil
 }
 
 func (p ProfilesPage) handleModelPickerCancelled(_ components.ModelPickerCancelledMsg) (tea.Model, tea.Cmd) {
@@ -47,12 +46,7 @@ func (p ProfilesPage) handleNavigateToSizing(msg NavigateToSizingMsg) (tea.Model
 	for i, it := range items {
 		if sel, ok := it.(item); ok && sel.p.ID == msg.ProfileID {
 			p.list.Select(i)
-			p, cmd := p.startEditSelected()
-			if rm, ok := p.(ProfilesPage); ok {
-				rm.editor = rm.editor.SetSubTabSizing()
-				return rm, cmd
-			}
-			return p, cmd
+			return p.startEditSelected()
 		}
 	}
 	p, fc := p.withFlashError("profile not found for sizing navigation")
