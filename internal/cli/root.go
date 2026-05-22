@@ -48,6 +48,8 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "",
 		"override log level (debug|info|warn|error); also reads $MODEL_LOADER_LOG_LEVEL and config logging.level")
+	rootCmd.PersistentFlags().BoolVar(&jsonOut, "json", false,
+		"emit machine-readable JSON instead of human-readable tables")
 }
 
 // Execute runs the cobra tree and returns the process exit code. An *ExitError

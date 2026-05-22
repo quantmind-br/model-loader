@@ -2,12 +2,10 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -142,7 +140,7 @@ func init() {
 			}
 
 			if asJSON {
-				emitJSON(run)
+				_ = emitJSON(os.Stdout, run)
 			} else {
 				printRun(run)
 			}
@@ -184,12 +182,6 @@ func parseBenchMode(s string) (benchmark.Mode, bool) {
 	return "", false
 }
 
-func emitJSON(v any) {
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	_ = enc.Encode(v)
-}
-
 func printRun(run benchmark.Run) {
 	a := run.Aggregate
 	fmt.Printf("Profile: %s (%s)\n", run.ProfileName, run.ProfileID)
@@ -225,7 +217,7 @@ func benchPrintList(store benchmarkstore.Store, asJSON bool) int {
 		return 1
 	}
 	if asJSON {
-		emitJSON(runs)
+		_ = emitJSON(os.Stdout, runs)
 		return 0
 	}
 	if len(runs) == 0 {
@@ -248,7 +240,7 @@ func benchPrintHistory(store benchmarkstore.Store, profileID string, asJSON bool
 		return 1
 	}
 	if asJSON {
-		emitJSON(runs)
+		_ = emitJSON(os.Stdout, runs)
 		return 0
 	}
 	if len(runs) == 0 {
@@ -281,7 +273,7 @@ func benchPrintCompare(store benchmarkstore.Store, asJSON bool) int {
 		latest = append(latest, r)
 	}
 	if asJSON {
-		emitJSON(latest)
+		_ = emitJSON(os.Stdout, latest)
 		return 0
 	}
 	if len(latest) == 0 {
@@ -305,7 +297,7 @@ func benchPrintTranscript(store benchmarkstore.Store, id string, asJSON bool) in
 		return 1
 	}
 	if asJSON {
-		emitJSON(tr)
+		_ = emitJSON(os.Stdout, tr)
 		return 0
 	}
 	for _, t := range tr {
@@ -324,30 +316,3 @@ func benchPrintTranscript(store benchmarkstore.Store, id string, asJSON bool) in
 	return 0
 }
 
-func indent(s, pad string) string {
-	if s == "" {
-		return pad + "(empty)"
-	}
-	lines := strings.Split(s, "\n")
-	for i, l := range lines {
-		lines[i] = pad + l
-	}
-	return strings.Join(lines, "\n")
-}
-
-func dashOr(s string) string {
-	if s == "" {
-		return "-"
-	}
-	return s
-}
-
-func clip(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	if max <= 1 {
-		return s[:max]
-	}
-	return s[:max-1] + "…"
-}
