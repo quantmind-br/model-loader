@@ -19,13 +19,21 @@ var instanceCmd = &cobra.Command{
 }
 
 func init() {
-	instanceCmd.AddCommand(&cobra.Command{
+	var watch bool
+	var interval time.Duration
+	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "List running instances",
 		RunE: instanceReadRunE(func(out io.Writer, mgr processmgr.Manager, _ string, _ []string) error {
+			if watch {
+				return watchInstances(out, mgr, interval)
+			}
 			return listInstances(out, mgr, jsonOut)
 		}),
-	})
+	}
+	listCmd.Flags().BoolVarP(&watch, "watch", "w", false, "continuously re-poll instances (like watch)")
+	listCmd.Flags().DurationVar(&interval, "interval", 2*time.Second, "polling interval for --watch")
+	instanceCmd.AddCommand(listCmd)
 	instanceCmd.AddCommand(&cobra.Command{
 		Use:   "show <pid|id>",
 		Short: "Show a single instance",
@@ -124,6 +132,17 @@ func listInstances(w io.Writer, mgr processmgr.Manager, asJSON bool) error {
 		fmt.Fprintln(w, "(no running instances)")
 	}
 	return nil
+}
+
+// watchInstances continuously re-polls the instance list on interval until interrupted.
+func watchInstances(out io.Writer, mgr processmgr.Manager, interval time.Duration) error {
+	for {
+		fmt.Fprint(out, "\033[H\033[2J") // clear screen
+		if err := listInstances(out, mgr, false); err != nil {
+			return err
+		}
+		time.Sleep(interval)
+	}
 }
 
 func showInstance(w io.Writer, mgr processmgr.Manager, ref string, asJSON bool) error {
