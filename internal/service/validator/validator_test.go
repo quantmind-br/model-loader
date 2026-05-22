@@ -200,3 +200,14 @@ func TestValidate_RequiredFlagPresent(t *testing.T) {
 		t.Fatalf("unexpected errors: %+v", rep.Errors)
 	}
 }
+
+func TestValidate_RequiredFlagInExtraArgs(t *testing.T) {
+	sch := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"port": {Long: "port", Type: domain.FlagTypeInt, Required: true},
+	}}
+	p := domain.Profile{Args: map[string]any{}, ExtraArgs: []string{"--port=8080"}}
+	rep := New(nil).Validate(p, sch, domain.BackendKindLlamaServer)
+	if rep.HasBlockingErrors() {
+		t.Fatalf("unexpected errors: %+v", rep.Errors)
+	}
+}

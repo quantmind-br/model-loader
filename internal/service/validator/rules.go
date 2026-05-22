@@ -322,8 +322,10 @@ func applyRequiredRules(p domain.Profile, schema domain.FlagSchema, rep Report) 
 		if _, ok := p.Args[long]; ok {
 			continue
 		}
-		if _, ok := p.Args[domain.CanonicalFlag(spec.Short)]; spec.Short != "" && ok {
-			continue
+		if spec.Short != "" {
+			if _, ok := p.Args[domain.CanonicalFlag(spec.Short)]; ok {
+				continue
+			}
 		}
 		if extraArgsContain(p.ExtraArgs, spec) {
 			continue
