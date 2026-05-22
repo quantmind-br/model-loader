@@ -7,7 +7,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 )
 
-// SGLangGenerator generates schemas from the hand-curated sglang flag catalog.
+// SGLangGenerator generates schemas from the hand-curated sglang serve flag catalog.
 type SGLangGenerator struct {
 	schemaStore backendcatalog.SchemaStore
 }
@@ -17,7 +17,7 @@ func NewSGLangGenerator(schemaStore backendcatalog.SchemaStore) *SGLangGenerator
 	return &SGLangGenerator{schemaStore: schemaStore}
 }
 
-// Generate returns the hand-curated sglang schema without runtime --help parsing.
+// Generate returns the hand-curated sglang serve schema without runtime --help parsing.
 // If the existing schema has source.editable=true, generation is skipped to preserve manual edits.
 func (g *SGLangGenerator) Generate(backend domain.Backend) (domain.BackendValidationSchema, error) {
 	if backend.Kind != domain.BackendKindSGLang {

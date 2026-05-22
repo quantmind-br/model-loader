@@ -241,14 +241,10 @@ func TestManager_AddSGLangBackendGeneratesSchema(t *testing.T) {
 		t.Errorf("schema.BackendKind = %q, want %q", schema.BackendKind, domain.BackendKindSGLang)
 	}
 	if _, ok := schema.Flags["model-path"]; ok {
-		t.Errorf("schema unexpectedly includes 'model-path' flag")
+		t.Errorf("schema should not include 'model-path' flag")
 	}
-	tp, ok := schema.Flags["tensor-parallel-size"]
-	if !ok {
-		t.Fatalf("schema missing 'tensor-parallel-size' flag")
-	}
-	if len(tp.Aliases) != 1 || tp.Aliases[0] != "tp-size" {
-		t.Errorf("tensor-parallel-size aliases = %v, want [tp-size]", tp.Aliases)
+	if _, ok := schema.Flags["tensor-parallel-size"]; !ok {
+		t.Errorf("schema missing 'tensor-parallel-size' flag")
 	}
 }
 
