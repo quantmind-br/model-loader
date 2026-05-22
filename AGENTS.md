@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-05-21
-**Commit:** f32c804
+**Generated:** 2026-05-22
+**Commit:** defda2f
 **Branch:** main
 
 ## OVERVIEW
@@ -20,8 +20,10 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 │   │   ├── backendschema/  # Schema generation orchestrator
 │   │   ├── benchmark/      # Profile eval engine (SWE-bench Lite + needle probe)
 │   │   ├── benchmarkstore/ # Benchmark run persistence (1 JSON per run)
+│   │   ├── buunhelp/       # Embedded schema for buun-llama-cpp backend
 │   │   ├── configweb/      # On-demand web GUI for profile editing (HTMX/Alpine, embedded assets)
 │   │   ├── downloadmgr/    # HuggingFace file downloader with progress
+│   │   ├── dflashhelp/     # Embedded schema for DFlash backend
 │   │   ├── hfhub/          # HuggingFace Hub API client
 │   │   ├── httpproxy/      # OpenAI-shaped reverse proxy
 │   │   ├── llamahelp/      # --help parser + embedded schema
@@ -51,6 +53,8 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 | Task | Location | Notes |
 |------|----------|-------|
 | llama-server --help parsing | internal/service/llamahelp/ | embedded schema pinned to v7376 |
+| Buun embedded schema | internal/service/buunhelp/ | buun-llama-cpp fork — merges upstream + fork-specific flags |
+| DFlash embedded schema | internal/service/dflashhelp/ | Lucebox speculative-decoding runtime — hand-curated |
 | Multi-backend catalog | internal/service/backendcatalog/ | catalog.json + schema resolver |
 | Schema generation | internal/service/backendschema/ | orchestrates AddBackend for all kinds |
 | GGUF model metadata | internal/service/modelscanner/gguf.go | |
@@ -128,7 +132,7 @@ go test ./... -update  # Update golden test fixtures
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **model-loader** (7158 symbols, 25373 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **model-loader** (7414 symbols, 25320 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
