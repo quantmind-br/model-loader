@@ -3,6 +3,7 @@ package benchmark
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -317,11 +318,76 @@ func (r *Runner) newScorer(mode Mode) (Scorer, error) {
 
 // --- long-context needle probe --------------------------------------------
 
-const longNeedle = "WIDGETKEY_NEEDLE_91743X"
+// needle is one randomized fact planted in the long-context haystack.
+type needle struct {
+	label string // distinguishes the three planted facts
+	value string // "<City>-<4digit>", the literal the model must recover
+}
 
-// runLongContext packs a large synthetic code corpus with a unique needle deep
-// inside, then asks the model to retrieve it. Pass/fail + prompt/gen speed at
-// depth is the single most direct signal of KV-cache-quantization degradation.
+var needleCities = []string{
+	"Reykjavik", "Ulaanbaatar", "Montevideo", "Gaborone", "Tbilisi",
+	"Ljubljana", "Windhoek", "Paramaribo", "Bishkek", "Vientiane",
+}
+
+// buildNeedles makes three randomized needles at distinct depths.
+func buildNeedles() []needle {
+	labels := []string{"alpha", "beta", "gamma"}
+	out := make([]needle, 3)
+	for i := range out {
+		city := needleCities[rand.Intn(len(needleCities))]
+		out[i] = needle{label: labels[i], value: fmt.Sprintf("%s-%04d", city, rand.Intn(9000)+1000)}
+	}
+	return out
+}
+
+// scoreNeedles returns the fraction of needle values present in the response.
+func scoreNeedles(response string, needles []needle) float64 {
+	if len(needles) == 0 {
+		return 0
+	}
+	found := 0
+	for _, n := range needles {
+		if strings.Contains(response, n.value) {
+			found++
+		}
+	}
+	return float64(found) / float64(len(needles))
+}
+
+// buildMultiNeedleHaystack generates ~targetTokens of varied pseudo-code with
+// the needles planted at ~25%, ~50%, ~75% depth.
+func buildMultiNeedleHaystack(targetTokens int, needles []needle) string {
+	charBudget := targetTokens * 4
+	depths := []int{charBudget / 4, charBudget / 2, charBudget * 3 / 4}
+	var b strings.Builder
+	planted := make([]bool, len(needles))
+	i := 0
+	for b.Len() < charBudget {
+		for k := range needles {
+			if !planted[k] && k < len(depths) && b.Len() >= depths[k] {
+				fmt.Fprintf(&b, "\n# === FILE: registry_%s.py ===\n# Internal registration table.\nMAGIC_%s_NUMBER = '%s'\n# End.\n\n",
+					needles[k].label, strings.ToUpper(needles[k].label), needles[k].value)
+				planted[k] = true
+			}
+		}
+		fmt.Fprintf(&b, "\n# === FILE: module_%04d.py ===\n", i)
+		fmt.Fprintf(&b, "def handler_%04d(state, payload, retries=%d):\n", i, i%7)
+		fmt.Fprintf(&b, "    total = 0\n    for item in payload.get('items_%d', []):\n", i%5)
+		fmt.Fprintf(&b, "        total += item.weight * %d\n", (i%9)+1)
+		fmt.Fprintf(&b, "    return Result(total=total, code=%d)\n", i%256)
+		i++
+	}
+	for k := range needles {
+		if !planted[k] {
+			fmt.Fprintf(&b, "\nMAGIC_%s_NUMBER = '%s'\n", strings.ToUpper(needles[k].label), needles[k].value)
+		}
+	}
+	return b.String()
+}
+
+// runLongContext packs a large synthetic code corpus with three randomized
+// needles planted at varied depths, then asks the model to retrieve all three.
+// Score = fraction recovered; resolved = all three found.
 func (r *Runner) runLongContext(ctx context.Context, base, model string) (ProblemResult, ProblemTranscript) {
 	res := ProblemResult{ProblemID: "long-context-needle", ProblemName: "Long-context needle retrieval"}
 	tr := ProblemTranscript{ProblemID: res.ProblemID, ProblemName: res.ProblemName}
@@ -330,17 +396,18 @@ func (r *Runner) runLongContext(ctx context.Context, base, model string) (Proble
 	if targetTokens <= 0 {
 		targetTokens = 8000
 	}
-	haystack := buildHaystack(targetTokens)
+	needles := buildNeedles()
+	haystack := buildMultiNeedleHaystack(targetTokens, needles)
 	user := "Below is a dump of a Python codebase. Read it carefully.\n\n" + haystack +
-		"\n\nQuestion: in the file `widget_registry.py`, what is the value of `WIDGET_PRODUCTION_KEY`? " +
-		"Reply with just the literal value, no explanation."
+		"\n\nQuestion: three files define a constant named MAGIC_<NAME>_NUMBER. " +
+		"List all three literal values, one per line, no explanation."
 
 	reqCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout)
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
 		Model:       model,
 		Temperature: 0,
-		MaxTokens:   64,
+		MaxTokens:   128,
 		Messages: []ChatMessage{
 			{Role: "system", Content: "You are a careful code-reading assistant. Answer literally."},
 			{Role: "user", Content: user},
@@ -360,53 +427,12 @@ func (r *Runner) runLongContext(ctx context.Context, base, model string) (Proble
 	res.CompletionTokens = comp.CompletionTokens
 	tr.ModelResponse = comp.Content
 
-	found := strings.Contains(comp.Content, longNeedle)
-	if found {
-		res.Resolved = true
-		res.Score = 1
-	}
-	ppTps := 0.0
-	if comp.TTFT.Seconds() > 0 {
-		ppTps = float64(comp.PromptTokens) / comp.TTFT.Seconds()
-	}
-	verdict := "missed"
-	if found {
-		verdict = "found"
-	}
-	res.Detail = fmt.Sprintf("needle %s; prompt≈%d tok; pp %.0f t/s; tg %.0f t/s",
-		verdict, comp.PromptTokens, ppTps, comp.TokensPerSecond)
+	frac := scoreNeedles(comp.Content, needles)
+	res.Score = frac
+	res.Resolved = frac == 1.0
+	res.Detail = fmt.Sprintf("recovered %.0f%% of needles (%d/3); prompt≈%d tok; pp %.0f t/s; tg %.0f t/s",
+		frac*100, int(frac*3+0.5), comp.PromptTokens, comp.PromptProcessingTPS, comp.TokensPerSecond)
 	return res, tr
-}
-
-// buildHaystack generates ~targetTokens of varied pseudo-code (≈4 chars/token)
-// with the needle block inserted in the middle.
-func buildHaystack(targetTokens int) string {
-	charBudget := targetTokens * 4
-	var b strings.Builder
-	needleBlock := "\n# === FILE: widget_registry.py ===\n" +
-		"# Internal widget registration table.\n" +
-		"WIDGET_PRODUCTION_KEY = '" + longNeedle + "'\n" +
-		"# End of widget registry.\n\n"
-
-	i := 0
-	inserted := false
-	for b.Len() < charBudget {
-		if !inserted && b.Len() >= charBudget/2 {
-			b.WriteString(needleBlock)
-			inserted = true
-		}
-		fmt.Fprintf(&b, "\n# === FILE: module_%04d.py ===\n", i)
-		fmt.Fprintf(&b, "def handler_%04d(state, payload, retries=%d):\n", i, i%7)
-		fmt.Fprintf(&b, "    \"\"\"Process payload %04d for subsystem %d.\"\"\"\n", i, i%13)
-		fmt.Fprintf(&b, "    total = 0\n    for item in payload.get('items_%d', []):\n", i%5)
-		fmt.Fprintf(&b, "        total += item.weight * %d\n", (i%9)+1)
-		fmt.Fprintf(&b, "    return Result(total=total, code=%d, ok=total > %d)\n", i%256, i%50)
-		i++
-	}
-	if !inserted {
-		b.WriteString(needleBlock)
-	}
-	return b.String()
 }
 
 // --- llama-bench throughput probe ------------------------------------------
