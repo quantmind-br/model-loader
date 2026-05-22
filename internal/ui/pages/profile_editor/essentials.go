@@ -60,6 +60,20 @@ var essentialFields = map[domain.BackendKind][]EssentialField{
 		{Flag: "fa-window", Label: "fa-window", Description: "Sliding-window flash attention (0 = full)", Min: iptr(0), Max: iptr(1024 * 1024), Default: "2048"},
 		{Flag: "port", Label: "port", Description: "Server port", IsPort: true, Default: "8080"},
 	},
+	domain.BackendKindBuunLlamaCpp: {
+		{Flag: "n-gpu-layers", Label: "ngl (gpu layers)", Description: "Number of GPU layers to offload", Min: iptr(-1), Max: iptr(9999), Default: "99"},
+		{Flag: "ctx-size", Label: "ctx-size", Description: "Context window size in tokens", Min: iptr(0), Max: iptr(1024 * 1024), Default: "8192"},
+		{Flag: "flash-attn", Label: "flash-attn", Description: "Flash Attention mode", Default: "auto", Coerce: FlashAttnToString},
+		{Flag: "port", Label: "port", Description: "Port to bind the inference server", IsPort: true, Default: "8080"},
+		{Flag: "cache-type-k", Label: "cache-type-k", Description: "K cache type (turbo2/3/4, turbo*_tcq, or standard)", Default: "f16"},
+		{Flag: "cache-type-v", Label: "cache-type-v", Description: "V cache type (turbo2/3/4, turbo*_tcq, or standard)", Default: "f16"},
+		{Flag: "spec-type", Label: "spec-type", Description: "Speculative decoding strategy (dflash/copyspec/ngram-*/...)", Default: "none"},
+		{Flag: "spec-draft-model", Label: "spec-draft-model (-md)", Description: "Path to the speculative draft model"},
+		{Flag: "spec-dflash-default", Label: "spec-dflash-default", Description: "Enable default DFlash config (requires draft model)"},
+		{Flag: "dflash-max-slots", Label: "dflash-max-slots", Description: "Max concurrent server slots with DFlash state", Min: iptr(1), Max: iptr(1024), Default: "1"},
+		{Flag: "draft-max", Label: "draft-max", Description: "Max draft tokens per step", Min: iptr(0), Max: iptr(512), Default: "16"},
+		{Flag: "draft-min", Label: "draft-min", Description: "Min draft tokens per step", Min: iptr(0), Max: iptr(512), Default: "0"},
+	},
 }
 
 // essentialsFor returns the essential fields for a kind that exist in the schema.
