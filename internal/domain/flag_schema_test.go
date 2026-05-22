@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -22,16 +23,7 @@ func TestFlagSpec_RequiredRoundTrip(t *testing.T) {
 
 func TestFlagSpec_RequiredOmittedWhenFalse(t *testing.T) {
 	b, _ := json.Marshal(FlagSpec{Long: "x", Type: FlagTypeString})
-	if string(b) == "" || flagSpecContains(string(b), "required") {
+	if strings.Contains(string(b), `"required"`) {
 		t.Fatalf("required should be omitted when false, got %s", b)
 	}
-}
-
-func flagSpecContains(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }
