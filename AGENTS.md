@@ -20,6 +20,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 │   │   ├── backendschema/  # Schema generation orchestrator
 │   │   ├── benchmark/      # Profile eval engine (SWE-bench Lite + needle probe)
 │   │   ├── benchmarkstore/ # Benchmark run persistence (1 JSON per run)
+│   │   ├── configweb/      # On-demand web GUI for profile editing (HTMX/Alpine, embedded assets)
 │   │   ├── downloadmgr/    # HuggingFace file downloader with progress
 │   │   ├── hfhub/          # HuggingFace Hub API client
 │   │   ├── httpproxy/      # OpenAI-shaped reverse proxy
@@ -39,8 +40,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 │   │   └── vllmhelp/       # Embedded schema for vLLM
 │   └── ui/
 │       ├── components/    # Help, Modal, Picker, Sparkline, Statusbar
-│       ├── pages/         # 5 tabs + profile_editor sub-package
-│       │   └── profile_editor/  # huh-based profile editing
+│       ├── pages/         # 5 tabs (profile create/edit launches the web GUI)
 │       └── theme/
 ├── testdata/              # Golden test fixtures
 ├── docs/superpowers/      # Design specs
@@ -66,9 +66,10 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 | Benchmark engine | internal/service/benchmark/ | SWE-bench Lite + long-context needle probe |
 | Benchmark store | internal/service/benchmarkstore/ | 1 JSON per run |
 | Metrics persistence | internal/service/metricsstore/ | per-profile JSONL |
-| TUI pages | internal/ui/pages/ | 5 tabs + profile_editor sub-package |
-| Profile editing | internal/ui/pages/profile_editor/ | huh forms, draft state machine |
-| Essentials registry | internal/ui/pages/profile_editor/essentials.go | curated per-backend flag list |
+| TUI pages | internal/ui/pages/ | 5 tabs; Profiles tab launches the web editor for create/edit |
+| Web profile editor | internal/service/configweb/ | on-demand in-process HTTP GUI (HTMX/Alpine); replaces the old huh editor |
+| Editor presentation/rules | internal/domain/backend_schema.go | `Presentation` + `CrossFieldRule` on the schema envelope |
+| Essentials seed | internal/service/backendschema/presentation.go | `essentialSeed` + `BuildPresentation` — curated per-backend highlights |
 | Config | internal/config/ | Viper TOML at ~/.config/model-loader/ |
 | Logging | internal/log/ | file-only slog, rotate-by-session |
 | Profile config schema (canonical) | docs/profile-schema.json | JSON Schema for the persisted profile file format — authoritative reference, keep in sync with `domain.Profile` |
@@ -80,26 +81,26 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 - **Instance recovery**: Background llama-server processes survive TUI exit; processmgr.Reconcile restores at boot
 - **Profile config schema is canonical**: `docs/profile-schema.json` is the authoritative JSON Schema (draft 2020-12) for the persisted profile file format (envelope: `schemaVersion`/`id`/`name`/`model`/`args`/`extraArgs`/`launch`/`meta`/`pinned`). Treat it as the source of truth when authoring or validating profiles. ANY change to the persisted profile shape — adding/renaming/removing fields in `domain.Profile`, `launch`, or `meta`; bumping `schemaVersion`; changing accepted `args`/`extraArgs` value types — MUST update `docs/profile-schema.json` in the SAME change so the doc never drifts from the code.
 
-## ESSENTIALS REGISTRY CONTRACT
-- `essentialFields` in `essentials.go` is a `map[domain.BackendKind][]EssentialField` — curated UX layer, not a generic form abstraction. See `DYNAMIC_FORM_PLAN.md` for authoritative design.
-- `Draft.Essentials map[string]string` stores long-keyed flag values as value types (not pointers), making the Draft copyable for snapshot/dirty-check.
-- `Editor.essentialPtrs` is a `map[string]*string` of heap-allocated pointers, one per essential field, bound to huh form inputs.
-- `syncEssentials()` drains `essentialPtrs` back into `Draft.Essentials` after every `form.Update`.
-- `hydrateEssentials()` peels matching values from `Draft.Args` into `Draft.Essentials` and seeds defaults — called with re-snapshot in `Open()`, without re-snapshot on backend switch.
-- `hydrateEssentialsForSwitch()` is the no-snapshot variant used during backend kind changes so the dirty flag reflects legitimate mutation.
+## WEB PROFILE EDITOR CONTRACT
+- Profile create/edit no longer uses an in-TUI huh form. The Profiles tab launches an **on-demand, in-process** HTTP server (`internal/service/configweb`) bound to `127.0.0.1:0`, opens the browser, and shows an "editing in browser…" modal. On save/cancel the server shuts down and the TUI reloads the list.
+- The form is **schema-driven**: one render engine builds the page from `domain.BackendValidationSchema.Flags` + an editable `Presentation` (groups/order/highlights). `configweb.BuildViewModel` produces the per-field widgets (number/select/toggle/text) from `FlagType`.
+- The GUI's **Customize mode** edits the backend schema itself — per-flag constraints (min/max/enum/default/required), add/remove flags, presentation, and `CrossFieldRule`s. Every customize handler sets `schema.Source.Editable = true` so `backendschema.Manager.RefreshSchema` preserves manual edits across `--help` re-parsing.
+- The curated highlights live in `essentialSeed` (`internal/service/backendschema/presentation.go`); `BuildPresentation` seeds the highlighted "Essenciais" group. A one-time migration (`migration.ensurePresentations`) seeds a default `Presentation` into any schema lacking one (it does NOT mark `Editable`, since a synthesized default is not a manual edit).
+- Cross-field rules are evaluated by the validator (`internal/service/validator/crossfield.go`, `applyCrossFieldRules`).
 
 ## ANTI-PATTERNS (THIS PROJECT)
-- DO NOT add fields to `essentialFields` without explicit user request — it's a curated UX layer, not a generic form abstraction
+- DO NOT hand-edit a backend schema's `presentation`/`rules` blocks in JSON — edit them through the web Customize mode so `Source.Editable` is set and `RefreshSchema` preserves them
+- DO NOT extend `essentialSeed` (in `backendschema/presentation.go`) without explicit user request — it's a curated seed for the highlighted group, not a generic form abstraction
 - DO NOT run `llama-server` manually while TUI is managing instances
 - DO NOT edit `testdata/help-v7376.golden.json` directly — regenerate via golden test update
 - DO NOT assume process cleanup on TUI exit — processes are intentionally orphaned
 - DO NOT change the persisted profile structure (`domain.Profile` / profilestore JSON) without mirroring the change in `docs/profile-schema.json` — the schema doc and the code must never drift apart
-- DO NOT intercept printable runes (`q`, `1-5`, `?`, letters, digits) globally in `internal/ui/root.go` without first checking `activePageCapturesInput()`. Only `ctrl+c` may bypass this gate. Pages with active huh forms / pickers / inline modals must implement `InputCapture.IsCapturingInput() bool` returning `true` while in those states. Otherwise the global shortcut steals the keystroke from the editable field and the user can't type that character.
+- DO NOT intercept printable runes (`q`, `1-5`, `?`, letters, digits) globally in `internal/ui/root.go` without first checking `activePageCapturesInput()`. Only `ctrl+c` may bypass this gate. Pages with active huh forms / pickers / inline modals / the web-edit modal must implement `InputCapture.IsCapturingInput() bool` returning `true` while in those states (e.g. `ProfilesPage` returns `true` while `webEditing`). Otherwise the global shortcut steals the keystroke.
 
 ## TUI INPUT ROUTING RULES
 - **Global shortcut gate**: every shortcut in `RootModel.Update` that consumes a printable rune MUST be wrapped in `if !m.activePageCapturesInput() { ... }`. Exception: `ctrl+c` is unconditional escape.
-- **Page capture contract**: a page that opens any editable surface (huh form, text input, inline picker, confirm dialog) MUST implement `InputCapture` and return `true` while that surface is on screen. See `ProfilesPage.IsCapturingInput()` for the pattern (`return p.editing || p.pickerActive || p.confirmDelete`).
-- **Forwarding non-key messages to huh**: when a page hosts a `*huh.Form`, its `Update` MUST forward non-`tea.KeyMsg` messages to the form so its internal Cmd→Msg handshake (Init focus, async validation) completes. See `ProfilesPage.Update` tail block.
+- **Page capture contract**: a page that opens any editable surface (huh form, text input, inline picker, confirm dialog, the web-edit modal) MUST implement `InputCapture` and return `true` while that surface is on screen. See `ProfilesPage.IsCapturingInput()` for the pattern (captures while `webEditing`, `pickerActive`, or `confirmDelete`).
+- **Forwarding non-key messages to huh**: when a page hosts a `*huh.Form` (e.g. the Backends page), its `Update` MUST forward non-`tea.KeyMsg` messages to the form so its internal Cmd→Msg handshake (Init focus, async validation) completes.
 - **Tests**: any new global shortcut MUST have a paired test using the `capturingPage` test double in `internal/ui/root_test.go` proving the key is forwarded (not consumed) when the active page captures input.
 
 ## UNIQUE STYLES
