@@ -345,13 +345,23 @@ var needleCities = []string{
 	"Ljubljana", "Windhoek", "Paramaribo", "Bishkek", "Vientiane",
 }
 
-// buildNeedles makes three randomized needles at distinct depths.
+// buildNeedles makes three randomized needles at distinct depths. The three
+// values are guaranteed distinct so scoreNeedles can't double-count a collision.
 func buildNeedles() []needle {
 	labels := []string{"alpha", "beta", "gamma"}
 	out := make([]needle, 3)
+	seen := make(map[string]bool, 3)
 	for i := range out {
-		city := needleCities[rand.Intn(len(needleCities))]
-		out[i] = needle{label: labels[i], value: fmt.Sprintf("%s-%04d", city, rand.Intn(9000)+1000)}
+		var value string
+		for {
+			city := needleCities[rand.Intn(len(needleCities))]
+			value = fmt.Sprintf("%s-%04d", city, rand.Intn(9000)+1000)
+			if !seen[value] {
+				break
+			}
+		}
+		seen[value] = true
+		out[i] = needle{label: labels[i], value: value}
 	}
 	return out
 }

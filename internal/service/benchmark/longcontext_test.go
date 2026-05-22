@@ -39,3 +39,16 @@ func TestScoreNeedles_FractionFound(t *testing.T) {
 		t.Errorf("scoreNeedles = %v, want 0.6667", got)
 	}
 }
+
+func TestBuildNeedles_ValuesAreUnique(t *testing.T) {
+	for trial := 0; trial < 1000; trial++ {
+		ns := buildNeedles()
+		seen := map[string]bool{}
+		for _, n := range ns {
+			if seen[n.value] {
+				t.Fatalf("duplicate needle value %q in a single call", n.value)
+			}
+			seen[n.value] = true
+		}
+	}
+}
