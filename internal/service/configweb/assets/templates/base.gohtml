@@ -1,0 +1,32 @@
+{{define "base"}}<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Draft.Name}} · model-loader</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js"></script>
+<script defer src="/static/alpine.min.js"></script>
+</head>
+<body x-data="{mode:'configure'}">
+<header class="topbar">
+  <div class="title">{{.Draft.Name}} <span class="muted">· {{.Draft.BackendID}}</span></div>
+  <nav class="modes">
+    <button :class="{active: mode==='configure'}" @click="mode='configure'">Configurar</button>
+    <button :class="{active: mode==='customize'}" @click="mode='customize'">Personalizar</button>
+  </nav>
+  <div class="actions">
+    <button class="ghost" hx-post="/cancel">Cancelar</button>
+    <button class="primary" form="profile-form" hx-post="/save" hx-target="#issues">Salvar</button>
+  </div>
+</header>
+<main class="layout">
+  <aside class="sidebar">{{block "sidebar" .}}{{end}}</aside>
+  <section class="content">
+    <div x-show="mode==='configure'">{{block "configure" .}}{{end}}</div>
+    <div x-show="mode==='customize'">{{block "customize" .}}{{end}}</div>
+  </section>
+</main>
+<footer class="statusbar"><div id="issues"><span class="ok">✓ válido</span></div></footer>
+</body>
+</html>{{end}}

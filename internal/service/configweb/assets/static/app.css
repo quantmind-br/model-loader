@@ -1,0 +1,21 @@
+:root{--bg:#0f1320;--panel:#171c2e;--ink:#e7ecf5;--muted:#8b95ad;--accent:#6ea8fe;--err:#ff6b6b;--warn:#ffcf66;--ok:#5fd38a}
+*{box-sizing:border-box}body{margin:0;font:14px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+.topbar{display:flex;align-items:center;gap:1rem;padding:.6rem 1rem;background:var(--panel);border-bottom:1px solid #222a44}
+.topbar .title{font-weight:600}.muted{color:var(--muted)}
+.modes{margin-left:auto;display:flex;gap:.25rem}.modes button{background:transparent;color:var(--muted);border:0;padding:.4rem .8rem;border-radius:.4rem;cursor:pointer}
+.modes button.active{background:#22294a;color:var(--ink)}
+.actions{display:flex;gap:.5rem}button.primary{background:var(--accent);color:#04122e;border:0;padding:.45rem .9rem;border-radius:.4rem;font-weight:600;cursor:pointer}
+button.ghost{background:transparent;border:1px solid #333c5e;color:var(--ink);padding:.45rem .9rem;border-radius:.4rem;cursor:pointer}
+.layout{display:flex;min-height:calc(100vh - 96px)}
+.sidebar{width:200px;padding:1rem;background:var(--panel);border-right:1px solid #222a44}
+.sidebar a{display:block;color:var(--muted);text-decoration:none;padding:.3rem .4rem;border-radius:.3rem}
+.sidebar a.hl{color:var(--ink);font-weight:600}
+.content{flex:1;padding:1.2rem;overflow:auto}
+.group{margin-bottom:1.4rem}.group h3{margin:.2rem 0 .6rem;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:.2rem;margin-bottom:.7rem;max-width:520px}
+.field label{font-size:.8rem;color:var(--muted)}
+.field input,.field select{background:#0c1020;border:1px solid #2a3354;color:var(--ink);border-radius:.4rem;padding:.45rem .6rem}
+.statusbar{position:sticky;bottom:0;padding:.5rem 1rem;background:var(--panel);border-top:1px solid #222a44}
+.issue{padding:.15rem 0}.issue.error{color:var(--err)}.issue.warn{color:var(--warn)}.ok{color:var(--ok)}
+.flag-edit{border:1px solid #2a3354;border-radius:.5rem;padding:.7rem;margin-bottom:.6rem}
+.rule{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;border:1px solid #2a3354;border-radius:.5rem;padding:.5rem;margin-bottom:.4rem}
