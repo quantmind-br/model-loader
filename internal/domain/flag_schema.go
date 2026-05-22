@@ -35,6 +35,7 @@ type FlagSchema struct {
 	Version     string
 	BackendKind BackendKind
 	Flags       map[string]FlagSpec
+	Rules       []CrossFieldRule
 }
 
 // Lookup resolves a name (map key, long form, short form, or alias) to a FlagSpec.
