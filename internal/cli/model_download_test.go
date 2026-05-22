@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -134,5 +135,119 @@ func TestStartDownload_WaitFails(t *testing.T) {
 	err := startDownload(&out, mgr, &fakeHub{}, root, "org/m", "f.gguf", false, true)
 	if err == nil || !strings.Contains(err.Error(), "404") {
 		t.Fatalf("expected failure error including reason, got: %v", err)
+	}
+}
+
+func sampleStates() []downloadmgr.State {
+	return []downloadmgr.State{
+		{ID: "aaa111", Spec: downloadmgr.Spec{RepoID: "org/a", Filename: "a.gguf"}, Status: downloadmgr.StatusActive, Bytes: 512, Total: 1024},
+		{ID: "bbb222", Spec: downloadmgr.Spec{RepoID: "org/b", Filename: "b.gguf"}, Status: downloadmgr.StatusCompleted, Bytes: 2048, Total: 2048},
+	}
+}
+
+func TestListDownloads_Table(t *testing.T) {
+	mgr := &fakeDLManager{snapshot: sampleStates()}
+	var out bytes.Buffer
+	if err := listDownloads(&out, mgr, false); err != nil {
+		t.Fatalf("listDownloads: %v", err)
+	}
+	s := out.String()
+	if !strings.Contains(s, "aaa111") || !strings.Contains(s, "active") || !strings.Contains(s, "completed") {
+		t.Fatalf("table missing rows: %q", s)
+	}
+}
+
+func TestListDownloads_Empty(t *testing.T) {
+	var out bytes.Buffer
+	if err := listDownloads(&out, &fakeDLManager{}, false); err != nil {
+		t.Fatalf("listDownloads: %v", err)
+	}
+	if !strings.Contains(out.String(), "no downloads") {
+		t.Fatalf("expected 'no downloads': %q", out.String())
+	}
+}
+
+func TestResolveDownloadID_Prefix(t *testing.T) {
+	mgr := &fakeDLManager{snapshot: sampleStates()}
+	id, err := resolveDownloadID(mgr, "aaa")
+	if err != nil || id != "aaa111" {
+		t.Fatalf("prefix resolve: id=%q err=%v", id, err)
+	}
+	if _, err := resolveDownloadID(mgr, "zzz"); err == nil {
+		t.Fatal("expected not-found error")
+	}
+}
+
+func TestCancelDownload(t *testing.T) {
+	mgr := &fakeDLManager{snapshot: sampleStates()}
+	var out bytes.Buffer
+	if err := cancelDownload(&out, mgr, "aaa111", false); err != nil {
+		t.Fatalf("cancelDownload: %v", err)
+	}
+	if len(mgr.cancelled) != 1 || mgr.cancelled[0] != "aaa111" {
+		t.Fatalf("cancel not recorded: %+v", mgr.cancelled)
+	}
+}
+
+func TestResumeDownload_NotResumable(t *testing.T) {
+	mgr := &fakeDLManager{snapshot: sampleStates(), resumeErr: downloadmgr.ErrNotResumable}
+	var out bytes.Buffer
+	err := resumeDownload(&out, mgr, "bbb222", false)
+	if err == nil || !strings.Contains(err.Error(), "not resumable") {
+		t.Fatalf("expected not-resumable error, got %v", err)
+	}
+}
+
+func TestListDownloads_JSON(t *testing.T) {
+	mgr := &fakeDLManager{snapshot: sampleStates()}
+	var out bytes.Buffer
+	if err := listDownloads(&out, mgr, true); err != nil {
+		t.Fatalf("listDownloads json: %v", err)
+	}
+	var items []downloadItem
+	if err := json.Unmarshal(out.Bytes(), &items); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, out.String())
+	}
+	if len(items) != 2 || items[0].ID != "aaa111" || items[0].Status != "active" {
+		t.Fatalf("unexpected items: %+v", items)
+	}
+	var out2 bytes.Buffer
+	if err := listDownloads(&out2, &fakeDLManager{}, true); err != nil {
+		t.Fatalf("empty json: %v", err)
+	}
+	if strings.TrimSpace(out2.String()) != "[]" {
+		t.Fatalf("empty json should be [], got %q", out2.String())
+	}
+}
+
+func TestResolveDownloadID_Ambiguous(t *testing.T) {
+	mgr := &fakeDLManager{snapshot: []downloadmgr.State{
+		{ID: "aaa111"}, {ID: "aaa222"},
+	}}
+	if _, err := resolveDownloadID(mgr, "aaa"); err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("expected ambiguous error, got %v", err)
+	}
+}
+
+func TestCancelDownload_Error(t *testing.T) {
+	mgr := &fakeDLManager{snapshot: sampleStates(), cancelErr: errors.New("boom")}
+	var out bytes.Buffer
+	err := cancelDownload(&out, mgr, "aaa111", false)
+	if err == nil || !strings.Contains(err.Error(), "cancel:") {
+		t.Fatalf("expected wrapped cancel error, got %v", err)
+	}
+}
+
+func TestResumeDownload_Happy(t *testing.T) {
+	mgr := &fakeDLManager{snapshot: sampleStates()}
+	var out bytes.Buffer
+	if err := resumeDownload(&out, mgr, "bbb222", false); err != nil {
+		t.Fatalf("resumeDownload: %v", err)
+	}
+	if len(mgr.resumed) != 1 || mgr.resumed[0] != "bbb222" {
+		t.Fatalf("resume not recorded: %+v", mgr.resumed)
+	}
+	if !strings.Contains(out.String(), "resuming") {
+		t.Fatalf("expected resuming message: %q", out.String())
 	}
 }

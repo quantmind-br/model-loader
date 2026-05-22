@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/quantmind-br/model-loader/internal/config"
 	"github.com/quantmind-br/model-loader/internal/service/downloadmgr"
@@ -96,5 +98,136 @@ func startDownload(out io.Writer, mgr downloadManager, hub hubClient, searchPath
 		}
 		return fmt.Errorf("download %s ended: %s", id, ev.State.Status)
 	}
+	return nil
+}
+
+// downloadItem is the JSON view of a download's state.
+type downloadItem struct {
+	ID       string `json:"id"`
+	Repo     string `json:"repo,omitempty"`
+	Filename string `json:"filename,omitempty"`
+	Status   string `json:"status"`
+	Bytes    int64  `json:"bytes"`
+	Total    int64  `json:"total"`
+}
+
+func init() {
+	downloadsCmd := &cobra.Command{
+		Use:   "downloads",
+		Short: "List and manage downloads",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runWithManager(cmd, func(out io.Writer, mgr downloadManager) error {
+				return listDownloads(out, mgr, jsonOut)
+			})
+		},
+	}
+	cancelCmd := &cobra.Command{
+		Use:   "cancel <id>",
+		Short: "Cancel a download",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runWithManager(cmd, func(out io.Writer, mgr downloadManager) error {
+				return cancelDownload(out, mgr, args[0], jsonOut)
+			})
+		},
+	}
+	resumeCmd := &cobra.Command{
+		Use:   "resume <id>",
+		Short: "Resume an abandoned or failed download",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runWithManager(cmd, func(out io.Writer, mgr downloadManager) error {
+				return resumeDownload(out, mgr, args[0], jsonOut)
+			})
+		},
+	}
+	downloadsCmd.AddCommand(cancelCmd)
+	downloadsCmd.AddCommand(resumeCmd)
+	modelCmd.AddCommand(downloadsCmd)
+}
+
+func listDownloads(out io.Writer, mgr downloadManager, asJSON bool) error {
+	states := mgr.Snapshot()
+	if asJSON {
+		items := make([]downloadItem, 0, len(states))
+		for _, s := range states {
+			items = append(items, downloadItem{
+				ID: string(s.ID), Repo: s.Spec.RepoID, Filename: s.Spec.Filename,
+				Status: s.Status.String(), Bytes: s.Bytes, Total: s.Total,
+			})
+		}
+		return emitJSON(out, items)
+	}
+	if len(states) == 0 {
+		fmt.Fprintln(out, "no downloads")
+		return nil
+	}
+	rows := make([][]string, 0, len(states))
+	for _, s := range states {
+		progress := humanBytes(s.Bytes)
+		if s.Total > 0 {
+			progress = fmt.Sprintf("%s / %s", humanBytes(s.Bytes), humanBytes(s.Total))
+		}
+		rows = append(rows, []string{
+			string(s.ID), dashOr(s.Spec.RepoID), dashOr(s.Spec.Filename), s.Status.String(), progress,
+		})
+	}
+	printTable(out, []string{"ID", "REPO", "FILE", "STATUS", "PROGRESS"}, rows)
+	return nil
+}
+
+// resolveDownloadID matches ref against a download id exactly, then by unique prefix.
+func resolveDownloadID(mgr downloadManager, ref string) (downloadmgr.ID, error) {
+	states := mgr.Snapshot()
+	var byPrefix []downloadmgr.ID
+	for _, s := range states {
+		if string(s.ID) == ref {
+			return s.ID, nil
+		}
+		if strings.HasPrefix(string(s.ID), ref) {
+			byPrefix = append(byPrefix, s.ID)
+		}
+	}
+	switch len(byPrefix) {
+	case 1:
+		return byPrefix[0], nil
+	case 0:
+		return "", fmt.Errorf("download not found: %s", ref)
+	default:
+		return "", fmt.Errorf("ambiguous download id: %s matches %d downloads", ref, len(byPrefix))
+	}
+}
+
+func cancelDownload(out io.Writer, mgr downloadManager, ref string, asJSON bool) error {
+	id, err := resolveDownloadID(mgr, ref)
+	if err != nil {
+		return err
+	}
+	if err := mgr.Cancel(id); err != nil {
+		return fmt.Errorf("cancel: %w", err)
+	}
+	if asJSON {
+		return emitJSON(out, map[string]string{"id": string(id), "status": "cancelled"})
+	}
+	fmt.Fprintf(out, "cancelled %s\n", id)
+	return nil
+}
+
+func resumeDownload(out io.Writer, mgr downloadManager, ref string, asJSON bool) error {
+	id, err := resolveDownloadID(mgr, ref)
+	if err != nil {
+		return err
+	}
+	if err := mgr.Resume(id); err != nil {
+		if errors.Is(err, downloadmgr.ErrNotResumable) {
+			return fmt.Errorf("download not resumable: %s", id)
+		}
+		return fmt.Errorf("resume: %w", err)
+	}
+	if asJSON {
+		return emitJSON(out, map[string]string{"id": string(id), "status": "resuming"})
+	}
+	fmt.Fprintf(out, "resuming %s\n", id)
 	return nil
 }
