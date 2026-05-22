@@ -22,6 +22,7 @@ type Draft struct {
 	BackendID   string            `json:"backendId"`
 	Args        map[string]string `json:"args"`
 	ExtraArgs   []string          `json:"extraArgs"`
+	Env         []domain.EnvVar   `json:"env,omitempty"`
 }
 
 // ToProfile builds a fresh Profile from the draft, coercing arg values by type.
@@ -36,7 +37,7 @@ func (d Draft) ToProfile(schema domain.FlagSchema) domain.Profile {
 		Model:         d.Model,
 		Args:          coerceArgs(d.Args, schema),
 		ExtraArgs:     d.ExtraArgs,
-		Launch:        domain.LaunchConfig{BackendID: d.BackendID},
+		Launch:        domain.LaunchConfig{BackendID: d.BackendID, Env: d.Env},
 		Meta:          domain.ProfileMeta{CreatedAt: now, UpdatedAt: now},
 	}
 }
@@ -51,6 +52,7 @@ func (d Draft) ApplyTo(existing domain.Profile, schema domain.FlagSchema) domain
 	existing.Args = coerceArgs(d.Args, schema)
 	existing.ExtraArgs = d.ExtraArgs
 	existing.Launch.BackendID = d.BackendID
+	existing.Launch.Env = d.Env
 	existing.Meta.UpdatedAt = time.Now().UTC()
 	return existing
 }
