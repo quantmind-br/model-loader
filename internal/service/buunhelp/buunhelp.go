@@ -26,8 +26,10 @@ func EmbeddedSchema() domain.FlagSchema {
 }
 
 // kvTurboTypes lists the standard llama KV types plus the fork's turbo types.
+// Base types mirror cacheTypeEnum in internal/service/llamahelp/parser.go exactly;
+// turbo types are appended after.
 var kvTurboTypes = []string{
-	"f16", "bf16", "q8_0", "q4_0", "q4_1", "q5_0", "q5_1",
+	"f32", "f16", "bf16", "q8_0", "q4_0", "q4_1", "iq4_nl", "q5_0", "q5_1",
 	"turbo2", "turbo3", "turbo4", "turbo2_tcq", "turbo3_tcq",
 }
 
