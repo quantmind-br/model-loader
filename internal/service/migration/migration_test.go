@@ -315,6 +315,35 @@ func TestMigration_PreservesCustomBackendOnSchemaFailure(t *testing.T) {
 	}
 }
 
+func TestEnsurePresentations_SeedsMissing(t *testing.T) {
+	dir := t.TempDir()
+	schemaStore := backendcatalog.NewFSSchemaStore(dir)
+	ref := "llama.json"
+	_ = schemaStore.Save(ref, domain.BackendValidationSchema{
+		SchemaVersion: 1,
+		Kind:          domain.ValidationSchemaCLIFlagsV1,
+		BackendKind:   domain.BackendKindLlamaServer,
+		BackendID:     "llama",
+		Flags:         map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt, Group: "common"}},
+	})
+	catalog := domain.BackendCatalog{
+		SchemaVersion:    1,
+		DefaultBackendID: "llama",
+		Backends:         []domain.Backend{{ID: "llama", Kind: domain.BackendKindLlamaServer, SchemaRef: "schemas/llama.json"}},
+	}
+	if n, err := ensurePresentations(catalog, schemaStore); err != nil || n != 1 {
+		t.Fatalf("ensurePresentations n=%d err=%v", n, err)
+	}
+	got, _ := schemaStore.Load(ref)
+	if got.Presentation == nil || len(got.Presentation.Groups) == 0 {
+		t.Fatalf("presentation not seeded: %+v", got)
+	}
+	// idempotent: second run seeds nothing.
+	if n, _ := ensurePresentations(catalog, schemaStore); n != 0 {
+		t.Fatalf("expected idempotent second run, seeded %d", n)
+	}
+}
+
 func TestMigration_SetsUpdatedAt(t *testing.T) {
 	dir := t.TempDir()
 	profileStore, _ := profilestore.NewFSStore(dir)
