@@ -59,6 +59,7 @@ func (v defaultValidator) Validate(p domain.Profile, schema domain.FlagSchema, k
 	rep = applyTypeRules(p, schema, rep)
 	rep = applyExtraArgsRules(p, schema, rep)
 	rep = applyRequiredRules(p, schema, rep)
+	rep = applyCrossFieldRules(p, schema, rep)
 	rep = applyExistenceRules(p, kind, rep)
 	if rep.HasBlockingErrors() {
 		v.logger.Info("validation_failed",
