@@ -8,7 +8,7 @@ import (
 
 func applyCrossFieldRules(p domain.Profile, schema domain.FlagSchema, rep Report) Report {
 	for _, rule := range schema.Rules {
-		if !condHolds(rule.When, p, schema) {
+		if !condHolds(rule.When, p) {
 			continue
 		}
 		sev := SeverityWarning
@@ -19,7 +19,7 @@ func applyCrossFieldRules(p domain.Profile, schema domain.FlagSchema, rep Report
 		case "message":
 			rep = appendIssue(rep, FieldIssue{Field: rule.When.Flag, Message: rule.Then.Message, Severity: sev})
 		case "limit":
-			if !compare(argString(p, rule.Then.Flag, schema), rule.Then.Op, rule.Then.Value, schema, rule.Then.Flag) {
+			if !compare(argString(p, rule.Then.Flag), rule.Then.Op, rule.Then.Value) {
 				rep = appendIssue(rep, FieldIssue{
 					Field:    rule.Then.Flag,
 					Message:  ruleMessage(rule),
@@ -27,7 +27,7 @@ func applyCrossFieldRules(p domain.Profile, schema domain.FlagSchema, rep Report
 				})
 			}
 		case "require":
-			got := argString(p, rule.Then.Flag, schema)
+			got := argString(p, rule.Then.Flag)
 			if got == "" || (rule.Then.Value != "" && got != rule.Then.Value) {
 				rep = appendIssue(rep, FieldIssue{
 					Field:    rule.Then.Flag,
@@ -44,20 +44,21 @@ func ruleMessage(r domain.CrossFieldRule) string {
 	if r.Then.Message != "" {
 		return r.Then.Message
 	}
-	return "cross-field rule violated (when " + r.When.Flag + ")"
+	return "cross-field rule violated: when " + r.When.Flag + " " + r.When.Op + " " + r.When.Value
 }
 
-func condHolds(c domain.Cond, p domain.Profile, schema domain.FlagSchema) bool {
-	return compare(argString(p, c.Flag, schema), c.Op, c.Value, schema, c.Flag)
+func condHolds(c domain.Cond, p domain.Profile) bool {
+	return compare(argString(p, c.Flag), c.Op, c.Value)
 }
 
 // argString renders the profile arg for flag as a string for comparison.
 // Bools render "on"/"off"; numbers via strconv; missing -> "".
-func argString(p domain.Profile, flag string, schema domain.FlagSchema) string {
+func argString(p domain.Profile, flag string) string {
 	v, ok := p.Args[flag]
 	if !ok {
 		return ""
 	}
+	// Args values are float64 when loaded from JSON, or int/string/bool when set in-memory.
 	switch x := v.(type) {
 	case string:
 		return x
@@ -78,27 +79,28 @@ func argString(p domain.Profile, flag string, schema domain.FlagSchema) string {
 	}
 }
 
-// compare evaluates "got op want". For le/ge it tries numeric comparison and
-// falls back to string comparison when either side is non-numeric.
-func compare(got, op, want string, schema domain.FlagSchema, flag string) bool {
+// compare evaluates "got op want". For le/ge, both sides must parse as float;
+// returns false if either fails (string flags have no meaningful numeric order).
+func compare(got, op, want string) bool {
 	switch op {
 	case "eq":
 		return got == want
 	case "ne":
 		return got != want
-	case "le", "ge":
+	case "le":
 		gf, gerr := strconv.ParseFloat(got, 64)
 		wf, werr := strconv.ParseFloat(want, 64)
-		if gerr == nil && werr == nil {
-			if op == "le" {
-				return gf <= wf
-			}
-			return gf >= wf
+		if gerr != nil || werr != nil {
+			return false
 		}
-		if op == "le" {
-			return got <= want
+		return gf <= wf
+	case "ge":
+		gf, gerr := strconv.ParseFloat(got, 64)
+		wf, werr := strconv.ParseFloat(want, 64)
+		if gerr != nil || werr != nil {
+			return false
 		}
-		return got >= want
+		return gf >= wf
 	}
 	return false
 }

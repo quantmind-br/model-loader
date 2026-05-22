@@ -60,3 +60,36 @@ func TestCrossField_RequireMissing(t *testing.T) {
 		t.Fatalf("expected error: require flash-attn=on")
 	}
 }
+
+func TestCrossField_LimitWithinBoundPasses(t *testing.T) {
+	rule := domain.CrossFieldRule{
+		ID:       "r1",
+		When:     domain.Cond{Flag: "flash-attn", Op: "eq", Value: "on"},
+		Then:     domain.Effect{Kind: "limit", Flag: "ctx-size", Op: "le", Value: "32768"},
+		Severity: "warning",
+	}
+	flags := map[string]domain.FlagSpec{
+		"flash-attn": {Long: "flash-attn", Type: domain.FlagTypeString},
+		"ctx-size":   {Long: "ctx-size", Type: domain.FlagTypeInt},
+	}
+	p := domain.Profile{Args: map[string]any{"flash-attn": "on", "ctx-size": 16384}}
+	rep := New(nil).Validate(p, ruleSchema(rule, flags), domain.BackendKindLlamaServer)
+	if len(rep.Warnings) != 0 || rep.HasBlockingErrors() {
+		t.Fatalf("compliant value should produce no issues: %+v", rep)
+	}
+}
+
+func TestCrossField_MessageFires(t *testing.T) {
+	rule := domain.CrossFieldRule{
+		ID:       "r1",
+		When:     domain.Cond{Flag: "flash-attn", Op: "eq", Value: "on"},
+		Then:     domain.Effect{Kind: "message", Message: "heads up"},
+		Severity: "warning",
+	}
+	flags := map[string]domain.FlagSpec{"flash-attn": {Long: "flash-attn", Type: domain.FlagTypeString}}
+	p := domain.Profile{Args: map[string]any{"flash-attn": "on"}}
+	rep := New(nil).Validate(p, ruleSchema(rule, flags), domain.BackendKindLlamaServer)
+	if len(rep.Warnings) != 1 || rep.Warnings[0].Message != "heads up" {
+		t.Fatalf("expected one warning 'heads up', got %+v", rep)
+	}
+}
