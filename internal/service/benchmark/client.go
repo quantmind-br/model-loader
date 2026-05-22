@@ -35,11 +35,11 @@ type ChatRequest struct {
 // CompletionResult holds the model output plus the per-request metrics the
 // benchmark records (token cost, generation speed, latency).
 type CompletionResult struct {
-	Content          string
-	PromptTokens     int
-	CompletionTokens int
-	TTFT             time.Duration // time to first content token
-	Total            time.Duration
+	Content             string
+	PromptTokens        int
+	CompletionTokens    int
+	TTFT                time.Duration // time to first content token
+	Total               time.Duration
 	TokensPerSecond     float64 // completion tokens / generation time (decode speed)
 	PromptProcessingTPS float64 // prompt tokens / TTFT (prefill speed)
 }

@@ -65,8 +65,8 @@ func TestComplete_SetsPromptProcessingTPS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
-	if got.PromptProcessingTPS <= 0 {
-		t.Fatalf("PromptProcessingTPS = %v, want > 0", got.PromptProcessingTPS)
+	if got.PromptProcessingTPS <= 0 || got.PromptProcessingTPS > 1e7 {
+		t.Fatalf("PromptProcessingTPS = %v, want a plausible positive prefill rate", got.PromptProcessingTPS)
 	}
 }
 

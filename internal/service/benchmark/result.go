@@ -46,36 +46,36 @@ type ProfileSnapshot struct {
 
 // ProblemResult is the outcome for a single problem in a run.
 type ProblemResult struct {
-	ProblemID        string  `json:"problemId"`
-	ProblemName      string  `json:"problemName"`
-	Resolved         bool    `json:"resolved"`
-	Score            float64 `json:"score"` // 0..1
-	TTFTms           int64   `json:"ttftMs"`
-	TotalMs          int64   `json:"totalMs"`
+	ProblemID           string  `json:"problemId"`
+	ProblemName         string  `json:"problemName"`
+	Resolved            bool    `json:"resolved"`
+	Score               float64 `json:"score"` // 0..1
+	TTFTms              int64   `json:"ttftMs"`
+	TotalMs             int64   `json:"totalMs"`
 	TokensPerSecond     float64 `json:"tokensPerSecond"`
 	PromptProcessingTPS float64 `json:"promptProcessingTps,omitempty"`
 	DecodeTPS           float64 `json:"decodeTps,omitempty"`
 	PromptTokens        int     `json:"promptTokens"`
-	CompletionTokens int     `json:"completionTokens"`
-	Detail           string  `json:"detail,omitempty"`
-	Err              string  `json:"err,omitempty"`
+	CompletionTokens    int     `json:"completionTokens"`
+	Detail              string  `json:"detail,omitempty"`
+	Err                 string  `json:"err,omitempty"`
 }
 
 // Aggregate is the run-level rollup across all problems.
 type Aggregate struct {
-	Total                 int     `json:"total"`
-	Resolved              int     `json:"resolved"`
-	SolveRate             float64 `json:"solveRate"` // 0..1
-	AvgScore              float64 `json:"avgScore"`
-	AvgTokensPerSecond    float64 `json:"avgTokensPerSecond"`
-	PromptProcessingTPS   float64 `json:"promptProcessingTps,omitempty"` // avg prefill tok/s
-	DecodeTPS             float64 `json:"decodeTps,omitempty"`           // avg decode tok/s
-	AvgTTFTms             float64 `json:"avgTtftMs"`
-	TotalPromptTokens     int     `json:"totalPromptTokens"`
-	TotalCompletionTokens int     `json:"totalCompletionTokens"`
-	TotalMs               int64   `json:"totalMs"`
-	PeakVRAMMB            uint64  `json:"peakVramMb"`
-	AvgGPUUtil            float64 `json:"avgGpuUtil"`
+	Total                  int     `json:"total"`
+	Resolved               int     `json:"resolved"`
+	SolveRate              float64 `json:"solveRate"` // 0..1
+	AvgScore               float64 `json:"avgScore"`
+	AvgTokensPerSecond     float64 `json:"avgTokensPerSecond"`
+	AvgPromptProcessingTPS float64 `json:"avgPromptProcessingTps,omitempty"` // avg prefill tok/s
+	AvgDecodeTPS           float64 `json:"avgDecodeTps,omitempty"`           // avg decode tok/s
+	AvgTTFTms              float64 `json:"avgTtftMs"`
+	TotalPromptTokens      int     `json:"totalPromptTokens"`
+	TotalCompletionTokens  int     `json:"totalCompletionTokens"`
+	TotalMs                int64   `json:"totalMs"`
+	PeakVRAMMB             uint64  `json:"peakVramMb"`
+	AvgGPUUtil             float64 `json:"avgGpuUtil"`
 }
 
 // ProblemTranscript captures the raw I/O for one problem for debugging. It is
