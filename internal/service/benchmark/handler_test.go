@@ -28,3 +28,13 @@ func TestHandlerCount_MatchesRunner(t *testing.T) {
 		t.Errorf("llama-bench count = %d, want 2", h.Count(r))
 	}
 }
+
+func TestCountForMode_DelegatesToRegistry(t *testing.T) {
+	r := &Runner{presets: []tpPreset{{512, 128}}, problems: make([]Problem, 3)}
+	if got := r.CountForMode(ModeJudge); got != 3 {
+		t.Errorf("CountForMode(judge) = %d, want 3", got)
+	}
+	if got := r.CountForMode(Mode("unknown")); got != 0 {
+		t.Errorf("CountForMode(unknown) = %d, want 0", got)
+	}
+}

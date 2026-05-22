@@ -134,23 +134,15 @@ func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Mana
 	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, presets: presets, reps: reps}, nil
 }
 
-// problemSet returns the dataset a given mode evaluates.
-func (r *Runner) problemSet(mode Mode) []Problem {
-	if mode == ModeLongContext {
-		return []Problem{{ID: "long-context-needle", Name: "Long-context needle retrieval"}}
-	}
-	return r.problems
-}
-
 // ProblemCount reports how many problems the default executable set contains.
 func (r *Runner) ProblemCount() int { return len(r.problems) }
 
 // CountForMode reports how many problems a given mode will run.
 func (r *Runner) CountForMode(mode Mode) int {
-	if mode == ModeLlamaBench {
-		return len(r.presets)
+	if h, ok := handlerFor(mode); ok {
+		return h.Count(r)
 	}
-	return len(r.problemSet(mode))
+	return 0
 }
 
 // Run executes the benchmark. It launches (or reuses) the profile's backend,
@@ -172,27 +164,19 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 		Profile:     snapshotProfile(profile),
 	}
 
-	// Validate the mode and build the scorer BEFORE launching an expensive
-	// backend, so missing pytest/git or missing judge config fails fast
-	// instead of after a multi-minute model load.
-	// Validate the mode (and build the judge scorer) BEFORE launching an
-	// expensive backend, so an unknown mode or missing judge config fails fast
-	// instead of after a multi-minute model load — and never reaches the default
-	// problem loop with a nil scorer.
-	var scorer Scorer
-	switch rc.Mode {
-	case ModeJudge:
-		scorer, err = r.newScorer(rc.Mode)
-		if err != nil {
-			return Run{}, err
-		}
-	case ModeLongContext, ModeLlamaBench:
-		// objective probes — no scorer
-	default:
+	h, ok := handlerFor(rc.Mode)
+	if !ok {
 		return Run{}, fmt.Errorf("unsupported benchmark mode %q", rc.Mode)
 	}
 
-	send(progress, Progress{Total: len(r.problems), Phase: "launch"})
+	// Prepare (validate config / build scorer) BEFORE launching an expensive
+	// backend so missing judge config fails fast instead of after a model load.
+	scorer, err := h.Prepare(r)
+	if err != nil {
+		return Run{}, err
+	}
+
+	send(progress, Progress{Total: h.Count(r), Phase: "launch"})
 
 	port, logPath, pid, owned, err := r.ensureInstance(ctx, profile)
 	if err != nil {
@@ -208,48 +192,19 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 	base := fmt.Sprintf("http://127.0.0.1:%d", port)
 	model := requestModelName(profile)
 
-	if rc.Mode == ModeLongContext {
-		send(progress, Progress{Index: 1, Total: 1, ProblemID: "long-context-needle", ProblemName: "Long-context needle retrieval", Phase: "infer"})
-		pr, tr := r.runLongContext(ctx, base, model)
-		run.Problems = append(run.Problems, pr)
-		if r.cfg.SaveTranscripts {
-			run.Transcript = append(run.Transcript, tr)
-		}
-	} else if rc.Mode == ModeLlamaBench {
-		for i, ps := range r.presets {
-			select {
-			case <-ctx.Done():
-				return run, ctx.Err()
-			default:
-			}
-			send(progress, Progress{Index: i + 1, Total: len(r.presets), ProblemID: ps.id(), ProblemName: ps.name(), Phase: "infer"})
-			pr, tr := r.runLlamaBench(ctx, base, model, ps)
-			run.Problems = append(run.Problems, pr)
-			if r.cfg.SaveTranscripts {
-				run.Transcript = append(run.Transcript, tr)
-			}
-		}
-	} else {
-		problems := r.problemSet(rc.Mode)
-		for i, p := range problems {
-			select {
-			case <-ctx.Done():
-				return run, ctx.Err()
-			default:
-			}
-			send(progress, Progress{Index: i + 1, Total: len(problems), ProblemID: p.ID, ProblemName: p.Name, Phase: "infer"})
-			pr, tr := r.runProblem(ctx, scorer, base, model, p)
-			run.Problems = append(run.Problems, pr)
-			if r.cfg.SaveTranscripts {
-				run.Transcript = append(run.Transcript, tr)
-			}
-			send(progress, Progress{Index: i + 1, Total: len(problems), ProblemID: p.ID, ProblemName: p.Name, Phase: "score"})
-		}
+	results, transcripts, err := h.Execute(ctx, r, base, model, scorer, progress)
+	run.Problems = results
+	run.Transcript = transcripts
+	if err != nil {
+		run.FinishedAt = time.Now()
+		run.Aggregate = aggregate(run.Problems, gpu.peakVRAM(), gpu.avgUtil())
+		return run, err
 	}
 
 	run.FinishedAt = time.Now()
 	run.Aggregate = aggregate(run.Problems, gpu.peakVRAM(), gpu.avgUtil())
-	send(progress, Progress{Total: len(r.problems), Phase: "done"})
+	h.Finalize(&run.Aggregate, run.Problems)
+	send(progress, Progress{Total: h.Count(r), Phase: "done"})
 	return run, nil
 }
 
