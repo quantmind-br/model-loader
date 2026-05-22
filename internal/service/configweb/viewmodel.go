@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/backendschema"
 )
 
 // ViewModel is the template data for the editor page.
@@ -50,12 +51,10 @@ func BuildViewModel(d Draft, schema domain.BackendValidationSchema) ViewModel {
 	vm := ViewModel{Draft: d}
 	pres := schema.Presentation
 	if pres == nil {
-		// Defensive: a schema with no presentation renders a single group.
-		var flags []string
-		for long := range schema.Flags {
-			flags = append(flags, long)
-		}
-		pres = &domain.Presentation{Groups: []domain.PresentationGroup{{Name: "Flags", Highlighted: true, Flags: flags}}}
+		// Defensive: schema with no persisted presentation — synthesize curated
+		// groups on the fly so the UI is never a flat "Flags" dump.
+		bp := backendschema.BuildPresentation(schema)
+		pres = &bp
 	}
 	for _, g := range pres.Groups {
 		gvm := GroupVM{Name: g.Name, Highlighted: g.Highlighted}

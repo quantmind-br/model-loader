@@ -111,6 +111,9 @@ func bootstrap(cliLevel string) (cfg config.AppConfig, logger *slog.Logger, clos
 
 	resolver := backendcatalog.NewResolver(catalogStore, schemaStore, logger)
 	defaultSchema := ensureDefaultCatalog(catalogStore, schemaStore, schemaManager, cfg.Paths.LlamaServerBinaryPath, logger)
+	if _, perr := backendschema.EnsurePresentations(catalogStore, schemaStore); perr != nil {
+		logger.Warn("ensure_presentations_failed", "err", perr)
+	}
 
 	helper := &restartHelper{}
 	mgr := processmgr.New(processmgr.Config{
