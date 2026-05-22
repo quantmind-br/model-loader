@@ -10,4 +10,9 @@ func (s *Session) routes(mux *http.ServeMux) {
 	mux.HandleFunc("/save", s.handleSave)
 	mux.HandleFunc("/cancel", s.handleCancel)
 	mux.HandleFunc("/closed", s.handleClosed)
+	mux.HandleFunc("/customize/flag", s.handleCustomizeFlag)
+	mux.HandleFunc("/customize/flag/add", s.handleCustomizeAddFlag)
+	mux.HandleFunc("/customize/flag/remove", s.handleCustomizeRemoveFlag)
+	mux.HandleFunc("/customize/presentation", s.handleCustomizePresentation)
+	mux.HandleFunc("/customize/rules", s.handleCustomizeRules)
 }

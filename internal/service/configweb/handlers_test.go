@@ -102,6 +102,66 @@ func TestSaveHandler_PersistsAndCompletes(t *testing.T) {
 
 // --- test ---
 
+// --- captureSchemaStore ---
+
+type captureSchemaStore struct {
+	schema domain.BackendValidationSchema
+	saved  domain.BackendValidationSchema
+}
+
+func (c *captureSchemaStore) Load(ref string) (domain.BackendValidationSchema, error) {
+	return c.schema, nil
+}
+func (c *captureSchemaStore) Save(ref string, sch domain.BackendValidationSchema) error {
+	c.saved = sch
+	return nil
+}
+func (c *captureSchemaStore) Delete(ref string) error { return nil }
+
+func TestCustomize_SaveFlagConstraintMarksEditable(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	store := &captureSchemaStore{schema: schema}
+	s := &Session{deps: Deps{Schemas: store, Catalog: stubCatalog{id: "llama", ref: "llama.json"}}, done: make(chan Result, 1)}
+	form := url.Values{
+		"backendId": {"llama"}, "flag": {"ctx-size"},
+		"min": {"512"}, "max": {"131072"}, "default": {"8192"}, "required": {"on"},
+	}
+	req := httptest.NewRequest("POST", "/customize/flag", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.handleCustomizeFlag(httptest.NewRecorder(), req)
+
+	saved := store.saved
+	if saved.Flags["ctx-size"].Min == nil || *saved.Flags["ctx-size"].Min != 512 {
+		t.Fatalf("min not saved: %+v", saved.Flags["ctx-size"])
+	}
+	if !saved.Flags["ctx-size"].Required {
+		t.Fatalf("required not saved")
+	}
+	if !saved.Source.Editable {
+		t.Fatalf("schema must be marked Editable after manual edit")
+	}
+}
+
+func TestCustomize_RulesRejectsUnknownFlag(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	store := &captureSchemaStore{schema: schema}
+	s := &Session{deps: Deps{Schemas: store, Catalog: stubCatalog{id: "llama", ref: "llama.json"}}, done: make(chan Result, 1)}
+	body := `[{"id":"r1","when":{"flag":"nonexistent","op":"eq","value":"x"},"then":{"kind":"message","message":"hi"},"severity":"warning"}]`
+	req := httptest.NewRequest("POST", "/customize/rules?backendId=llama", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	s.handleCustomizeRules(rec, req)
+	if rec.Code != 400 {
+		t.Fatalf("expected 400 for unknown-flag rule, got %d", rec.Code)
+	}
+}
+
 func TestValidateHandler_ReportsUnknownFlag(t *testing.T) {
 	schema := domain.BackendValidationSchema{
 		BackendKind: domain.BackendKindLlamaServer,
