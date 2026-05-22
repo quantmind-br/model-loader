@@ -251,3 +251,34 @@ func TestResumeDownload_Happy(t *testing.T) {
 		t.Fatalf("expected resuming message: %q", out.String())
 	}
 }
+
+func TestModelCommandTree(t *testing.T) {
+	model := childByName(rootCmd, "model")
+	if model == nil {
+		t.Fatal("model command missing")
+	}
+	for _, name := range []string{"list", "search", "info", "download", "downloads"} {
+		if childByName(model, name) == nil {
+			t.Errorf("model subcommand missing: %s", name)
+		}
+	}
+	downloads := childByName(model, "downloads")
+	if downloads == nil {
+		t.Fatal("downloads command missing")
+	}
+	for _, name := range []string{"cancel", "resume"} {
+		if childByName(downloads, name) == nil {
+			t.Errorf("downloads subcommand missing: %s", name)
+		}
+	}
+}
+
+func TestModelDownload_ArgValidation(t *testing.T) {
+	// 'model download' with too few args must exit non-zero (cobra Args check),
+	// without panicking or reaching the network.
+	rootCmd.SetArgs([]string{"model", "download", "only-one-arg"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+	if code := Execute(); code == 0 {
+		t.Fatal("expected non-zero exit for missing filename arg")
+	}
+}
