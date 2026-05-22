@@ -12,6 +12,7 @@ import (
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/configweb"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/pages/profile_editor"
@@ -260,10 +261,20 @@ func (p ProfilesPage) existingIDs() []string {
 }
 
 func (p ProfilesPage) startNew() (tea.Model, tea.Cmd) {
-	p.editor = p.prepareEditor()
-	var cmd tea.Cmd
-	p.editor, cmd = p.editor.Open(p.newDraftDefaults())
-	return p, cmd
+	d := configweb.Draft{
+		IsNew:     true,
+		Name:      "New Profile",
+		ID:        domain.Slugify("New Profile"),
+		Args:      map[string]string{},
+		ExtraArgs: []string{},
+	}
+	if p.catalogStore != nil {
+		if catalog, err := p.catalogStore.Load(); err == nil && catalog.DefaultBackendID != "" {
+			d.BackendID = catalog.DefaultBackendID
+		}
+	}
+	p.webEditing = true
+	return p, p.startWebEdit(d)
 }
 
 func (p ProfilesPage) startEditSelected() (tea.Model, tea.Cmd) {
@@ -276,24 +287,34 @@ func (p ProfilesPage) startEditSelected() (tea.Model, tea.Cmd) {
 		return p, nil
 	}
 	pr := sel.p
-	d := profile_editor.Draft{
-		ID:             pr.ID,
-		OrigID:         pr.ID,
-		Name:           pr.Name,
-		Description:    pr.Description,
-		Tags:           profile_editor.FormatTags(pr.Tags),
-		Model:          pr.Model,
-		BackendID:      pr.Launch.BackendID,
-		Env:            append([]domain.EnvVar(nil), pr.Launch.Env...),
-		RestartPolicy:  string(pr.Launch.RestartPolicy),
-		MaxRestarts:    strconv.Itoa(pr.Launch.MaxRestarts),
-		BackoffSeconds: strconv.Itoa(pr.Launch.BackoffSeconds),
-		Args:           copyArgs(pr.Args),
+	d := configweb.Draft{
+		ID:          pr.ID,
+		OrigID:      pr.ID,
+		Name:        pr.Name,
+		Description: pr.Description,
+		Tags:        pr.Tags,
+		Model:       pr.Model,
+		BackendID:   pr.Launch.BackendID,
+		Args:        argsToStrings(pr.Args),
 	}
-	p.editor = p.prepareEditor()
-	var cmd tea.Cmd
-	p.editor, cmd = p.editor.Open(d)
-	return p, cmd
+	if d.Tags == nil {
+		d.Tags = []string{}
+	}
+	if d.Args == nil {
+		d.Args = map[string]string{}
+	}
+	p.webEditing = true
+	return p, p.startWebEdit(d)
+}
+
+// argsToStrings converts a map[string]any args map to map[string]string
+// using formatArgValue for each value.
+func argsToStrings(args map[string]any) map[string]string {
+	out := make(map[string]string, len(args))
+	for k, v := range args {
+		out[k] = formatArgValue(v)
+	}
+	return out
 }
 
 func copyArgs(args map[string]any) map[string]any {

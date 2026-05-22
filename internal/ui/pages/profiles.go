@@ -15,6 +15,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/configweb"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/service/validator"
@@ -63,6 +64,11 @@ type ProfilesPage struct {
 	launch  launchTracker
 
 	killConfirm components.Confirm
+
+	// --- web editor fields ---
+	webEditing bool
+	webURL     string
+	webSession *configweb.Session
 }
 
 // NewProfilesPage constructs the page wired to a Store and FlagSchema.
@@ -148,7 +154,14 @@ func (p ProfilesPage) loadCmd() tea.Cmd {
 	}
 }
 
+func (p ProfilesPage) renderWebEditModal() string {
+	return "\n  Editando profile no navegador…\n\n  " + p.webURL + "\n\n  Salve ou cancele na página. (esc cancela)\n"
+}
+
 func (p ProfilesPage) View() string {
+	if p.webEditing {
+		return p.renderWebEditModal()
+	}
 	leftW := p.width / 3
 	rightW := (p.width*2)/3 - 2
 	left := lipgloss.NewStyle().Width(leftW).Render(p.list.View())

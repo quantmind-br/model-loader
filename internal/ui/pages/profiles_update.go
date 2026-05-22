@@ -54,6 +54,26 @@ func (p ProfilesPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.handleLaunchProfile(m)
 	case profilesKillConfirmedMsg:
 		return p.handleKillConfirmed(m)
+	case webEditStartedMsg:
+		p.webSession = m.session
+		p.webURL = m.url
+		return p, waitForWebEdit(m.session)
+	case webEditFailedMsg:
+		p.webEditing = false
+		p, fc := p.withFlashError("web editor failed: " + m.err.Error())
+		return p, fc
+	case webEditDoneMsg:
+		p.webEditing = false
+		p.webSession = nil
+		if m.err != nil {
+			p, fc := p.withFlashError("web editor error: " + m.err.Error())
+			return p, fc
+		}
+		var fc tea.Cmd
+		if m.saved {
+			p, fc = p.withFlash("saved " + m.profileID)
+		}
+		return p, tea.Batch(p.loadCmd(), fc)
 	case tea.KeyMsg:
 		return p.handleKey(m)
 	}
@@ -104,6 +124,12 @@ func (p ProfilesPage) handlePickerScan(msg tea.Msg) (tea.Model, tea.Cmd) {
 // confirm) > delete confirm > list nav. Picker is intercepted on ctrl+p
 // or while open before forwarding to the editor.
 func (p ProfilesPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if p.webEditing {
+		if msg.String() == "esc" && p.webSession != nil {
+			p.webSession.Cancel()
+		}
+		return p, nil
+	}
 	if p.killConfirm.Active() {
 		return p.updateKillConfirm(msg)
 	}
@@ -215,6 +241,7 @@ func (p ProfilesPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (p ProfilesPage) IsCapturingInput() bool {
 	return CaptureAny(
+		func() bool { return p.webEditing },
 		func() bool { return p.editor.Active() },
 		func() bool { return p.deleteConfirm.Active() },
 		func() bool { return p.picker.active },

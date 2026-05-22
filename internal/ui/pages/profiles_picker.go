@@ -3,17 +3,28 @@ package pages
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/configweb"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
 
 func (p ProfilesPage) handleUseInNewProfile(msg UseInNewProfileMsg) (tea.Model, tea.Cmd) {
-	d := p.newDraftDefaults()
-	d.Model = msg.Path
-	p.editor = p.prepareEditor()
-	var openCmd tea.Cmd
-	p.editor, openCmd = p.editor.Open(d)
+	d := configweb.Draft{
+		IsNew:     true,
+		Name:      "New Profile",
+		ID:        domain.Slugify("New Profile"),
+		Model:     msg.Path,
+		Args:      map[string]string{},
+		ExtraArgs: []string{},
+	}
+	if p.catalogStore != nil {
+		if catalog, err := p.catalogStore.Load(); err == nil && catalog.DefaultBackendID != "" {
+			d.BackendID = catalog.DefaultBackendID
+		}
+	}
+	p.webEditing = true
 	p, fc := p.withFlash("new profile prefilled with picked model")
-	return p, tea.Batch(openCmd, fc)
+	return p, tea.Batch(p.startWebEdit(d), fc)
 }
 
 func (p ProfilesPage) handleModelPicked(msg components.ModelPickedMsg) (tea.Model, tea.Cmd) {
