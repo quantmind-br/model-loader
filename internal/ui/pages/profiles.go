@@ -150,7 +150,7 @@ func (p ProfilesPage) loadCmd() tea.Cmd {
 }
 
 func (p ProfilesPage) renderWebEditModal() string {
-	return "\n  Editando profile no navegador…\n\n  " + p.webURL + "\n\n  Salve ou cancele na página. (esc cancela)\n"
+	return "\n  Editing profile in browser…\n\n  " + p.webURL + "\n\n  Save or cancel on the page. (esc cancels)\n"
 }
 
 func (p ProfilesPage) View() string {

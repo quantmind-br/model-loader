@@ -29,8 +29,8 @@ type backendResolverIface interface {
 	Resolve(profile domain.Profile) (backendcatalog.ResolvedBackend, error)
 }
 
-// profileStoreIface é o subset de profilestore.Store usado pela ServerPage
-// para implementar `r` (restart real). nil -> `r` cai em modo kill-only.
+// profileStoreIface is the subset of profilestore.Store used by ServerPage
+// to implement `r` (real restart). nil -> `r` falls back to kill-only mode.
 type profileStoreIface interface {
 	Get(id string) (domain.Profile, error)
 }

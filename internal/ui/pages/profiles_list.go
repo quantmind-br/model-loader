@@ -78,8 +78,8 @@ func (i item) FilterValue() string {
 
 // corruptItem is a list row representing a profile JSON entry that failed
 // to parse. Edit/duplicate are no-ops; delete is allowed so the user can
-// remove the bad file. Implementa design § 8 — "marca entry com ⚠,
-// exclui de operações até user fix/delete".
+// remove the bad file. Implements design § 8 — "marks entry with ⚠,
+// excludes it from operations until the user fixes/deletes it".
 type corruptItem struct {
 	id  string
 	err error
