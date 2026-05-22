@@ -6,11 +6,12 @@ import "time"
 type BackendKind string
 
 const (
-	BackendKindLlamaServer BackendKind = "llama-server"
-	BackendKindVLLM        BackendKind = "vllm"
-	BackendKindTabbyAPI    BackendKind = "tabbyapi"
-	BackendKindSGLang      BackendKind = "sglang"
-	BackendKindDFlash      BackendKind = "dflash"
+	BackendKindLlamaServer  BackendKind = "llama-server"
+	BackendKindVLLM         BackendKind = "vllm"
+	BackendKindTabbyAPI     BackendKind = "tabbyapi"
+	BackendKindSGLang       BackendKind = "sglang"
+	BackendKindDFlash       BackendKind = "dflash"
+	BackendKindBuunLlamaCpp BackendKind = "buun-llama-cpp"
 )
 
 // BackendMeta holds timestamps and bookkeeping for a backend entry.
