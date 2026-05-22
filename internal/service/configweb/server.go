@@ -7,4 +7,7 @@ func (s *Session) routes(mux *http.ServeMux) {
 		w.WriteHeader(http.StatusOK)
 	})
 	mux.HandleFunc("/validate", s.handleValidate)
+	mux.HandleFunc("/save", s.handleSave)
+	mux.HandleFunc("/cancel", s.handleCancel)
+	mux.HandleFunc("/closed", s.handleClosed)
 }

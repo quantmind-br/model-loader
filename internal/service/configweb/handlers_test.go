@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 )
 
 // --- test doubles ---
@@ -34,6 +35,70 @@ func (c stubCatalog) Load() (domain.BackendCatalog, error) {
 	}, nil
 }
 func (c stubCatalog) Save(domain.BackendCatalog) error { return nil }
+
+// --- memProfileStore ---
+
+type memProfileStore struct{ m map[string]domain.Profile }
+
+func newMemProfileStore() *memProfileStore { return &memProfileStore{m: map[string]domain.Profile{}} }
+
+func (s *memProfileStore) List() ([]domain.Profile, error) {
+	out := make([]domain.Profile, 0, len(s.m))
+	for _, p := range s.m {
+		out = append(out, p)
+	}
+	return out, nil
+}
+func (s *memProfileStore) ListWithDiagnostics() ([]domain.Profile, []profilestore.ListDiagnostic, error) {
+	ps, _ := s.List()
+	return ps, nil, nil
+}
+func (s *memProfileStore) Get(id string) (domain.Profile, error) {
+	if p, ok := s.m[id]; ok {
+		return p, nil
+	}
+	return domain.Profile{}, profilestore.ErrNotFound
+}
+func (s *memProfileStore) Create(p domain.Profile) error {
+	if _, ok := s.m[p.ID]; ok {
+		return profilestore.ErrDuplicateID
+	}
+	s.m[p.ID] = p
+	return nil
+}
+func (s *memProfileStore) Save(p domain.Profile) error { s.m[p.ID] = p; return nil }
+func (s *memProfileStore) Delete(id string) error      { delete(s.m, id); return nil }
+func (s *memProfileStore) Duplicate(srcID, newID string) (domain.Profile, error) {
+	return domain.Profile{}, nil
+}
+func (s *memProfileStore) Rename(oldID string, p domain.Profile) error { return nil }
+
+func TestSaveHandler_PersistsAndCompletes(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	ps := newMemProfileStore()
+	s := &Session{
+		deps: Deps{Profiles: ps, Schemas: stubSchemaStore{schema: schema}, Catalog: stubCatalog{id: "llama", ref: "llama.json"}},
+		done: make(chan Result, 1),
+	}
+	form := url.Values{
+		"isNew": {"true"}, "id": {"qwen"}, "name": {"Qwen"},
+		"backendId": {"llama"}, "model": {"/m.gguf"}, "arg.ctx-size": {"8192"},
+	}
+	req := httptest.NewRequest("POST", "/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleSave(rec, req)
+	res := <-s.Done()
+	if !res.Saved || res.ProfileID != "qwen" {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+	if _, err := ps.Get("qwen"); err != nil {
+		t.Fatalf("profile not persisted: %v", err)
+	}
+}
 
 // --- test ---
 

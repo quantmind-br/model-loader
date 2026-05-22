@@ -89,3 +89,51 @@ func htmlEscape(s string) string {
 	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
 	return r.Replace(s)
 }
+
+func (s *Session) handleSave(w http.ResponseWriter, r *http.Request) {
+	d := draftFromForm(r)
+	if d.ID == "" {
+		d.ID = domain.Slugify(d.Name)
+	}
+	schema, err := s.loadSchema(d.BackendID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	fs := schema.ToFlagSchema()
+
+	var perr error
+	if d.IsNew {
+		perr = s.deps.Profiles.Create(d.ToProfile(fs))
+	} else {
+		lookup := d.OrigID
+		if lookup == "" {
+			lookup = d.ID
+		}
+		existing, gerr := s.deps.Profiles.Get(lookup)
+		if gerr != nil {
+			perr = s.deps.Profiles.Create(d.ToProfile(fs))
+		} else {
+			perr = s.deps.Profiles.Save(d.ApplyTo(existing, fs))
+		}
+	}
+	if perr != nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<div class="issue error">` + htmlEscape(perr.Error()) + `</div>`))
+		return
+	}
+	w.Header().Set("HX-Redirect", "/closed")
+	w.WriteHeader(http.StatusOK)
+	s.complete(Result{Saved: true, ProfileID: d.ID})
+}
+
+func (s *Session) handleCancel(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("HX-Redirect", "/closed")
+	w.WriteHeader(http.StatusOK)
+	s.complete(Result{Saved: false})
+}
+
+func (s *Session) handleClosed(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(`<!doctype html><meta charset="utf-8"><title>Pronto</title><body style="font-family:sans-serif;padding:3rem;text-align:center"><h2>Pronto — pode fechar esta aba.</h2></body>`))
+}
