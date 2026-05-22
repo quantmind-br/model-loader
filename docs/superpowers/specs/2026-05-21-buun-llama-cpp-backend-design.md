@@ -17,10 +17,12 @@ existing `llama-server` backend.
   `backends/buun-llama-cpp/build/bin/llama-server`, 8.1 MB, already built).
 - Its `--help` output is **100% format-compatible** with upstream llama.cpp and is parseable by the
   existing `llamahelp` parser (`llamahelp.NewExecParserFor`).
-- New flag families: KV-cache "turbo" types (`turbo2/turbo3/turbo4/turbo2_tcq/turbo3_tcq` on
-  `--cache-type-k`/`--cache-type-v`), DFlash cross-attention drafter (`--spec-draft-model`/`-md`,
-  `--spec-dflash-default`, `--dflash-max-slots`, `--tree-budget`), and generic speculative decoding
-  (`--spec-type`, `--draft-max/min`, `--draft-topk`).
+- New flag families (verified present in build `9561 / e9187d155`): KV-cache "turbo" types
+  (`turbo2/turbo3/turbo4/turbo2_tcq/turbo3_tcq` on `--cache-type-k`/`--cache-type-v`), DFlash
+  cross-attention drafter (`--spec-draft-model`/`-md`, `--spec-dflash-default`,
+  `--dflash-max-slots`), and generic speculative decoding (`--spec-type`, `--draft-max/min`).
+  (`--tree-budget` and `--draft-topk` were referenced in early investigation but are **not** present
+  in this build — excluded from the implementation.)
 - `docs/profile-schema.json` does **not** enumerate backend-kind values (no `enum`), and
   `internal/domain/backend.go` has no kind-validation function — kinds are free string constants.
   Adding a new kind therefore does **not** change the persisted profile shape (no schema-doc sync
@@ -79,12 +81,21 @@ No change. It is a native binary and falls through `resolveExecutable`'s `defaul
 
 ### 6. Curated essentials
 `internal/ui/pages/profile_editor/essentials.go`: new `domain.BackendKindBuunLlamaCpp` entry.
-- **Base (llama):** `n-gpu-layers`, `ctx-size`, `flash-attn`, `host`, `port`
+- **Base (llama):** `n-gpu-layers`, `ctx-size`, `flash-attn`, `port`
 - **KV-cache turbo:** `cache-type-k`, `cache-type-v` (description hints the turbo2/3/4/tcq types)
-- **DFlash:** `spec-draft-model` (`-md`), `spec-dflash-default`, `dflash-max-slots`, `tree-budget`
-- **Generic spec-type:** `spec-type`, `draft-max`, `draft-min`, `draft-topk`
+- **DFlash:** `spec-draft-model` (`-md`), `spec-dflash-default`, `dflash-max-slots`
+- **Generic spec-type:** `spec-type`, `draft-max`, `draft-min`
 
 This is an intentional, explicitly-requested addition to the curated essentials layer.
+
+**Deviations from the initial draft (corrected during implementation against build 9561):**
+- `--tree-budget` and `--draft-topk` were dropped — they **do not exist** in the verified fork
+  build (`9561 / e9187d155`). They were listed speculatively in early investigation; the live
+  `--help` does not emit them. If a future fork build adds them, add them to both `buunRows`
+  (`internal/service/buunhelp`) and the essentials entry.
+- `host` was dropped from the base essentials — it is absent from the upstream llama embedded base
+  (so `essentialsFor` would drop it in fallback mode) and is also omitted from the existing
+  `llama-server` essentials entry. Excluding it keeps buun consistent with the llama-server UX.
 
 ### 7. UI / validator
 No changes required:

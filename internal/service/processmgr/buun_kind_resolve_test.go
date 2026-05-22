@@ -2,6 +2,7 @@ package processmgr
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
@@ -46,5 +47,32 @@ func TestBuildArgsForBackend_Buun(t *testing.T) {
 	}
 	if len(args) < 2 || args[0] != "--model" || args[1] != "/m.gguf" {
 		t.Fatalf("expected --model first, got %v", args)
+	}
+}
+
+// TestBuildArgsForBackend_BuunEqualsLlama proves buun reuses the llama-server
+// arg builder: for any profile, the two kinds must produce identical args. This
+// guards against a future divergent buun builder being introduced silently.
+func TestBuildArgsForBackend_BuunEqualsLlama(t *testing.T) {
+	p := domain.Profile{
+		Model: "/m.gguf",
+		Args: map[string]any{
+			"ctx-size":     8192,
+			"n-gpu-layers": 99,
+			"flash-attn":   "auto",
+			"cache-type-k": "turbo4",
+		},
+		ExtraArgs: []string{"--verbose"},
+	}
+	buunArgs, err := BuildArgsForBackend(p, domain.BackendKindBuunLlamaCpp, "/bin/echo")
+	if err != nil {
+		t.Fatalf("buun args: %v", err)
+	}
+	llamaArgs, err := BuildArgsForBackend(p, domain.BackendKindLlamaServer, "/bin/echo")
+	if err != nil {
+		t.Fatalf("llama args: %v", err)
+	}
+	if !reflect.DeepEqual(buunArgs, llamaArgs) {
+		t.Fatalf("buun args must equal llama args:\n buun=%v\nllama=%v", buunArgs, llamaArgs)
 	}
 }
