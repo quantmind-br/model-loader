@@ -36,6 +36,7 @@ type BenchmarkConfig struct {
 type LlamaBenchConfig struct {
 	Presets     []string `mapstructure:"presets"`     // "pp/tg" pairs, e.g. ["512/128","4096/256"]
 	Repetitions int      `mapstructure:"repetitions"` // measurements per preset; 0 → 3
+	Warmup      int      `mapstructure:"warmup"`      // discarded warmup reps before measurement; <0 → 1; 0 disables
 }
 
 // JudgeConfig is the OpenAI-compatible endpoint used by the LLM-as-judge
@@ -185,6 +186,7 @@ func applyDefaults(v *viper.Viper) {
 	v.SetDefault("benchmark.judge.api_key", "")
 	v.SetDefault("benchmark.judge.model", "")
 	v.SetDefault("benchmark.judge.samples", 3)
-	v.SetDefault("benchmark.llamabench.presets", []string{"512/128", "4096/256"})
+	v.SetDefault("benchmark.llamabench.presets", []string{"128/512", "512/128", "2048/256", "4096/256", "8192/128", "16384/64"})
 	v.SetDefault("benchmark.llamabench.repetitions", 3)
+	v.SetDefault("benchmark.llamabench.warmup", 1)
 }

@@ -10,7 +10,7 @@ func TestParsePresets_DefaultWhenEmpty(t *testing.T) {
 	if len(got) != len(defaultPresets) {
 		t.Fatalf("want %d default presets, got %d", len(defaultPresets), len(got))
 	}
-	if got[0] != (tpPreset{PromptTokens: 512, GenTokens: 128}) {
+	if got[0] != (tpPreset{PromptTokens: 128, GenTokens: 512}) {
 		t.Errorf("first default preset = %+v", got[0])
 	}
 }
@@ -32,6 +32,22 @@ func TestParsePresets_Invalid(t *testing.T) {
 	for _, bad := range []string{"512", "x/128", "512/0", "0/128", "512/y", "512abc/128", "512/128/2", "512/128abc"} {
 		if _, err := parsePresets([]string{bad}); err == nil {
 			t.Errorf("expected error for %q, got nil", bad)
+		}
+	}
+}
+
+func TestDefaultPresets_Expanded(t *testing.T) {
+	got, err := parsePresets(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []tpPreset{{128, 512}, {512, 128}, {2048, 256}, {4096, 256}, {8192, 128}, {16384, 64}}
+	if len(got) != len(want) {
+		t.Fatalf("got %d default presets, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("preset %d = %+v, want %+v", i, got[i], want[i])
 		}
 	}
 }

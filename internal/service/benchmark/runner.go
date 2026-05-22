@@ -38,6 +38,9 @@ type Config struct {
 	// LlamaBenchReps is how many times each preset is measured and averaged.
 	// <=0 → default 3.
 	LlamaBenchReps int
+	// LlamaBenchWarmup is how many discarded warmup reps run before measurement
+	// to remove cold-start bias. <0 → default 1; 0 disables warmup.
+	LlamaBenchWarmup int
 }
 
 // tpPreset is one parsed throughput configuration: pp tokens in, tg tokens out.
@@ -49,7 +52,14 @@ type tpPreset struct {
 func (p tpPreset) name() string { return fmt.Sprintf("pp %d / tg %d", p.PromptTokens, p.GenTokens) }
 func (p tpPreset) id() string   { return fmt.Sprintf("tp-%d-%d", p.PromptTokens, p.GenTokens) }
 
-var defaultPresets = []tpPreset{{PromptTokens: 512, GenTokens: 128}, {PromptTokens: 4096, GenTokens: 256}}
+var defaultPresets = []tpPreset{
+	{PromptTokens: 128, GenTokens: 512}, // chat-like: short prefill, long gen
+	{PromptTokens: 512, GenTokens: 128},
+	{PromptTokens: 2048, GenTokens: 256},
+	{PromptTokens: 4096, GenTokens: 256},
+	{PromptTokens: 8192, GenTokens: 128}, // RAG-like: long prefill, short gen
+	{PromptTokens: 16384, GenTokens: 64}, // extreme RAG
+}
 
 // parsePresets parses "pp/tg" strings into tpPresets. Empty input → defaults.
 func parsePresets(raw []string) ([]tpPreset, error) {
@@ -110,6 +120,7 @@ type Runner struct {
 	problems []Problem  // embedded SWE-bench Lite coding set
 	presets  []tpPreset // parsed ModeLlamaBench configs
 	reps     int        // ModeLlamaBench repetitions per preset
+	warmup   int        // discarded warmup reps before measurement
 }
 
 // NewRunner builds a Runner and loads the embedded dataset.
@@ -132,7 +143,11 @@ func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Mana
 	if reps <= 0 {
 		reps = 3
 	}
-	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, presets: presets, reps: reps}, nil
+	warmup := cfg.LlamaBenchWarmup
+	if warmup < 0 {
+		warmup = 1
+	}
+	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, presets: presets, reps: reps, warmup: warmup}, nil
 }
 
 // ProblemCount reports how many problems the default executable set contains.
@@ -450,6 +465,21 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 	msgs := []ChatMessage{
 		{Role: "system", Content: "You are a verbose writing assistant. Continue at length."},
 		{Role: "user", Content: prompt},
+	}
+
+	for w := 0; w < r.warmup; w++ {
+		select {
+		case <-ctx.Done():
+			res.Err = ctx.Err().Error()
+			tr.Error = res.Err
+			return res, tr
+		default:
+		}
+		warmCtx, warmCancel := context.WithTimeout(ctx, r.cfg.Timeout)
+		_, _ = Complete(warmCtx, nil, base, "", ChatRequest{
+			Model: model, Temperature: 0, MaxTokens: ps.GenTokens, IgnoreEOS: true, Messages: msgs,
+		})
+		warmCancel()
 	}
 
 	var ttftSum, tpsSum, totalSum, ppTpsSum float64
