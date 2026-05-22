@@ -29,7 +29,7 @@ func TestReconcile_WrapperScriptExec(t *testing.T) {
 	}
 
 	freshMgr := New(Config{
-		Resolver:      func(_ domain.Profile) (string, error) { return "python3", nil },
+		Resolver:      func(_ domain.Profile) (string, domain.BackendKind, error) { return "python3", "", nil },
 		DefaultBinary: "python3",
 		LogDir:        mgr.logDir,
 		RegistryPath:  mgr.registryPath,

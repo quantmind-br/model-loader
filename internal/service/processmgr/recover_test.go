@@ -64,7 +64,7 @@ func TestReconcile_KeepsLiveLlamaServer(t *testing.T) {
 	// Forge a fresh manager pointing at the same registry — simulates restart.
 	dir := filepath.Dir(mgr.registryPath)
 	freshMgr := New(Config{
-		Resolver:      func(_ domain.Profile) (string, error) { return "python3", nil },
+		Resolver:      func(_ domain.Profile) (string, domain.BackendKind, error) { return "python3", "", nil },
 		DefaultBinary: "python3",
 		LogDir:        filepath.Join(dir, "logs"),
 		RegistryPath:  mgr.registryPath,
@@ -104,7 +104,7 @@ func TestReconcile_UsesInstanceBinaryPath(t *testing.T) {
 
 	dir := filepath.Dir(mgr.registryPath)
 	freshMgr := New(Config{
-		Resolver:     func(_ domain.Profile) (string, error) { return "definitely-not-python3", nil },
+		Resolver:     func(_ domain.Profile) (string, domain.BackendKind, error) { return "definitely-not-python3", "", nil },
 		LogDir:       filepath.Join(dir, "logs"),
 		RegistryPath: mgr.registryPath,
 	})

@@ -16,7 +16,7 @@ import (
 
 // fsManager is the default Manager implementation backed by os/exec.
 type fsManager struct {
-	resolver      func(domain.Profile) (string, error)
+	resolver      func(domain.Profile) (string, domain.BackendKind, error)
 	defaultBinary string
 	logDir        string
 	registryPath  string
@@ -41,7 +41,11 @@ type fsManager struct {
 
 // Config holds wiring for New.
 type Config struct {
-	Resolver      func(domain.Profile) (string, error)
+	// Resolver returns the executable path AND the backend kind for a profile.
+	// The kind is used to fill Profile.Launch.ResolvedBackendKind when a caller
+	// (e.g. the HTTP proxy's on-demand launch) did not pre-resolve it, so args
+	// are built for the correct backend instead of defaulting to llama-server.
+	Resolver      func(domain.Profile) (string, domain.BackendKind, error)
 	DefaultBinary string
 	LogDir        string
 	RegistryPath  string

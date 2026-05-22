@@ -32,14 +32,24 @@ func (m *fsManager) prepareLaunch(p domain.Profile) (launchPlan, error) {
 		return launchPlan{}, err
 	}
 	resolvedBinary := p.Launch.ResolvedExecutable
-	if resolvedBinary == "" {
-		var err error
-		resolvedBinary, err = m.resolver(p)
+	resolvedKind := p.Launch.ResolvedBackendKind
+	// Resolve when either the executable or the backend kind is missing. Callers
+	// that pre-resolve (TUI, benchmark, restart) set both; the HTTP proxy's
+	// on-demand launch sets neither, so without this the kind would default to
+	// llama-server and emit --model for sglang/vllm/dflash backends.
+	if resolvedBinary == "" || resolvedKind == "" {
+		exe, kind, err := m.resolver(p)
 		if err != nil {
 			return launchPlan{}, fmt.Errorf("resolve backend executable: %w", err)
 		}
+		if resolvedBinary == "" {
+			resolvedBinary = exe
+		}
+		if resolvedKind == "" {
+			resolvedKind = kind
+		}
 	}
-	profileArgs, err := BuildArgsForBackend(p, p.Launch.ResolvedBackendKind, resolvedBinary)
+	profileArgs, err := BuildArgsForBackend(p, resolvedKind, resolvedBinary)
 	if err != nil {
 		return launchPlan{}, fmt.Errorf("build args: %w", err)
 	}

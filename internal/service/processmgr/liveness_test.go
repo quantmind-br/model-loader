@@ -11,7 +11,7 @@ import (
 
 func TestLiveness_MarksDeadPIDCrashed(t *testing.T) {
 	dir := t.TempDir()
-	m := New(Config{Resolver: func(_ domain.Profile) (string, error) { return "true", nil }, LogDir: dir, RegistryPath: filepath.Join(dir, "i.json")})
+	m := New(Config{Resolver: func(_ domain.Profile) (string, domain.BackendKind, error) { return "true", "", nil }, LogDir: dir, RegistryPath: filepath.Join(dir, "i.json")})
 	t.Cleanup(func() { _ = m.Close() })
 	m.tracked[99999] = domain.RunningInstance{ProfileID: "x", PID: 99999, Port: 9000, Background: true}
 
@@ -40,7 +40,7 @@ func TestLiveness_MarksDeadPIDCrashed(t *testing.T) {
 
 func TestLiveness_AliveStaysAlive(t *testing.T) {
 	dir := t.TempDir()
-	m := New(Config{Resolver: func(_ domain.Profile) (string, error) { return "true", nil }, LogDir: dir, RegistryPath: filepath.Join(dir, "i.json")})
+	m := New(Config{Resolver: func(_ domain.Profile) (string, domain.BackendKind, error) { return "true", "", nil }, LogDir: dir, RegistryPath: filepath.Join(dir, "i.json")})
 	t.Cleanup(func() { _ = m.Close() })
 	m.tracked[111] = domain.RunningInstance{ProfileID: "x", PID: 111, Port: 9000, Background: true}
 

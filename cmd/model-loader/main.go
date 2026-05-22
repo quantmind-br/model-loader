@@ -331,13 +331,13 @@ func ensureDefaultCatalog(catalogStore backendcatalog.Store, schemaStore backend
 	return domain.BackendValidationSchema{}.ToFlagSchema()
 }
 
-func buildResolver(resolver backendcatalog.Resolver) func(domain.Profile) (string, error) {
-	return func(p domain.Profile) (string, error) {
+func buildResolver(resolver backendcatalog.Resolver) func(domain.Profile) (string, domain.BackendKind, error) {
+	return func(p domain.Profile) (string, domain.BackendKind, error) {
 		rb, err := resolver.Resolve(p)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
-		return rb.ExecutablePath, nil
+		return rb.ExecutablePath, rb.Backend.Kind, nil
 	}
 }
 
