@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 )
 
 func TestBuildPresentation_HighlightsEssentialsFirst(t *testing.T) {
@@ -55,6 +56,78 @@ func TestEssentialSeed_MatchesCuratedBackends(t *testing.T) {
 		if !found {
 			t.Fatalf("buun seed missing curated flag %q", want)
 		}
+	}
+}
+
+func TestEnsurePresentations_SeedsCatalog(t *testing.T) {
+	dir := t.TempDir()
+	catalogStore := backendcatalog.NewFSStore(dir)
+	schemaStore := backendcatalog.NewFSSchemaStore(dir)
+
+	// Build a catalog with one llama-server backend.
+	backend := domain.Backend{
+		ID:         "test-llama",
+		Name:       "test-llama",
+		Kind:       domain.BackendKindLlamaServer,
+		Executable: "llama-server",
+		SchemaRef:  "schemas/test-llama.json",
+	}
+	catalog := domain.BackendCatalog{
+		SchemaVersion:    1,
+		DefaultBackendID: backend.ID,
+		Backends:         []domain.Backend{backend},
+	}
+	if err := catalogStore.Save(catalog); err != nil {
+		t.Fatalf("save catalog: %v", err)
+	}
+
+	// Schema without Presentation.
+	schema := domain.BackendValidationSchema{
+		SchemaVersion: 1,
+		BackendID:     backend.ID,
+		BackendKind:   domain.BackendKindLlamaServer,
+		Flags: map[string]domain.FlagSpec{
+			"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt, Group: "common"},
+			"port":     {Long: "port", Type: domain.FlagTypeInt, Group: "common"},
+			"temp":     {Long: "temp", Type: domain.FlagTypeFloat, Group: "sampling"},
+		},
+	}
+	ref := backendcatalog.SchemaStoreRef(backend.SchemaRef)
+	if err := schemaStore.Save(ref, schema); err != nil {
+		t.Fatalf("save schema: %v", err)
+	}
+
+	// First call must seed 1 presentation.
+	n, err := EnsurePresentations(catalogStore, schemaStore)
+	if err != nil {
+		t.Fatalf("EnsurePresentations: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("want 1 updated, got %d", n)
+	}
+
+	// Reloaded schema must have a non-empty Presentation with highlighted first group.
+	updated, err := schemaStore.Load(ref)
+	if err != nil {
+		t.Fatalf("load updated schema: %v", err)
+	}
+	if updated.Presentation == nil {
+		t.Fatal("Presentation must not be nil after seeding")
+	}
+	if len(updated.Presentation.Groups) == 0 {
+		t.Fatal("Presentation.Groups must not be empty")
+	}
+	if !updated.Presentation.Groups[0].Highlighted {
+		t.Fatalf("first group must be highlighted: %+v", updated.Presentation.Groups[0])
+	}
+
+	// Second call must be idempotent (0 updated).
+	n2, err := EnsurePresentations(catalogStore, schemaStore)
+	if err != nil {
+		t.Fatalf("EnsurePresentations (2nd): %v", err)
+	}
+	if n2 != 0 {
+		t.Fatalf("want 0 on 2nd call, got %d", n2)
 	}
 }
 

@@ -6,6 +6,45 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
+func TestBuildViewModel_NilPresentationUsesCuratedGroups(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer,
+		Flags: map[string]domain.FlagSpec{
+			"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt, Group: "common"},
+			"port":     {Long: "port", Type: domain.FlagTypeInt, Group: "common"},
+			"temp":     {Long: "temp", Type: domain.FlagTypeFloat, Group: "sampling"},
+		},
+		Presentation: nil, // no persisted presentation
+	}
+	d := Draft{Args: map[string]string{}}
+	vm := BuildViewModel(d, schema)
+
+	if len(vm.Groups) <= 1 {
+		t.Fatalf("expected more than one group (curated + other), got %d: %+v", len(vm.Groups), vm.Groups)
+	}
+	first := vm.Groups[0]
+	if first.Name == "Flags" {
+		t.Fatal("flat 'Flags' fallback must not be used; expect curated groups")
+	}
+	if !first.Highlighted {
+		t.Fatalf("first group must be highlighted essentials, got %+v", first)
+	}
+	// ctx-size and port are llama essentials — must appear in first group.
+	hasCtxSize := false
+	hasPort := false
+	for _, f := range first.Fields {
+		if f.Flag == "ctx-size" {
+			hasCtxSize = true
+		}
+		if f.Flag == "port" {
+			hasPort = true
+		}
+	}
+	if !hasCtxSize || !hasPort {
+		t.Fatalf("essentials missing from first group: %+v", first.Fields)
+	}
+}
+
 func TestBuildViewModel_OrdersGroupsAndWidgets(t *testing.T) {
 	schema := domain.BackendValidationSchema{
 		BackendKind: domain.BackendKindLlamaServer,

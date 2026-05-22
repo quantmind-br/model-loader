@@ -1,9 +1,11 @@
 package backendschema
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 )
 
 // essentialSeed lists, per backend kind, the flag long-names that should land
@@ -60,4 +62,32 @@ func BuildPresentation(schema domain.BackendValidationSchema) domain.Presentatio
 		groups = append(groups, domain.PresentationGroup{Name: g, Flags: flags})
 	}
 	return domain.Presentation{Groups: groups}
+}
+
+// EnsurePresentations seeds a default Presentation into every backend schema in
+// the catalog that lacks one. Idempotent; returns the count updated. Does NOT
+// mark Source.Editable (a synthesized default is not a manual edit).
+func EnsurePresentations(catalogStore backendcatalog.Store, schemaStore backendcatalog.SchemaStore) (int, error) {
+	catalog, err := catalogStore.Load()
+	if err != nil {
+		return 0, fmt.Errorf("load catalog: %w", err)
+	}
+	updated := 0
+	for _, b := range catalog.Backends {
+		ref := backendcatalog.SchemaStoreRef(b.SchemaRef)
+		schema, err := schemaStore.Load(ref)
+		if err != nil {
+			continue // missing schema handled elsewhere; skip
+		}
+		if schema.Presentation != nil {
+			continue
+		}
+		pres := BuildPresentation(schema)
+		schema.Presentation = &pres
+		if err := schemaStore.Save(ref, schema); err != nil {
+			return updated, fmt.Errorf("save presentation for %s: %w", b.ID, err)
+		}
+		updated++
+	}
+	return updated, nil
 }
