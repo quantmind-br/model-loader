@@ -1,13 +1,19 @@
 package configweb
 
 import (
+	"encoding/json"
 	"html/template"
 	"net/http"
 
 	"github.com/quantmind-br/model-loader/internal/service/configweb/assets"
 )
 
-var tmpl = template.Must(template.ParseFS(assets.FS,
+var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
+	"toJSON": func(v any) (template.JS, error) {
+		b, err := json.Marshal(v)
+		return template.JS(b), err
+	},
+}).ParseFS(assets.FS,
 	"templates/base.gohtml",
 	"templates/configure.gohtml",
 	"templates/customize.gohtml",
