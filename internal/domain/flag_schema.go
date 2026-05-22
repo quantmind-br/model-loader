@@ -27,6 +27,7 @@ type FlagSpec struct {
 	FloatMin *float64 `json:"floatMin,omitempty"`
 	FloatMax *float64 `json:"floatMax,omitempty"`
 	IsPort   bool     `json:"isPort,omitempty"`
+	Required bool     `json:"required,omitempty"`
 }
 
 // FlagSchema is the parsed --help output keyed by long name.
@@ -34,6 +35,7 @@ type FlagSchema struct {
 	Version     string
 	BackendKind BackendKind
 	Flags       map[string]FlagSpec
+	Rules       []CrossFieldRule
 }
 
 // Lookup resolves a name (map key, long form, short form, or alias) to a FlagSpec.

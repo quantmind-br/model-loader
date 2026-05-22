@@ -1,0 +1,67 @@
+{{define "customize"}}
+<div x-data="customize()">
+  <h3>Flags do backend ({{.BackendID}})</h3>
+  {{range .AllFlags}}
+  <form class="flag-edit" hx-post="/customize/flag">
+    <input type="hidden" name="backendId" value="{{$.BackendID}}">
+    <input type="hidden" name="flag" value="{{.Flag}}">
+    <strong>{{.Flag}}</strong>
+    <select name="type">
+      <option value="int"{{if eq .Type "int"}} selected{{end}}>int</option>
+      <option value="float"{{if eq .Type "float"}} selected{{end}}>float</option>
+      <option value="bool"{{if eq .Type "bool"}} selected{{end}}>bool</option>
+      <option value="enum"{{if eq .Type "enum"}} selected{{end}}>enum</option>
+      <option value="string"{{if eq .Type "string"}} selected{{end}}>string</option>
+    </select>
+    <input name="min" placeholder="min" value="{{.Min}}" size="6">
+    <input name="max" placeholder="max" value="{{.Max}}" size="8">
+    <input name="default" placeholder="default" value="{{.Default}}" size="10">
+    <input name="enumValues" placeholder="enum (csv)" value="{{.Enum}}" size="14">
+    <label><input type="checkbox" name="required"{{if .Required}} checked{{end}}> obrigatória</label>
+    <button class="primary" type="submit">Salvar flag</button>
+    <button class="ghost" type="button"
+      hx-post="/customize/flag/remove" hx-vals='{"backendId":"{{$.BackendID}}","flag":"{{.Flag}}"}'>🗑</button>
+  </form>
+  {{end}}
+
+  <form class="flag-edit" hx-post="/customize/flag/add">
+    <input type="hidden" name="backendId" value="{{.BackendID}}">
+    <input name="flag" placeholder="nova flag (long name)" required>
+    <select name="type"><option>string</option><option>int</option><option>float</option><option>bool</option><option>enum</option></select>
+    <input name="help" placeholder="descrição">
+    <button class="primary" type="submit">＋ Adicionar flag</button>
+  </form>
+
+  <h3>Regras entre campos</h3>
+  <template x-for="(rule,i) in rules" :key="i">
+    <div class="rule">
+      SE <input x-model="rule.when.flag" placeholder="flag" size="12">
+      <select x-model="rule.when.op"><option value="eq">=</option><option value="ne">≠</option><option value="le">≤</option><option value="ge">≥</option></select>
+      <input x-model="rule.when.value" placeholder="valor" size="8">
+      ENTÃO
+      <select x-model="rule.then.kind"><option value="limit">limitar</option><option value="require">exigir</option><option value="message">mensagem</option></select>
+      <input x-model="rule.then.flag" placeholder="campo alvo" size="12" x-show="rule.then.kind!=='message'">
+      <select x-model="rule.then.op" x-show="rule.then.kind==='limit'"><option value="le">≤</option><option value="ge">≥</option><option value="eq">=</option><option value="ne">≠</option></select>
+      <input x-model="rule.then.value" placeholder="valor" size="8" x-show="rule.then.kind!=='message'">
+      <input x-model="rule.then.message" placeholder="mensagem" size="20" x-show="rule.then.kind==='message'">
+      <select x-model="rule.severity"><option value="warning">aviso</option><option value="error">erro</option></select>
+      <button class="ghost" type="button" @click="rules.splice(i,1)">🗑</button>
+    </div>
+  </template>
+  <button class="ghost" type="button" @click="addRule()">＋ Nova regra</button>
+  <button class="primary" type="button" @click="saveRules()">Salvar regras</button>
+
+  <script>
+    function customize(){return{
+      rules: {{ if .Rules }}{{ .Rules | toJSON }}{{ else }}[]{{ end }},
+      backendId: "{{.BackendID}}",
+      addRule(){this.rules.push({id:crypto.randomUUID(),when:{flag:'',op:'eq',value:''},then:{kind:'message',message:''},severity:'warning'})},
+      async saveRules(){
+        const r = await fetch('/customize/rules?backendId='+encodeURIComponent(this.backendId),
+          {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(this.rules)});
+        if(!r.ok){alert(await r.text())}
+      }
+    }}
+  </script>
+</div>
+{{end}}

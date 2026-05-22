@@ -3,17 +3,28 @@ package pages
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/configweb"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
 
 func (p ProfilesPage) handleUseInNewProfile(msg UseInNewProfileMsg) (tea.Model, tea.Cmd) {
-	d := p.newDraftDefaults()
-	d.Model = msg.Path
-	p.editor = p.prepareEditor()
-	var openCmd tea.Cmd
-	p.editor, openCmd = p.editor.Open(d)
+	d := configweb.Draft{
+		IsNew:     true,
+		Name:      "New Profile",
+		ID:        domain.Slugify("New Profile"),
+		Model:     msg.Path,
+		Args:      map[string]string{},
+		ExtraArgs: []string{},
+	}
+	if p.catalogStore != nil {
+		if catalog, err := p.catalogStore.Load(); err == nil && catalog.DefaultBackendID != "" {
+			d.BackendID = catalog.DefaultBackendID
+		}
+	}
+	p.webEditing = true
 	p, fc := p.withFlash("new profile prefilled with picked model")
-	return p, tea.Batch(openCmd, fc)
+	return p, tea.Batch(p.startWebEdit(d), fc)
 }
 
 func (p ProfilesPage) handleModelPicked(msg components.ModelPickedMsg) (tea.Model, tea.Cmd) {
@@ -21,9 +32,8 @@ func (p ProfilesPage) handleModelPicked(msg components.ModelPickedMsg) (tea.Mode
 	if c := p.picker.picker.Cancel(); c != nil {
 		c()
 	}
-	var cmd tea.Cmd
-	p.editor, cmd = p.editor.SetModelPath(msg.Path)
-	return p, cmd
+	_ = msg // model picker no longer used with huh editor; web editor receives model path via URL
+	return p, nil
 }
 
 func (p ProfilesPage) handleModelPickerCancelled(_ components.ModelPickerCancelledMsg) (tea.Model, tea.Cmd) {
@@ -36,12 +46,7 @@ func (p ProfilesPage) handleNavigateToSizing(msg NavigateToSizingMsg) (tea.Model
 	for i, it := range items {
 		if sel, ok := it.(item); ok && sel.p.ID == msg.ProfileID {
 			p.list.Select(i)
-			p, cmd := p.startEditSelected()
-			if rm, ok := p.(ProfilesPage); ok {
-				rm.editor = rm.editor.SetSubTabSizing()
-				return rm, cmd
-			}
-			return p, cmd
+			return p.startEditSelected()
 		}
 	}
 	p, fc := p.withFlashError("profile not found for sizing navigation")

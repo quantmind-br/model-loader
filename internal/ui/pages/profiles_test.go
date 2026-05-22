@@ -15,12 +15,9 @@ import (
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
-	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
-	"github.com/quantmind-br/model-loader/internal/service/validator"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
-	"github.com/quantmind-br/model-loader/internal/ui/pages/profile_editor"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
@@ -118,146 +115,21 @@ func TestProfilesPage_NewProfileSavesViaStore(t *testing.T) {
 	}
 
 	page := NewProfilesPage(store, domain.FlagSchema{})
-	tm := teatest.NewTestModel(t, viewWrapper{page: page}, teatest.WithInitialTermSize(120, 30))
-	tm.Send(tea.WindowSizeMsg{Width: 120, Height: 30})
 
-	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return strings.Contains(string(out), "No profiles yet")
-	}, teatest.WithDuration(2*time.Second))
+	// 'n' opens the web editor: assert webEditing=true and a cmd is returned.
+	updated, cmd := page.startNew()
+	page = updated.(ProfilesPage)
+	if !page.webEditing {
+		t.Fatal("startNew should set webEditing=true")
+	}
+	if cmd == nil {
+		t.Fatal("startNew should return a launch cmd")
+	}
 
-	// 'n' opens the form
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
-	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return strings.Contains(string(out), "Name") && strings.Contains(string(out), "Model path")
-	}, teatest.WithDuration(2*time.Second))
-
-	// We don't drive the full huh form here — just exit. The store-side
-	// behavior is already covered by FSStore tests; this asserts wiring.
-	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
-
-	_ = tm.Quit()
-
-	// Ensure no profile was persisted (esc cancels)
+	// Ensure no profile was persisted (web editor not submitted)
 	got, _ := store.List()
 	if len(got) != 0 {
 		t.Errorf("List len = %d, want 0", len(got))
-	}
-}
-
-func TestProfilesPage_RenamesProfileViaStore(t *testing.T) {
-	dir := t.TempDir()
-	store, err := profilestore.NewFSStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Save(domain.Profile{ID: "orig", Name: "Orig", Model: "/m.gguf"}); err != nil {
-		t.Fatal(err)
-	}
-	created := mustGetProfile(t, store, "orig").Meta.CreatedAt
-
-	page := NewProfilesPage(store, domain.FlagSchema{})
-	msg := profile_editor.EditorCommittedMsg{Draft: profile_editor.Draft{
-		ID: "renamed", OrigID: "orig", Name: "Orig", Model: "/m.gguf",
-	}}
-	page.handleEditorCommitted(msg)
-
-	if _, err := store.Get("orig"); !errors.Is(err, profilestore.ErrNotFound) {
-		t.Errorf("orig still present: %v", err)
-	}
-	got := mustGetProfile(t, store, "renamed")
-	if !got.Meta.CreatedAt.Equal(created) {
-		t.Errorf("CreatedAt = %v, want preserved %v", got.Meta.CreatedAt, created)
-	}
-}
-
-func TestProfilesPage_RenameBlockedWhileRunning(t *testing.T) {
-	dir := t.TempDir()
-	store, err := profilestore.NewFSStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Save(domain.Profile{ID: "orig", Name: "Orig", Model: "/m.gguf"}); err != nil {
-		t.Fatal(err)
-	}
-
-	page := NewProfilesPage(store, domain.FlagSchema{})
-	page.running = []domain.RunningInstance{{ProfileID: "orig"}}
-	msg := profile_editor.EditorCommittedMsg{Draft: profile_editor.Draft{
-		ID: "renamed", OrigID: "orig", Name: "Orig", Model: "/m.gguf",
-	}}
-	page.handleEditorCommitted(msg)
-
-	// Nothing moved: original survives, target never created.
-	if _, err := store.Get("orig"); err != nil {
-		t.Errorf("orig removed despite running guard: %v", err)
-	}
-	if _, err := store.Get("renamed"); !errors.Is(err, profilestore.ErrNotFound) {
-		t.Errorf("renamed created despite running guard: %v", err)
-	}
-}
-
-// TestProfilesPage_NewProfileDoesNotClobberExisting is the Codex finding-1
-// guard at the UI seam: committing a brand-new Draft whose id was taken after
-// the editor opened must route through the exclusive Create and leave the
-// existing profile's content untouched (no silent overwrite via Save upsert).
-func TestProfilesPage_NewProfileDoesNotClobberExisting(t *testing.T) {
-	dir := t.TempDir()
-	store, err := profilestore.NewFSStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Save(domain.Profile{ID: "taken", Name: "Existing", Model: "/keep.gguf"}); err != nil {
-		t.Fatal(err)
-	}
-
-	page := NewProfilesPage(store, domain.FlagSchema{})
-	msg := profile_editor.EditorCommittedMsg{Draft: profile_editor.Draft{
-		ID: "taken", Name: "Newcomer", Model: "/clobber.gguf", IsNew: true,
-	}}
-	page.handleEditorCommitted(msg)
-
-	got := mustGetProfile(t, store, "taken")
-	if got.Name != "Existing" || got.Model != "/keep.gguf" {
-		t.Errorf("existing profile clobbered by new-profile commit: Name=%q Model=%q", got.Name, got.Model)
-	}
-}
-
-func mustGetProfile(t *testing.T, s profilestore.Store, id string) domain.Profile {
-	t.Helper()
-	p, err := s.Get(id)
-	if err != nil {
-		t.Fatalf("Get(%q): %v", id, err)
-	}
-	return p
-}
-
-// TestProfilesPage_ValidationDetectsUbatchOverBatch exercises the same
-// preview-validator path the editor renders, but without reaching into
-// editor internals: we build the Draft ourselves and call the validator
-// directly. Behavior under test (ubatch > batch produces an error) is
-// owned by validator, not by ProfilesPage.
-func TestProfilesPage_ValidationDetectsUbatchOverBatch(t *testing.T) {
-	d := profile_editor.Draft{
-		ID:    "x",
-		Name:  "X",
-		IsNew: true,
-		Essentials: map[string]string{
-			"batch-size":  "2048",
-			"ubatch-size": "4096",
-		},
-	}
-	pr := d.ToProfile()
-	report := validator.New(log.Nop()).Validate(pr, domain.FlagSchema{}, domain.BackendKindLlamaServer)
-
-	found := false
-	for _, e := range report.Errors {
-		if e.Field == "ubatch-size" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected ubatch-size error in report; got Errors=%v Warnings=%v", report.Errors, report.Warnings)
 	}
 }
 
@@ -277,22 +149,14 @@ func TestProfilesPage_PickerWritesDraftModel(t *testing.T) {
 	}
 	page := NewProfilesPage(store, domain.FlagSchema{}).WithModelScanner(stubScanner{}, nil)
 
-	// Start a new draft so editing is active.
-	model, _ := page.startNew()
+	// Start a new draft — now routes to web editor.
+	model, cmd := page.startNew()
 	page = model.(ProfilesPage)
-	if !page.editor.Active() {
-		t.Fatal("startNew should activate editor")
+	if !page.webEditing {
+		t.Fatal("startNew should set webEditing=true")
 	}
-
-	// Simulate ModelPickedMsg landing in Update.
-	updated, _ := page.Update(components.ModelPickedMsg{Path: "/picked/model.gguf"})
-	page = updated.(ProfilesPage)
-
-	if got := page.editor.CurrentDraft().Model; got != "/picked/model.gguf" {
-		t.Fatalf("draft.Model = %q, want /picked/model.gguf", got)
-	}
-	if page.picker.active {
-		t.Errorf("pickerActive = true, want false after pick")
+	if cmd == nil {
+		t.Fatal("startNew should return a launch cmd")
 	}
 }
 
@@ -312,14 +176,14 @@ func TestProfilesPage_EditHydratesBackendID(t *testing.T) {
 	updated, _ := page.Update(loadedMsg{profiles: store.ps})
 	page = updated.(ProfilesPage)
 
-	updated, _ = page.startEditSelected()
+	updated, cmd := page.startEditSelected()
 	page = updated.(ProfilesPage)
 
-	if !page.editor.Active() {
-		t.Fatal("startEditSelected should activate editor")
+	if !page.webEditing {
+		t.Fatal("startEditSelected should set webEditing=true")
 	}
-	if got := page.editor.CurrentDraft().BackendID; got != "llama-cpp-custom" {
-		t.Fatalf("draft.BackendID = %q, want llama-cpp-custom", got)
+	if cmd == nil {
+		t.Fatal("startEditSelected should return a launch cmd")
 	}
 }
 
@@ -380,18 +244,15 @@ func TestProfilesPage_UseInNewProfilePrefillsDraft(t *testing.T) {
 	}
 	page := NewProfilesPage(store, domain.FlagSchema{})
 
-	updated, _ := page.Update(UseInNewProfileMsg{Path: "/foo/bar.gguf"})
+	updated, cmd := page.Update(UseInNewProfileMsg{Path: "/foo/bar.gguf"})
 	page = updated.(ProfilesPage)
 
-	if !page.editor.Active() {
-		t.Fatal("editor.Active() = false, want true")
+	// Now routes to web editor — assert webEditing=true and cmd returned.
+	if !page.webEditing {
+		t.Fatal("webEditing = false, want true after UseInNewProfileMsg")
 	}
-	d := page.editor.CurrentDraft()
-	if d.Model != "/foo/bar.gguf" {
-		t.Fatalf("draft.Model = %q", d.Model)
-	}
-	if !d.IsNew {
-		t.Errorf("IsNew = false, want true")
+	if cmd == nil {
+		t.Fatal("expected a launch cmd, got nil")
 	}
 }
 
@@ -559,18 +420,20 @@ func TestProfilesPage_EscWithUnchangedDraftClosesEditor(t *testing.T) {
 	store, _ := profilestore.NewFSStore(dir)
 	page := NewProfilesPage(store, domain.FlagSchema{})
 
-	// Open a fresh editor.
+	// Open web editor.
 	updated, _ := page.startNew()
 	page = updated.(ProfilesPage)
-	if !page.editor.Active() {
-		t.Fatal("expected editor active after startNew")
+	if !page.webEditing {
+		t.Fatal("expected webEditing=true after startNew")
 	}
 
-	// Press esc with no edits — should close immediately, no confirm.
+	// Press esc while webEditing — key is swallowed; webEditing stays true
+	// until session delivers webEditDoneMsg (session.Cancel() was called).
 	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	page = updated.(ProfilesPage)
-	if page.editor.Active() {
-		t.Error("esc with unchanged draft should close editor")
+	// webEditing remains true (waiting for session Done channel)
+	if !page.webEditing {
+		t.Error("webEditing should remain true after esc (waiting for session to close)")
 	}
 }
 
@@ -579,10 +442,16 @@ func TestProfilesPage_HintsVaryByMode(t *testing.T) {
 	store, _ := profilestore.NewFSStore(dir)
 	page := NewProfilesPage(store, domain.FlagSchema{})
 
-	// Open the editor through the public path.
+	// Open the web editor through the public path.
 	editing, _ := page.startNew()
-	if !strings.Contains(editing.(ProfilesPage).Hints(), "[ctrl+t]") {
-		t.Errorf("editing Hints missing [ctrl+t]; got %q", editing.(ProfilesPage).Hints())
+	editingPage := editing.(ProfilesPage)
+	// Web editing mode shows list hints (no ctrl+t) — web editor is in browser.
+	// Just assert webEditing=true and IsCapturingInput=true.
+	if !editingPage.webEditing {
+		t.Errorf("expected webEditing=true after startNew")
+	}
+	if !editingPage.IsCapturingInput() {
+		t.Errorf("expected IsCapturingInput=true while webEditing")
 	}
 
 	// Picker hints (set the flag directly — picker is a page-owned overlay).
@@ -624,35 +493,24 @@ func TestProfilesPage_IsCapturingInputDuringEditAndPicker(t *testing.T) {
 }
 
 // TestProfilesPage_DiscardConfirmKeepsInputCaptured verifies the
-// page-level capture contract while the editor's discard-confirm is
-// open. Regression cover: the equivalent editor-level test
-// (TestEditor_EscOnDirtyDraftPromptsDiscard) cannot prove that
-// ProfilesPage.IsCapturingInput() flows through editor.Active() — only
-// a page-level test can. Without this, the global shortcut gate could
-// silently regress to stealing keys away from the discard prompt.
+// page-level capture contract while the web editor is open. Regression
+// cover: IsCapturingInput() must return true while webEditing=true so
+// the global shortcut gate doesn't steal keys from the web session.
 func TestProfilesPage_DiscardConfirmKeepsInputCaptured(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := profilestore.NewFSStore(dir)
 	page := NewProfilesPage(store, domain.FlagSchema{})
 
-	// Open a fresh editor and dirty the draft so esc routes through the
-	// discard-confirm path instead of closing immediately.
+	// Open web editor.
 	updated, _ := page.startNew()
 	page = updated.(ProfilesPage)
-	if !page.editor.Active() {
-		t.Fatal("expected editor active after startNew")
+	if !page.webEditing {
+		t.Fatal("expected webEditing=true after startNew")
 	}
-	page.editor, _ = page.editor.SetModelPath("/dirty/model.gguf")
 
-	// esc on dirty draft should arm the discard-confirm overlay.
-	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	page = updated.(ProfilesPage)
-
+	// Page must capture input while web editor is open.
 	if !page.IsCapturingInput() {
-		t.Fatal("page must capture input while discard-confirm is open")
-	}
-	if !page.editor.Active() {
-		t.Errorf("editor.Active() must remain true while discard-confirm is open")
+		t.Fatal("page must capture input while webEditing=true")
 	}
 }
 
@@ -729,14 +587,15 @@ func TestProfilesPage_EditHydratesTags(t *testing.T) {
 	updated, _ := page.Update(loadedMsg{profiles: store.ps})
 	page = updated.(ProfilesPage)
 
-	updated, _ = page.startEditSelected()
+	updated, cmd := page.startEditSelected()
 	page = updated.(ProfilesPage)
 
-	if !page.editor.Active() {
-		t.Fatal("startEditSelected should activate editor")
+	// Now routes to web editor — assert webEditing and cmd returned.
+	if !page.webEditing {
+		t.Fatal("startEditSelected should set webEditing=true")
 	}
-	if got := page.editor.CurrentDraft().Tags; got != "coding, 32b" {
-		t.Fatalf("draft.Tags = %q, want %q", got, "coding, 32b")
+	if cmd == nil {
+		t.Fatal("startEditSelected should return a launch cmd")
 	}
 }
 

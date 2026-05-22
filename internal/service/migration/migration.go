@@ -58,6 +58,10 @@ func (s *migrationService) Run(ctx context.Context) (Report, error) {
 		return rep, err
 	}
 	if !needs {
+		catalog, err := s.catalogStore.Load()
+		if err == nil {
+			_, _ = ensurePresentations(catalog, s.schemaStore)
+		}
 		return rep, nil
 	}
 
@@ -136,7 +140,40 @@ func (s *migrationService) Run(ctx context.Context) (Report, error) {
 		rep.MigratedProfiles++
 	}
 
+	catalog, _ = s.catalogStore.Load()
+	if n, err := ensurePresentations(catalog, s.schemaStore); err != nil {
+		rep.Warnings = append(rep.Warnings, fmt.Sprintf("ensure presentations: %v", err))
+	} else if n > 0 {
+		rep.Warnings = append(rep.Warnings, fmt.Sprintf("seeded %d backend presentation(s)", n))
+	}
+
 	return rep, nil
+}
+
+// ensurePresentations seeds a default Presentation into every backend schema
+// that lacks one. Idempotent: schemas that already have a Presentation are
+// skipped. Returns the number of schemas updated. It does NOT mark the schema
+// Source.Editable — a synthesized default is not a manual edit, so RefreshSchema
+// is free to regenerate it.
+func ensurePresentations(catalog domain.BackendCatalog, schemaStore backendcatalog.SchemaStore) (int, error) {
+	updated := 0
+	for _, b := range catalog.Backends {
+		ref := backendcatalog.SchemaStoreRef(b.SchemaRef)
+		schema, err := schemaStore.Load(ref)
+		if err != nil {
+			continue // missing schema handled elsewhere; skip
+		}
+		if schema.Presentation != nil {
+			continue
+		}
+		pres := backendschema.BuildPresentation(schema)
+		schema.Presentation = &pres
+		if err := schemaStore.Save(ref, schema); err != nil {
+			return updated, fmt.Errorf("save presentation for %s: %w", b.ID, err)
+		}
+		updated++
+	}
+	return updated, nil
 }
 
 func needsMigration(profiles []domain.Profile) (bool, error) {

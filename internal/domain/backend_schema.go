@@ -29,6 +29,8 @@ type BackendValidationSchema struct {
 	BackendID     string               `json:"backendId"`
 	Source        SchemaSource         `json:"source"`
 	Flags         map[string]FlagSpec  `json:"flags,omitempty"`
+	Presentation  *Presentation        `json:"presentation,omitempty"`
+	Rules         []CrossFieldRule     `json:"rules,omitempty"`
 }
 
 // ToFlagSchema converts the backend validation schema to the legacy
@@ -43,6 +45,7 @@ func (s BackendValidationSchema) ToFlagSchema() FlagSchema {
 		Version:     version,
 		BackendKind: s.BackendKind,
 		Flags:       s.Flags,
+		Rules:       s.Rules,
 	}
 }
 
@@ -57,4 +60,42 @@ func FlagSchemaToBackend(fs FlagSchema, kind BackendKind, backendID string, src 
 		Source:        src,
 		Flags:         fs.Flags,
 	}
+}
+
+// Presentation is the editable per-backend UI layout for the config web GUI.
+// It controls which flags are shown, in what groups, and in what order. The
+// first group with Highlighted=true renders at the top as "Essentials".
+type Presentation struct {
+	Groups []PresentationGroup `json:"groups"`
+}
+
+// PresentationGroup is an ordered set of flags rendered together.
+type PresentationGroup struct {
+	Name        string   `json:"name"`
+	Highlighted bool     `json:"highlighted,omitempty"`
+	Flags       []string `json:"flags"` // ordered flag long-names
+}
+
+// CrossFieldRule is a declarative validation rule spanning multiple flags.
+type CrossFieldRule struct {
+	ID       string `json:"id"`
+	When     Cond   `json:"when"`
+	Then     Effect `json:"then"`
+	Severity string `json:"severity"` // "warning" | "error"
+}
+
+// Cond is a rule precondition. Op is one of: eq, ne, le, ge.
+type Cond struct {
+	Flag  string `json:"flag"`
+	Op    string `json:"op"`
+	Value string `json:"value"`
+}
+
+// Effect is a rule consequence. Kind is one of: limit, require, message.
+type Effect struct {
+	Kind    string `json:"kind"`
+	Flag    string `json:"flag,omitempty"`
+	Op      string `json:"op,omitempty"`
+	Value   string `json:"value,omitempty"`
+	Message string `json:"message,omitempty"`
 }

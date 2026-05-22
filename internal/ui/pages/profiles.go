@@ -15,18 +15,17 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/configweb"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/service/validator"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
-	"github.com/quantmind-br/model-loader/internal/ui/pages/profile_editor"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // ProfilesPage is the master-detail page for managing profiles.
 //
-// After CQ-002 the editor (form, draft, sub-tab, advanced table,
-// discard-confirm) lives in a profile_editor.Editor sub-model. The page
+// Create/edit is handled by the web editor (configweb.Session). The page
 // keeps only master-list, delete-confirm, picker overlay, status flash.
 type ProfilesPage struct {
 	store        profilestore.Store
@@ -38,7 +37,6 @@ type ProfilesPage struct {
 	width        int
 	height       int
 
-	editor        profile_editor.Editor
 	deleteConfirm components.Confirm
 	conflictModal components.ConflictModal
 	undoModal     components.UndoModal
@@ -63,6 +61,11 @@ type ProfilesPage struct {
 	launch  launchTracker
 
 	killConfirm components.Confirm
+
+	// --- web editor fields ---
+	webEditing bool
+	webURL     string
+	webSession *configweb.Session
 }
 
 // NewProfilesPage constructs the page wired to a Store and FlagSchema.
@@ -77,7 +80,6 @@ func NewProfilesPage(store profilestore.Store, schema domain.FlagSchema) Profile
 	return ProfilesPage{
 		store:    store,
 		schema:   schema,
-		editor:   profile_editor.New(schema),
 		list:     l,
 		listKeys: defaultProfilesKeys(),
 		flash:    components.NewFlash("profiles"),
@@ -119,12 +121,11 @@ func (p ProfilesPage) WithModelScanner(scanner components.ModelScanner, paths []
 	return p
 }
 
-// WithBackendCatalog injects the backend catalog so the editor can list backends
-// and resolve per-profile schemas.
+// WithBackendCatalog injects the backend catalog so the web editor and
+// schema resolver can list backends and resolve per-profile schemas.
 func (p ProfilesPage) WithBackendCatalog(catalogStore backendcatalog.Store, schemaStore backendcatalog.SchemaStore) ProfilesPage {
 	p.catalogStore = catalogStore
 	p.schemaStore = schemaStore
-	p.editor = p.editor.SetCatalogStore(catalogStore).SetSchemaStore(schemaStore)
 	return p
 }
 
@@ -148,7 +149,14 @@ func (p ProfilesPage) loadCmd() tea.Cmd {
 	}
 }
 
+func (p ProfilesPage) renderWebEditModal() string {
+	return "\n  Editando profile no navegador…\n\n  " + p.webURL + "\n\n  Salve ou cancele na página. (esc cancela)\n"
+}
+
 func (p ProfilesPage) View() string {
+	if p.webEditing {
+		return p.renderWebEditModal()
+	}
 	leftW := p.width / 3
 	rightW := (p.width*2)/3 - 2
 	left := lipgloss.NewStyle().Width(leftW).Render(p.list.View())
@@ -203,8 +211,6 @@ func (p ProfilesPage) OverlayView() Overlay {
 		raw = p.conflictModal.View()
 	case p.undoModal.Active():
 		raw = p.undoModal.View()
-	case p.editor.Active():
-		raw = p.editor.View()
 	default:
 		return Overlay{}
 	}
@@ -229,7 +235,7 @@ func (p ProfilesPage) detailView() string {
 	if backend == "" {
 		backend = "(default)"
 	}
-	tags := profile_editor.FormatTags(pr.Tags)
+	tags := strings.Join(pr.Tags, ", ")
 	if tags == "" {
 		tags = "(none)"
 	}
@@ -254,8 +260,6 @@ func (p ProfilesPage) Hints() string {
 		return "[↑↓] move  [enter] pick  [esc] cancel"
 	case p.deleteConfirm.Active():
 		return "[←→] choose  [enter] confirm"
-	case p.editor.Active():
-		return "[ctrl+t] sub-tab  [ctrl+p] pick model  [esc] cancel"
 	default:
 		return "[enter] launch  [E] edit  [n] new  [d] dup  [x] del  [b] bg/fg  [k] kill  [r] refresh  [e] export  [p] pin  [I] import  [u] undo  [/] filter"
 	}

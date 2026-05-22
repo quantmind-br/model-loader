@@ -7,13 +7,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/quantmind-br/model-loader/internal/ui/components"
-	"github.com/quantmind-br/model-loader/internal/ui/pages/profile_editor"
 )
 
 // Update is a thin dispatcher: each typed-message arm delegates to a
-// private handle<MsgType> method. Non-key messages forward to the editor
-// (when active) or to forwardToConfirms so active huh forms can complete
-// their internal Cmd→Msg handshakes.
+// private handle<MsgType> method. Non-key messages forward to active surfaces
+// (delete confirm, list filter) so their internal Cmd→Msg handshakes complete.
 func (p ProfilesPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -32,10 +30,6 @@ func (p ProfilesPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.handleModelPickerCancelled(m)
 	case profileDeleteConfirmedMsg:
 		return p.performDelete(m.id)
-	case profile_editor.EditorCommittedMsg:
-		return p.handleEditorCommitted(m)
-	case profile_editor.EditorCancelledMsg:
-		return p, nil
 	case importDoneMsg:
 		return p.handleImportDone(m)
 	case undoDoneMsg:
@@ -54,6 +48,26 @@ func (p ProfilesPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.handleLaunchProfile(m)
 	case profilesKillConfirmedMsg:
 		return p.handleKillConfirmed(m)
+	case webEditStartedMsg:
+		p.webSession = m.session
+		p.webURL = m.url
+		return p, waitForWebEdit(m.session)
+	case webEditFailedMsg:
+		p.webEditing = false
+		p, fc := p.withFlashError("web editor failed: " + m.err.Error())
+		return p, fc
+	case webEditDoneMsg:
+		p.webEditing = false
+		p.webSession = nil
+		if m.err != nil {
+			p, fc := p.withFlashError("web editor error: " + m.err.Error())
+			return p, fc
+		}
+		var fc tea.Cmd
+		if m.saved {
+			p, fc = p.withFlash("saved " + m.profileID)
+		}
+		return p, tea.Batch(p.loadCmd(), fc)
 	case tea.KeyMsg:
 		return p.handleKey(m)
 	}
@@ -100,10 +114,15 @@ func (p ProfilesPage) handlePickerScan(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return p, nil
 }
 
-// handleKey routes key input. Priority: editor (which owns its discard
-// confirm) > delete confirm > list nav. Picker is intercepted on ctrl+p
-// or while open before forwarding to the editor.
+// handleKey routes key input. Priority: web editor > delete confirm > list nav.
+// Picker is intercepted on ctrl+p or while open.
 func (p ProfilesPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if p.webEditing {
+		if msg.String() == "esc" && p.webSession != nil {
+			p.webSession.Cancel()
+		}
+		return p, nil
+	}
 	if p.killConfirm.Active() {
 		return p.updateKillConfirm(msg)
 	}
@@ -133,34 +152,16 @@ func (p ProfilesPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p.undoModal, cmd = p.undoModal.Update(msg)
 		return p, cmd
 	}
-	if p.editor.Active() {
-		if msg.String() == "ctrl+p" && p.picker.scanner != nil {
-			p.picker.picker = components.NewModelPicker(p.picker.scanner, p.picker.scanPaths)
-			p.picker.active = true
-			return p, p.picker.picker.Init()
-		}
-		var cmd tea.Cmd
-		p.editor, cmd = p.editor.Update(msg)
-		return p, cmd
-	}
 	if p.deleteConfirm.Active() {
 		return p.updateConfirm(msg)
 	}
 	return p.updateList(msg)
 }
 
-// forwardNonKey routes non-key messages to the highest-priority active
-// surface so its internal Cmd→Msg loops complete (huh focus init, async
-// validation). Editor first (its discard confirm and form both need
-// non-key forwarding), then delete confirm. As fallback, forwards
-// list-internal messages (e.g. list.FilterMatchesMsg) to the list so the
-// filter Cmd→Msg cycle settles.
+// forwardNonKey routes non-key messages to active surfaces so their internal
+// Cmd→Msg loops complete (huh focus init, async validation). Forwards to
+// delete confirm, then to the list for filter Cmd→Msg cycles.
 func (p ProfilesPage) forwardNonKey(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if p.editor.Active() {
-		var cmd tea.Cmd
-		p.editor, cmd = p.editor.Update(msg)
-		return p, cmd
-	}
 	if p.deleteConfirm.Active() {
 		var cmd tea.Cmd
 		p.deleteConfirm, cmd = p.deleteConfirm.Update(msg)
@@ -215,7 +216,7 @@ func (p ProfilesPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (p ProfilesPage) IsCapturingInput() bool {
 	return CaptureAny(
-		func() bool { return p.editor.Active() },
+		func() bool { return p.webEditing },
 		func() bool { return p.deleteConfirm.Active() },
 		func() bool { return p.picker.active },
 		func() bool { return p.conflictModal.Active() },

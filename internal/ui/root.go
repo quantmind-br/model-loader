@@ -40,7 +40,7 @@ type globalShortcut struct {
 }
 
 var rootShortcuts = []globalShortcut{
-	{Keys: []string{"ctrl+c"}, Captures: true, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m, tea.Quit }},
+	{Keys: []string{"ctrl+c"}, Captures: true, Handler: func(m RootModel) (tea.Model, tea.Cmd) { m.cleanupAll(); return m, tea.Quit }},
 	{Keys: []string{"?"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) {
 		m.helpOpen = true
 		m = m.ensureHelpViewport()
@@ -48,7 +48,7 @@ var rootShortcuts = []globalShortcut{
 		return m, nil
 	}},
 	{Keys: []string{"esc"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m, nil }},
-	{Keys: []string{"q"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m, tea.Quit }},
+	{Keys: []string{"q"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { m.cleanupAll(); return m, tea.Quit }},
 	{Keys: []string{"1"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate(TabProfiles) }},
 	{Keys: []string{"2"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate(TabServer) }},
 	{Keys: []string{"3"}, Captures: false, Handler: func(m RootModel) (tea.Model, tea.Cmd) { return m.activate(TabModels) }},
@@ -116,6 +116,13 @@ type HelpContextProvider interface {
 // modal overlay that should be rendered on top of the page content.
 type Overlayer interface {
 	OverlayView() pages.Overlay
+}
+
+// Cleaner is the optional contract a page implements to release resources
+// (e.g. cancel an active web-edit session) when the TUI is about to quit.
+// RootModel calls Cleanup() on all pages before returning tea.Quit.
+type Cleaner interface {
+	Cleanup()
 }
 
 // globalHints is the prefix shown in every status bar line.
@@ -249,6 +256,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m RootModel) handleBootBlocker(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if k, ok := msg.(tea.KeyMsg); ok {
 		if k.Type == tea.KeyCtrlC || (k.Type == tea.KeyRunes && len(k.Runes) == 1 && k.Runes[0] == 'q') {
+			m.cleanupAll()
 			return m, tea.Quit
 		}
 	}
@@ -343,6 +351,7 @@ func (m RootModel) handleHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.helpOpen = false
 		return m, nil
 	case "ctrl+c":
+		m.cleanupAll()
 		return m, tea.Quit
 	case "g", "home":
 		// Jump-to-top: the bubbles viewport keymap doesn't bind these, so
@@ -548,6 +557,17 @@ func (m *RootModel) recomputeHints() {
 	if m.pm != nil {
 		for _, inst := range m.pm.List() {
 			m.status.RestartCount += inst.RestartCount
+		}
+	}
+}
+
+// cleanupAll calls Cleanup() on every page that implements Cleaner.
+// Invoked on both quit paths (ctrl+c, q) so pages can cancel lingering
+// goroutines (e.g. configweb sessions) before the process exits.
+func (m RootModel) cleanupAll() {
+	for i := range m.pages {
+		if c, ok := m.pages[i].(Cleaner); ok {
+			c.Cleanup()
 		}
 	}
 }

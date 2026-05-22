@@ -1,0 +1,41 @@
+{{define "sidebar"}}
+{{range .Groups}}<a href="#g-{{.Name}}" class="{{if .Highlighted}}hl{{end}}">{{if .Highlighted}}★ {{end}}{{.Name}}</a>{{end}}
+{{end}}
+
+{{define "configure"}}
+<form id="profile-form" hx-post="/validate" hx-trigger="input changed delay:300ms" hx-target="#issues">
+  <input type="hidden" name="id" value="{{.Draft.ID}}">
+  <input type="hidden" name="origId" value="{{.Draft.OrigID}}">
+  <input type="hidden" name="isNew" value="{{if .Draft.IsNew}}true{{else}}false{{end}}">
+  <input type="hidden" name="backendId" value="{{.Draft.BackendID}}">
+  <div class="field"><label>Nome</label><input name="name" value="{{.Draft.Name}}"></div>
+  <div class="field"><label>Model (caminho ou repo)</label><input name="model" value="{{.Draft.Model}}"></div>
+  {{range .Groups}}
+  <div class="group" id="g-{{.Name}}">
+    <h3>{{if .Highlighted}}★ {{end}}{{.Name}}</h3>
+    {{range .Fields}}
+    <div class="field">
+      <label>{{.Label}}{{if .Required}} *{{end}}</label>
+      {{if eq .Widget "select"}}
+        {{$val := .Value}}
+        <select name="arg.{{.Flag}}">
+          {{range .Options}}<option value="{{.}}"{{if eq . $val}} selected{{end}}>{{.}}</option>{{end}}
+        </select>
+      {{else if eq .Widget "toggle"}}
+        {{$val := .Value}}
+        <select name="arg.{{.Flag}}">
+          <option value="on"{{if eq $val "on"}} selected{{end}}>on</option>
+          <option value="off"{{if eq $val "off"}} selected{{end}}>off</option>
+        </select>
+      {{else if eq .Widget "number"}}
+        <input type="number" name="arg.{{.Flag}}" value="{{.Value}}"{{if .Min}} min="{{.Min}}"{{end}}{{if .Max}} max="{{.Max}}"{{end}}>
+      {{else}}
+        <input name="arg.{{.Flag}}" value="{{.Value}}">
+      {{end}}
+      {{if .Help}}<small class="muted">{{.Help}}</small>{{end}}
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</form>
+{{end}}
