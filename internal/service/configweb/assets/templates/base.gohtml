@@ -1,5 +1,5 @@
 {{define "base"}}<!doctype html>
-<html lang="pt-br">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,12 +12,12 @@
 <header class="topbar">
   <div class="title">{{.Draft.Name}} <span class="muted">· {{.Draft.BackendID}}</span></div>
   <nav class="modes">
-    <button :class="{active: mode==='configure'}" @click="mode='configure'">Configurar</button>
-    <button :class="{active: mode==='customize'}" @click="mode='customize'">Personalizar</button>
+    <button :class="{active: mode==='configure'}" @click="mode='configure'">Configure</button>
+    <button :class="{active: mode==='customize'}" @click="mode='customize'">Customize</button>
   </nav>
   <div class="actions">
-    <button class="ghost" hx-post="/cancel">Cancelar</button>
-    <button class="primary" form="profile-form" hx-post="/save" hx-target="#issues">Salvar</button>
+    <button class="ghost" hx-post="/cancel">Cancel</button>
+    <button class="primary" form="profile-form" hx-post="/save" hx-target="#issues">Save</button>
   </div>
 </header>
 <main class="layout" :class="{'no-sidebar': mode!=='configure' || search.trim()!==''}">
@@ -27,7 +27,7 @@
     <div x-show="mode==='customize'">{{block "customize" .}}{{end}}</div>
   </section>
 </main>
-<footer class="statusbar"><div id="issues"><span class="ok">✓ válido</span></div></footer>
+<footer class="statusbar"><div id="issues"><span class="ok">✓ valid</span></div></footer>
 <script>
 function fuzzyMatch(q, text) {
   if (!q) return true;

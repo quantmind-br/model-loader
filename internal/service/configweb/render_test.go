@@ -12,7 +12,7 @@ func TestCustomizeModeRendersFlagEditors(t *testing.T) {
 	schema := domain.BackendValidationSchema{
 		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
 		Flags:        map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
-		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{{Name: "Essenciais", Highlighted: true, Flags: []string{"ctx-size"}}}},
+		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{{Name: "Essentials", Highlighted: true, Flags: []string{"ctx-size"}}}},
 		Rules:        []domain.CrossFieldRule{{ID: "r1", When: domain.Cond{Flag: "ctx-size", Op: "ge", Value: "1"}, Then: domain.Effect{Kind: "message", Message: "hi"}, Severity: "warning"}},
 	}
 	s := &Session{deps: Deps{Schemas: stubSchemaStore{schema: schema}, Catalog: stubCatalog{id: "llama", ref: "llama.json"}, InitialDraft: Draft{BackendID: "llama"}}}
@@ -22,7 +22,7 @@ func TestCustomizeModeRendersFlagEditors(t *testing.T) {
 	if !strings.Contains(body, "/customize/flag") {
 		t.Fatalf("flag editor form action missing")
 	}
-	if !strings.Contains(body, "Regras entre campos") {
+	if !strings.Contains(body, "Cross-field rules") {
 		t.Fatalf("rules section missing")
 	}
 }
@@ -32,7 +32,7 @@ func TestIndexRendersGroupedFields(t *testing.T) {
 		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
 		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt, Default: 8192}},
 		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{
-			{Name: "Essenciais", Highlighted: true, Flags: []string{"ctx-size"}},
+			{Name: "Essentials", Highlighted: true, Flags: []string{"ctx-size"}},
 		}},
 	}
 	s := &Session{deps: Deps{
@@ -46,7 +46,7 @@ func TestIndexRendersGroupedFields(t *testing.T) {
 	if !strings.Contains(body, `name="arg.ctx-size"`) || !strings.Contains(body, `value="4096"`) {
 		t.Fatalf("ctx-size field not rendered with value: %s", body)
 	}
-	if !strings.Contains(body, "Essenciais") {
+	if !strings.Contains(body, "Essentials") {
 		t.Fatalf("group title missing")
 	}
 }

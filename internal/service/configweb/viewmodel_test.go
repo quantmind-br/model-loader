@@ -53,12 +53,12 @@ func TestBuildViewModel_OrdersGroupsAndWidgets(t *testing.T) {
 			"flash-attn": {Long: "flash-attn", Type: domain.FlagTypeEnum, EnumValues: []string{"on", "off", "auto"}},
 		},
 		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{
-			{Name: "Essenciais", Highlighted: true, Flags: []string{"ctx-size", "flash-attn"}},
+			{Name: "Essentials", Highlighted: true, Flags: []string{"ctx-size", "flash-attn"}},
 		}},
 	}
 	d := Draft{Args: map[string]string{"ctx-size": "4096"}}
 	vm := BuildViewModel(d, schema, nil)
-	if len(vm.Groups) != 1 || vm.Groups[0].Name != "Essenciais" {
+	if len(vm.Groups) != 1 || vm.Groups[0].Name != "Essentials" {
 		t.Fatalf("groups wrong: %+v", vm.Groups)
 	}
 	f0 := vm.Groups[0].Fields[0]
@@ -78,7 +78,7 @@ func TestBuildViewModel_UntouchedFlagStaysUnconfigured(t *testing.T) {
 			"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt, Default: 8192},
 		},
 		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{
-			{Name: "Essenciais", Highlighted: true, Flags: []string{"ctx-size"}},
+			{Name: "Essentials", Highlighted: true, Flags: []string{"ctx-size"}},
 		}},
 	}
 	// No draft arg for ctx-size: it must stay empty (not configured), with the

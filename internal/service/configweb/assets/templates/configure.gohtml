@@ -1,5 +1,5 @@
 {{define "sidebar"}}
-<div class="sidebar-title">Grupos</div>
+<div class="sidebar-title">Groups</div>
 {{range .Groups}}
 <button 
   class="tab-btn{{if .Highlighted}} hl{{end}}"
@@ -33,20 +33,20 @@
     {{end}}
     <div class="field">
       <label>ID {{if not .Draft.ID}}<span class="req">*</span>{{end}}</label>
-      <input name="id" value="{{.Draft.ID}}" placeholder="identificador do profile (slug)">
+      <input name="id" value="{{.Draft.ID}}" placeholder="profile identifier (slug)">
     </div>
     <div class="field">
-      <label>Nome {{if not .Draft.Name}}<span class="req">*</span>{{end}}</label>
-      <input name="name" value="{{.Draft.Name}}" placeholder="nome do profile">
+      <label>Name {{if not .Draft.Name}}<span class="req">*</span>{{end}}</label>
+      <input name="name" value="{{.Draft.Name}}" placeholder="profile name">
     </div>
     <div class="field">
       <label>Model <span class="req">*</span></label>
-      <input name="model" value="{{.Draft.Model}}" placeholder="caminho ou repo do modelo">
+      <input name="model" value="{{.Draft.Model}}" placeholder="model path or repo">
     </div>
   </div>
 
   <div class="search-box">
-    <input type="text" x-model="search" placeholder="🔍 Buscar parâmetro..." class="search-input">
+    <input type="text" x-model="search" placeholder="🔍 Search parameter..." class="search-input">
     <button type="button" x-show="search.length > 0" @click="search=''" class="clear-btn">×</button>
   </div>
 
@@ -54,29 +54,29 @@
   <div x-show="search.trim()==='' ? activeGroup==='{{.Name}}' : true" x-cloak>
     <div class="group-header" x-show="search.trim()!==''">
       <h2>{{.Name}}</h2>
-      <span class="badge">{{len .Fields}} opções</span>
+      <span class="badge">{{len .Fields}} options</span>
     </div>
     <div class="fields-grid">
       {{range .Fields}}
       <div class="field{{if eq .Widget "text"}} full-width{{end}}" x-show="search.trim()==='' || fuzzyMatch(search, '{{.Flag}} {{.Label}} {{.Help}}')">
-        <label>{{.Label}}{{if .Required}} <span class="req">obrigatório</span>{{end}}</label>
+        <label>{{.Label}}{{if .Required}} <span class="req">required</span>{{end}}</label>
         {{if eq .Widget "select"}}
           {{$val := .Value}}
           <select name="arg.{{.Flag}}">
-            <option value=""{{if eq $val ""}} selected{{end}}>(padrão)</option>
+            <option value=""{{if eq $val ""}} selected{{end}}>(default)</option>
             {{range .Options}}<option value="{{.}}"{{if eq . $val}} selected{{end}}>{{.}}</option>{{end}}
           </select>
         {{else if eq .Widget "toggle"}}
           {{$val := .Value}}
           <select name="arg.{{.Flag}}">
-            <option value=""{{if eq $val ""}} selected{{end}}>(padrão)</option>
+            <option value=""{{if eq $val ""}} selected{{end}}>(default)</option>
             <option value="on"{{if eq $val "on"}} selected{{end}}>on</option>
             <option value="off"{{if eq $val "off"}} selected{{end}}>off</option>
           </select>
         {{else if eq .Widget "number"}}
-          <input type="number" name="arg.{{.Flag}}" value="{{.Value}}" placeholder="{{if .Default}}{{.Default}} (padrão){{else}}não configurado{{end}}"{{if .Min}} min="{{.Min}}"{{end}}{{if .Max}} max="{{.Max}}"{{end}}>
+          <input type="number" name="arg.{{.Flag}}" value="{{.Value}}" placeholder="{{if .Default}}{{.Default}} (default){{else}}not configured{{end}}"{{if .Min}} min="{{.Min}}"{{end}}{{if .Max}} max="{{.Max}}"{{end}}>
         {{else}}
-          <input name="arg.{{.Flag}}" value="{{.Value}}" placeholder="{{if .Default}}{{.Default}} (padrão){{else}}não configurado{{end}}">
+          <input name="arg.{{.Flag}}" value="{{.Value}}" placeholder="{{if .Default}}{{.Default}} (default){{else}}not configured{{end}}">
         {{end}}
         {{if .Help}}<small class="muted">{{.Help}}</small>{{end}}
       </div>

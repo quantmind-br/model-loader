@@ -78,7 +78,7 @@ func renderIssues(w http.ResponseWriter, rep validator.Report) {
 	var b strings.Builder
 	b.WriteString(`<div id="issues" hx-swap-oob="true">`)
 	if len(rep.Errors) == 0 && len(rep.Warnings) == 0 {
-		b.WriteString(`<span class="ok">✓ válido</span>`)
+		b.WriteString(`<span class="ok">✓ valid</span>`)
 	}
 	for _, e := range rep.Errors {
 		b.WriteString(`<div class="issue error" data-field="` + htmlEscape(e.Field) + `">` + htmlEscape(e.Field) + `: ` + htmlEscape(e.Message) + `</div>`)
