@@ -16,14 +16,14 @@
     <button class="primary" form="backend-form" hx-post="/backend/save" hx-target="#issues">Save</button>
   </div>
 </header>
-<main class="layout">
+<main class="layout no-sidebar">
   <section class="content">
     <form id="backend-form" hx-post="/backend/validate" hx-trigger="input changed delay:300ms" hx-target="#issues">
       <input type="hidden" name="id" value="{{.Draft.ID}}">
       <input type="hidden" name="origId" value="{{.Draft.OrigID}}">
       <input type="hidden" name="isNew" value="{{if .Draft.IsNew}}true{{else}}false{{end}}">
 
-      <div class="top-fields">
+      <div class="backend-fields">
         <div class="field">
           <label>Name <span class="req">*</span></label>
           <input name="name" value="{{.Draft.Name}}" placeholder="backend name" required>

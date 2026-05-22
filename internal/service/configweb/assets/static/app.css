@@ -697,3 +697,20 @@ button.danger:hover{
   padding-top:var(--sp-4);
   border-top:1px solid var(--border);
 }
+
+.backend-fields{
+  display:flex;
+  flex-direction:column;
+  gap:var(--sp-6);
+  max-width:720px;
+  margin:0 auto;
+}
+.backend-fields .field input,
+.backend-fields .field select{
+  min-width:100%;
+  padding:0.85rem 1.1rem;
+  font-size:var(--text-md);
+}
+.backend-fields .field label{
+  font-size:var(--text-base);
+}
