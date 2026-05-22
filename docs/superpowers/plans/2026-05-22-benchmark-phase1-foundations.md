@@ -142,11 +142,11 @@ func TestAggregate_RollsUpPrefillDecode(t *testing.T) {
 		{Resolved: true, PromptProcessingTPS: 200, DecodeTPS: 60, TokensPerSecond: 60, TTFTms: 20},
 	}
 	a := aggregate(results, 0, 0)
-	if a.PromptProcessingTPS != 150 {
-		t.Errorf("PromptProcessingTPS = %v, want 150", a.PromptProcessingTPS)
+	if a.AvgPromptProcessingTPS != 150 {
+		t.Errorf("AvgPromptProcessingTPS = %v, want 150", a.AvgPromptProcessingTPS)
 	}
-	if a.DecodeTPS != 50 {
-		t.Errorf("DecodeTPS = %v, want 50", a.DecodeTPS)
+	if a.AvgDecodeTPS != 50 {
+		t.Errorf("AvgDecodeTPS = %v, want 50", a.AvgDecodeTPS)
 	}
 }
 ```
@@ -182,10 +182,10 @@ Before `return a`:
 
 ```go
 	if ppN > 0 {
-		a.PromptProcessingTPS = ppSum / float64(ppN)
+		a.AvgPromptProcessingTPS = ppSum / float64(ppN)
 	}
 	if decN > 0 {
-		a.DecodeTPS = decSum / float64(decN)
+		a.AvgDecodeTPS = decSum / float64(decN)
 	}
 ```
 

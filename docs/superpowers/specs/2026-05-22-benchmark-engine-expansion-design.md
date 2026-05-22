@@ -126,9 +126,9 @@ const (
 `Aggregate` gains (all `omitempty`, zero when not applicable):
 
 ```go
-PromptProcessingTPS float64 // prefill tok/s (existing modes too)
-DecodeTPS           float64 // decode tok/s
-MathAccuracy        float64
+AvgPromptProcessingTPS float64 // avg prefill tok/s (existing modes too)
+AvgDecodeTPS           float64 // avg decode tok/s
+MathAccuracy           float64
 CodePassRate        float64
 RagasFaithfulness   float64
 RagasRelevancy      float64
