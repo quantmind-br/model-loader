@@ -10,8 +10,8 @@ func TestLoad_EmbeddedSWEBenchValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if len(problems) != 8 {
-		t.Fatalf("got %d problems, want 8", len(problems))
+	if len(problems) < 8 {
+		t.Fatalf("got %d problems, want >= 8", len(problems))
 	}
 	seen := map[string]bool{}
 	for _, p := range problems {
@@ -28,5 +28,15 @@ func TestLoad_EmbeddedSWEBenchValid(t *testing.T) {
 		if p.RepoName == "" {
 			t.Errorf("problem %q missing repo name", p.ID)
 		}
+	}
+}
+
+func TestLoad_HasAtLeast32(t *testing.T) {
+	problems, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(problems) < 32 {
+		t.Fatalf("dataset has %d problems, want >= 32", len(problems))
 	}
 }
