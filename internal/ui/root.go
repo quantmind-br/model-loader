@@ -128,7 +128,7 @@ type Cleaner interface {
 // globalHints is the prefix shown in every status bar line.
 const globalHints = "[1-5] tabs  [tab] next  [q] quit" + components.HelpToken
 
-// bootBlocker carrega o conteúdo de um modal bloqueante exibido sobre toda a UI.
+// bootBlocker loads blocking modal content displayed over the entire UI.
 type bootBlocker struct {
 	title string
 	body  string
@@ -209,9 +209,9 @@ func (m RootModel) WithStatusWarn(msg string) RootModel {
 	return m
 }
 
-// WithBootBlocker mostra um modal bloqueante sobre toda a UI. Usado quando
-// algum recurso crítico falta na boot (e.g. llama-server fora do PATH).
-// Apenas `q` / `ctrl+c` continuam respondendo enquanto o blocker está ativo.
+// WithBootBlocker shows a blocking modal over the entire UI. Used when
+// a critical resource is missing at boot (e.g. llama-server outside PATH).
+// Only `q` / `ctrl+c` keep responding while the blocker is active.
 func (m RootModel) WithBootBlocker(title, body string) RootModel {
 	m.bootBlocker = &bootBlocker{title: title, body: body}
 	return m

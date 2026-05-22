@@ -32,10 +32,10 @@ func modalTitleStyle() lipgloss.Style {
 	return s
 }
 
-// Modal renderiza title + body em uma caixa centralizada. Quando width ou
-// height são 0, retorna apenas a caixa (sem Place wrapper) — útil para
-// inspeção em testes ou composições adicionais. Quando width > 0 e height > 0,
-// a caixa é centralizada num canvas dessa dimensão.
+// Modal renders title + body in a centered box. When width or
+// height are 0, returns only the box (without a Place wrapper) — useful for
+// inspection in tests or extra composition. When width > 0 and height > 0,
+// the box is centered on a canvas of that size.
 func Modal(title, body string, width, height int) string {
 	box := modalBoxStyle().Render(modalTitleStyle().Render(title) + "\n" + body)
 	if width <= 0 || height <= 0 {

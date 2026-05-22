@@ -2,8 +2,8 @@ package components
 
 import "github.com/charmbracelet/glamour"
 
-// HelpMarkdown é o conteúdo da modal de help acessível via `?` em qualquer
-// página. Atualizado quando keybindings mudam.
+// HelpMarkdown is the help modal content accessible via `?` on any
+// page. Updated when keybindings change.
 const HelpMarkdown = `# model-loader — Keybindings
 
 ## Global
@@ -62,8 +62,8 @@ _Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or
 - ` + "`/`" + ` — filter
 `
 
-// RenderHelp retorna o markdown HelpMarkdown renderizado via glamour.
-// width informa ao renderer o tamanho da viewport em colunas (afeta wrap).
+// RenderHelp returns HelpMarkdown rendered through glamour.
+// width tells the renderer the viewport size in columns (affects wrapping).
 func RenderHelp(width int) (string, error) {
 	return RenderContextualHelp(width, "")
 }
