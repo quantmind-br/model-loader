@@ -101,6 +101,10 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 - DO NOT change the persisted profile structure (`domain.Profile` / profilestore JSON) without mirroring the change in `docs/profile-schema.json` — the schema doc and the code must never drift apart
 - DO NOT intercept printable runes (`q`, `1-5`, `?`, letters, digits) globally in `internal/ui/root.go` without first checking `activePageCapturesInput()`. Only `ctrl+c` may bypass this gate. Pages with active huh forms / pickers / inline modals / the web-edit modal must implement `InputCapture.IsCapturingInput() bool` returning `true` while in those states (e.g. `ProfilesPage` returns `true` while `webEditing`). Otherwise the global shortcut steals the keystroke.
 
+## LANGUAGE RULES
+- ALL UI/UX interfaces (TUI labels, web editor labels, help text, modals, status messages, menu items) MUST be in English. Do not introduce Portuguese, Spanish, or any other language in the user-facing interface.
+- ALL configuration schemas (flag names, field names, JSON keys, TOML keys, `BackendValidationSchema` descriptions, `Presentation` group labels) MUST be in English. No non-English identifiers or schema metadata.
+
 ## TUI INPUT ROUTING RULES
 - **Global shortcut gate**: every shortcut in `RootModel.Update` that consumes a printable rune MUST be wrapped in `if !m.activePageCapturesInput() { ... }`. Exception: `ctrl+c` is unconditional escape.
 - **Page capture contract**: a page that opens any editable surface (huh form, text input, inline picker, confirm dialog, the web-edit modal) MUST implement `InputCapture` and return `true` while that surface is on screen. See `ProfilesPage.IsCapturingInput()` for the pattern (captures while `webEditing`, `pickerActive`, or `confirmDelete`).
