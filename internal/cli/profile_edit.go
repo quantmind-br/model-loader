@@ -138,6 +138,12 @@ func runProfileWrite(out, errw io.Writer, deps profileWriteDeps, isEdit bool, re
 		}
 		base = p
 	}
+	// Capture the resolved id before any overlay so the edit path cannot be
+	// hijacked by a --file JSON that carries a different id.
+	var resolvedID string
+	if isEdit {
+		resolvedID = base.ID
+	}
 	// 2. Overlay --file/stdin JSON onto the base.
 	if file != "" {
 		raw, err := readInput(file)
@@ -148,6 +154,9 @@ func runProfileWrite(out, errw io.Writer, deps profileWriteDeps, isEdit bool, re
 		if err := json.Unmarshal(raw, &base); err != nil {
 			fmt.Fprintf(errw, "parse profile JSON: %v\n", err)
 			return 1
+		}
+		if isEdit {
+			base.ID = resolvedID
 		}
 	}
 	// 3. Compute id for create.

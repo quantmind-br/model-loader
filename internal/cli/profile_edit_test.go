@@ -1,10 +1,14 @@
 package cli
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/service/validator"
 )
 
@@ -131,4 +135,67 @@ type noopValidator struct{}
 
 func (noopValidator) Validate(domain.Profile, domain.FlagSchema, domain.BackendKind) validator.Report {
 	return validator.Report{}
+}
+
+type blockingValidator struct{}
+
+func (blockingValidator) Validate(domain.Profile, domain.FlagSchema, domain.BackendKind) validator.Report {
+	return validator.Report{Errors: []validator.FieldIssue{{Field: "port", Message: "required"}}}
+}
+
+func TestRunProfileWrite_BlockingValidation_Exit2(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := profilestore.NewFSStore(dir)
+	var out, errw strings.Builder
+	code := runProfileWrite(&out, &errw, profileWriteDeps{store: s, val: blockingValidator{}, dir: dir}, false, "",
+		"", profileInput{id: "p1", name: "P1", setName: true})
+	if code != 2 {
+		t.Fatalf("expected exit 2 on blocking validation, got %d (err=%q)", code, errw.String())
+	}
+	if _, err := s.Get("p1"); err == nil {
+		t.Fatalf("profile must NOT be persisted when validation has blocking errors")
+	}
+}
+
+func TestRunProfileWrite_EditFile_PinsID(t *testing.T) {
+	s := newTempStore(t)
+	dir := s.Dir()
+	var out, errw strings.Builder
+
+	// create the profile we will edit
+	code := runProfileWrite(&out, &errw, profileWriteDeps{store: s, dir: dir}, false, "",
+		"", profileInput{id: "p1", name: "P1", setName: true})
+	if code != 0 {
+		t.Fatalf("setup create code=%d err=%q", code, errw.String())
+	}
+
+	// write a temp JSON file that carries a different id
+	overlay := map[string]any{"id": "other", "name": "X"}
+	raw, _ := json.Marshal(overlay)
+	tmpFile := filepath.Join(t.TempDir(), "overlay.json")
+	if err := os.WriteFile(tmpFile, raw, 0o600); err != nil {
+		t.Fatalf("write overlay: %v", err)
+	}
+
+	out.Reset()
+	errw.Reset()
+	code = runProfileWrite(&out, &errw, profileWriteDeps{store: s, val: noopValidator{}, dir: dir},
+		true, "p1", tmpFile, profileInput{})
+	if code != 0 {
+		t.Fatalf("edit code=%d err=%q", code, errw.String())
+	}
+
+	// p1 must still exist with the updated name
+	got, err := s.Get("p1")
+	if err != nil {
+		t.Fatalf("p1 must still exist after edit: %v", err)
+	}
+	if got.Name != "X" {
+		t.Fatalf("name not updated: %+v", got)
+	}
+
+	// "other" must NOT have been created
+	if _, err := s.Get("other"); err == nil {
+		t.Fatalf("a profile with id 'other' must NOT exist")
+	}
 }

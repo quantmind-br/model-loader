@@ -72,7 +72,7 @@ func init() {
 				return &ExitError{Code: 1}
 			}
 			defer svc.Close()
-			code := validateProfile(cmd.OutOrStdout(), cmd.ErrOrStderr(), svc.Store, svc.Val, svc.Resolver, args[0])
+			code := validateProfile(cmd.OutOrStdout(), cmd.ErrOrStderr(), svc.Store, svc.Val, svc.Resolver, args[0], jsonOut)
 			if code != 0 {
 				return &ExitError{Code: code}
 			}
@@ -140,8 +140,17 @@ func importProfiles(w io.Writer, store profilestore.Store, path string, mode pro
 	return nil
 }
 
+// validationResult is the JSON-serialisable result of a profile validation.
+type validationResult struct {
+	ID       string                `json:"id"`
+	Valid    bool                  `json:"valid"`
+	Errors   []validator.FieldIssue `json:"errors,omitempty"`
+	Warnings []validator.FieldIssue `json:"warnings,omitempty"`
+}
+
 // validateProfile returns exit code: 0 ok, 1 lookup error, 2 blocking errors.
-func validateProfile(out, errw io.Writer, store profilestore.Store, val validator.Validator, resolver backendcatalog.Resolver, ref string) int {
+// When asJSON is true the result is emitted as JSON instead of human-readable lines.
+func validateProfile(out, errw io.Writer, store profilestore.Store, val validator.Validator, resolver backendcatalog.Resolver, ref string, asJSON bool) int {
 	p, err := resolveProfileRef(store, ref)
 	if err != nil {
 		fmt.Fprintln(errw, err)
@@ -149,10 +158,27 @@ func validateProfile(out, errw io.Writer, store profilestore.Store, val validato
 	}
 	schema, kind := resolveSchema(resolver, p)
 	if val == nil {
-		fmt.Fprintln(out, "ok (no validator)")
+		if asJSON {
+			_ = emitJSON(out, validationResult{ID: p.ID, Valid: true})
+		} else {
+			fmt.Fprintln(out, "ok (no validator)")
+		}
 		return 0
 	}
 	report := val.Validate(p, schema, kind)
+	if asJSON {
+		res := validationResult{
+			ID:       p.ID,
+			Valid:    !report.HasBlockingErrors(),
+			Errors:   report.Errors,
+			Warnings: report.Warnings,
+		}
+		_ = emitJSON(out, res)
+		if report.HasBlockingErrors() {
+			return 2
+		}
+		return 0
+	}
 	for _, wm := range report.Warnings {
 		fmt.Fprintf(errw, "warning: %s: %s\n", wm.Field, wm.Message)
 	}

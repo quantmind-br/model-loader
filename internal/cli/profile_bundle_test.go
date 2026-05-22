@@ -50,8 +50,59 @@ func TestValidateProfile_OK(t *testing.T) {
 	s := newTempStore(t)
 	seed(t, s, "a", "A")
 	var out strings.Builder
-	code := validateProfile(&out, &out, s, noopValidator{}, nil, "a")
+	code := validateProfile(&out, &out, s, noopValidator{}, nil, "a", false)
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
 }
+
+func TestValidateProfile_BlockingErrors(t *testing.T) {
+	s := newTempStore(t)
+	seed(t, s, "a", "A")
+	var out, errw strings.Builder
+	code := validateProfile(&out, &errw, s, blockingValidator{}, nil, "a", false)
+	if code != 2 {
+		t.Fatalf("expected exit 2, got %d", code)
+	}
+}
+
+func TestValidateProfile_JSON(t *testing.T) {
+	s := newTempStore(t)
+	seed(t, s, "a", "A")
+	var out strings.Builder
+	code := validateProfile(&out, &out, s, noopValidator{}, nil, "a", true)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	var res validationResult
+	if err := json.Unmarshal([]byte(out.String()), &res); err != nil {
+		t.Fatalf("output is not valid JSON: %v (got: %s)", err, out.String())
+	}
+	if !res.Valid {
+		t.Fatalf("expected valid=true in JSON result, got false")
+	}
+	if res.ID != "a" {
+		t.Fatalf("expected id=a, got %q", res.ID)
+	}
+}
+
+func TestValidateProfile_JSON_BlockingErrors(t *testing.T) {
+	s := newTempStore(t)
+	seed(t, s, "a", "A")
+	var out strings.Builder
+	code := validateProfile(&out, &out, s, blockingValidator{}, nil, "a", true)
+	if code != 2 {
+		t.Fatalf("expected exit 2, got %d", code)
+	}
+	var res validationResult
+	if err := json.Unmarshal([]byte(out.String()), &res); err != nil {
+		t.Fatalf("output is not valid JSON: %v (got: %s)", err, out.String())
+	}
+	if res.Valid {
+		t.Fatalf("expected valid=false in JSON result")
+	}
+	if len(res.Errors) == 0 {
+		t.Fatalf("expected errors in JSON result")
+	}
+}
+
