@@ -221,15 +221,6 @@ func TestManager_AddSGLangBackendGeneratesSchema(t *testing.T) {
 	mgr := NewManager(store, schemaStore)
 	mgr.Register(domain.BackendKindSGLang, NewSGLangGenerator(schemaStore))
 
-	// Create a fake python binary in a temp dir so llamabin.Resolve succeeds.
-	tmpBin := filepath.Join(dir, "python")
-	if err := os.WriteFile(tmpBin, []byte("#!/bin/sh"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	oldPATH := os.Getenv("PATH")
-	os.Setenv("PATH", dir)
-	defer os.Setenv("PATH", oldPATH)
-
 	b, err := mgr.AddBackend(t.Context(), "sglang-dev", "python -m sglang.launch_server", domain.BackendKindSGLang)
 	if err != nil {
 		t.Fatalf("AddBackend sglang: %v", err)
@@ -249,11 +240,15 @@ func TestManager_AddSGLangBackendGeneratesSchema(t *testing.T) {
 	if schema.BackendKind != domain.BackendKindSGLang {
 		t.Errorf("schema.BackendKind = %q, want %q", schema.BackendKind, domain.BackendKindSGLang)
 	}
-	if _, ok := schema.Flags["model-path"]; !ok {
-		t.Errorf("schema missing 'model-path' flag")
+	if _, ok := schema.Flags["model-path"]; ok {
+		t.Errorf("schema unexpectedly includes 'model-path' flag")
 	}
-	if _, ok := schema.Flags["tp-size"]; !ok {
-		t.Errorf("schema missing 'tp-size' flag")
+	tp, ok := schema.Flags["tensor-parallel-size"]
+	if !ok {
+		t.Fatalf("schema missing 'tensor-parallel-size' flag")
+	}
+	if len(tp.Aliases) != 1 || tp.Aliases[0] != "tp-size" {
+		t.Errorf("tensor-parallel-size aliases = %v, want [tp-size]", tp.Aliases)
 	}
 }
 
