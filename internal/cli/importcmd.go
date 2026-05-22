@@ -13,9 +13,10 @@ func init() {
 	var modeFlag string
 
 	cmd := &cobra.Command{
-		Use:   "import <path>",
-		Short: "Import a profile bundle from a JSON file",
-		Args:  cobra.ExactArgs(1),
+		Use:        "import <path>",
+		Short:      "Import a profile bundle from a JSON file",
+		Deprecated: "use \"model-loader profile import\" instead",
+		Args:       cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := args[0]
 			mode := profilestore.ConflictModeMerge
