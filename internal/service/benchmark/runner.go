@@ -273,6 +273,8 @@ func (r *Runner) runProblem(ctx context.Context, scorer Scorer, base, model stri
 	res.TTFTms = comp.TTFT.Milliseconds()
 	res.TotalMs = comp.Total.Milliseconds()
 	res.TokensPerSecond = comp.TokensPerSecond
+	res.DecodeTPS = comp.TokensPerSecond
+	res.PromptProcessingTPS = comp.PromptProcessingTPS
 	res.PromptTokens = comp.PromptTokens
 	res.CompletionTokens = comp.CompletionTokens
 	tr.ModelResponse = comp.Content
@@ -397,6 +399,8 @@ func (r *Runner) runLongContext(ctx context.Context, base, model string) (Proble
 	res.TTFTms = comp.TTFT.Milliseconds()
 	res.TotalMs = comp.Total.Milliseconds()
 	res.TokensPerSecond = comp.TokensPerSecond
+	res.DecodeTPS = comp.TokensPerSecond
+	res.PromptProcessingTPS = comp.PromptProcessingTPS
 	res.PromptTokens = comp.PromptTokens
 	res.CompletionTokens = comp.CompletionTokens
 	tr.ModelResponse = comp.Content
@@ -467,7 +471,7 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 		{Role: "user", Content: prompt},
 	}
 
-	var ttftSum, tpsSum, totalSum float64
+	var ttftSum, tpsSum, totalSum, ppTpsSum float64
 	var ppSum, tgSum, ok, short int
 	var lastContent string
 	for i := 0; i < r.reps; i++ {
@@ -502,6 +506,7 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 		}
 		ttftSum += float64(comp.TTFT.Milliseconds())
 		tpsSum += comp.TokensPerSecond
+		ppTpsSum += comp.PromptProcessingTPS
 		totalSum += float64(comp.Total.Milliseconds())
 		ppSum += comp.PromptTokens
 		tgSum += comp.CompletionTokens
@@ -519,6 +524,8 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 	res.Resolved = true
 	res.TTFTms = int64(ttftSum / n)
 	res.TokensPerSecond = tpsSum / n
+	res.DecodeTPS = tpsSum / n
+	res.PromptProcessingTPS = ppTpsSum / n
 	res.TotalMs = int64(totalSum / n)
 	res.PromptTokens = ppSum / ok
 	res.CompletionTokens = tgSum / ok
@@ -620,8 +627,8 @@ func send(ch chan<- Progress, p Progress) {
 
 func aggregate(results []ProblemResult, peakVRAM uint64, avgUtil float64) Aggregate {
 	a := Aggregate{Total: len(results), PeakVRAMMB: peakVRAM, AvgGPUUtil: avgUtil}
-	var scoreSum, tpsSum, ttftSum float64
-	var tpsN, ttftN int
+	var scoreSum, tpsSum, ttftSum, ppSum, decSum float64
+	var tpsN, ttftN, ppN, decN int
 	for _, r := range results {
 		if r.Resolved {
 			a.Resolved++
@@ -633,6 +640,14 @@ func aggregate(results []ProblemResult, peakVRAM uint64, avgUtil float64) Aggreg
 		if r.TokensPerSecond > 0 {
 			tpsSum += r.TokensPerSecond
 			tpsN++
+		}
+		if r.PromptProcessingTPS > 0 {
+			ppSum += r.PromptProcessingTPS
+			ppN++
+		}
+		if r.DecodeTPS > 0 {
+			decSum += r.DecodeTPS
+			decN++
 		}
 		if r.TTFTms > 0 {
 			ttftSum += float64(r.TTFTms)
@@ -648,6 +663,12 @@ func aggregate(results []ProblemResult, peakVRAM uint64, avgUtil float64) Aggreg
 	}
 	if ttftN > 0 {
 		a.AvgTTFTms = ttftSum / float64(ttftN)
+	}
+	if ppN > 0 {
+		a.AvgPromptProcessingTPS = ppSum / float64(ppN)
+	}
+	if decN > 0 {
+		a.AvgDecodeTPS = decSum / float64(decN)
 	}
 	return a
 }
