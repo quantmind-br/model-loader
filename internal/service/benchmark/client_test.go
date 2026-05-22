@@ -2,6 +2,7 @@ package benchmark
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -45,6 +46,27 @@ func TestComplete_StreamsContentAndUsage(t *testing.T) {
 	}
 	if res.Total <= 0 {
 		t.Errorf("total duration = %v, want > 0", res.Total)
+	}
+}
+
+func TestComplete_SetsPromptProcessingTPS(t *testing.T) {
+	// Stream: two content chunks then a usage block with 100 prompt tokens.
+	body := "data: {\"choices\":[{\"delta\":{\"content\":\"a\"}}]}\n" +
+		"data: {\"choices\":[{\"delta\":{\"content\":\"b\"}}]}\n" +
+		"data: {\"choices\":[],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":2}}\n" +
+		"data: [DONE]\n"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, body)
+	}))
+	defer srv.Close()
+
+	got, err := Complete(context.Background(), srv.Client(), srv.URL, "", ChatRequest{Model: "m"})
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if got.PromptProcessingTPS <= 0 {
+		t.Fatalf("PromptProcessingTPS = %v, want > 0", got.PromptProcessingTPS)
 	}
 }
 

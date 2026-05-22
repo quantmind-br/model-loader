@@ -40,7 +40,8 @@ type CompletionResult struct {
 	CompletionTokens int
 	TTFT             time.Duration // time to first content token
 	Total            time.Duration
-	TokensPerSecond  float64 // completion tokens / generation time
+	TokensPerSecond     float64 // completion tokens / generation time (decode speed)
+	PromptProcessingTPS float64 // prompt tokens / TTFT (prefill speed)
 }
 
 // httpDoer abstracts *http.Client for tests.
@@ -161,13 +162,18 @@ func Complete(ctx context.Context, doer httpDoer, base, apiKey string, req ChatR
 	if genSeconds > 0 && completionTokens > 0 {
 		tps = float64(completionTokens) / genSeconds
 	}
+	ppTps := 0.0
+	if ttft.Seconds() > 0 && promptTokens > 0 {
+		ppTps = float64(promptTokens) / ttft.Seconds()
+	}
 	return CompletionResult{
-		Content:          content,
-		PromptTokens:     promptTokens,
-		CompletionTokens: completionTokens,
-		TTFT:             ttft,
-		Total:            total,
-		TokensPerSecond:  tps,
+		Content:             content,
+		PromptTokens:        promptTokens,
+		CompletionTokens:    completionTokens,
+		TTFT:                ttft,
+		Total:               total,
+		TokensPerSecond:     tps,
+		PromptProcessingTPS: ppTps,
 	}, nil
 }
 
