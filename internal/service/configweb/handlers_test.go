@@ -181,3 +181,57 @@ func TestValidateHandler_ReportsUnknownFlag(t *testing.T) {
 		t.Fatalf("expected unknown-flag issue, got: %s", rec.Body.String())
 	}
 }
+
+func TestDraftFromForm_ParsesEnvVars(t *testing.T) {
+	form := url.Values{
+		"id":          []string{"test"},
+		"name":        []string{"Test"},
+		"isNew":       []string{"true"},
+		"envKey_0":    []string{"FOO"},
+		"envValue_0":  []string{"bar"},
+		"envKey_1":    []string{"BAZ"},
+		"envValue_1":  []string{"qux"},
+		"envKey_2":    []string{""},
+		"envValue_2":  []string{"skip"},
+	}
+	req := httptest.NewRequest("POST", "/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.ParseForm()
+	d := draftFromForm(req)
+	if len(d.Env) != 2 {
+		t.Fatalf("expected 2 env vars, got %d: %+v", len(d.Env), d.Env)
+	}
+	if d.Env[0].Key != "FOO" || d.Env[0].Value != "bar" {
+		t.Fatalf("env[0] wrong: %+v", d.Env[0])
+	}
+	if d.Env[1].Key != "BAZ" || d.Env[1].Value != "qux" {
+		t.Fatalf("env[1] wrong: %+v", d.Env[1])
+	}
+}
+
+func TestDraftFromForm_NoEnvVars(t *testing.T) {
+	form := url.Values{"id": []string{"test"}, "name": []string{"Test"}, "isNew": []string{"true"}}
+	req := httptest.NewRequest("POST", "/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.ParseForm()
+	d := draftFromForm(req)
+	if len(d.Env) != 0 {
+		t.Fatalf("expected no env vars, got %d", len(d.Env))
+	}
+}
+
+func TestDraftFromForm_SkipsWhitespaceKeys(t *testing.T) {
+	form := url.Values{
+		"id":         []string{"test"},
+		"name":       []string{"Test"},
+		"envKey_0":   []string{"  "},
+		"envValue_0": []string{"bar"},
+	}
+	req := httptest.NewRequest("POST", "/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.ParseForm()
+	d := draftFromForm(req)
+	if len(d.Env) != 0 {
+		t.Fatalf("expected no env vars for whitespace key, got %d", len(d.Env))
+	}
+}

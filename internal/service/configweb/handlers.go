@@ -2,6 +2,7 @@ package configweb
 
 import (
 	"encoding/json"
+	"fmt"
 	"html"
 	"net/http"
 	"strconv"
@@ -39,6 +40,15 @@ func draftFromForm(r *http.Request) Draft {
 		if strings.HasPrefix(k, "arg.") && len(vs) > 0 && strings.TrimSpace(vs[0]) != "" {
 			d.Args[strings.TrimPrefix(k, "arg.")] = vs[0]
 		}
+	}
+	// Parse env vars from envKey_N / envValue_N pairs.
+	for i := 0; ; i++ {
+		key := strings.TrimSpace(r.FormValue(fmt.Sprintf("envKey_%d", i)))
+		val := strings.TrimSpace(r.FormValue(fmt.Sprintf("envValue_%d", i)))
+		if key == "" {
+			break
+		}
+		d.Env = append(d.Env, domain.EnvVar{Key: key, Value: val})
 	}
 	return d
 }
