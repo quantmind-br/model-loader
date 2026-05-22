@@ -34,7 +34,9 @@ func draftFromForm(r *http.Request) Draft {
 		}
 	}
 	for k, vs := range r.Form {
-		if strings.HasPrefix(k, "arg.") && len(vs) > 0 {
+		// Empty arg values mean "not configured" — drop them so untouched flags
+		// (their inputs default to empty) never get persisted into the profile.
+		if strings.HasPrefix(k, "arg.") && len(vs) > 0 && strings.TrimSpace(vs[0]) != "" {
 			d.Args[strings.TrimPrefix(k, "arg.")] = vs[0]
 		}
 	}

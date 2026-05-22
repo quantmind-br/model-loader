@@ -40,7 +40,8 @@ type FieldVM struct {
 	Label    string
 	Help     string
 	Widget   string // number | select | toggle | text
-	Value    string
+	Value    string // user-set value; empty means "not configured"
+	Default  string // schema default, shown only as placeholder/hint
 	Options  []string
 	Required bool
 	Min, Max *int
@@ -88,6 +89,7 @@ func fieldVM(long string, spec domain.FlagSpec, d Draft) FieldVM {
 		Required: spec.Required,
 		Min:      spec.Min,
 		Max:      spec.Max,
+		Default:  defaultString(spec.Default),
 	}
 	switch spec.Type {
 	case domain.FlagTypeInt, domain.FlagTypeFloat:
@@ -100,10 +102,11 @@ func fieldVM(long string, spec domain.FlagSpec, d Draft) FieldVM {
 	default:
 		f.Widget = "text"
 	}
+	// Only a value the user explicitly set fills the field. An untouched flag
+	// stays empty (= not configured) so it never leaks into the saved profile;
+	// the schema default is surfaced only as a placeholder hint.
 	if v, ok := d.Args[long]; ok {
 		f.Value = v
-	} else if spec.Default != nil {
-		f.Value = defaultString(spec.Default)
 	}
 	return f
 }

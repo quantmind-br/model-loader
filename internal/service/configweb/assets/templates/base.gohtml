@@ -8,7 +8,7 @@
 <script src="/static/htmx.min.js"></script>
 <script defer src="/static/alpine.min.js"></script>
 </head>
-<body x-data="{mode:'configure'}">
+<body x-data="{mode:'configure',activeGroup:'{{if .Groups}}{{(index .Groups 0).Name}}{{end}}'}">
 <header class="topbar">
   <div class="title">{{.Draft.Name}} <span class="muted">· {{.Draft.BackendID}}</span></div>
   <nav class="modes">
@@ -20,8 +20,8 @@
     <button class="primary" form="profile-form" hx-post="/save" hx-target="#issues">Salvar</button>
   </div>
 </header>
-<main class="layout">
-  <aside class="sidebar">{{block "sidebar" .}}{{end}}</aside>
+<main class="layout" :class="{'no-sidebar': mode!=='configure'}">
+  <aside class="sidebar" x-show="mode==='configure'">{{block "sidebar" .}}{{end}}</aside>
   <section class="content">
     <div x-show="mode==='configure'">{{block "configure" .}}{{end}}</div>
     <div x-show="mode==='customize'">{{block "customize" .}}{{end}}</div>

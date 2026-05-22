@@ -1,5 +1,15 @@
 {{define "sidebar"}}
-{{range .Groups}}<a href="#g-{{.Name}}" class="{{if .Highlighted}}hl{{end}}">{{if .Highlighted}}★ {{end}}{{.Name}}</a>{{end}}
+<div class="sidebar-title">Grupos</div>
+{{range .Groups}}
+<button 
+  class="tab-btn{{if .Highlighted}} hl{{end}}"
+  @click="activeGroup='{{.Name}}'"
+  :class="(activeGroup==='{{.Name}}' ? 'tab-btn active' : 'tab-btn') + '{{if .Highlighted}} hl{{end}}'"
+>
+  {{if .Highlighted}}<span class="star">★</span>{{end}}{{.Name}}
+  <span class="count">{{len .Fields}}</span>
+</button>
+{{end}}
 {{end}}
 
 {{define "configure"}}
@@ -8,33 +18,50 @@
   <input type="hidden" name="origId" value="{{.Draft.OrigID}}">
   <input type="hidden" name="isNew" value="{{if .Draft.IsNew}}true{{else}}false{{end}}">
   <input type="hidden" name="backendId" value="{{.Draft.BackendID}}">
-  <div class="field"><label>Nome</label><input name="name" value="{{.Draft.Name}}"></div>
-  <div class="field"><label>Model (caminho ou repo)</label><input name="model" value="{{.Draft.Model}}"></div>
-  {{range .Groups}}
-  <div class="group" id="g-{{.Name}}">
-    <h3>{{if .Highlighted}}★ {{end}}{{.Name}}</h3>
-    {{range .Fields}}
+
+  <div class="top-fields">
     <div class="field">
-      <label>{{.Label}}{{if .Required}} *{{end}}</label>
-      {{if eq .Widget "select"}}
-        {{$val := .Value}}
-        <select name="arg.{{.Flag}}">
-          {{range .Options}}<option value="{{.}}"{{if eq . $val}} selected{{end}}>{{.}}</option>{{end}}
-        </select>
-      {{else if eq .Widget "toggle"}}
-        {{$val := .Value}}
-        <select name="arg.{{.Flag}}">
-          <option value="on"{{if eq $val "on"}} selected{{end}}>on</option>
-          <option value="off"{{if eq $val "off"}} selected{{end}}>off</option>
-        </select>
-      {{else if eq .Widget "number"}}
-        <input type="number" name="arg.{{.Flag}}" value="{{.Value}}"{{if .Min}} min="{{.Min}}"{{end}}{{if .Max}} max="{{.Max}}"{{end}}>
-      {{else}}
-        <input name="arg.{{.Flag}}" value="{{.Value}}">
-      {{end}}
-      {{if .Help}}<small class="muted">{{.Help}}</small>{{end}}
+      <label>Nome {{if not .Draft.Name}}<span class="req">*</span>{{end}}</label>
+      <input name="name" value="{{.Draft.Name}}" placeholder="nome do profile">
     </div>
-    {{end}}
+    <div class="field">
+      <label>Model <span class="req">*</span></label>
+      <input name="model" value="{{.Draft.Model}}" placeholder="caminho ou repo do modelo">
+    </div>
+  </div>
+
+  {{range .Groups}}
+  <div x-show="activeGroup==='{{.Name}}'" x-cloak>
+    <div class="group-header">
+      <h2>{{if .Highlighted}}★ {{end}}{{.Name}}</h2>
+      <span class="badge">{{len .Fields}} opções</span>
+    </div>
+    <div class="fields-grid">
+      {{range .Fields}}
+      <div class="field{{if eq .Widget "text"}} full-width{{end}}">
+        <label>{{.Label}}{{if .Required}} <span class="req">obrigatório</span>{{end}}</label>
+        {{if eq .Widget "select"}}
+          {{$val := .Value}}
+          <select name="arg.{{.Flag}}">
+            <option value=""{{if eq $val ""}} selected{{end}}>(padrão)</option>
+            {{range .Options}}<option value="{{.}}"{{if eq . $val}} selected{{end}}>{{.}}</option>{{end}}
+          </select>
+        {{else if eq .Widget "toggle"}}
+          {{$val := .Value}}
+          <select name="arg.{{.Flag}}">
+            <option value=""{{if eq $val ""}} selected{{end}}>(padrão)</option>
+            <option value="on"{{if eq $val "on"}} selected{{end}}>on</option>
+            <option value="off"{{if eq $val "off"}} selected{{end}}>off</option>
+          </select>
+        {{else if eq .Widget "number"}}
+          <input type="number" name="arg.{{.Flag}}" value="{{.Value}}" placeholder="{{if .Default}}{{.Default}} (padrão){{else}}não configurado{{end}}"{{if .Min}} min="{{.Min}}"{{end}}{{if .Max}} max="{{.Max}}"{{end}}>
+        {{else}}
+          <input name="arg.{{.Flag}}" value="{{.Value}}" placeholder="{{if .Default}}{{.Default}} (padrão){{else}}não configurado{{end}}">
+        {{end}}
+        {{if .Help}}<small class="muted">{{.Help}}</small>{{end}}
+      </div>
+      {{end}}
+    </div>
   </div>
   {{end}}
 </form>

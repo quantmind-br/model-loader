@@ -70,3 +70,25 @@ func TestBuildViewModel_OrdersGroupsAndWidgets(t *testing.T) {
 		t.Fatalf("enum widget wrong: %+v", f1)
 	}
 }
+
+func TestBuildViewModel_UntouchedFlagStaysUnconfigured(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer,
+		Flags: map[string]domain.FlagSpec{
+			"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt, Default: 8192},
+		},
+		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{
+			{Name: "Essenciais", Highlighted: true, Flags: []string{"ctx-size"}},
+		}},
+	}
+	// No draft arg for ctx-size: it must stay empty (not configured), with the
+	// schema default surfaced only as a placeholder hint.
+	vm := BuildViewModel(Draft{Args: map[string]string{}}, schema)
+	f := vm.Groups[0].Fields[0]
+	if f.Value != "" {
+		t.Fatalf("untouched flag must have empty Value, got %q", f.Value)
+	}
+	if f.Default != "8192" {
+		t.Fatalf("default hint should be 8192, got %q", f.Default)
+	}
+}
