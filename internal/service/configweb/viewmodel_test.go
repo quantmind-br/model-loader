@@ -17,7 +17,7 @@ func TestBuildViewModel_NilPresentationUsesCuratedGroups(t *testing.T) {
 		Presentation: nil, // no persisted presentation
 	}
 	d := Draft{Args: map[string]string{}}
-	vm := BuildViewModel(d, schema)
+	vm := BuildViewModel(d, schema, nil)
 
 	if len(vm.Groups) <= 1 {
 		t.Fatalf("expected more than one group (curated + other), got %d: %+v", len(vm.Groups), vm.Groups)
@@ -57,7 +57,7 @@ func TestBuildViewModel_OrdersGroupsAndWidgets(t *testing.T) {
 		}},
 	}
 	d := Draft{Args: map[string]string{"ctx-size": "4096"}}
-	vm := BuildViewModel(d, schema)
+	vm := BuildViewModel(d, schema, nil)
 	if len(vm.Groups) != 1 || vm.Groups[0].Name != "Essenciais" {
 		t.Fatalf("groups wrong: %+v", vm.Groups)
 	}
@@ -83,7 +83,7 @@ func TestBuildViewModel_UntouchedFlagStaysUnconfigured(t *testing.T) {
 	}
 	// No draft arg for ctx-size: it must stay empty (not configured), with the
 	// schema default surfaced only as a placeholder hint.
-	vm := BuildViewModel(Draft{Args: map[string]string{}}, schema)
+	vm := BuildViewModel(Draft{Args: map[string]string{}}, schema, nil)
 	f := vm.Groups[0].Fields[0]
 	if f.Value != "" {
 		t.Fatalf("untouched flag must have empty Value, got %q", f.Value)

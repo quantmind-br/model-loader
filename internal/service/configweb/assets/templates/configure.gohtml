@@ -6,7 +6,7 @@
   @click="activeGroup='{{.Name}}'"
   :class="(activeGroup==='{{.Name}}' ? 'tab-btn active' : 'tab-btn') + '{{if .Highlighted}} hl{{end}}'"
 >
-  {{if .Highlighted}}<span class="star">★</span>{{end}}{{.Name}}
+  {{.Name}}
   <span class="count">{{len .Fields}}</span>
 </button>
 {{end}}
@@ -17,9 +17,24 @@
   <input type="hidden" name="id" value="{{.Draft.ID}}">
   <input type="hidden" name="origId" value="{{.Draft.OrigID}}">
   <input type="hidden" name="isNew" value="{{if .Draft.IsNew}}true{{else}}false{{end}}">
-  <input type="hidden" name="backendId" value="{{.Draft.BackendID}}">
 
   <div class="top-fields">
+    {{if .Draft.IsNew}}
+    <div class="field">
+      <label>Backend</label>
+      <select name="backendId" hx-post="/switch-backend" hx-target="#profile-form" hx-swap="outerHTML">
+        {{range .Backends}}
+        <option value="{{.ID}}"{{if eq .ID $.Draft.BackendID}} selected{{end}}>{{.Name}}</option>
+        {{end}}
+      </select>
+    </div>
+    {{else}}
+    <input type="hidden" name="backendId" value="{{.Draft.BackendID}}">
+    {{end}}
+    <div class="field">
+      <label>ID {{if not .Draft.ID}}<span class="req">*</span>{{end}}</label>
+      <input name="id" value="{{.Draft.ID}}" placeholder="identificador do profile (slug)">
+    </div>
     <div class="field">
       <label>Nome {{if not .Draft.Name}}<span class="req">*</span>{{end}}</label>
       <input name="name" value="{{.Draft.Name}}" placeholder="nome do profile">
@@ -30,15 +45,20 @@
     </div>
   </div>
 
+  <div class="search-box">
+    <input type="text" x-model="search" placeholder="🔍 Buscar parâmetro..." class="search-input">
+    <button type="button" x-show="search.length > 0" @click="search=''" class="clear-btn">×</button>
+  </div>
+
   {{range .Groups}}
-  <div x-show="activeGroup==='{{.Name}}'" x-cloak>
-    <div class="group-header">
-      <h2>{{if .Highlighted}}★ {{end}}{{.Name}}</h2>
+  <div x-show="search.trim()==='' ? activeGroup==='{{.Name}}' : true" x-cloak>
+    <div class="group-header" x-show="search.trim()!==''">
+      <h2>{{.Name}}</h2>
       <span class="badge">{{len .Fields}} opções</span>
     </div>
     <div class="fields-grid">
       {{range .Fields}}
-      <div class="field{{if eq .Widget "text"}} full-width{{end}}">
+      <div class="field{{if eq .Widget "text"}} full-width{{end}}" x-show="search.trim()==='' || fuzzyMatch(search, '{{.Flag}} {{.Label}} {{.Help}}')">
         <label>{{.Label}}{{if .Required}} <span class="req">obrigatório</span>{{end}}</label>
         {{if eq .Widget "select"}}
           {{$val := .Value}}

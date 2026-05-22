@@ -7,7 +7,6 @@ import (
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
-	"github.com/quantmind-br/model-loader/internal/service/llamabin"
 	"github.com/quantmind-br/model-loader/internal/service/llamahelp"
 )
 
@@ -34,7 +33,7 @@ func NewLlamaServerGenerator(schemaStore backendcatalog.SchemaStore) *LlamaServe
 	return &LlamaServerGenerator{schemaStore: schemaStore}
 }
 
-// Generate resolves the backend executable, runs --help, parses flags, and persists the schema.
+// Generate returns the hand-curated llama-server schema without runtime --help parsing.
 // If the existing schema has source.editable=true, generation is skipped to preserve manual edits.
 func (g *LlamaServerGenerator) Generate(backend domain.Backend) (domain.BackendValidationSchema, error) {
 	if backend.Kind != domain.BackendKindLlamaServer {
@@ -47,15 +46,8 @@ func (g *LlamaServerGenerator) Generate(backend domain.Backend) (domain.BackendV
 		return existing, nil
 	}
 
-	resolved, err := llamabin.Resolve(backend.Executable)
-	if err != nil {
-		return domain.BackendValidationSchema{}, fmt.Errorf("resolve executable: %w", err)
-	}
-
-	schema, err := parseHelpSchema(backend, resolved)
-	if err != nil {
-		return domain.BackendValidationSchema{}, err
-	}
+	schema := CuratedLlamaSchema()
+	schema.BackendID = backend.ID
 	if err := g.schemaStore.Save(ref, schema); err != nil {
 		return domain.BackendValidationSchema{}, fmt.Errorf("save schema: %w", err)
 	}

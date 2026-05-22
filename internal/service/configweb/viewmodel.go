@@ -16,6 +16,7 @@ type ViewModel struct {
 	BackendID string
 	AllFlags  []FlagEditVM
 	Rules     []domain.CrossFieldRule
+	Backends  []domain.Backend
 }
 
 // FlagEditVM is the editable representation of one flag for customize mode.
@@ -48,7 +49,7 @@ type FieldVM struct {
 }
 
 // BuildViewModel renders schema + presentation + draft into template data.
-func BuildViewModel(d Draft, schema domain.BackendValidationSchema) ViewModel {
+func BuildViewModel(d Draft, schema domain.BackendValidationSchema, backends []domain.Backend) ViewModel {
 	vm := ViewModel{Draft: d}
 	pres := schema.Presentation
 	if pres == nil {
@@ -69,6 +70,7 @@ func BuildViewModel(d Draft, schema domain.BackendValidationSchema) ViewModel {
 		vm.Groups = append(vm.Groups, gvm)
 	}
 	vm.BackendID = schema.BackendID
+	vm.Backends = backends
 	vm.Rules = schema.Rules
 	longs := make([]string, 0, len(schema.Flags))
 	for long := range schema.Flags {

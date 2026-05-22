@@ -51,6 +51,9 @@ func buildLlamaArgs(p domain.Profile) []string {
 	sort.Strings(keys)
 
 	for _, k := range keys {
+		if k == "model" {
+			continue
+		}
 		flag := "--" + domain.CanonicalFlag(k)
 		switch v := p.Args[k].(type) {
 		case bool:

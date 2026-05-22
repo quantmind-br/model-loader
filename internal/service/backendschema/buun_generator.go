@@ -7,13 +7,10 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/buunhelp"
-	"github.com/quantmind-br/model-loader/internal/service/llamabin"
 )
 
-// BuunServerGenerator generates schemas for the buun-llama-cpp fork. The fork's
-// `--help` is format-identical to upstream llama.cpp, so the live schema is
-// parsed at runtime via the shared parseHelpSchema helper. When the binary
-// cannot be resolved or parsed, it falls back to the curated embedded schema.
+// BuunServerGenerator returns the hand-curated embedded schema for the
+// buun-llama-cpp fork without runtime --help parsing.
 type BuunServerGenerator struct {
 	schemaStore backendcatalog.SchemaStore
 }
@@ -43,14 +40,8 @@ func (g *BuunServerGenerator) Generate(backend domain.Backend) (domain.BackendVa
 	return schema, nil
 }
 
-// resolveSchema tries runtime --help parsing and falls back to the embedded
-// curated schema on any resolve/parse failure.
+// resolveSchema returns the embedded curated schema without runtime --help parsing.
 func (g *BuunServerGenerator) resolveSchema(backend domain.Backend) domain.BackendValidationSchema {
-	if resolved, err := llamabin.Resolve(backend.Executable); err == nil {
-		if parsed, perr := parseHelpSchema(backend, resolved); perr == nil {
-			return parsed
-		}
-	}
 	return buunFallbackSchema(backend)
 }
 

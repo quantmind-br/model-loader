@@ -8,7 +8,7 @@
 <script src="/static/htmx.min.js"></script>
 <script defer src="/static/alpine.min.js"></script>
 </head>
-<body x-data="{mode:'configure',activeGroup:'{{if .Groups}}{{(index .Groups 0).Name}}{{end}}'}">
+<body x-data="{mode:'configure',activeGroup:'{{if .Groups}}{{(index .Groups 0).Name}}{{end}}',search:''}">
 <header class="topbar">
   <div class="title">{{.Draft.Name}} <span class="muted">· {{.Draft.BackendID}}</span></div>
   <nav class="modes">
@@ -20,13 +20,25 @@
     <button class="primary" form="profile-form" hx-post="/save" hx-target="#issues">Salvar</button>
   </div>
 </header>
-<main class="layout" :class="{'no-sidebar': mode!=='configure'}">
-  <aside class="sidebar" x-show="mode==='configure'">{{block "sidebar" .}}{{end}}</aside>
+<main class="layout" :class="{'no-sidebar': mode!=='configure' || search.trim()!==''}">
+  <aside class="sidebar" x-show="mode==='configure' && search.trim()===''">{{block "sidebar" .}}{{end}}</aside>
   <section class="content">
     <div x-show="mode==='configure'">{{block "configure" .}}{{end}}</div>
     <div x-show="mode==='customize'">{{block "customize" .}}{{end}}</div>
   </section>
 </main>
 <footer class="statusbar"><div id="issues"><span class="ok">✓ válido</span></div></footer>
+<script>
+function fuzzyMatch(q, text) {
+  if (!q) return true;
+  q = q.toLowerCase();
+  text = text.toLowerCase();
+  var qi = 0;
+  for (var ti = 0; ti < text.length && qi < q.length; ti++) {
+    if (text.charAt(ti) === q.charAt(qi)) qi++;
+  }
+  return qi === q.length;
+}
+</script>
 </body>
 </html>{{end}}

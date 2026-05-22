@@ -366,3 +366,28 @@ func validateRules(rules []domain.CrossFieldRule, schema domain.BackendValidatio
 	}
 	return ""
 }
+
+// handleSwitchBackend updates the draft's backend and re-renders the form.
+func (s *Session) handleSwitchBackend(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	newBackendID := r.FormValue("backendId")
+	if newBackendID == "" {
+		http.Error(w, "backendId required", http.StatusBadRequest)
+		return
+	}
+
+	s.deps.InitialDraft.BackendID = newBackendID
+
+	schema, err := s.loadSchema(newBackendID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	backends, _ := s.loadBackends()
+	vm := BuildViewModel(s.deps.InitialDraft, schema, backends)
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.ExecuteTemplate(w, "configure", vm); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}

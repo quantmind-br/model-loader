@@ -36,10 +36,10 @@ func (m *Manager) Generators() map[domain.BackendKind]Generator {
 	return m.generators
 }
 
-// AddBackend creates a new backend entry, generates its schema, and persists the catalog.
-// Schema is generated BEFORE catalog is saved so an invalid binary does not create a
-// broken catalog entry. If catalog save fails after schema generation, the schema is
-// left as an orphan (harmless) rather than a catalog entry without a schema.
+// AddBackend creates a new backend entry and persists the catalog.
+// Schema generation is deferred; the caller should invoke GenerateSchema or
+// RefreshSchema after the backend entry exists, or provide a hand-curated
+// schema file directly in the schema store.
 func (m *Manager) AddBackend(ctx context.Context, name, executable string, kind domain.BackendKind) (domain.Backend, error) {
 	id := domain.Slugify(name)
 	if id == "" {
@@ -66,14 +66,6 @@ func (m *Manager) AddBackend(ctx context.Context, name, executable string, kind 
 
 	if _, ok := findBackend(catalog.Backends, id); ok {
 		return domain.Backend{}, fmt.Errorf("backend already exists: %s", id)
-	}
-
-	if g, ok := m.generators[kind]; ok {
-		if _, err := g.Generate(backend); err != nil {
-			return domain.Backend{}, fmt.Errorf("generate schema: %w", err)
-		}
-	} else {
-		return domain.Backend{}, fmt.Errorf("no generator registered for kind: %s", kind)
 	}
 
 	catalog.Backends = upsertBackend(catalog.Backends, backend)

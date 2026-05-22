@@ -323,7 +323,10 @@ func ensureDefaultCatalog(catalogStore backendcatalog.Store, schemaStore backend
 		return domain.BackendValidationSchema{}.ToFlagSchema()
 	}
 	backend := catalog.Backends[0]
-	_ = backendschema.WriteEmbeddedFallback(schemaStore, backend.ID, backend.SchemaRef)
+	schema := backendschema.CuratedLlamaSchema()
+	schema.BackendID = backend.ID
+	ref := backendcatalog.SchemaStoreRef(backend.SchemaRef)
+	_ = schemaStore.Save(ref, schema)
 	resolver := backendcatalog.NewResolver(catalogStore, schemaStore, logger)
 	if rb, err := resolver.Resolve(domain.Profile{}); err == nil {
 		return rb.Schema.ToFlagSchema()

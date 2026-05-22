@@ -31,10 +31,6 @@ func (g *embeddedGenerator) Generate(backend domain.Backend) (domain.BackendVali
 		return existing, nil
 	}
 
-	if _, err := g.resolveFn(backend.Executable); err != nil {
-		return domain.BackendValidationSchema{}, fmt.Errorf("validate executable: %w", err)
-	}
-
 	fs := g.schemaFn()
 
 	src := domain.SchemaSource{

@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"net/http"
 
+	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/configweb/assets"
 )
 
@@ -25,9 +26,18 @@ func (s *Session) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	vm := BuildViewModel(s.deps.InitialDraft, schema)
+	backends, _ := s.loadBackends()
+	vm := BuildViewModel(s.deps.InitialDraft, schema, backends)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "base", vm); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func (s *Session) loadBackends() ([]domain.Backend, error) {
+	catalog, err := s.deps.Catalog.Load()
+	if err != nil {
+		return nil, err
+	}
+	return catalog.Backends, nil
 }

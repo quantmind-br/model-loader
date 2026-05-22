@@ -21,4 +21,5 @@ func (s *Session) routes(mux *http.ServeMux) {
 	mux.HandleFunc("/customize/flag/remove", s.handleCustomizeRemoveFlag)
 	mux.HandleFunc("/customize/presentation", s.handleCustomizePresentation)
 	mux.HandleFunc("/customize/rules", s.handleCustomizeRules)
+	mux.HandleFunc("/switch-backend", s.handleSwitchBackend)
 }

@@ -238,6 +238,10 @@ func TestManager_AddSGLangBackendGeneratesSchema(t *testing.T) {
 		t.Errorf("Kind = %q, want %q", b.Kind, domain.BackendKindSGLang)
 	}
 
+	if err := mgr.RefreshSchema(b.ID); err != nil {
+		t.Fatalf("RefreshSchema: %v", err)
+	}
+
 	schema, err := schemaStore.Load("sglang-dev.json")
 	if err != nil {
 		t.Fatalf("load schema: %v", err)

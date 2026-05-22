@@ -245,6 +245,47 @@ form{
   border-bottom:1px solid var(--border);
 }
 
+.search-box{
+  position:relative;
+  margin-bottom:var(--sp-6);
+}
+.search-input{
+  width:100%;
+  padding:var(--sp-3) var(--sp-4);
+  padding-right:2.5rem;
+  background:var(--input-bg);
+  border:1px solid var(--input-bd);
+  border-radius:var(--radius-md);
+  color:var(--ink);
+  font-size:var(--text-sm);
+  outline:none;
+  transition:border-color .15s ease;
+}
+.search-input:focus{
+  border-color:var(--accent);
+}
+.search-input::placeholder{
+  color:var(--muted);
+}
+.clear-btn{
+  position:absolute;
+  right:var(--sp-2);
+  top:50%;
+  transform:translateY(-50%);
+  background:transparent;
+  border:0;
+  color:var(--muted);
+  font-size:var(--text-lg);
+  cursor:pointer;
+  line-height:1;
+  padding:0.2rem 0.4rem;
+  border-radius:var(--radius-sm);
+}
+.clear-btn:hover{
+  color:var(--ink);
+  background:var(--hover-bg);
+}
+
 .fields-grid{
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
