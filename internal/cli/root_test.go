@@ -3,7 +3,20 @@ package cli
 import (
 	"errors"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
+
+// init registers a hidden test-only command so Execute() can be exercised
+// end-to-end. It lives in the test file so the hook never ships in the
+// production binary (only the test binary runs this init).
+func init() {
+	rootCmd.AddCommand(&cobra.Command{
+		Use:    "_exittest",
+		Hidden: true,
+		RunE:   func(*cobra.Command, []string) error { return &ExitError{Code: 2} },
+	})
+}
 
 func TestExecute_MapsExitError(t *testing.T) {
 	// A command returning *ExitError{Code:2} must surface as exit code 2.

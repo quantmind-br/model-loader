@@ -48,13 +48,6 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "",
 		"override log level (debug|info|warn|error); also reads $MODEL_LOADER_LOG_LEVEL and config logging.level")
-
-	// Hidden test hook so Execute() can be exercised end-to-end.
-	rootCmd.AddCommand(&cobra.Command{
-		Use:    "_exittest",
-		Hidden: true,
-		RunE:   func(*cobra.Command, []string) error { return &ExitError{Code: 2} },
-	})
 }
 
 // Execute runs the cobra tree and returns the process exit code. An *ExitError
