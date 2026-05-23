@@ -17,3 +17,15 @@ func TestBenchModesIncludeInstructionBench(t *testing.T) {
 		t.Fatal("benchModes must include ModeInstBench")
 	}
 }
+
+func TestBenchModesIncludeMMLUBench(t *testing.T) {
+	found := false
+	for _, m := range benchModes {
+		if m == benchmark.ModeMMLUBench {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("benchModes must include ModeMMLUBench")
+	}
+}

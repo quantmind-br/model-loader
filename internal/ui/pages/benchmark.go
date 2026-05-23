@@ -38,6 +38,7 @@ var benchModes = []benchmark.Mode{
 	benchmark.ModeMathBench,
 	benchmark.ModeCodeGenBench,
 	benchmark.ModeInstBench,
+	benchmark.ModeMMLUBench,
 }
 
 // BenchmarkPage is the Benchmark tab: pick a profile, run the embedded
@@ -235,6 +236,7 @@ func (p BenchmarkPage) viewModePick() string {
 		benchmark.ModeMathBench:    "math reasoning (GSM8K): exact numeric match, accuracy under quantization",
 		benchmark.ModeCodeGenBench: "code generation (HumanEval): sandboxed Pass@1; needs python3 on PATH",
 		benchmark.ModeInstBench:    "instruction following: structured-format, refusal of disallowed prompts, and answer consistency",
+		benchmark.ModeMMLUBench:    "factual knowledge (MMLU): multiple-choice exact-match across STEM/humanities/social/other",
 	}
 	rows := make([]string, 0, len(benchModes))
 	for i, m := range benchModes {
