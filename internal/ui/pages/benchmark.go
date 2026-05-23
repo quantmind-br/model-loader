@@ -3,6 +3,8 @@ package pages
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -324,13 +326,135 @@ func (p BenchmarkPage) viewRunDetail() string {
 			truncate(pr.ProblemName, 24), result, pr.Score, pr.TokensPerSecond, pr.TTFTms, truncate(detail, 40)))
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		title,
-		strings.Join(meta, "\n"),
-		summary,
-		"",
-		strings.Join(rows, "\n"),
-	)
+	extra := modeDetailLines(r)
+	sections := []string{title, strings.Join(meta, "\n"), summary}
+	if len(extra) > 0 {
+		sections = append(sections, strings.Join(extra, "\n"))
+	}
+	sections = append(sections, "", strings.Join(rows, "\n"))
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+// --- mode-specific detail helpers ------------------------------------------
+
+var (
+	mathDifficultyRe = regexp.MustCompile(`difficulty (\d+)\)`)
+)
+
+// modeDetailLines returns mode-specific metric/breakdown lines shown in the
+// run detail view, below the generic summary.
+func modeDetailLines(r benchmark.Run) []string {
+	a := r.Aggregate
+	var lines []string
+	if a.AvgPromptProcessingTPS > 0 || a.AvgDecodeTPS > 0 {
+		lines = append(lines, fmt.Sprintf("prefill %.1f tok/s   decode %.1f tok/s", a.AvgPromptProcessingTPS, a.AvgDecodeTPS))
+	}
+	switch r.Mode {
+	case benchmark.ModeMathBench:
+		lines = append(lines, fmt.Sprintf("math accuracy %.0f%%", a.MathAccuracy*100))
+		if b := mathDifficultyBreakdown(r.Problems); b != "" {
+			lines = append(lines, "  "+b)
+		}
+	case benchmark.ModeCodeGenBench:
+		executed, skipped := 0, 0
+		for _, pr := range r.Problems {
+			if pr.Err != "" {
+				skipped++
+			} else {
+				executed++
+			}
+		}
+		if executed == 0 {
+			lines = append(lines, "code generation skipped (python3 not available)")
+		} else {
+			lines = append(lines, fmt.Sprintf("code pass rate %.0f%% (%d executed, %d skipped)", a.CodePassRate*100, executed, skipped))
+		}
+	case benchmark.ModeInstBench:
+		lines = append(lines, fmt.Sprintf("instruction — format %.0f%%   refusal %.0f%%   consistency %.2f",
+			a.InstFormatRate*100, a.InstRefusalRate*100, a.InstConsistency))
+	case benchmark.ModeMMLUBench:
+		lines = append(lines, fmt.Sprintf("MMLU accuracy %.0f%%", a.MMLUAccuracy*100))
+		if b := mmluCategoryBreakdown(r.Problems); b != "" {
+			lines = append(lines, "  "+b)
+		}
+	}
+	return lines
+}
+
+// mathDifficultyBreakdown tallies solved/total per difficulty band parsed from
+// the math Detail format "… (difficulty N)".
+func mathDifficultyBreakdown(problems []benchmark.ProblemResult) string {
+	type tally struct{ solved, total int }
+	bands := map[string]*tally{}
+	var order []string
+	for _, pr := range problems {
+		m := mathDifficultyRe.FindStringSubmatch(pr.Detail)
+		if m == nil {
+			continue
+		}
+		d := m[1]
+		t, ok := bands[d]
+		if !ok {
+			t = &tally{}
+			bands[d] = t
+			order = append(order, d)
+		}
+		t.total++
+		if pr.Resolved {
+			t.solved++
+		}
+	}
+	sort.Strings(order)
+	parts := make([]string, 0, len(order))
+	for _, d := range order {
+		t := bands[d]
+		parts = append(parts, fmt.Sprintf("difficulty %s: %d/%d", d, t.solved, t.total))
+	}
+	return strings.Join(parts, "   ")
+}
+
+// mmluCategoryBreakdown tallies solved/total per category parsed from the MMLU
+// Detail format "category=<C> expected …".
+func mmluCategoryBreakdown(problems []benchmark.ProblemResult) string {
+	type tally struct{ solved, total int }
+	cats := map[string]*tally{}
+	var order []string
+	for _, pr := range problems {
+		cat := parseMMLUCategory(pr.Detail)
+		if cat == "" {
+			continue
+		}
+		t, ok := cats[cat]
+		if !ok {
+			t = &tally{}
+			cats[cat] = t
+			order = append(order, cat)
+		}
+		t.total++
+		if pr.Resolved {
+			t.solved++
+		}
+	}
+	sort.Strings(order)
+	parts := make([]string, 0, len(order))
+	for _, c := range order {
+		t := cats[c]
+		parts = append(parts, fmt.Sprintf("%s: %d/%d", c, t.solved, t.total))
+	}
+	return strings.Join(parts, "   ")
+}
+
+// parseMMLUCategory extracts the category from "category=<C> expected …".
+func parseMMLUCategory(detail string) string {
+	const pfx = "category="
+	if !strings.HasPrefix(detail, pfx) {
+		return ""
+	}
+	rest := detail[len(pfx):]
+	if i := strings.Index(rest, " expected"); i >= 0 {
+		return rest[:i]
+	}
+	return ""
 }
 
 // --- shared helpers --------------------------------------------------------
