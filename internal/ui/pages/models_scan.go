@@ -2,7 +2,9 @@ package pages
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"sort"
 	"strings"
 
@@ -89,7 +91,11 @@ func (p ModelsPage) handleScanEvent(evt domain.ScanEvent) (tea.Model, tea.Cmd) {
 		st := p.statusMap[evt.Root]
 		st.state = "error"
 		if evt.Error != nil {
-			st.err = evt.Error.Error()
+			if errors.Is(evt.Error, fs.ErrNotExist) {
+				st.err = "path not found"
+			} else {
+				st.err = evt.Error.Error()
+			}
 		}
 		p.statusMap[evt.Root] = st
 	case domain.ScanEventDone:

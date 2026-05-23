@@ -116,7 +116,6 @@ func TestManager_CancelQueuedRecord(t *testing.T) {
 	// before a spawn happens → record flipped to StatusCancelled and
 	// no worker is ever started.
 	release := make(chan struct{})
-	defer close(release)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-release
 		_, _ = w.Write([]byte("ok"))
@@ -130,6 +129,9 @@ func TestManager_CancelQueuedRecord(t *testing.T) {
 		WithPollInterval(20 * time.Millisecond)
 	mgr.StartPolling()
 	defer mgr.Close()
+	// Declared last so it runs FIRST (LIFO): unblock any in-flight handler before
+	// srv.Close()/mgr.Close() wait on connections, avoiding a teardown deadlock.
+	defer close(release)
 
 	first, _ := mgr.Start(Spec{URL: srv.URL, DestFile: filepath.Join(dir, "first")})
 	queued, _ := mgr.Start(Spec{URL: srv.URL, DestFile: filepath.Join(dir, "queued")})

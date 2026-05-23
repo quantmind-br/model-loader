@@ -166,8 +166,8 @@ func ensureDefaultCatalog(catalogStore backendcatalog.Store, schemaStore backend
 	}
 	if len(catalog.Backends) > 0 {
 		resolver := backendcatalog.NewResolver(catalogStore, schemaStore, logger)
-		if rb, err := resolver.Resolve(domain.Profile{}); err == nil {
-			return rb.Schema.ToFlagSchema()
+		if schema, _, err := resolver.ResolveSchema(domain.Profile{}); err == nil {
+			return schema.ToFlagSchema()
 		}
 		logger.Warn("default_catalog_schema_missing",
 			"hint", "fix catalog.json or remove it to recreate defaults")
@@ -189,8 +189,8 @@ func ensureDefaultCatalog(catalogStore backendcatalog.Store, schemaStore backend
 	ref := backendcatalog.SchemaStoreRef(backend.SchemaRef)
 	_ = schemaStore.Save(ref, schema)
 	resolver := backendcatalog.NewResolver(catalogStore, schemaStore, logger)
-	if rb, err := resolver.Resolve(domain.Profile{}); err == nil {
-		return rb.Schema.ToFlagSchema()
+	if schema, _, err := resolver.ResolveSchema(domain.Profile{}); err == nil {
+		return schema.ToFlagSchema()
 	}
 	return domain.BackendValidationSchema{}.ToFlagSchema()
 }

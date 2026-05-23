@@ -142,6 +142,36 @@ func TestResolver_Errors(t *testing.T) {
 	}
 }
 
+func TestResolver_ResolveSchemaWithoutExecutable(t *testing.T) {
+	// ResolveSchema must succeed even when the backend binary is absent, so
+	// profiles can be authored/validated before the runtime is installed.
+	dir := t.TempDir()
+	catalogStore := NewFSStore(dir)
+	schemaStore := NewFSSchemaStore(dir)
+	catalog := DefaultCatalog(filepath.Join(dir, "missing"))
+	if err := catalogStore.Save(catalog); err != nil {
+		t.Fatalf("Save catalog: %v", err)
+	}
+	if err := schemaStore.Save("llama-cpp-default.json", sampleSchema()); err != nil {
+		t.Fatalf("Save schema: %v", err)
+	}
+
+	r := NewResolver(catalogStore, schemaStore, log.Nop())
+	if _, err := r.Resolve(domain.Profile{}); !errors.Is(err, llamabin.ErrBinaryNotFound) {
+		t.Fatalf("Resolve should still require the executable; err = %v", err)
+	}
+	schema, backend, err := r.ResolveSchema(domain.Profile{})
+	if err != nil {
+		t.Fatalf("ResolveSchema: %v", err)
+	}
+	if backend.ID != defaultBackendID {
+		t.Errorf("Backend.ID = %q, want %q", backend.ID, defaultBackendID)
+	}
+	if schema.BackendID != defaultBackendID {
+		t.Errorf("Schema.BackendID = %q, want %q", schema.BackendID, defaultBackendID)
+	}
+}
+
 func TestResolver_SGLangFallsBackToPython3(t *testing.T) {
 	dir := t.TempDir()
 	catalogStore := NewFSStore(dir)

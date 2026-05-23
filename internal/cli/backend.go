@@ -27,6 +27,10 @@ type backendManager interface {
 	ListBackends() ([]domain.Backend, error)
 	DefaultBackendID() (string, error)
 	RefreshSchema(backendID string) error
+	AddBackend(ctx context.Context, name, executable string, kind domain.BackendKind) (domain.Backend, error)
+	DeleteBackend(id string) error
+	SetDefaultBackend(id string) error
+	Generators() map[domain.BackendKind]backendschema.Generator
 }
 
 // backendProber is the narrow slice of *backendcatalog.Prober the CLI needs.
@@ -48,6 +52,11 @@ func buildSchemaManager(cfg config.AppConfig) *backendschema.Manager {
 // buildSchemaStore returns the filesystem schema store for the configured dir.
 func buildSchemaStore(cfg config.AppConfig) backendcatalog.SchemaStore {
 	return backendcatalog.NewFSSchemaStore(cfg.Paths.BackendsDir)
+}
+
+// buildCatalogStore returns the filesystem catalog store for the configured dir.
+func buildCatalogStore(cfg config.AppConfig) backendcatalog.Store {
+	return backendcatalog.NewFSStore(cfg.Paths.BackendsDir)
 }
 
 // buildProber returns a Prober over the configured catalog with a 5s timeout.
