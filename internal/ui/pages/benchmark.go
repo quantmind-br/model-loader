@@ -40,6 +40,8 @@ var benchModes = []benchmark.Mode{
 	benchmark.ModeJudge,
 	benchmark.ModeMathBench,
 	benchmark.ModeCodeGenBench,
+	benchmark.ModeRagasBench,
+	benchmark.ModeSummaryBench,
 	// Speed
 	benchmark.ModeLlamaBench,
 	// Robustness
@@ -247,6 +249,8 @@ func (p BenchmarkPage) viewModePick() string {
 		benchmark.ModeCodeGenBench: "code generation (HumanEval): sandboxed Pass@1; needs python3 on PATH",
 		benchmark.ModeInstBench:    "instruction following: structured-format, refusal of disallowed prompts, and answer consistency",
 		benchmark.ModeMMLUBench:    "factual knowledge (MMLU): multiple-choice exact-match across STEM/humanities/social/other",
+		benchmark.ModeRagasBench:   "RAG quality (synthetic): grader scores faithfulness, answer relevancy, and context precision",
+		benchmark.ModeSummaryBench: "multi-doc summarization: fact coverage + grader-scored coherence",
 	}
 	rows := make([]string, 0, len(benchModes)+4)
 	var lastCat benchmark.Category
@@ -379,6 +383,11 @@ func modeDetailLines(r benchmark.Run) []string {
 		if b := mmluCategoryBreakdown(r.Problems); b != "" {
 			lines = append(lines, "  "+b)
 		}
+	case benchmark.ModeRagasBench:
+		lines = append(lines, fmt.Sprintf("RAG — faithfulness %.0f%%   relevancy %.0f%%   precision %.0f%%",
+			a.RagasFaithfulness*100, a.RagasRelevancy*100, a.RagasPrecision*100))
+	case benchmark.ModeSummaryBench:
+		lines = append(lines, fmt.Sprintf("summarization coherence %.0f%%", a.SummaryCoherence*100))
 	}
 	return lines
 }

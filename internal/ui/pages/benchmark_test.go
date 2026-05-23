@@ -51,6 +51,29 @@ func TestBenchModesGroupedByCategory(t *testing.T) {
 	}
 }
 
+func TestBenchModes_IncludesPhase3(t *testing.T) {
+	want := map[benchmark.Mode]bool{benchmark.ModeRagasBench: false, benchmark.ModeSummaryBench: false}
+	for _, m := range benchModes {
+		if _, ok := want[m]; ok {
+			want[m] = true
+		}
+	}
+	for m, found := range want {
+		if !found {
+			t.Errorf("benchModes missing %q", m)
+		}
+	}
+}
+
+func TestBenchModes_Phase3AreQuality(t *testing.T) {
+	for _, m := range []benchmark.Mode{benchmark.ModeRagasBench, benchmark.ModeSummaryBench} {
+		c, ok := benchmark.CategoryOf(m)
+		if !ok || c != benchmark.CatQuality {
+			t.Errorf("CategoryOf(%q) = %v,%v; want Quality,true", m, c, ok)
+		}
+	}
+}
+
 func TestViewModePickShowsCategoryHeaders(t *testing.T) {
 	p := BenchmarkPage{view: bvModePick, runningName: "demo"}
 	out := p.viewModePick()

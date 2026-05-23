@@ -73,3 +73,28 @@ func TestRunDetailCodeGenRate(t *testing.T) {
 		t.Fatalf("missing codegen pass-rate line:\n%s", out)
 	}
 }
+
+func TestModeDetailLines_Ragas(t *testing.T) {
+	r := benchmark.Run{
+		Mode: benchmark.ModeRagasBench,
+		Aggregate: benchmark.Aggregate{
+			RagasFaithfulness: 0.82, RagasRelevancy: 0.9, RagasPrecision: 0.75,
+		},
+	}
+	lines := modeDetailLines(r)
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, "faithfulness") || !strings.Contains(joined, "relevancy") || !strings.Contains(joined, "precision") {
+		t.Errorf("ragas detail missing fields:\n%s", joined)
+	}
+}
+
+func TestModeDetailLines_Summary(t *testing.T) {
+	r := benchmark.Run{
+		Mode:      benchmark.ModeSummaryBench,
+		Aggregate: benchmark.Aggregate{SummaryCoherence: 0.71},
+	}
+	lines := modeDetailLines(r)
+	if !strings.Contains(strings.Join(lines, "\n"), "coherence") {
+		t.Errorf("summary detail missing coherence: %v", lines)
+	}
+}
