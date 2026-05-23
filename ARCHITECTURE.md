@@ -1,9 +1,9 @@
 # Architecture
 
 **Project:** model-loader  
-**Generated:** 2026-05-21 from GitNexus knowledge graph  
-**Stats:** 268 files · 7158 symbols · 25373 relationships · 300 execution flows  
-**Indexed commit:** f32c804
+**Generated:** 2026-05-23 from GitNexus knowledge graph  
+**Stats:** 309 files · 7,414 symbols · 30,635 relationships · 300 execution flows  
+**Indexed commit:** defda2f
 
 ## Overview
 
@@ -17,49 +17,64 @@ GitNexus clusters the codebase into 27 functional modules. The most significant 
 
 | Module | Symbols | Cohesion | Responsibility |
 |--------|---------|----------|----------------|
-| **Pages** | 432 | 72% | 5 TUI tabs (Profiles, Models, Server, Benchmark, Downloads) + page logic |
-| **Components** | 257 | 80% | Reusable UI widgets: Help, Modal, Picker, Sparkline, Statusbar |
-| **Profile_editor** | 144 | 77% | `huh`-based profile editing with essentials registry + draft state machine |
-| **Processmgr** | 107 | 79% | `llama-server` process lifecycle + instance recovery |
+| **Pages** | 456 | 73% | 5 TUI tabs (Profiles, Models, Backends, Server, Benchmark) + page logic |
+| **Components** | 251 | 82% | Reusable UI widgets: Help, Modal, Picker, Sparkline, Statusbar |
+| **Cli** | 196 | 71% | Subcommand dispatch, argument parsing, TUI/CLI dual entry |
+| **Benchmark** | 179 | 81% | SWE-bench Lite + long-context needle probe engine |
+| **Processmgr** | 119 | 81% | `llama-server` process lifecycle + instance recovery |
+| **Backendschema** | 117 | 84% | Schema generation orchestrator across all backend kinds |
 | **Profilestore** | 81 | 82% | FS-based profile CRUD |
-| **Ui** | 72 | 84% | Root model, tab orchestration, global input routing |
-| **Backendschema** | 63 | 81% | Schema generation orchestrator across all backend kinds |
-| **Downloadmgr** | 61 | 83% | HuggingFace file downloader with progress events + state |
-| **Benchmark** | 51 | 86% | SWE-bench Lite + long-context needle probe engine |
-| **Monitor** | 46 | 88% | GPU metrics via `nvidia-smi` |
-| **Httpproxy** | 42 | 88% | OpenAI-shaped reverse proxy |
-| **Modelscanner** | 34 | 88% | GGUF model metadata extraction |
+| **Ui** | 69 | 83% | Root model, tab orchestration, global input routing |
+| **Downloadmgr** | 62 | 84% | HuggingFace file downloader with progress events + state |
+| **Configweb** | 60 | 78% | On-demand HTTP server for web-based profile editing |
+| **Monitor** | 46 | 90% | GPU metrics via `nvidia-smi` |
+| **Httpproxy** | 44 | 89% | OpenAI-shaped reverse proxy |
+| **Validator** | 39 | 83% | Flag validation rules + cross-field rule engine |
+| **Modelscanner** | 35 | 89% | GGUF model metadata extraction |
 | **Llamahelp** | 31 | 89% | `llama-server --help` parser + embedded schema (v7376) |
-| **Validator** | 24 | 80% | Flag validation rules |
+| **Domain** | 24 | 70% | Shared types: Profile, Instance, Model, BackendValidationSchema |
 | **Hfhub** | 21 | 74% | HuggingFace Hub API client (search, file listing) |
-| **Backendcatalog** | 20 | 67% | Multi-backend catalog + binary resolver |
-| **Llamabin** | 19 | 91% | Binary path resolution (PATH + Python fallback) |
+| **Backendcatalog** | 16 | 76% | Multi-backend catalog + binary resolver |
 | **Proxysupervisor** | 14 | 98% | HTTP proxy lifecycle state machine |
-| **Benchmarkstore** | 14 | 82% | Benchmark run persistence (1 JSON per run) |
+| **Llamabin** | 12 | 76% | Binary path resolution (PATH + Python fallback) |
 
-Plus smaller modules: Config, Domain, Log, Migration, Metricsstore, Playground, SGLang/vLLM help embeds, and an internal `fsx` atomic-write helper.
+Plus smaller modules: Config, Log, Migration, Metricsstore, Playground, SGLang/vLLM/DFlash/buun help embeds, and internal `fsx` atomic-write helper.
 
 ## Key Execution Flows
 
 The graph holds 300 flows. The top 5 by step count and cross-community impact:
 
-### 1. GGUF Model Scanning — `Scan → GgufHeader` (7 steps)
+### 1. Profile Picker Scan — `Update → PickerScanClosedMsg` (7 steps)
 
-Cross-community flow spanning **Modelscanner** communities. Reads GGUF metadata from disk into the model catalog.
+Cross-community flow spanning **Pages** and **Components**. Triggered when a profile scan (e.g., model directory scan) completes. The picker component emits a `PickerScanClosedMsg` after the async scan goroutine finishes.
 
 ```
-Scan (modelscanner/scanner.go)
-  → scanRoot
-    → buildModelFile
-      → readMetaFromFile
-        → readGGUFMeta (gguf.go)
-          → readGGUFHeader
-            → ggufHeader
+Update (profiles_update.go)
+  → handlePickerScan
+    → updatePicker (profiles_picker.go)
+      → Update (picker.go)
+        → handleScanStarted
+          → pickerWaitForEvent
+            → PickerScanClosedMsg
 ```
 
-### 2. Backend Binary Probing — `Probe → SplitCommandLine` (7 steps)
+### 2. Download Manager Initialization — `Init → StateFilename` (7 steps)
 
-Intra-community flow inside **Backendcatalog** + **Llamabin**. Resolves the correct backend executable at runtime.
+Intra-community flow inside **Downloadmgr**. Reconciles the download state file on CLI init.
+
+```
+init (cli/download.go)
+  → RunWorker (worker.go)
+    → runDownload
+      → streamWithProgress
+        → SaveRecord (state.go)
+          → StatePath
+            → stateFilename
+```
+
+### 3. Backend Binary Probing — `Probe → SplitCommandLine` (7 steps)
+
+Cross-community flow connecting **Backendcatalog** and **Llamabin**. Resolves the correct backend executable at runtime with PATH lookup + Python fallback.
 
 ```
 Probe (backendcatalog/probe.go)
@@ -71,41 +86,30 @@ Probe (backendcatalog/probe.go)
             → splitCommandLine
 ```
 
-### 3. Backend Binary Resolution — `Resolve → CheckExecutable` (6 steps)
+### 4. Benchmark Streaming — `Execute → StreamChunk` (6 steps)
 
-Intra-community flow for backend catalog binary resolution. Supports PATH lookup and Python-module fallback.
-
-```
-Resolve (backendcatalog/resolver.go)
-  → resolveExecutable
-    → ResolveCommandWithPythonFallback (llamabin/resolver.go)
-      → Resolve
-        → resolveInPATH
-          → checkExecutable
-```
-
-### 4. TUI Startup & Download Recovery — `RunTUI → DownloadRecord` (5 steps)
-
-Cross-community flow connecting **CLI entry** to **Downloadmgr**. Reconciles persisted download state when the TUI boots.
+Cross-community flow connecting **Benchmark** and the OpenAI client. Sends chat completion requests to a running backend instance and parses streaming SSE chunks.
 
 ```
-runTUI (cmd/model-loader/main.go)
-  → Reconcile (downloadmgr/manager.go)
-    → ListRecords (downloadmgr/state.go)
-      → LoadRecord
-        → DownloadRecord
+Execute (benchmark/instructionbench.go)
+  → runInstructionBench
+    → runInstConsistency
+      → Complete (client.go)
+        → parseChunk
+          → streamChunk
 ```
 
-### 5. Server Launch Bootstrap — `RunServe → ApplyDefaults` (5 steps)
+### 5. Profile Import — `HandleKey → ProfileExists` (6 steps)
 
-Cross-community flow initializing the CLI `serve` subcommand.
+Cross-community flow connecting **Pages** and **Profilestore**. Validates IDs, checks for collisions, and writes imported profiles to disk.
 
 ```
-runServe (cmd/model-loader/main.go)
-  → bootstrap (cmd/model-loader/bootstrap.go)
-    → Load (internal/config/config.go)
-      → LoadFrom
-        → applyDefaults
+handleKey (profiles_update.go)
+  → startImportWithPath
+    → importBundleCmd (profiles_importexport.go)
+      → ImportBundle (profilestore/import.go)
+        → nextImportedID
+          → profileExists
 ```
 
 ### Bonus: Schema Generation — `Generate → FlagSpec` (5 steps)
@@ -129,9 +133,12 @@ graph TD
     subgraph UI["UI Layer (internal/ui)"]
         Root["Ui / Root model<br/>tab routing + input gate"]
         Pages["Pages<br/>5 tabs"]
-        Editor["Profile_editor<br/>huh forms + draft state"]
         Components["Components<br/>Modal · Picker · Sparkline · Statusbar"]
         Theme["Theme"]
+    end
+
+    subgraph Web["Web Editor (internal/service/configweb)"]
+        ConfigWeb["configweb<br/>on-demand HTTP server<br/>schema-driven form builder"]
     end
 
     subgraph Services["Service Layer (internal/service)"]
@@ -157,7 +164,6 @@ graph TD
     Main --> Catalog
 
     Root --> Pages
-    Pages --> Editor
     Pages --> Components
     Components --> Theme
 
@@ -168,15 +174,18 @@ graph TD
     Pages --> Monitor
     Pages --> Proxy
     Pages --> BenchmarkSvc
+    Pages --> ConfigWeb
 
-    Editor --> Validator
-    Editor --> Catalog
+    ConfigWeb --> ProfStore
+    ConfigWeb --> Catalog
+    ConfigWeb --> Validator
+
     DownloadMgr --> HfHub
     ProcMgr --> Catalog
     Catalog --> LlamaBin
     Catalog --> LlamaHelp
     Proxy --> ProcMgr
-    BenchmarkSvc --> ProcMgr
+    BenchmarkSvc --> Proxy
 
     ProfStore --> Domain
     ProcMgr --> Domain
@@ -188,9 +197,10 @@ graph TD
 ## Notable Design Decisions
 
 - **Process survival:** background `llama-server` processes are intentionally orphaned on TUI exit; `processmgr.Reconcile` restores them from `~/.local/state/model-loader/instances.json` at boot.
-- **Input routing:** every global shortcut consuming a printable rune must be gated behind `activePageCapturesInput()`; pages with active `huh` forms / pickers implement `InputCapture`. See `CLAUDE.md` → TUI INPUT ROUTING RULES.
+- **Input routing:** every global shortcut consuming a printable rune must be gated behind `activePageCapturesInput()`; pages with active forms / pickers / modals implement `InputCapture`. See `CLAUDE.md` → TUI INPUT ROUTING RULES.
+- **Web profile editor:** Profile create/edit no longer uses an in-TUI `huh` form. The Profiles tab launches an on-demand HTTP server (`configweb`) bound to `127.0.0.1:0`, opens the browser, and shows an "editing in browser..." modal. On save/cancel the server shuts down and the TUI reloads the list.
 - **Embedded schema:** the `llama-server --help` schema is pinned to build `v7376 (380b4c9)`; parsed at runtime if the binary is present, falling back to the embedded copy.
 - **Schema-driven profiles:** Profiles are schema-aware. A `SchemaBuilder` constructs structured `FlagSchema` per backend kind; the profile editor maps drafts via `ApplyToWithSchema`/`ToProfileWithSchema`, and the validator runs `Validate(profile, FlagSchema, BackendKind)` so flag checks adapt to the selected backend.
-- **Essentials registry is curated UX:** `essentialFields` in `profile_editor/essentials.go` is a hand-picked list of per-backend flags — not a generic form abstraction.
+- **Essentials seed is curated UX:** `essentialSeed` in `backendschema/presentation.go` is a hand-picked list of per-backend flags — not a generic form abstraction. Do not extend without explicit user request.
 - **Profile schema is canonical:** `docs/profile-schema.json` is the authoritative JSON Schema for the persisted profile file format. Any change to `domain.Profile` must mirror it there.
 - **Config / state paths:** config at `~/.config/model-loader/config.toml`, profiles at `~/.config/model-loader/profiles/`, backends at `~/.config/model-loader/backends/`, state at `~/.local/state/model-loader/`.
