@@ -17,6 +17,10 @@ const (
 	// fixed-size prompts (pp tokens in / tg tokens out) measuring TTFT and
 	// tokens/second. Not judged; the target metric is generation speed.
 	ModeLlamaBench Mode = "llama-bench"
+	// ModeMathBench: math-reasoning probe — curated GSM8K problems scored by
+	// exact numeric match (objective, not judged). The most direct signal of
+	// reasoning degradation from quantization.
+	ModeMathBench Mode = "math-bench"
 )
 
 // Title returns a short human label for the mode.
@@ -28,6 +32,8 @@ func (m Mode) Title() string {
 		return "Long-context needle"
 	case ModeLlamaBench:
 		return "Throughput (llama-bench)"
+	case ModeMathBench:
+		return "Math reasoning (GSM8K)"
 	default:
 		return string(m)
 	}
@@ -70,6 +76,7 @@ type Aggregate struct {
 	AvgTokensPerSecond     float64 `json:"avgTokensPerSecond"`
 	AvgPromptProcessingTPS float64 `json:"avgPromptProcessingTps,omitempty"` // avg prefill tok/s
 	AvgDecodeTPS           float64 `json:"avgDecodeTps,omitempty"`           // avg decode tok/s
+	MathAccuracy           float64 `json:"mathAccuracy,omitempty"`           // 0..1, exact-match rate
 	AvgTTFTms              float64 `json:"avgTtftMs"`
 	TotalPromptTokens      int     `json:"totalPromptTokens"`
 	TotalCompletionTokens  int     `json:"totalCompletionTokens"`
