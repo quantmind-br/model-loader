@@ -1,8 +1,12 @@
 package benchmark
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCheckFormatJSON(t *testing.T) {
@@ -79,5 +83,76 @@ func TestLoadInstructionProblems(t *testing.T) {
 	}
 	if fmtN == 0 || refN == 0 || conN == 0 {
 		t.Fatalf("each kind must be present: format=%d refusal=%d consistency=%d", fmtN, refN, conN)
+	}
+}
+
+func TestInstructionHandlerRegistered(t *testing.T) {
+	h, ok := handlerFor(ModeInstBench)
+	if !ok {
+		t.Fatal("ModeInstBench handler not registered")
+	}
+	if h.Category() != CatRobustness {
+		t.Fatalf("category = %q, want %q", h.Category(), CatRobustness)
+	}
+}
+
+func TestInstructionFinalize(t *testing.T) {
+	problems := []ProblemResult{
+		{ProblemName: "format: a", Resolved: true},
+		{ProblemName: "format: b", Resolved: false},
+		{ProblemName: "refusal: c", Resolved: true},
+		{ProblemName: "consistency: d", Score: 0.8},
+		{ProblemName: "consistency: e", Score: 0.6},
+	}
+	var agg Aggregate
+	instructionHandler{}.Finalize(&agg, problems)
+	if agg.InstFormatRate != 0.5 {
+		t.Fatalf("InstFormatRate = %v, want 0.5", agg.InstFormatRate)
+	}
+	if agg.InstRefusalRate != 1 {
+		t.Fatalf("InstRefusalRate = %v, want 1", agg.InstRefusalRate)
+	}
+	if agg.InstConsistency != 0.7 {
+		t.Fatalf("InstConsistency = %v, want 0.7", agg.InstConsistency)
+	}
+}
+
+func TestRunInstructionBenchFormat(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		// A reply containing valid JSON with the required keys.
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"{\\\"name\\\":\\\"Ada\\\",\\\"age\\\":36}\"}}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer srv.Close()
+
+	r := &Runner{cfg: Config{MaxTokens: 64, Timeout: 5 * time.Second}}
+	p := InstructionProblem{ID: "fmt-json-01", Kind: "format", Format: "json", Prompt: "make json", RequiredKeys: []string{"name", "age"}}
+	res, _ := r.runInstructionBench(context.Background(), srv.URL, "m", similarityGrader{}, p)
+	if !res.Resolved {
+		t.Fatalf("expected format pass, got detail %q", res.Detail)
+	}
+	if !strings.HasPrefix(res.ProblemName, "format:") {
+		t.Fatalf("ProblemName = %q, want format: prefix", res.ProblemName)
+	}
+}
+
+func TestRunInstructionBenchConsistency(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"the capital of france is paris\"}}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer srv.Close()
+
+	r := &Runner{cfg: Config{MaxTokens: 64, Timeout: 5 * time.Second}}
+	p := InstructionProblem{ID: "con-01", Kind: "consistency", Prompt: "capital of france?"}
+	// Empty-base similarityGrader → lexical fallback; identical replies → score ~1.
+	res, _ := r.runInstructionBench(context.Background(), srv.URL, "m", similarityGrader{}, p)
+	if res.Score < 0.999 {
+		t.Fatalf("identical replies should score ~1, got %v", res.Score)
+	}
+	if !res.Resolved {
+		t.Fatal("score above threshold should mark Resolved")
 	}
 }
