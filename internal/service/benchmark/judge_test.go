@@ -61,6 +61,17 @@ func TestParseJudgeVerdict_ToleratesProse(t *testing.T) {
 	}
 }
 
+func TestJudgeSystem_IncludesMaintainability(t *testing.T) {
+	if !strings.Contains(judgeSystem, "maintainability") {
+		t.Error("judge rubric should include the maintainability criterion")
+	}
+	for _, w := range []string{"0.30", "0.45", "0.15", "0.10"} {
+		if !strings.Contains(judgeSystem, w) {
+			t.Errorf("judge rubric missing weight %s", w)
+		}
+	}
+}
+
 func TestMedian(t *testing.T) {
 	cases := []struct {
 		in   []float64

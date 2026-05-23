@@ -45,11 +45,12 @@ const judgeSystem = `You are a strict code-review judge. You are given a bug rep
 
 Score these weighted criteria, each 0..1:
 - localization (0.30): does it target the correct file(s) and function(s) as the reference?
-- correctness (0.50): would the change actually fix the reported bug, like the reference does?
-- completeness (0.20): does it cover the cases the reference covers, without breaking others?
+- correctness (0.45): would the change actually fix the reported bug, like the reference does?
+- completeness (0.15): does it cover the cases the reference covers, without breaking others?
+- maintainability (0.10): does it avoid new dependencies, dead code, or changes likely to break existing tests?
 
 Reply with ONLY a JSON object, no prose:
-{"localization":<0..1>,"correctness":<0..1>,"completeness":<0..1>,"score":<weighted 0..1>,"resolved":<bool>,"rationale":"<=160 chars"}
+{"localization":<0..1>,"correctness":<0..1>,"completeness":<0..1>,"maintainability":<0..1>,"score":<weighted 0..1>,"resolved":<bool>,"rationale":"<=160 chars"}
 resolved must be true only when the candidate is functionally equivalent to the reference fix.`
 
 func (j judgeScorer) Score(ctx context.Context, p Problem, response string) (ProblemScore, error) {
