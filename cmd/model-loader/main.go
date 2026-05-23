@@ -119,6 +119,7 @@ func runTUI(cliLevel string) int {
 		LlamaBenchPresets: svc.Cfg.Benchmark.LlamaBench.Presets,
 		LlamaBenchReps:    svc.Cfg.Benchmark.LlamaBench.Repetitions,
 		LlamaBenchWarmup:  svc.Cfg.Benchmark.LlamaBench.Warmup,
+		EmbeddingsBaseURL: svc.Cfg.Benchmark.Embeddings.BaseURL,
 	})
 	if err != nil {
 		svc.Logger.Error("benchmark_dataset_load_failed", "err", err)

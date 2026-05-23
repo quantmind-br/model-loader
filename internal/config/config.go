@@ -29,6 +29,7 @@ type BenchmarkConfig struct {
 	SaveTranscripts   bool             `mapstructure:"save_transcripts"`    // capture raw model/judge I/O per run for debugging
 	Judge             JudgeConfig      `mapstructure:"judge"`
 	LlamaBench        LlamaBenchConfig `mapstructure:"llamabench"`
+	Embeddings        EmbeddingsConfig `mapstructure:"embeddings"`
 }
 
 // LlamaBenchConfig tunes the throughput (llama-bench) scoring mode. Empty values
@@ -39,6 +40,12 @@ type LlamaBenchConfig struct {
 	Presets     []string `mapstructure:"presets"`
 	Repetitions int      `mapstructure:"repetitions"` // measurements per preset; 0 → 3
 	Warmup      int      `mapstructure:"warmup"`      // discarded warmup reps before measurement; <0 → 1; 0 disables
+}
+
+// EmbeddingsConfig optionally overrides where similarity graders fetch
+// embeddings; empty reuses the model-under-test server.
+type EmbeddingsConfig struct {
+	BaseURL string `mapstructure:"base_url"`
 }
 
 // JudgeConfig is the OpenAI-compatible endpoint used by the LLM-as-judge
@@ -188,6 +195,7 @@ func applyDefaults(v *viper.Viper) {
 	v.SetDefault("benchmark.judge.api_key", "")
 	v.SetDefault("benchmark.judge.model", "")
 	v.SetDefault("benchmark.judge.samples", 3)
+	v.SetDefault("benchmark.embeddings.base_url", "")
 	v.SetDefault("benchmark.llamabench.presets", []string{"128/512", "512/128", "2048/256", "4096/256", "8192/128", "16384/64"})
 	v.SetDefault("benchmark.llamabench.repetitions", 3)
 	v.SetDefault("benchmark.llamabench.warmup", 1)

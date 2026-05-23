@@ -31,6 +31,10 @@ type Config struct {
 	LongContextTokens int           // target prompt size for the needle probe (0 → default)
 	SaveTranscripts   bool          // capture raw model/judge I/O for debugging
 	Judge             JudgeEndpoint
+	// EmbeddingsBaseURL optionally overrides where similarity graders fetch
+	// embeddings. Empty → reuse the model-under-test server. Reserved for the
+	// instruction-consistency mode (added in a later plan).
+	EmbeddingsBaseURL string
 
 	// LlamaBenchPresets are "pp/tg" strings (prompt tokens / generation tokens)
 	// for ModeLlamaBench. Empty → default {512/128, 4096/256}.
@@ -317,6 +321,18 @@ func (r *Runner) waitHealthy(ctx context.Context, pid, port int, attemptID strin
 		}
 		return nil
 	}
+}
+
+// graderFor returns the grader used for semantic scoring. If an external judge
+// is configured it is the gold standard; otherwise the model under test grades
+// itself (zero-config, flagged judgedBy=self). base/model identify the
+// model-under-test server for the self-judge path.
+func (r *Runner) graderFor(base, model string) grader {
+	maxTok := r.cfg.MaxTokens
+	if j := r.cfg.Judge; j.BaseURL != "" && j.Model != "" {
+		return llmGrader{base: j.BaseURL, apiKey: j.APIKey, model: j.Model, maxTok: maxTok, judgedBy: "external"}
+	}
+	return llmGrader{base: base, model: model, maxTok: maxTok, judgedBy: "self"}
 }
 
 func (r *Runner) newScorer(mode Mode) (Scorer, error) {

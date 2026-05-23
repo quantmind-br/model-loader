@@ -65,6 +65,19 @@ func TestLLMGrader_ClampsAndDefaults(t *testing.T) {
 	}
 }
 
+func TestGraderFor_PrefersExternalElseSelf(t *testing.T) {
+	rExt := &Runner{cfg: Config{Judge: JudgeEndpoint{BaseURL: "http://judge:9", Model: "j"}, MaxTokens: 100}}
+	gExt := rExt.graderFor("http://under-test:1", "ut").(llmGrader)
+	if gExt.judgedBy != "external" || gExt.base != "http://judge:9" || gExt.model != "j" {
+		t.Errorf("external grader = %+v", gExt)
+	}
+	rSelf := &Runner{cfg: Config{MaxTokens: 100}}
+	gSelf := rSelf.graderFor("http://under-test:1", "ut").(llmGrader)
+	if gSelf.judgedBy != "self" || gSelf.base != "http://under-test:1" || gSelf.model != "ut" {
+		t.Errorf("self grader = %+v", gSelf)
+	}
+}
+
 func jsonQuote(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
