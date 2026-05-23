@@ -125,7 +125,8 @@ func runTUI(cliLevel string) int {
 		svc.Logger.Error("benchmark_dataset_load_failed", "err", err)
 		benchRunner = nil
 	}
-	benchmarkPage := pages.NewBenchmarkPage(svc.Store, benchStore, benchRunner)
+	benchmarkPage := pages.NewBenchmarkPage(svc.Store, benchStore, benchRunner,
+		filepath.Join(svc.Cfg.Paths.StateDir, "benchmark", "exports"))
 
 	root := ui.NewRoot(parseTab(svc.Cfg.UI.DefaultTab)).
 		WithProfilesPage(profilesPage).

@@ -1,9 +1,12 @@
 package pages
 
 import (
+	"path/filepath"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/quantmind-br/model-loader/internal/service/benchmark"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
 
@@ -59,6 +62,10 @@ func (p BenchmarkPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case bvRunDetail, bvCompare, bvHistory:
 		if msg.String() == "esc" {
 			p.view = bvList
+			return p, nil
+		}
+		if msg.String() == "e" && p.view == bvRunDetail && p.detail != nil {
+			return p.exportRunValue(*p.detail)
 		}
 		return p, nil
 	default:
@@ -90,6 +97,8 @@ func (p BenchmarkPage) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.openHistory()
 	case "x":
 		return p.deleteSelected()
+	case "e":
+		return p.exportSelected()
 	case "r":
 		return p, p.loadRunsCmd()
 	}
@@ -197,4 +206,24 @@ func (p BenchmarkPage) deleteSelected() (tea.Model, tea.Cmd) {
 	var fc tea.Cmd
 	p.flash, fc = flashSuccess(p.flash, "deleted run")
 	return p, tea.Batch(fc, p.loadRunsCmd())
+}
+
+// exportSelected exports the run highlighted in the list.
+func (p BenchmarkPage) exportSelected() (tea.Model, tea.Cmd) {
+	if p.runCursor >= len(p.runs) {
+		return p, nil
+	}
+	return p.exportRunValue(p.runs[p.runCursor])
+}
+
+// exportRunValue writes a run to the exports dir and flashes the result.
+func (p BenchmarkPage) exportRunValue(r benchmark.Run) (tea.Model, tea.Cmd) {
+	jsonPath, _, err := exportRun(p.exportDir, r)
+	if err != nil {
+		p.flash, _ = flashError(p.flash, "export: "+err.Error())
+		return p, nil
+	}
+	var fc tea.Cmd
+	p.flash, fc = flashSuccess(p.flash, "exported to "+filepath.Dir(jsonPath))
+	return p, fc
 }

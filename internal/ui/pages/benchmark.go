@@ -53,9 +53,10 @@ var benchModes = []benchmark.Mode{
 // SWE-bench-style mini-set, record metrics, and compare runs across profiles
 // or over time.
 type BenchmarkPage struct {
-	store  profilestore.Store
-	bstore benchmarkstore.Store
-	runner *benchmark.Runner
+	store     profilestore.Store
+	bstore    benchmarkstore.Store
+	runner    *benchmark.Runner
+	exportDir string
 
 	view    benchView
 	width   int
@@ -89,14 +90,15 @@ type BenchmarkPage struct {
 
 // NewBenchmarkPage builds the page bound to the profile store, run store, and
 // engine. A nil runner disables launching (the dataset failed to load).
-func NewBenchmarkPage(store profilestore.Store, bstore benchmarkstore.Store, runner *benchmark.Runner) BenchmarkPage {
+func NewBenchmarkPage(store profilestore.Store, bstore benchmarkstore.Store, runner *benchmark.Runner, exportDir string) BenchmarkPage {
 	return BenchmarkPage{
-		store:   store,
-		bstore:  bstore,
-		runner:  runner,
-		view:    bvList,
-		flash:   components.NewFlash("benchmark"),
-		spinner: components.NewLoadingSpinner(),
+		store:     store,
+		bstore:    bstore,
+		runner:    runner,
+		exportDir: exportDir,
+		view:      bvList,
+		flash:     components.NewFlash("benchmark"),
+		spinner:   components.NewLoadingSpinner(),
 	}
 }
 
@@ -125,13 +127,13 @@ func (p BenchmarkPage) Hints() string {
 	case bvRunning:
 		return "running… [esc] cancel"
 	case bvRunDetail:
-		return "[esc] back"
+		return "[e] export  [esc] back"
 	case bvCompare:
 		return "[esc] back"
 	case bvHistory:
 		return "[esc] back"
 	default:
-		hints := "[b] run  [enter] details  [c] compare  [x] delete  [r] reload"
+		hints := "[b] run  [enter] details  [c] compare  [e] export  [x] delete  [r] reload"
 		if len(p.runs) > 0 {
 			hints += "  [h] history"
 		}
