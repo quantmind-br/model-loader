@@ -2,6 +2,9 @@ package benchmark
 
 import (
 	"context"
+	_ "embed"
+	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +13,29 @@ import (
 	"syscall"
 	"time"
 )
+
+//go:embed data/humaneval_curated.json
+var codeGenDataset []byte
+
+// CodeGenProblem is one curated HumanEval item.
+type CodeGenProblem struct {
+	TaskID            string `json:"task_id"`
+	Prompt            string `json:"prompt"`
+	CanonicalSolution string `json:"canonical_solution"`
+	Test              string `json:"test"`
+	EntryPoint        string `json:"entry_point"`
+}
+
+func loadCodeGenProblems() ([]CodeGenProblem, error) {
+	var ps []CodeGenProblem
+	if err := json.Unmarshal(codeGenDataset, &ps); err != nil {
+		return nil, fmt.Errorf("decode codegen dataset: %w", err)
+	}
+	if len(ps) == 0 {
+		return nil, fmt.Errorf("codegen dataset is empty")
+	}
+	return ps, nil
+}
 
 var codeFenceRe = regexp.MustCompile("(?s)```[A-Za-z0-9+]*[ \\t]*\\n(.*?)```")
 

@@ -58,3 +58,18 @@ func TestExtractCode(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadCodeGenProblems(t *testing.T) {
+	ps, err := loadCodeGenProblems()
+	if err != nil {
+		t.Fatalf("loadCodeGenProblems: %v", err)
+	}
+	if len(ps) < 40 {
+		t.Fatalf("got %d codegen problems, want >= 40", len(ps))
+	}
+	for _, p := range ps {
+		if p.TaskID == "" || p.Prompt == "" || p.Test == "" || p.EntryPoint == "" {
+			t.Fatalf("invalid problem: %+v", p.TaskID)
+		}
+	}
+}
