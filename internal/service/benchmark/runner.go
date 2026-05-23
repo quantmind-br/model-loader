@@ -122,12 +122,13 @@ type Runner struct {
 	mon             monitor.Manager
 	resolver        backendcatalog.Resolver
 	cfg             Config
-	problems        []Problem        // embedded SWE-bench Lite coding set
-	mathProblems    []MathProblem    // embedded GSM8K set for ModeMathBench
-	codeGenProblems []CodeGenProblem // embedded HumanEval set for ModeCodeGenBench
-	presets         []tpPreset       // parsed ModeLlamaBench configs
-	reps            int              // ModeLlamaBench repetitions per preset
-	warmup          int              // discarded warmup reps before measurement
+	problems        []Problem            // embedded SWE-bench Lite coding set
+	mathProblems    []MathProblem        // embedded GSM8K set for ModeMathBench
+	codeGenProblems []CodeGenProblem     // embedded HumanEval set for ModeCodeGenBench
+	instProblems    []InstructionProblem // embedded instruction-robustness set for ModeInstBench
+	presets         []tpPreset           // parsed ModeLlamaBench configs
+	reps            int                  // ModeLlamaBench repetitions per preset
+	warmup          int                  // discarded warmup reps before measurement
 }
 
 // NewRunner builds a Runner and loads the embedded dataset.
@@ -141,6 +142,10 @@ func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Mana
 		return nil, err
 	}
 	codeGenProblems, err := loadCodeGenProblems()
+	if err != nil {
+		return nil, err
+	}
+	instProblems, err := loadInstructionProblems()
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +167,7 @@ func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Mana
 	if warmup < 0 {
 		warmup = 1
 	}
-	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, mathProblems: mathProblems, codeGenProblems: codeGenProblems, presets: presets, reps: reps, warmup: warmup}, nil
+	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, mathProblems: mathProblems, codeGenProblems: codeGenProblems, instProblems: instProblems, presets: presets, reps: reps, warmup: warmup}, nil
 }
 
 // ProblemCount reports how many problems the default executable set contains.
