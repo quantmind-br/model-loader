@@ -91,7 +91,7 @@ func (p *Prober) probeOne(ctx context.Context, backend domain.Backend) ProbeEven
 	probeCtx, cancel := context.WithTimeout(ctx, p.cfg.Timeout)
 	defer cancel()
 
-	status, detail, err := runProbe(probeCtx, resolved, "--version")
+	status, detail, _ := runProbe(probeCtx, resolved, "--version")
 	if status == ProbeStatusOK {
 		return ProbeEvent{
 			BackendID: backend.ID,

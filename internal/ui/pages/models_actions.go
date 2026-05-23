@@ -233,18 +233,3 @@ func (p ModelsPage) renderActionMenuContent() string {
 	lines = append(lines, "", theme.Subtitle.Render("[↑/↓] move  [enter] select  [esc] cancel"))
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
-
-func menuWidth(termWidth int) int {
-	const (
-		floor = 40
-		ceil  = 80
-	)
-	w := termWidth - 4
-	if w > ceil {
-		w = ceil
-	}
-	if w < floor {
-		w = floor
-	}
-	return w
-}

@@ -446,13 +446,6 @@ func (m RootModel) activateAndForward(t Tab, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// forwardTo delivers the message to a specific tab without changing focus.
-func (m RootModel) forwardTo(t Tab, msg tea.Msg) (tea.Model, tea.Cmd) {
-	updated, cmd := m.pages[t].Update(msg)
-	m.pages[t] = updated
-	return m, cmd
-}
-
 // forwardToActivePage delivers the message to the currently active tab.
 func (m RootModel) forwardToActivePage(msg tea.Msg) (tea.Model, tea.Cmd) {
 	updated, cmd := m.pages[m.active].Update(msg)

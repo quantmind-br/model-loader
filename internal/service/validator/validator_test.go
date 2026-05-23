@@ -171,10 +171,6 @@ func TestValidator_ExistingLocalPathNotTreatedAsHFRepo(t *testing.T) {
 	}
 }
 
-func cacheTypes() []string {
-	return []string{"f32", "f16", "bf16", "q8_0", "q4_0"}
-}
-
 func TestValidate_RequiredFlagMissing(t *testing.T) {
 	sch := domain.FlagSchema{
 		Flags: map[string]domain.FlagSpec{

@@ -6,8 +6,8 @@ import (
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
 
-// hfSearchResultMsg delivers the outcome of a HF Hub search. epoch
-// matches ModelsPage.searchEpoch at request time; stale responses from
+// hfSearchResultMsg delivers the outcome of a HF Hub search. Epoch is
+// the debounce token captured at request time; stale responses from
 // abandoned debounce windows are discarded by epoch comparison.
 type hfSearchResultMsg struct {
 	Epoch   int
