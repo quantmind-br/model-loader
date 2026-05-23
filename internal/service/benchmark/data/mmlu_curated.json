@@ -1,0 +1,1202 @@
+[
+  {
+    "id": "mmlu-4303",
+    "question": "The first term of a given sequence is 1, and each successive term is the sum of all the previous terms of the sequence. What is the value of the first term which exceeds 5000?",
+    "choices": [
+      "10240",
+      "5001",
+      "5002",
+      "8192"
+    ],
+    "answer": "D",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-4386",
+    "question": "Morgan is on a social networking website. She has 60 female friends and 50 male friends and belongs to 5 social groups. If 30% of her female friends live in town and 40% of her male friends live in town, how many out-of-town friends does she have on the social networking site?",
+    "choices": [
+      "38",
+      "72",
+      "110",
+      "360"
+    ],
+    "answer": "B",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-2198",
+    "question": "The schedule for a music showcase includes 3 sets that are 20 minutes each and 1 set that is 40 minutes. There is a 10-minute break between each set. The total length of the music showcase is 3(20 + 10) + 40 minutes. What is the total length of the music showcase?",
+    "choices": [
+      "73 minutes",
+      "110 minutes",
+      "130 minutes",
+      "210 minutes"
+    ],
+    "answer": "C",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-862",
+    "question": "Which of the following sources makes the greatest contribution to the dry mass of organic matter that comprises an oak tree?",
+    "choices": [
+      "Organic molecules from decaying matter in the soil that are taken up by the roots",
+      "Mineral nutrients dissolved in groundwater that are taken up by the roots",
+      "Water that is taken up by the roots and carbon dioxide from the air",
+      "Endosperm located in the cotyledons of the acorn"
+    ],
+    "answer": "C",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-2013",
+    "question": "A long wire composed of a smooth round conductor runs above and parallel to the ground (assumed to be a large conducting plane). A high voltage exists between the conductor and the ground. The maximum electric stress occurs at",
+    "choices": [
+      "lower surface of the conductor.",
+      "upper surface of the conductor.",
+      "the ground surface.",
+      "midway between the conductor and ground."
+    ],
+    "answer": "A",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-4754",
+    "question": "A horse is attached to a cart that is at rest behind it. Which force, or combination of forces, explains how the horse-cart system can accelerate from rest?",
+    "choices": [
+      "The forward static friction force of the ground on the horse is greater than any friction forces acting backward on the cart, providing a forward acceleration.",
+      "The forward force of the horse on the cart is greater than the backward force of the cart on the horse, providing a forward acceleration.",
+      "The force of the horse’s muscles on the rest of the horse-cart system provides the necessary acceleration.",
+      "The upward normal force of the ground on the horse is greater than the horse’s weight, providing an upward acceleration."
+    ],
+    "answer": "A",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-4476",
+    "question": "How many positive integers are factors of 120 and also factors of 40?",
+    "choices": [
+      "1",
+      "3",
+      "4",
+      "8"
+    ],
+    "answer": "D",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-5509",
+    "question": "Players in the National Football League weigh, on average, about 248 pounds with a standard deviation of about 47 pounds. If four players are to be selected at random, the expected value of the random variable W, the total combined weight of the four players, is 992 pounds. The standard deviation of Wis approximately",
+    "choices": [
+      "47 pounds",
+      "67 pounds",
+      "94 pounds",
+      "141 pounds"
+    ],
+    "answer": "C",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-3051",
+    "question": "A sample of oxygen gas at 50 °C is heated, reaching a final temperature of 100 °C. Which statement best describes the behavior of the gas molecules?",
+    "choices": [
+      "Their velocity increases by a factor of two.",
+      "Their velocity increases by a factor of four.",
+      "Their kinetic energy increases by a factor of 2.",
+      "Their kinetic energy increases by a factor of less than 2."
+    ],
+    "answer": "D",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-6875",
+    "question": "Which of the following is/are true regarding an SVM?",
+    "choices": [
+      "For two dimensional data points, the separating hyperplane learnt by a linear SVM will be a straight line.",
+      "In theory, a Gaussian kernel SVM cannot model any complex separating hyperplane.",
+      "For every kernel function used in a SVM, one can obtain an equivalent closed form basis expansion.",
+      "Overfitting in an SVM is not a function of number of support vectors."
+    ],
+    "answer": "A",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-1770",
+    "question": "Find the speed of a wave by multiplying its frequency by its",
+    "choices": [
+      "period",
+      "wavelength",
+      "amplitude",
+      "None of these"
+    ],
+    "answer": "B",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-821",
+    "question": "A species of goose nests on both cliffs and beaches near the ocean. Soon after hatching, all chicks must make their way to the ocean. Chicks from cliff nests must tumble down the cliff to get to the ocean, and many are killed by the fall. Which of the following is most consistent with the hypothesis that cliff nesting is adaptive in this goose species?",
+    "choices": [
+      "Many more geese nest on the beaches than on the cliffs.",
+      "Cliff-side nesting confers a higher fitness than does beach nesting.",
+      "Chicks from cliff nests instinctively step off the cliffs at the appropriate time.",
+      "More chicks survive the fall from the cliffs than are killed."
+    ],
+    "answer": "B",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-6916",
+    "question": "Statement 1| In a Bayesian network, the inference results of the junction tree algorithm are the same as the inference results of variable elimination. Statement 2| If two random variable X and Y are conditionally independent given another random variable Z, then in the corresponding Bayesian network, the nodes for X and Y are d-separated given Z.",
+    "choices": [
+      "True, True",
+      "False, False",
+      "True, False",
+      "False, True"
+    ],
+    "answer": "C",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-4389",
+    "question": "An investment of $4000 grows at the rate of 320*e^(0.08t) dollars per year after t years. Its value after 10 years is approximately",
+    "choices": [
+      "$4,902",
+      "$8,902",
+      "$7,122",
+      "$12,902"
+    ],
+    "answer": "B",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-1061",
+    "question": "Let T (n) be defined by T(1) = 7 and T(n + 1) = 3n + T(n) for all integers n ≥ 1. Which of the following represents the order of growth of T(n) as a function of n?",
+    "choices": [
+      "Θ(n)",
+      "Θ(n log n)",
+      "Θ(n^2)",
+      "Θ(n^2 log n)"
+    ],
+    "answer": "C",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-2128",
+    "question": "Two whole numbers have a least common multiple of 60. Each number is less than or equal to 12. The greatest common factor of the two numbersis 2. What are the two numbers?",
+    "choices": [
+      "6 and 10",
+      "5 and 12",
+      "10 and 12",
+      "12 and 15"
+    ],
+    "answer": "C",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-2429",
+    "question": "Simon used 3 pears and 9 apples to make a fruit salad. What was the ratio of the number of pears to the number of apples in the fruit salad?",
+    "choices": [
+      "1:03",
+      "1:04",
+      "1:06",
+      "1:09"
+    ],
+    "answer": "A",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-4473",
+    "question": "Where, in the first quadrant, does the rose r = sin 3θ have a vertical tangent?",
+    "choices": [
+      "nowhere",
+      "θ = 0.39",
+      "θ=  0.47",
+      "θ = 0.52"
+    ],
+    "answer": "C",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-2419",
+    "question": "Ken and Tami are making necklaces. Ken makes 25 necklaces. Tami makes m more necklaces than Ken. Which expression represents the total number of necklaces Ken and Tami made?",
+    "choices": [
+      "25 + (25+ m)",
+      "25 + 25m",
+      "25 + m",
+      "25m"
+    ],
+    "answer": "A",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-1800",
+    "question": "The magnetic field lines about a current-carrying wire form",
+    "choices": [
+      "circles",
+      "radial lines",
+      "eddy currents",
+      "energy loops"
+    ],
+    "answer": "A",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-4350",
+    "question": "In 1960, there were 450,000 cases of measles reported in the U.S. In 1996, there were 500 cases reported. How many cases of measles would have been reported in 1987 if the number of cases reported from 1960 to 1996 decreased linearly?",
+    "choices": [
+      "337125",
+      "449500",
+      "27",
+      "112875"
+    ],
+    "answer": "D",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-4301",
+    "question": "If $(2x + 3y)^2 = 4$ and $xy = -5$, what is the value of $4x^2 + 9y^2$?",
+    "choices": [
+      "-5",
+      "13",
+      "64",
+      "25"
+    ],
+    "answer": "C",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-5494",
+    "question": "Both over-the-counter niacin and the prescription drug Lipitor are known to lower blood cholesterol levels. In one double-blind study Lipitor outperformed niacin. The 95% confidence interval estimate of the difference in mean cholesterol level lowering was (18, 41). Which of the following is a reasonable conclusion?",
+    "choices": [
+      "Niacin lowers cholesterol an average of 18 points, while Lipitor lowers cholesterol an average of 41 points.",
+      "There is a 0.95 probability that Lipitor will outperform niacin in lowering the cholesterol level of any given individual.",
+      "There is a 0.95 probability that Lipitor will outperform niacin by at least 23 points in lowering the cholesterol level of any given individual.",
+      "None of the above."
+    ],
+    "answer": "D",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-973",
+    "question": "The solid-state structures of the principal allotropes of elemental boron are made up of which of the following structural units?",
+    "choices": [
+      "B12 icosahedra",
+      "B8 cubes",
+      "B6 octahedra",
+      "B4 tetrahedra"
+    ],
+    "answer": "A",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-364",
+    "question": "You've made a scientific theory that there is a force between all objects. This forcce has both a dark and light side. When will your theory be proven correct?",
+    "choices": [
+      "When you and many other Jedi have tested the hypothesis",
+      "Jean-Luc Skywalker drops Yoda during the day and he falls to the ground proving your theory.",
+      "You can never prove your theory to be correct only \"yet to be proven wrong.\"",
+      "After you've repeated your experiment many times"
+    ],
+    "answer": "C",
+    "category": "STEM"
+  },
+  {
+    "id": "mmlu-8863",
+    "question": "For which of these two scenarios does the main character (who uses I/me/my) do something clearly morally wrong, according to ordinary moral standards in the US as of 2020? Scenario 1 | I poured water on the stage before the dancers performed. Scenario 2 | There was no restroom around so I asked the security guard where to find a public pool.",
+    "choices": [
+      "Wrong, Wrong",
+      "Wrong, Not wrong",
+      "Not wrong, Wrong",
+      "Not wrong, Not wrong"
+    ],
+    "answer": "A",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-9903",
+    "question": "According to d'Holbach, all the mental and moral attributes that people think are evidence for an immaterial soul are in fact _____.",
+    "choices": [
+      "purely intellectual",
+      "purely physical and natural",
+      "ethereal",
+      "undetermined"
+    ],
+    "answer": "B",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-10250",
+    "question": "In primates, the location of which of the following determines if it is a quadruped or biped?",
+    "choices": [
+      "the feet",
+      "the skull",
+      "the foramen magnum",
+      "the ulna"
+    ],
+    "answer": "C",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-6507",
+    "question": "What is functional (ratione materiae) immunity?",
+    "choices": [
+      "Functional immunity covers the person but not the act",
+      "Functional immunity covers the act and incidentally also the person committing the act",
+      "Functional immunity covers the State and incidentally also the act",
+      "Functional immunity covers both private and public acts as long as they are sanctioned by the State"
+    ],
+    "answer": "B",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-10119",
+    "question": "Pompeii was unusually well preserved because:",
+    "choices": [
+      "the layer of volcanic pumice created a seal over the remains.",
+      "avalanches pushed the remains into the sea and seawater preserves things.",
+      "poisonous volcanic gases killed people instantly.",
+      "the Romans embalmed the victims with salt from seawater."
+    ],
+    "answer": "A",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-6784",
+    "question": "The universe, like a watch, must have a maker.",
+    "choices": [
+      "Fallacy of Accident",
+      "Questionable Analogy",
+      "Questionable Cause",
+      "Fallacy of Composition"
+    ],
+    "answer": "B",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-8972",
+    "question": "For which of these two scenarios does the main character (who uses I/me/my) do something clearly morally wrong, according to ordinary moral standards in the US as of 2020? Scenario 1 | I rented a sleek and sexy boat for the afternoon. Scenario 2 | I put the candy-coated pills on a low shelf because my kid brother thinks they're candy.",
+    "choices": [
+      "Wrong, Wrong",
+      "Wrong, Not wrong",
+      "Not wrong, Wrong",
+      "Not wrong, Not wrong"
+    ],
+    "answer": "C",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-9894",
+    "question": "Bentham claims that nature has placed mankind under two sovereign masters:",
+    "choices": [
+      "pain and pleasure.",
+      "good and evil.",
+      "God and the devil.",
+      "duty and self-interest."
+    ],
+    "answer": "A",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-3362",
+    "question": "This question refers to the following information.\nThe history of all hitherto existing societies is the history of class struggles. … The modern bourgeois society that has sprouted from the ruins of feudal society has not done away with class antagonisms. It has but established new classes, new conditions of oppression, new forms of struggle in place of the old ones. Our epoch, the epoch of the bourgeoisie, possesses, however, this distinctive feature: it has simplified the class antagonisms. Society as a whole is more and more splitting up into two great hostile camps, into two great classes, directly facing each other: Bourgeoisie and Proletariat.\nKarl Marx and Friedrich Engels, The Communist Manifesto, 1848\nA follower of Marx and Engels's view of history would argue that an all-out war between the bourgeoisie and the proletariat classes was",
+    "choices": [
+      "a destructive development that could be avoided through the study of philosophy",
+      "a possibility which should be encouraged in order to foster progress",
+      "an inevitable result of fundamental economic change",
+      "an example of history repeating itself"
+    ],
+    "answer": "C",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-6044",
+    "question": "This question refers to the following information.\nSource 1:\n\"Moreover, Sir, in our Kingdoms there is another great inconvenience which is of little service to God, and this is that many of our people, keenly desirous as they are of the wares and things of your Kingdoms, which are brought here by your people, and in order to satisfy their voracious appetite, seize many of our people, freed and exempt men, and very often it happens that they kidnap even noblemen and our relatives, and take them to be sold to the white men who are in our kingdoms.\"\nLetter from King Afonso I of Kongo to King John III of Portugal, 1526\nSource 2:\n\"This expedition has cost us much: it would be unreasonable to send it home with empty hands. Although our [principal] wish is to serve God and the pleasure of the king of Kongo, none the less you will make him understand—as though speaking in our name—what he should do to fill the ships, whether with slaves, or copper, or ivory.\"\nInstructions from King Manuel of Portugal to his envoy in Kongo, 1512\nThe interactions described in the letters are best understood in the context of which of the following?",
+    "choices": [
+      "Portuguese exploration of the coast of West Africa",
+      "Catholic missionary efforts in Sub-Saharan Africa",
+      "State formation in Sub-Saharan Africa",
+      "Development of the slave trade in Sub-Saharan Africa"
+    ],
+    "answer": "D",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-13906",
+    "question": "Which form of Buddhism taught the only hope for salvation was in the saving grace of Amida?",
+    "choices": [
+      "Pure Land",
+      "Tendai",
+      "Shingon",
+      "Soto Zen"
+    ],
+    "answer": "A",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-11325",
+    "question": "Seller has a contract that specifies a delivery point. What kind of a contract is this?",
+    "choices": [
+      "F.A.S. Contract",
+      "Destination contract",
+      "Shipment contract",
+      "F.O.B. Contract"
+    ],
+    "answer": "D",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-11729",
+    "question": "Two brothers broke into the home of a bank's president and kidnapped the president's wife. The brothers took the wife hostage, pointed a gun at her head, and demanded that she drive them in her car to their hideout. As the wife was driving down the street, a woman pushing her baby in a stroller suddenly stopped in the middle of the intersection. In order to avoid hitting the woman and her child, the wife veered the car to the left, and intentionally struck a bystander, instantly killing him. If the wife is subsequently prosecuted for the murder of the bystander, she will most likely be found",
+    "choices": [
+      "guilty, because she intentionally veered the car, striking the bystander.",
+      "not guilty, by reason of necessity.",
+      "not guilty, by reason of duress.",
+      "not guilty, by reason of self-defense."
+    ],
+    "answer": "B",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-8948",
+    "question": "For which of these two scenarios does the main character (who uses I/me/my) do something clearly morally wrong, according to ordinary moral standards in the US as of 2020? Scenario 1 | I poisoned the weeds. Scenario 2 | I boarded the submarine because I knew I could infect the crew.",
+    "choices": [
+      "Wrong, Wrong",
+      "Wrong, Not wrong",
+      "Not wrong, Wrong",
+      "Not wrong, Not wrong"
+    ],
+    "answer": "C",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-10816",
+    "question": "A relevant fact in a plaintiff's suit is the magnitude of an explosion at an oil refinery one evening. At trial, the plaintiff was asked on direct examination if he remembered the explosion. He replied, \"I recall my son running into the home and screaming that the car windows just shattered. \" The son was available to testify at trial. The defendant's attorney makes a motion to strike the plaintiff's answer. The trial judge should rule the plaintiff's testimony",
+    "choices": [
+      "admissible, because the son is available as a witness.",
+      "admissible, whether or not the son is available as a witness.",
+      "inadmissible as hearsay not within any recognized exception.",
+      "inadmissible under the excited utterance exception, because it can be a product of reflection and deliberation."
+    ],
+    "answer": "B",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-11329",
+    "question": "A rancher owned a 2,000-acre cattle ranch in a remote section of the state. For some time the rancher's cattle had been seized upon by roaming packs of wolves. In order to protect his livestock from these attacks, the rancher erected a fence around his property. In addition, the rancher installed electrical wiring on the fence. The wiring transmitted an electric current, which would emit a shock upon contact with the fence. Although the voltage was calculated to frighten animals away from the fence, it was of such low intensity that it posed no risk of injury to a human being, even a small child. Consequently, the rancher did not post any notice of the electrical wiring device. One day, a cowboy was riding his horse along the outskirts of the rancher's property, when a gust of wind blew his hat onto the fence. The cowboy, who had undergone major heart surgery, wore a pacemaker. When the cowboy touched the top of the fence to retrieve his hat, the electric current short- circuited his pacemaker, resulting in the cowboy's death by electrocution. In a wrongful death action by the cowboy's estate against the rancher, the installation of the electrical wiring device would most likely constitute",
+    "choices": [
+      "the legal cause of the cowboy's death, but not the cause-in-fact.",
+      "the cause-in-fact of the cowboy's death, but not the legal cause.",
+      "the legal cause and the cause-in-fact of the cowboy's death.",
+      "neither the legal cause nor the cause-in-fact of the cowboy's death."
+    ],
+    "answer": "B",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-11298",
+    "question": "A defendant was arrested and charged with involuntary manslaughter for causing a vehicular homicide. A grand jury was convened, and various witnesses were subpoenaed. At the grand jury, a witness was asked the following question by the prosecuting attorney: \"Is it not true that 20 minutes after the accident you told the police that the defendant's car went through the red light?\" He answered, \"Yes. \"The defendant was also subpoenaed to appear before the grand jury. The defendant was represented by counsel at the grand jury hearing. During questioning he was shown the witness's statement from his testimony. No objection was made to the introduction of the witness's statement. At the defendant's trial, the prosecuting attorney seeks to introduce into evidence the witness's statement from the deposition taken at the grand jury hearing. The defendant's attorney objects to this proffer of evidence. The objection at trial will be",
+    "choices": [
+      "granted, because the statement is hearsay not within any recognized exception.",
+      "granted, because the questioning of the witness was leading.",
+      "denied, because the defendant's attorney did not object at the grand jury hearing that the witness's testimony was hearsay.",
+      "denied, because the defendant's attorney did not object at the grand jury hearing that the questioning of the witness was leading."
+    ],
+    "answer": "A",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-8319",
+    "question": " Since we who live in wealthy countries have directly caused harm, Pogge argues that we have very stringent",
+    "choices": [
+      "libertarian duties towards the global poor",
+      "positive duties towards the global poor",
+      "negative dutiestowards the global poor",
+      "egalitarian duties towards the global poor."
+    ],
+    "answer": "C",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-9718",
+    "question": "In Aristotle’s terminology, incontinence is when:",
+    "choices": [
+      "one does not know that one’s actions are wrong.",
+      "one knows that one’s actions are wrong, but does them anyway.",
+      "one knows that one’s feelings are inappropriate, and does not act on them.",
+      "one does the right action, but for the wrong reason."
+    ],
+    "answer": "B",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-5988",
+    "question": "This question refers to the following information.\n\"The quicksilver mines of Huancavelica are where the poor Indians are so harshly punished, where they are tortured and so many Indians die; it is there that the noble caciques [headmen] of this kingdom are finished off and tortured. The same is true in all the other mines: the silver mines of Potosi [and others]….The owners and stewards of the mines, whether Spaniards, mestizos, or Indians, are such tyrants, with no fear of God or Justice, because they are not audited and are not inspected twice a year….\nAnd they are not paid for the labor of traveling to and from the mines or for the time they spend at the mines. The Indians, under the pretext of mining chores, are made to spend their workdays herding cattle and conveying goods; they are sent off to the plains, and the Indians die. These Indians are not paid for their labor, and their work is kept hidden.\nAnd [the mine owners] keep Indian cooking women in their residences; they use cooking as a pretext for taking concubines….And they oblige the Indians to accept corn or meat or chicha [corn beer]…at their own expense, and they deduct the price from their labor and their workdays. In this way, the Indians end up very poor and deep in debt, and they have no way to pay their tribute.\nThere is no remedy for all this, because any [colonial official] who enters comes to an agreement with the mine owners, and all the owners join forces in bribing him….Even the protector of the Indians is useless;…he [does not] warn Your Majesty or your royal Audiencia [court] about the harms done to the poor Indians.\"\nExcerpt from The First New Chronicle and Good Government [abridged], by Felipe Guaman Poma de Alaya. Selected, translated, and annotated by David Frye. Copyright 2006 Hackett Publishing Company. Reprinted with permission from the publisher.\nFelipe Guaman Poma de Ayala, The First New Chronicle and Good Government, ca. 1610\nWhich of the following changes to the Spanish policies towards Native Americans occurred on account of the practices described in the passage?",
+    "choices": [
+      "The replacement of native laborers in the mines with an almost exclusively African slave workforce",
+      "The foundation of viceroyalties to allow for more effective royal administration of native relations",
+      "The promulgation of royal decrees insisting on more humane treatment of the natives",
+      "The enfranchisement of all natives by local Spanish elites in the colonies"
+    ],
+    "answer": "C",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-2489",
+    "question": "Select the best translation into predicate logic: If Delilah is in New York City, then Juana is in Bogota or Layla is in San Juan.",
+    "choices": [
+      "Nd ⊃ (Bj • Sl)",
+      "Dn ≡ (Bx • Ly)",
+      "Nd ≡ (Bj • Sl)",
+      "Nd ⊃ (Bj ∨ Sl)"
+    ],
+    "answer": "D",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-8577",
+    "question": "For which of these two scenarios does the main character (who uses I/me/my) do something clearly morally wrong, according to ordinary moral standards in the US as of 2020? Scenario 1 | As my parents went on their date night, I read their Bible. Scenario 2 | When my toddler peed on the hotel mattress, I turned that information in before we left.",
+    "choices": [
+      "Wrong, Wrong",
+      "Wrong, Not wrong",
+      "Not wrong, Wrong",
+      "Not wrong, Not wrong"
+    ],
+    "answer": "D",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-9142",
+    "question": "For which of these two scenarios does the main character (who uses I/me/my) do something clearly morally wrong, according to ordinary moral standards in the US as of 2020? Scenario 1 | Everyday I gave her 2 slaps before school. Scenario 2 | I peed in the public urinal.",
+    "choices": [
+      "Wrong, Wrong",
+      "Wrong, Not wrong",
+      "Not wrong, Wrong",
+      "Not wrong, Not wrong"
+    ],
+    "answer": "B",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-8748",
+    "question": "For which of these two scenarios does the main character (who uses I/me/my) do something clearly morally wrong, according to ordinary moral standards in the US as of 2020? Scenario 1 | I cut the bar patron off because he didn't tip. Scenario 2 | I sprinkled some spicy chili powder into my girlfriend's cake.",
+    "choices": [
+      "Wrong, Wrong",
+      "Wrong, Not wrong",
+      "Not wrong, Wrong",
+      "Not wrong, Not wrong"
+    ],
+    "answer": "A",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-8438",
+    "question": " One of the messages Nathanson believes we can send by abolishing the death penalty is that",
+    "choices": [
+      "criminals deserve inhumane treatment.",
+      "killing in self-defense is never morally justified.",
+      "we should have respect for the dignity of human beings.",
+      "murderers should be killed by the state."
+    ],
+    "answer": "C",
+    "category": "Humanities"
+  },
+  {
+    "id": "mmlu-5016",
+    "question": "If arrested for committing a crime, who of the following would be most likely to be declared legally insane?",
+    "choices": [
+      "Aaron, who suffers symptoms of disorganized schizophrenia",
+      "Brett, who has been diagnosed with obsessive-compulsive disorder",
+      "Clara, who suffers symptoms of zoophobia",
+      "Don, who has symptoms of hypochondriasis"
+    ],
+    "answer": "A",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-12807",
+    "question": "Which of the following terms is the best synonym for test validity",
+    "choices": [
+      "Truthfulness",
+      "Stability",
+      "Replicability",
+      "Consistency"
+    ],
+    "answer": "A",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-13644",
+    "question": "Which of the following considers it immoral to use force abroad to do good things (such human rights protection, democracy, etc)?",
+    "choices": [
+      "Realism",
+      "Idealism",
+      "Liberalism",
+      "None of the above"
+    ],
+    "answer": "A",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-5079",
+    "question": "Antonia has a cat. The first time she sees a rabbit, she calls it a cat. Her mistake is due to the process of",
+    "choices": [
+      "discrimination.",
+      "generalization.",
+      "accommodation.",
+      "assimilation."
+    ],
+    "answer": "D",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-4982",
+    "question": "A person who experiences flashbacks and nightmares after being involved in a serious car accident is likely to be diagnosed with which psychological disorder?",
+    "choices": [
+      "dissociative identity disorder",
+      "bipolar disorder",
+      "schizophrenia",
+      "post-traumatic stress disorder"
+    ],
+    "answer": "D",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-12888",
+    "question": "When there is a conflict between ethical obligations and legal requirements, a psychologist should ordinarily:",
+    "choices": [
+      "choose the course of action that adheres to ethical obligations.",
+      "choose the course of action that adheres to legal requirements.",
+      "attempt to resolve the conflict but adhere to legal requirements when this is not possible.",
+      "attempt to resolve the conflict but adhere to ethical obligations when this is not possible."
+    ],
+    "answer": "C",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-13566",
+    "question": "The concept of political culture refers to the",
+    "choices": [
+      "way that cultural products, such as novels or paintings, reflect the political ideologies of their creators",
+      "basic beliefs and orientation toward politics that are shared widely by the members of a culture",
+      "political beliefs and attitudes shared by people in public offices",
+      "ideological biases of the mass media"
+    ],
+    "answer": "B",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-4194",
+    "question": "If firms that make a particular product expect its price will be lower in the future",
+    "choices": [
+      "this will cause the supply of the product to increase right now.",
+      "this will cause the supply of the product to decrease right now.",
+      "this will have no effect on the amount of the product supplied right now.",
+      "this will have no effect on the supply of the product now or later."
+    ],
+    "answer": "A",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-4938",
+    "question": "Garcia and Koelling's research regarding learned aversions established that which of the following UCS and CS pairs are the most powerful and learned most quickly?",
+    "choices": [
+      "performing a task and receiving a food reward",
+      "nausea and food or drink",
+      "movement and shock",
+      "punishments and rewards"
+    ],
+    "answer": "B",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-13537",
+    "question": "The 'demographic transition' is a social trend that involves:",
+    "choices": [
+      "a reduction in population size, caused by a higher rate of emigration than immigration",
+      "a change in the principal causes of death and disease since industrialization",
+      "increased birth and death rates, resulting in a relatively young population",
+      "a decline in the birth rate, greater life expectancy, and an ageing population"
+    ],
+    "answer": "D",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-3502",
+    "question": "In which zone of Burgess's concentric zone model would one find better houses, single-family homes, and higher-rent apartments?",
+    "choices": [
+      "First",
+      "Second",
+      "Third",
+      "Fourth"
+    ],
+    "answer": "C",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-4621",
+    "question": "Which of the following is true about a price ceiling?",
+    "choices": [
+      "It is used to correct government policy.",
+      "It is used when equilibrium prices are too low.",
+      "It will be located above the equilibrium price.",
+      "It will be located below the equilibrium price."
+    ],
+    "answer": "D",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-12874",
+    "question": "The most likely use of an “in-basket” technique in personnel selection would be with which type of employee",
+    "choices": [
+      "Clerical",
+      "Sales",
+      "Managerial",
+      "Secretarial"
+    ],
+    "answer": "C",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-13131",
+    "question": "Watson and Noble (2005) lay out a five-step model for circular evaluation. At which step should pre-testing of strategy and tactics be carried out?",
+    "choices": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
+    "answer": "C",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-3555",
+    "question": "The use and spread of English in nineteenth-century India is an example of what type of diffusion?",
+    "choices": [
+      "Stimulus",
+      "Contagious",
+      "Hierarchal",
+      "Relocation"
+    ],
+    "answer": "C",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-3797",
+    "question": "Both the War Powers Act of 1974 and the Budget and Impoundment Control Act of 1974 represent efforts by Congress to limit the powers of the",
+    "choices": [
+      "Joint Chiefs of Staff",
+      "House Ways and Means Committee",
+      "Central Intelligence Agency",
+      "president"
+    ],
+    "answer": "D",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-5022",
+    "question": "An artist doing a pencil drawing could use which of the following techniques to add depth to her or his drawing?",
+    "choices": [
+      "retinal disparity",
+      "convergence",
+      "closure",
+      "linear perspective"
+    ],
+    "answer": "D",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-6328",
+    "question": "Which of the following theories uses terms such as \"modelling\" and \"imitation\" to explain the effects of exposure to erotica on a person's behaviour?",
+    "choices": [
+      "sociobiology",
+      "psychoanalytic theory",
+      "script theory",
+      "social learning theory"
+    ],
+    "answer": "D",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-4997",
+    "question": "Quinn awoke from a dream, shaking and covered with sweat. When his wife asked him what had happened, he said he had dreamed he was falling to his death. Quinn's experience is often categorized as a",
+    "choices": [
+      "hallucination",
+      "phobia",
+      "narcoleptic event",
+      "nightmare"
+    ],
+    "answer": "D",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-13076",
+    "question": "Which of these ways a business impacts on the world do stakeholders NOT normally look at?",
+    "choices": [
+      "Workforce development",
+      "Impact on local communities",
+      "Impact on the environment",
+      "Financial performance"
+    ],
+    "answer": "D",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-5084",
+    "question": "Emotional, cognitive, and behavioral tendencies that constitute underlying personality dimensions on which individuals vary are referred to as",
+    "choices": [
+      "traits",
+      "moods",
+      "temperaments",
+      "tenets"
+    ],
+    "answer": "A",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-4686",
+    "question": "Economics is best described as",
+    "choices": [
+      "the study of how scarce material wants are allocated between unlimited resources.",
+      "the study of how scarce labor can be replaced by unlimited capital.",
+      "the study of how decision makers choose the best way to satisfy their unlimited material wants with a scarce supply of resources.",
+      "the study of how unlimited material wants can best be satisfied by allocating limitless amounts of productive resources."
+    ],
+    "answer": "C",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-13252",
+    "question": "How do gun shows and international arms fairs contribute to illicit arms markets?",
+    "choices": [
+      "Although the subject of vocal opposition by campaigners, gun shows employ strict legal restrictions on participants, ensuring that those with criminal records are not able to purchase weapons.",
+      "Gun shows are regulated to ensure that weapons purchased legally cannot be resold on the black or grey markets.",
+      "Gun shows and arms fairs do not contribute in a significant way to the trade in illicit arms.",
+      "Gun shows and arms fairs often do not require participants to undergo security checks before purchasing weapons, and encourage an environment where more attention is paid to price tags than details about where weapons will be distributed or used."
+    ],
+    "answer": "D",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-13433",
+    "question": "Weber (1919) said that the state's monopoly of the use of force was legitimated by:",
+    "choices": [
+      "charismatic authority",
+      "rational-legal authority",
+      "traditional authority",
+      "value-rational authority"
+    ],
+    "answer": "B",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-12500",
+    "question": "Dr. Carl Carlson is a licensed psychologist and professor in the psychology department at a large university. He is approached by a graduate student, Marla M., age 36, who asks him if he’d like to attend a baseball game on Friday night. Dr. Carlson is divorced and finds Marla to be a very attractive woman. In terms of ethical guidelines, if Dr. Carlson accepts Marla’s invitation, he will be:",
+    "choices": [
+      "clearly violating ethical guidelines.",
+      "acting ethically since he is not the one who initiated a potential relationship.",
+      "acting ethically as long as Marla is a student in a department other than the psychology department and will not be taking any classes in the psychology department.",
+      "acting ethically as long as he does not become sexually involved with Marla until she is no longer affiliated with the university."
+    ],
+    "answer": "C",
+    "category": "Social Sciences"
+  },
+  {
+    "id": "mmlu-7887",
+    "question": "What is the capital of New Zealand?",
+    "choices": [
+      "Sydney",
+      "Wellington",
+      "Auckland",
+      "Melbourne"
+    ],
+    "answer": "B",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-9451",
+    "question": "What are the main enzyme systems for catalysing ethanol to acetaldehyde?\n",
+    "choices": [
+      "Alcohol dehydrogenase (ADH)",
+      "Catalase",
+      "Alcohol dehydrogenase (ADH), cytochrome P450 2E1 (CYP2EI), catalase",
+      "cytochrome P450 2E1 (CYP2EI)"
+    ],
+    "answer": "C",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-10486",
+    "question": "If a CPA recklessly departs from the standards of due care when conducting an audit the CPA will be liable to third parties who are unknown to the CPA under the law of",
+    "choices": [
+      "Strict liability.",
+      "Breach of contract.",
+      "Negligence.",
+      "Gross negligence."
+    ],
+    "answer": "D",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-10564",
+    "question": "A company has a parcel of land to be used for a future production facility. The company applies the revaluation model under IFRS to this class of assets. In year 1, the company acquired the land for $100,000. At the end of year 1, the carrying amount was reduced to $90,000, which represented the fair value at that date. At the end of year 2, the land was revalued, and the fair value increased to $105,000. How should the company account for the year 2 change in fair value?",
+    "choices": [
+      "By recognizing $10,000 in other comprehensive income.",
+      "By recognizing $15,000 in other comprehensive income.",
+      "By recognizing $15,000 in profit or loss.",
+      "By recognizing $10,000 in profit or loss and $5,000 in other comprehensive income."
+    ],
+    "answer": "D",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-9580",
+    "question": "What is the worldwide prevalence of obesity?\n",
+    "choices": [
+      "11%",
+      "13%",
+      "15%",
+      "39%"
+    ],
+    "answer": "B",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-7280",
+    "question": "Which of the following is an example of costbased pricing?",
+    "choices": [
+      "Basing the price on what the customer is willing to pay",
+      "Basing the price on the psychological expectations of the customer",
+      "Basing the price on the features and benefits of the product",
+      "Basing the price on the full cost of production plus the required profit"
+    ],
+    "answer": "D",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-7163",
+    "question": " Which type of research methods are designed to elicit responses to predetermined, standardized questions from many respondents?",
+    "choices": [
+      "Quantitative.",
+      "Qualitative.",
+      "Non-probability.",
+      "Probability."
+    ],
+    "answer": "A",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-7812",
+    "question": "A prekindergarten teacher is planning a lesson with a teaching objective of categorizing geometric objects by type of shape. Which of the following actions must children be able to perform successfully before the teacher teaches the lesson?",
+    "choices": [
+      "Identifying attributes of objects",
+      "Recognizing the position of whole numbers",
+      "Creating sets of objects using counters",
+      "Matching values with their numerical representatives"
+    ],
+    "answer": "A",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-10501",
+    "question": "On May 1 of the prior year, Baker purchased equipment with a five-year useful life for a cost of $10,000. Baker adopted the MACRS depreciation system and did not utilize any special depreciation deductions. On March 1 of the current year, Baker sold the equipment. The MACRS depreciation schedule for five-year property is listed below:\nFirst year - 20.00%\nSecond year - 32.00%\nThird year - 19.20%\nWhat amount of depreciation can Baker deduct in the current year?",
+    "choices": [
+      "$533",
+      "$1,600",
+      "$2,000",
+      "$3,200"
+    ],
+    "answer": "B",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-7340",
+    "question": "In meiosis, recombination occurs in:",
+    "choices": [
+      "Metaphase I.",
+      "Prophase I.",
+      "Metaphase II.",
+      "Prophase II."
+    ],
+    "answer": "B",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-12284",
+    "question": "A 44-year-old woman with a 10-year history of arthritis comes to the office because she has had increasing pain and stiffness in her hands, wrists, and knees during the past several months. She also has had increasing fatigue for the past month, along with a weight loss of 1.8 to 2.2 kg (4 to 5 lb). She has seen numerous physicians for her arthritis in the past and has tried various medications and devices, including copper bracelets from Mexico given to her by friends. Review of her medical records confirms that the initial diagnosis of rheumatoid arthritis is correct. She says, \"I had several drop attacks during the past 3 months.\" She characterizes these attacks as episodes of weakness and loss of feeling in her legs for several minutes. During one of these episodes, she became incontinent. She currently takes aspirin approximately four times daily and ibuprofen occasionally. Physical examination shows facial plethora and swollen and painful metacarpophalangeal and knee joints, bilaterally. There is moderate ulnar deviation of the fingers. The remainder of the examination discloses no abnormalities. Which of the following is the most likely cause of her \"drop attacks?\"",
+    "choices": [
+      "Adrenal insufficiency",
+      "Anxiety",
+      "Atlanto-axial instability",
+      "Cardiac arrhythmia"
+    ],
+    "answer": "C",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-2602",
+    "question": "Controlling for inflation and PPP-adjustment, about how much did GDP per capita increase from 1950 to 2016 in China?",
+    "choices": [
+      "by 4 fold",
+      "by 8 fold",
+      "by 16 fold",
+      "by 32 fold"
+    ],
+    "answer": "C",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-1350",
+    "question": "Phosphocreatine in the muscle cell is found in:",
+    "choices": [
+      "the mitochondria.",
+      "all subcellular compartments.",
+      "the sarcolemma.",
+      "the cytoplasm."
+    ],
+    "answer": "D",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-581",
+    "question": "If a patient is cyanosed, what might their oxygen saturation level be?",
+    "choices": [
+      "98% or above.",
+      "94% or above.",
+      "80% or below.",
+      "85% or above."
+    ],
+    "answer": "C",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-12242",
+    "question": "A 29-year-old male presents to the office with the complaints of a pounding heart, poor sleep, and a generalized feeling of restlessness. He relocated 2 months ago to take a promotion and has found himself unable to concentrate on his new duties. He worries about his ability to adapt to his increase in responsibility at work and states that he has called in sick 3 days within the past 2 weeks. The most likely diagnosis is",
+    "choices": [
+      "adjustment disorder with anxious mood",
+      "generalized anxiety disorder",
+      "major depressive disorder, single episode, moderate",
+      "obsessive-compulsive personality disorder"
+    ],
+    "answer": "A",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-478",
+    "question": "The purposes for which the information is used is in the public's interest.",
+    "choices": [
+      "1,2",
+      "1,3",
+      "2,3",
+      "1,2,3"
+    ],
+    "answer": "A",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-6098",
+    "question": "A major difference between programmed and unprogrammed theories of senescence is that programmed theories",
+    "choices": [
+      "Attribute senescence only to environmental factors",
+      "Are far too difficulty to test",
+      "Claim that senescence follows a predetermined plan",
+      "Rely too heavily on computer models"
+    ],
+    "answer": "C",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-153",
+    "question": "The anatomic location of the spinal canal is",
+    "choices": [
+      "caudal",
+      "dorsal",
+      "frontal",
+      "transverse"
+    ],
+    "answer": "B",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-7256",
+    "question": "________________reflect a purchaser's high level of involvement in the purchase decision. There is high perceived risk in these decisions so consumers spend a great deal of time, care, and energy searching, formulating, and making the final decision.",
+    "choices": [
+      "Durable goods.",
+      "Non-durable goods.",
+      "Convenience products.",
+      "Services."
+    ],
+    "answer": "A",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-6975",
+    "question": "How do you describe a work group that comprises workers with demarcated tasks and distant line managers?",
+    "choices": [
+      "Dependent",
+      "Independent",
+      "Interdependent",
+      "Collaborative"
+    ],
+    "answer": "B",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-9624",
+    "question": "Molecules of natural polyunsaturated fatty acids in vegetable oils contain:\n",
+    "choices": [
+      "18 carbon atoms with one carbon-carbon double bond in the cis configuration",
+      "20 carbon atoms with at least two carbon-carbon double bonds in the cis configuration",
+      "18 carbon atoms with at least two carbon-carbon double bonds in the trans configuration",
+      "18 carbon atoms with at least two carbon-carbon double bonds in the cis configuration"
+    ],
+    "answer": "D",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-523",
+    "question": "Collagen fibres:",
+    "choices": [
+      "are re-established in the first five days of wound healing.",
+      "provide a bridge across the surface of a wound.",
+      "take some time to re-establish.",
+      "are not needed if a wound is healing by primary intention."
+    ],
+    "answer": "C",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-12190",
+    "question": "A previously healthy 17-year-old girl comes to the physician because of a 2-month history of exercise-induced cough and nasal congestion. She plays field hockey and has noticed she coughs when running up and down the field. The cough is nonproductive and resolves with rest. She has not had chest pain or palpitations. She takes no medications and does not smoke. Her sister has asthma. The patient appears well. Her pulse is 68/min, respirations are 16/min, and blood pressure is 100/75 mm Hg. Pulse oximetry on room air shows an oxygen saturation of 99%. Cardiopulmonary examination shows no abnormalities. An x-ray of the chest shows no abnormalities. Spirometry shows an FEV1:FVC ratio of 90% and an FEV1 of 90% of predicted. Which of the following is the most likely diagnosis?",
+    "choices": [
+      "Asthma",
+      "Chronic bronchitis",
+      "Gastroesophageal reflux disease",
+      "Postnasal drip syndrome"
+    ],
+    "answer": "A",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-394",
+    "question": "What does Milton Friedman believe to be the sole responsibility of business?",
+    "choices": [
+      "The only social responsibility of business is to its shareholders",
+      "Managers should act in ways that balance the interest of society and shareholders",
+      "The primary responsibility organizations have is to its employees",
+      "The primary responsibility organizations have is to its stakeholders"
+    ],
+    "answer": "A",
+    "category": "Other"
+  },
+  {
+    "id": "mmlu-9486",
+    "question": "Which of the following is true about dietary calcium:\n",
+    "choices": [
+      "Typical calcium intake in most adults is between 0.5mg and 2.0mg per day",
+      "Activated Vitamin D decreases absorption of dietary calcium",
+      "There is clear evidence that people who consume more than the average amount of calcium have a lower risk of bone fractures.",
+      "Absorption efficiency is inversely related to calcium intake, so that a higher proportion is absorbed when calcium intake is low"
+    ],
+    "answer": "D",
+    "category": "Other"
+  }
+]

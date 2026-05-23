@@ -1,10 +1,27 @@
 package benchmark
 
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
 )
+
+//go:embed data/mmlu_curated.json
+var mmluDataset []byte
+
+// loadMMLUProblems decodes the embedded curated MMLU subset.
+func loadMMLUProblems() ([]MMLUProblem, error) {
+	var ps []MMLUProblem
+	if err := json.Unmarshal(mmluDataset, &ps); err != nil {
+		return nil, fmt.Errorf("decode mmlu dataset: %w", err)
+	}
+	if len(ps) == 0 {
+		return nil, fmt.Errorf("mmlu dataset is empty")
+	}
+	return ps, nil
+}
 
 // MMLUProblem is one curated MMLU multiple-choice item. Answer is the correct
 // option letter ("A".."D"); Category is the super-category (STEM, Humanities,
