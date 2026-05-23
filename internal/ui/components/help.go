@@ -8,7 +8,7 @@ const HelpMarkdown = `# model-loader — Keybindings
 
 ## Global
 
-- ` + "`1`" + `–` + "`4`" + ` — switch directly to a tab
+- ` + "`1`" + `–` + "`5`" + ` — switch directly to a tab
 - ` + "`Tab`" + ` — next tab     ` + "`Shift+Tab`" + ` — previous tab
 - ` + "`?`" + ` — toggle this help
 - ` + "`q`" + ` / ` + "`Ctrl+C`" + ` — quit (background instances survive)

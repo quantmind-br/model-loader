@@ -37,7 +37,19 @@ func modalTitleStyle() lipgloss.Style {
 // inspection in tests or extra composition. When width > 0 and height > 0,
 // the box is centered on a canvas of that size.
 func Modal(title, body string, width, height int) string {
-	box := modalBoxStyle().Render(modalTitleStyle().Render(title) + "\n" + body)
+	// Normalize every content line to one width before applying the bordered
+	// box. Title and body may contain East-Asian ambiguous-width glyphs
+	// (↑ ↓ · → –) that lipgloss and the terminal measure differently; without
+	// this the frame is sized to the widest line and the right border ends up
+	// ragged (RENDER: non-rectangular help overlay). Padding to a single inner
+	// width keeps the box a clean rectangle regardless of glyph width.
+	renderedTitle := modalTitleStyle().Render(title)
+	inner := lipgloss.Width(renderedTitle)
+	if w := lipgloss.Width(body); w > inner {
+		inner = w
+	}
+	content := lipgloss.NewStyle().Width(inner).Render(renderedTitle + "\n" + body)
+	box := modalBoxStyle().Render(content)
 	if width <= 0 || height <= 0 {
 		return box
 	}

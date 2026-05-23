@@ -162,13 +162,48 @@ func (p *ServerPage) renderSubViewBody() string {
 	return "no subscription"
 }
 
-// renderHistory renders the exit-history rows for the History sub-view.
+// renderHistory renders the exit-history rows for the History sub-view,
+// fitting the table to the available terminal width. The pid/started/exited/
+// duration columns are fixed; the remaining budget is shared by the variable
+// profile/reason/stderr columns and every cell is truncated so a row never
+// overflows and wraps onto a second line (RENDER: history overflow).
 func (p *ServerPage) renderHistory() string {
 	if len(p.history) == 0 {
 		return "(no exit history yet)"
 	}
+	const pidW, startedW, exitedW, durW = 7, 10, 10, 8
+	const sep = " │ "
+	const sepCount = 6 // separators between the 7 columns
+	width := p.width
+	if width <= 0 {
+		width = 80
+	}
+	flex := width - (pidW + startedW + exitedW + durW) - len([]rune(sep))*sepCount
+	if flex < 24 {
+		flex = 24
+	}
+	profileW := flex * 4 / 10 // ~40%
+	if profileW < 8 {
+		profileW = 8
+	}
+	reasonW := flex * 3 / 10 // ~30%
+	if reasonW < 6 {
+		reasonW = 6
+	}
+	stderrW := flex - profileW - reasonW
+	if stderrW < 6 {
+		stderrW = 6
+	}
+
 	var b strings.Builder
-	b.WriteString("profile          │ pid  │ started    │ exited     │ duration │ reason          │ stderr\n")
+	fmt.Fprintf(&b, "%-*s%s%-*s%s%-*s%s%-*s%s%-*s%s%-*s%s%s\n",
+		profileW, truncate("profile", profileW), sep,
+		pidW, "pid", sep,
+		startedW, "started", sep,
+		exitedW, "exited", sep,
+		durW, "duration", sep,
+		reasonW, truncate("reason", reasonW), sep,
+		truncate("stderr", stderrW))
 	now := time.Now()
 	for _, h := range p.history {
 		started := humanRelative(h.StartedAt, now)
@@ -182,8 +217,14 @@ func (p *ServerPage) renderHistory() string {
 		if len(h.StderrTail) == 0 {
 			stderr = "—"
 		}
-		fmt.Fprintf(&b, "%-16s │ %-4d │ %-10s │ %-10s │ %-8s │ %-15s │ %s\n",
-			h.ProfileID, h.PID, started, exited, dur, reason, stderr)
+		fmt.Fprintf(&b, "%-*s%s%-*d%s%-*s%s%-*s%s%-*s%s%-*s%s%s\n",
+			profileW, truncate(h.ProfileID, profileW), sep,
+			pidW, h.PID, sep,
+			startedW, truncate(started, startedW), sep,
+			exitedW, truncate(exited, exitedW), sep,
+			durW, truncate(dur, durW), sep,
+			reasonW, truncate(reason, reasonW), sep,
+			truncate(stderr, stderrW))
 	}
 	return b.String()
 }

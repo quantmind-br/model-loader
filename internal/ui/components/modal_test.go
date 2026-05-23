@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
@@ -95,6 +97,34 @@ func TestModal_NoColorStripsForeground(t *testing.T) {
 	}
 	if strings.Contains(out, "\x1b[38;") || strings.Contains(out, "\x1b[48;") {
 		t.Errorf("modal output contains 256/truecolor SGR under NO_COLOR:\n%q", out)
+	}
+}
+
+// TestModal_RectangularBorderWithWideGlyphs guarantees the bordered box stays
+// a clean rectangle even when the title and body contain East-Asian
+// ambiguous-width glyphs (↑ ↓ · → –). Regression for the ragged help-overlay
+// right border: every rendered line must share one display width.
+func TestModal_RectangularBorderWithWideGlyphs(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	theme.RebuildStyles()
+	t.Cleanup(func() {
+		t.Setenv("NO_COLOR", "")
+		theme.RebuildStyles()
+	})
+
+	title := "Keybindings (↑/↓ · ? to toggle · esc to close)"
+	body := "row one →\nEssentials → Advanced → Sizing\nshort"
+	out := Modal(title, body, 0, 0)
+
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("expected a multi-line box, got %d lines:\n%s", len(lines), out)
+	}
+	want := lipgloss.Width(lines[0])
+	for i, ln := range lines {
+		if w := lipgloss.Width(ln); w != want {
+			t.Errorf("line %d display width %d != frame width %d (ragged border):\n%s", i, w, want, out)
+		}
 	}
 }
 

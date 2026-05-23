@@ -413,7 +413,7 @@ func (p BackendsPage) detailView() string {
 			probeLine += " (" + r.latency.String() + ")"
 		}
 	}
-	labelStyle := lipgloss.NewStyle().Width(12).Foreground(theme.ColorDim)
+	labelStyle := lipgloss.NewStyle().Width(13).Foreground(theme.ColorDim)
 
 	row := func(label, value string) string {
 		return lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render(label), value)

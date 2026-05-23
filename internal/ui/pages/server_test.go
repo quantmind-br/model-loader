@@ -115,6 +115,30 @@ func TestServerPage_TableFits80Columns(t *testing.T) {
 	}
 }
 
+func TestServerPage_HistoryFits80Columns(t *testing.T) {
+	p := NewServerPage(&fakeProcMgr{}, &fakeMonMgr{}, nil)
+	p.SetSize(80, 30)
+	p.history = []domain.ExitedInstance{
+		{
+			ProfileID:       "a-very-long-profile-identifier-that-would-overflow-the-row",
+			PID:             1234567,
+			StartedAt:       time.Now().Add(-2 * time.Hour),
+			ExitedAt:        time.Now().Add(-1 * time.Hour),
+			DurationSeconds: 3600,
+			ExitReason:      "signal:SIGKILL killed by the oom reaper for a very long reason",
+			StderrTail:      []string{"line1", "line2", "line3"},
+		},
+	}
+	for _, line := range strings.Split(p.renderHistory(), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if w := lipgloss.Width(line); w > 80 {
+			t.Errorf("history line width = %d, want <= 80: %q", w, line)
+		}
+	}
+}
+
 func TestServerPage_FullViewFits80Columns(t *testing.T) {
 	pm := &fakeProcMgr{insts: []domain.RunningInstance{
 		{PID: 12345, Port: 8080, ProfileID: "very-long-profile-id-123", LogPath: "/tmp/x.log"},

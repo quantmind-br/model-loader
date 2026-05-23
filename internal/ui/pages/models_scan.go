@@ -151,8 +151,10 @@ func (p *ModelsPage) resizeColumns(width int) {
 		}
 		avail -= panelW
 	}
-	// Reserve fixed columns plus per-column cell padding/borders.
-	flex := avail - (sizeW + quantW + paramsW) - 8
+	// Reserve fixed columns plus per-column cell padding. bubbletea's table
+	// cell style adds Padding(0,1) = 2 cols per column (5 cols = 10); reserve
+	// that plus a small safety margin so a truncated Path never wraps (RENDER-01).
+	flex := avail - (sizeW + quantW + paramsW) - 12
 	if flex < 32 {
 		flex = 32
 	}
