@@ -30,6 +30,11 @@ const (
 	// requests, and answer consistency across repeated generations. Format and
 	// refusal are deterministic checks; consistency is scored by similarity.
 	ModeInstBench Mode = "instruction-bench"
+	// ModeMMLUBench: factual-knowledge probe — a curated MMLU subset stratified
+	// across STEM/Humanities/Social Sciences/Other, scored by objective
+	// multiple-choice letter exact-match (not judged). A direct signal of
+	// knowledge degradation from quantization.
+	ModeMMLUBench Mode = "mmlu-bench"
 )
 
 // Title returns a short human label for the mode.
@@ -47,6 +52,8 @@ func (m Mode) Title() string {
 		return "Code generation (HumanEval)"
 	case ModeInstBench:
 		return "Instruction following"
+	case ModeMMLUBench:
+		return "Factual knowledge (MMLU)"
 	default:
 		return string(m)
 	}
@@ -94,6 +101,7 @@ type Aggregate struct {
 	InstFormatRate         float64 `json:"instFormatRate,omitempty"`         // 0..1 structured-format adherence
 	InstRefusalRate        float64 `json:"instRefusalRate,omitempty"`        // 0..1 disallowed-request refusal
 	InstConsistency        float64 `json:"instConsistency,omitempty"`        // 0..1 mean pairwise similarity
+	MMLUAccuracy           float64 `json:"mmluAccuracy,omitempty"`           // 0..1 multiple-choice exact-match rate
 	AvgTTFTms              float64 `json:"avgTtftMs"`
 	TotalPromptTokens      int     `json:"totalPromptTokens"`
 	TotalCompletionTokens  int     `json:"totalCompletionTokens"`
