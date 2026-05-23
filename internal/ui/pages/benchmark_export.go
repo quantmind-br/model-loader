@@ -27,9 +27,18 @@ func exportRun(dir string, r benchmark.Run) (jsonPath, csvPath string, err error
 	}
 
 	csvPath = filepath.Join(dir, r.ID+".csv")
-	f, err := os.Create(csvPath)
+	if err = writeRunCSV(csvPath, r); err != nil {
+		os.Remove(jsonPath) // don't leave a half-written export behind
+		return "", "", err
+	}
+	return jsonPath, csvPath, nil
+}
+
+// writeRunCSV writes one row per problem to path.
+func writeRunCSV(path string, r benchmark.Run) error {
+	f, err := os.Create(path)
 	if err != nil {
-		return "", "", fmt.Errorf("create csv: %w", err)
+		return fmt.Errorf("create csv: %w", err)
 	}
 	defer f.Close()
 	w := csv.NewWriter(f)
@@ -38,8 +47,8 @@ func exportRun(dir string, r benchmark.Run) (jsonPath, csvPath string, err error
 		"tokensPerSecond", "promptProcessingTps", "decodeTps", "promptTokens",
 		"completionTokens", "detail", "err",
 	}
-	if err = w.Write(header); err != nil {
-		return "", "", fmt.Errorf("write csv header: %w", err)
+	if err := w.Write(header); err != nil {
+		return fmt.Errorf("write csv header: %w", err)
 	}
 	for _, pr := range r.Problems {
 		row := []string{
@@ -52,13 +61,13 @@ func exportRun(dir string, r benchmark.Run) (jsonPath, csvPath string, err error
 			strconv.Itoa(pr.PromptTokens), strconv.Itoa(pr.CompletionTokens),
 			pr.Detail, pr.Err,
 		}
-		if err = w.Write(row); err != nil {
-			return "", "", fmt.Errorf("write csv row: %w", err)
+		if err := w.Write(row); err != nil {
+			return fmt.Errorf("write csv row: %w", err)
 		}
 	}
 	w.Flush()
-	if err = w.Error(); err != nil {
-		return "", "", fmt.Errorf("flush csv: %w", err)
+	if err := w.Error(); err != nil {
+		return fmt.Errorf("flush csv: %w", err)
 	}
-	return jsonPath, csvPath, nil
+	return nil
 }
