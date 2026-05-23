@@ -211,12 +211,17 @@ func (r *Runner) runInstConsistency(ctx context.Context, base, model string, sim
 	}
 	tr.ModelResponse = strings.Join(replies, "\n---\n")
 
+	// Bound the similarity computation: a hanging /v1/embeddings endpoint must
+	// not block the run. On timeout Similarity falls back to the local lexical
+	// cosine, mirroring the per-request timeout discipline of the chat calls.
+	simCtx, simCancel := context.WithTimeout(ctx, r.cfg.Timeout)
+	defer simCancel()
 	var sum float64
 	var pairs int
 	method := "lexical"
 	for i := 0; i < len(replies); i++ {
 		for j := i + 1; j < len(replies); j++ {
-			s, m := sim.Similarity(ctx, replies[i], replies[j])
+			s, m := sim.Similarity(simCtx, replies[i], replies[j])
 			sum += s
 			pairs++
 			method = m
