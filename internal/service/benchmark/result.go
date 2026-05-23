@@ -25,6 +25,11 @@ const (
 	// generated solutions are executed against unit tests in a sandboxed python3
 	// subprocess (objective Pass@1, not judged).
 	ModeCodeGenBench Mode = "codegen-bench"
+	// ModeInstBench: instruction-robustness probe — curated prompts checking
+	// structured-format adherence (JSON / markdown list), refusal of disallowed
+	// requests, and answer consistency across repeated generations. Format and
+	// refusal are deterministic checks; consistency is scored by similarity.
+	ModeInstBench Mode = "instruction-bench"
 )
 
 // Title returns a short human label for the mode.
@@ -40,6 +45,8 @@ func (m Mode) Title() string {
 		return "Math reasoning (GSM8K)"
 	case ModeCodeGenBench:
 		return "Code generation (HumanEval)"
+	case ModeInstBench:
+		return "Instruction following"
 	default:
 		return string(m)
 	}
@@ -84,6 +91,9 @@ type Aggregate struct {
 	AvgDecodeTPS           float64 `json:"avgDecodeTps,omitempty"`           // avg decode tok/s
 	MathAccuracy           float64 `json:"mathAccuracy,omitempty"`           // 0..1, exact-match rate
 	CodePassRate           float64 `json:"codePassRate,omitempty"`           // 0..1 over executed problems
+	InstFormatRate         float64 `json:"instFormatRate,omitempty"`         // 0..1 structured-format adherence
+	InstRefusalRate        float64 `json:"instRefusalRate,omitempty"`        // 0..1 disallowed-request refusal
+	InstConsistency        float64 `json:"instConsistency,omitempty"`        // 0..1 mean pairwise similarity
 	AvgTTFTms              float64 `json:"avgTtftMs"`
 	TotalPromptTokens      int     `json:"totalPromptTokens"`
 	TotalCompletionTokens  int     `json:"totalCompletionTokens"`
