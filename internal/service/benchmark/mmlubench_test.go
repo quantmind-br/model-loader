@@ -1,8 +1,12 @@
 package benchmark
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestExtractMCLetter(t *testing.T) {
@@ -31,6 +35,52 @@ func TestBuildMMLUPrompt(t *testing.T) {
 	want := "2+2=?\n\nA) 3\nB) 4\nC) 5\nD) 6\n"
 	if got != want {
 		t.Fatalf("buildMMLUPrompt =\n%q\nwant\n%q", got, want)
+	}
+}
+
+func TestMMLUHandlerRegistered(t *testing.T) {
+	h, ok := handlerFor(ModeMMLUBench)
+	if !ok {
+		t.Fatal("ModeMMLUBench handler not registered")
+	}
+	if h.Category() != CatKnowledge {
+		t.Fatalf("category = %q, want %q", h.Category(), CatKnowledge)
+	}
+}
+
+func TestMMLUFinalize(t *testing.T) {
+	problems := []ProblemResult{
+		{Resolved: true},
+		{Resolved: false},
+		{Resolved: true},
+		{Resolved: true},
+	}
+	var agg Aggregate
+	mmluHandler{}.Finalize(&agg, problems)
+	if agg.MMLUAccuracy != 0.75 {
+		t.Fatalf("MMLUAccuracy = %v, want 0.75", agg.MMLUAccuracy)
+	}
+}
+
+func TestRunMMLUBench(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"The answer is B\"}}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer srv.Close()
+
+	r := &Runner{cfg: Config{MaxTokens: 16, Timeout: 5 * time.Second}}
+	p := MMLUProblem{ID: "mmlu-1", Question: "2+2=?", Choices: []string{"3", "4", "5", "6"}, Answer: "B", Category: "STEM"}
+	res, _ := r.runMMLUBench(context.Background(), srv.URL, "m", p)
+	if !res.Resolved {
+		t.Fatalf("expected correct answer B, detail %q", res.Detail)
+	}
+	if res.Score != 1 {
+		t.Fatalf("Score = %v, want 1", res.Score)
+	}
+	if !strings.Contains(res.Detail, "STEM") {
+		t.Fatalf("Detail %q should mention category", res.Detail)
 	}
 }
 

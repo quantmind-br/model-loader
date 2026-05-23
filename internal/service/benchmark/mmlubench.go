@@ -1,6 +1,7 @@
 package benchmark
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -76,4 +77,91 @@ func buildMMLUPrompt(p MMLUProblem) string {
 		fmt.Fprintf(&b, "%c) %s\n", 'A'+i, c)
 	}
 	return b.String()
+}
+
+// runMMLUBench asks the model one multiple-choice question and scores an
+// objective letter exact-match. Temperature 0 for determinism (no grader).
+func (r *Runner) runMMLUBench(ctx context.Context, base, model string, p MMLUProblem) (ProblemResult, ProblemTranscript) {
+	name := "[" + p.Category + "] " + truncateQuestion(p.Question)
+	res := ProblemResult{ProblemID: p.ID, ProblemName: name}
+	tr := ProblemTranscript{ProblemID: p.ID, ProblemName: name}
+
+	reqCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout)
+	defer cancel()
+	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
+		Model:       model,
+		Temperature: 0,
+		MaxTokens:   r.cfg.MaxTokens,
+		Messages: []ChatMessage{
+			{Role: "system", Content: "You are answering a multiple-choice question. Respond with ONLY the letter (A, B, C, or D) of the correct answer."},
+			{Role: "user", Content: buildMMLUPrompt(p)},
+		},
+	})
+	if err != nil {
+		res.Err = err.Error()
+		tr.Error = err.Error()
+		return res, tr
+	}
+	res.TTFTms = comp.TTFT.Milliseconds()
+	res.TotalMs = comp.Total.Milliseconds()
+	res.TokensPerSecond = comp.TokensPerSecond
+	res.DecodeTPS = comp.TokensPerSecond
+	res.PromptProcessingTPS = comp.PromptProcessingTPS
+	res.PromptTokens = comp.PromptTokens
+	res.CompletionTokens = comp.CompletionTokens
+	tr.ModelResponse = comp.Content
+
+	got := extractMCLetter(comp.Content)
+	res.Resolved = got != "" && got == p.Answer
+	if res.Resolved {
+		res.Score = 1
+	}
+	res.Detail = fmt.Sprintf("category=%s expected %s got %q", p.Category, p.Answer, got)
+	return res, tr
+}
+
+type mmluHandler struct{}
+
+func (mmluHandler) Mode() Mode                      { return ModeMMLUBench }
+func (mmluHandler) Category() Category              { return CatKnowledge }
+func (mmluHandler) Count(r *Runner) int             { return len(r.mmluProblems) }
+func (mmluHandler) Prepare(*Runner) (Scorer, error) { return nil, nil }
+
+// Finalize sets MMLUAccuracy over all answered problems. Per-category accuracy
+// is derivable from each ProblemResult.Detail, so no extra aggregate field is
+// needed.
+func (mmluHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
+	if len(problems) == 0 {
+		return
+	}
+	solved := 0
+	for _, p := range problems {
+		if p.Resolved {
+			solved++
+		}
+	}
+	agg.MMLUAccuracy = float64(solved) / float64(len(problems))
+}
+
+func (mmluHandler) Execute(ctx context.Context, r *Runner, base, model string, _ Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
+	var results []ProblemResult
+	var transcripts []ProblemTranscript
+	for i, p := range r.mmluProblems {
+		select {
+		case <-ctx.Done():
+			return results, transcripts, ctx.Err()
+		default:
+		}
+		send(progress, Progress{Index: i + 1, Total: len(r.mmluProblems), ProblemID: p.ID, ProblemName: p.Category, Phase: "infer"})
+		pr, tr := r.runMMLUBench(ctx, base, model, p)
+		results = append(results, pr)
+		if r.cfg.SaveTranscripts {
+			transcripts = append(transcripts, tr)
+		}
+	}
+	return results, transcripts, nil
+}
+
+func init() {
+	registerHandler(mmluHandler{})
 }
