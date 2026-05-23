@@ -1,0 +1,434 @@
+[
+  {
+    "id": "0704.0190",
+    "title": "The Reliability on the Direction of the Incident Neutrino for the Fully   Contained Events and Partially Contained Events due to QEL in the   Super-Kamiokande",
+    "abstract": "In the SK analysis of the neutrino events for [Fully Contained Events] and [Partially Contained Events] on their zenith angle distribution, it is assumed that the zenith angle of the incident neutrino is the same as that of the detected charged lepton. In the present paper, we examine the validity of [the SK assumption on the direction] of the incident neutrinos. Concretely speaking, we analyze muon-like events due to QEL. For the purpose, we develop [Time Sequential Monte Carlo Simulation] to extract the conclusion on the validity of the SK assumption. In our [Time Sequential Simulation], we simulate every physical process concerned as exactly as possible without any approximation.   From the comparison between the zenith angle distributon of the emitted muons under [the SK assumption on the direction] and the corresponding one obtained under our [Time Sequential Simulation], it is concluded that the measurement of the direction of the incident neutrino for the neutrino events occurring inside the detector in the SK analysis turns out to be unreliable, which holds irrespective of the existence and/or non-existence of the neutrino oscillation.",
+    "category": "hep-ex"
+  },
+  {
+    "id": "0704.0322",
+    "title": "Emergence of spatiotemporal chaos driven by far-field breakup of spiral   waves in the plankton ecological systems",
+    "abstract": "Alexander B. Medvinsky \\emph{et al} [A. B. Medvinsky, I. A. Tikhonova, R. R. Aliev, B.-L. Li, Z.-S. Lin, and H. Malchow, Phys. Rev. E \\textbf{64}, 021915 (2001)] and Marcus R. Garvie \\emph{et al} [M. R. Garvie and C. Trenchea, SIAM J. Control. Optim. \\textbf{46}, 775-791 (2007)] shown that the minimal spatially extended reaction-diffusion model of phytoplankton-zooplankton can exhibit both regular, chaotic behavior, and spatiotemporal patterns in a patchy environment. Based on that, the spatial plankton model is furtherly investigated by means of computer simulations and theoretical analysis in the present paper when its parameters would be expected in the case of mixed Turing-Hopf bifurcation region. Our results show that the spiral waves exist in that region and the spatiotemporal chaos emerge, which arise from the far-field breakup of the spiral waves over large ranges of diffusion coefficients of phytoplankton and zooplankton. Moreover, the spatiotemporal chaos arising from the far-field breakup of spiral waves does not gradually involve the whole space within that region. Our results are confirmed by means of computation spectra and nonlinear bifurcation of wave trains. Finally, we give some explanations about the spatially structured patterns from the community level.",
+    "category": "nlin"
+  },
+  {
+    "id": "0704.0332",
+    "title": "The effect of a fifth large-scale space-time dimension on the   conservation of energy in a four dimensional Universe",
+    "abstract": "The effect of introducing a fifth large-scale space-time dimension to the equations of orbital dynamics was analysed in an earlier paper by the authors. The results showed good agreement with the observed flat rotation curves of galaxies and the Pioneer Anomaly. This analysis did not require the modification of Newtonian dynamics, but rather only their restatement in a five dimensional framework. The same analysis derived a acceleration parameter ar, which plays an important role in the restated equations of orbital dynamics, and suggested a value for ar. In this companion paper, the principle of conservation of energy is restated within the same five-dimensional framework. The resulting analysis provides an alternative route to estimating the value of ar, without reference to the equations of orbital dynamics, and based solely on key cosmological constants and parameters, including the gravitational constant, G. The same analysis suggests that: (i) the inverse square law of gravity may itself be due to the conservation of energy at the boundary between a four-dimensional universe and a fifth large-scale space-time dimension; and (ii) there is a limiting case for the Tulley-Fisher relationship linking the speed of light to the mass of the Universe.",
+    "category": "gr-qc"
+  },
+  {
+    "id": "0704.0429",
+    "title": "Quantitative Resolution to some \"Absolute Discrepancies\" in Cancer   Theories: a View from Phage lambda Genetic Switch",
+    "abstract": "Is it possible to understand cancer? Or more specifically, is it possible to understand cancer from genetic side? There already many answers in literature. The most optimistic one has claimed that it is mission-possible. Duesberg and his colleagues reviewed the impressive amount of research results on cancer accumulated over 100 years. It confirms the a general opinion that considering all available experimental results and clinical observations there is no cancer theory without major difficulties, including the prevailing gene-based cancer theories. They have then listed 9 \"absolute discrepancies\" for such cancer theory. In this letter the quantitative evidence against one of their major reasons for dismissing mutation cancer theory, by both in vivo experiment and a first principle computation, is explicitly pointed out.",
+    "category": "q-bio"
+  },
+  {
+    "id": "0704.0492",
+    "title": "Refuting the Pseudo Attack on the REESSE1+ Cryptosystem",
+    "abstract": "We illustrate through example 1 and 2 that the condition at theorem 1 in [8] dissatisfies necessity, and the converse proposition of fact 1.1 in [8] does not hold, namely the condition Z/M - L/Ak < 1/(2 Ak^2) is not sufficient for f(i) + f(j) = f(k). Illuminate through an analysis and ex.3 that there is a logic error during deduction of fact 1.2, which causes each of fact 1.2, 1.3, 4 to be invalid. Demonstrate through ex.4 and 5 that each or the combination of qu+1 > qu * D at fact 4 and table 1 at fact 2.2 is not sufficient for f(i) + f(j) = f(k), property 1, 2, 3, 4, 5 each are invalid, and alg.1 based on fact 4 and alg.2 based on table 1 are disordered and wrong logically. Further, manifest through a repeated experiment and ex.5 that the data at table 2 is falsified, and the example in [8] is woven elaborately. We explain why Cx = Ax * W^f(x) (% M) is changed to Cx = (Ax * W^f(x))^d (% M) in REESSE1+ v2.1. To the signature fraud, we point out that [8] misunderstands the existence of T^-1 and Q^-1 % (M-1), and forging of Q can be easily avoided through moving H. Therefore, the conclusion of [8] that REESSE1+ is not secure at all (which connotes that [8] can extract a related private key from any public key in REESSE1+) is fully incorrect, and as long as the parameter Omega is fitly selected, REESSE1+ with Cx = Ax * W^f(x) (% M) is secure.",
+    "category": "cs"
+  },
+  {
+    "id": "0704.0688",
+    "title": "Strong Spherical Asymptotics for Rotor-Router Aggregation and the   Divisible Sandpile",
+    "abstract": "The rotor-router model is a deterministic analogue of random walk. It can be used to define a deterministic growth model analogous to internal DLA. We prove that the asymptotic shape of this model is a Euclidean ball, in a sense which is stronger than our earlier work. For the shape consisting of $n=\\omega_d r^d$ sites, where $\\omega_d$ is the volume of the unit ball in $\\R^d$, we show that the inradius of the set of occupied sites is at least $r-O(\\log r)$, while the outradius is at most $r+O(r^\\alpha)$ for any $\\alpha > 1-1/d$. For a related model, the divisible sandpile, we show that the domain of occupied sites is a Euclidean ball with error in the radius a constant independent of the total mass. For the classical abelian sandpile model in two dimensions, with $n=\\pi r^2$ particles, we show that the inradius is at least $r/\\sqrt{3}$, and the outradius is at most $(r+o(r))/\\sqrt{2}$. This improves on bounds of Le Borgne and Rossin. Similar bounds apply in higher dimensions.",
+    "category": "math"
+  },
+  {
+    "id": "0704.0744",
+    "title": "Quantifying social group evolution",
+    "abstract": "The rich set of interactions between individuals in the society results in complex community structure, capturing highly connected circles of friends, families, or professional cliques in a social network. Thanks to frequent changes in the activity and communication patterns of individuals, the associated social and communication network is subject to constant evolution. Our knowledge of the mechanisms governing the underlying community dynamics is limited, but is essential for a deeper understanding of the development and self-optimisation of the society as a whole. We have developed a new algorithm based on clique percolation, that allows, for the first time, to investigate the time dependence of overlapping communities on a large scale and as such, to uncover basic relationships characterising community evolution. Our focus is on networks capturing the collaboration between scientists and the calls between mobile phone users. We find that large groups persist longer if they are capable of dynamically altering their membership, suggesting that an ability to change the composition results in better adaptability. The behaviour of small groups displays the opposite tendency, the condition for stability being that their composition remains unchanged. We also show that the knowledge of the time commitment of the members to a given community can be used for estimating the community's lifetime. These findings offer a new view on the fundamental differences between the dynamics of small groups and large institutions.",
+    "category": "stat"
+  },
+  {
+    "id": "0704.0745",
+    "title": "Weak and Strong Taylor methods for numerical solutions of stochastic   differential equations",
+    "abstract": "We apply results of Malliavin-Thalmaier-Watanabe for strong and weak Taylor expansions of solutions of perturbed stochastic differential equations (SDEs). In particular, we work out weight expressions for the Taylor coefficients of the expansion. The results are applied to LIBOR market models in order to deal with the typical stochastic drift and with stochastic volatility. In contrast to other accurate methods like numerical schemes for the full SDE, we obtain easily tractable expressions for accurate pricing. In particular, we present an easily tractable alternative to ``freezing the drift'' in LIBOR market models, which has an accuracy similar to the full numerical scheme. Numerical examples underline the results.",
+    "category": "q-fin"
+  },
+  {
+    "id": "0704.0757",
+    "title": "Bounds on Negativity of Superpositions",
+    "abstract": "The entanglement quantified by negativity of pure bipartite superposed states is studied. We show that if the entanglement is quantified by the concurrence two pure states of high fidelity to one another still have nearly the same entanglement. Furthermore this conclusion can be guaranteed by our obtained inequality, and the concurrence is shown to be a continuous function even in infinite dimensions. The bounds on the negativity of superposed states in terms of those of the states being superposed are obtained. These bounds can find useful applications in estimating the amount of the entanglement of a given pure state.",
+    "category": "quant-ph"
+  },
+  {
+    "id": "0704.0771",
+    "title": "Suppression of 1/f noise in one-qubit systems",
+    "abstract": "We investigate the generation of quantum operations for one-qubit systems under classical noise with 1/f^\\alpha power spectrum, where 2>\\alpha > 0. We present an efficient way to approximate the noise with a discrete multi-state Markovian fluctuator. With this method, the average temporal evolution of the qubit density matrix under 1/f^\\alpha noise can be feasibly determined from recently derived deterministic master equations. We obtain qubit operations such as quantum memory and the NOT}gate to high fidelity by a gradient based optimization algorithm. For the NOT gate, the computed fidelities are qualitatively similar to those obtained earlier for random telegraph noise. In the case of quantum memory however, we observe a nonmonotonic dependency of the fidelity on the operation time, yielding a natural access rate of the memory.",
+    "category": "quant-ph"
+  },
+  {
+    "id": "0704.0892",
+    "title": "Nonstationary pattern in unsynchronizable complex networks",
+    "abstract": "Pattern formation and evolution in unsynchronizable complex networks are investigated. Due to the asymmetric topology, the synchronous patterns formed in complex networks are irregular and nonstationary. For coupling strength immediately out of the synchronizable region, the typical phenomenon is the on-off intermittency of the system dynamics. The patterns appeared in this process are signatured by the coexistence of a giant cluster, which comprises most of the nodes, and a few number of small clusters. The pattern evolution is characterized by the giant cluster irregularly absorbs or emits the small clusters. As the coupling strength leaves away from the synchronization bifurcation point, the giant cluster is gradually dissolved into a number of small clusters, and the system dynamics is characterized by the integration and separation of the small clusters. Dynamical mechanisms and statistical properties of the nonstationary pattern evolution are analyzed and conducted, and some scalings are newly revealed. Remarkably, it is found that the few active nodes, which escape from the giant cluster with a high frequency, are independent of the coupling strength while are sensitive to the bifurcation types. We hope our findings about nonstationary pattern could give additional understandings to the dynamics of complex systems and have implications to some real problems where systems maintain their normal functions only in the unsynchronizable state.",
+    "category": "nlin"
+  },
+  {
+    "id": "0704.0911",
+    "title": "Smooth and Starburst Tidal Tails in the GEMS and GOODS Fields",
+    "abstract": "GEMS and GOODS fields were examined to z~1.4 for galaxy interactions and mergers. The basic morphologies are familiar: antennae with long tidal tails, tidal dwarfs, and merged cores; M51-type galaxies with disk spirals and tidal arm companions; early-type galaxies with diffuse plumes; equal-mass grazing-collisions; and thick J-shaped tails beaded with star formation and double cores. One type is not common locally and is apparently a loose assemblage of smaller galaxies. Photometric measurements were made of the tails and clumps, and physical sizes were determined assuming photometric redshifts. Antennae tails are a factor of ~3 smaller in GEMS and GOODS systems compared to local antennae; their disks are a factor of ~2 smaller than locally. Collisions among early type galaxies generally show no fine structure in their tails, indicating that stellar debris is usually not unstable. One exception has a 5x10**9 Msun smooth red clump that could be a pure stellar condensation. Most tidal dwarfs are blue and probably form by gravitational instabilities in the gas. One tidal dwarf looks like it existed previously and was incorporated into the arm tip by tidal forces. The star-forming regions in tidal arms are 10 to 1000 times more massive than star complexes in local galaxies, although their separations are about the same. If they all form by gravitational instabilities, then the gaseous velocity dispersions in interacting galaxies have to be larger than in local galaxies by a factor of ~5 or more; the gas column densities have to be larger by the square of this factor.",
+    "category": "astro-ph"
+  },
+  {
+    "id": "0704.1108",
+    "title": "Evidence for Symplectic Symmetry in Ab Initio No-Core Shell Model   Results for Light Nuclei",
+    "abstract": "Clear evidence for symplectic symmetry in low-lying states of $^{12}$C and $^{16}$O is reported. Eigenstates of $^{12}$C and $^{16}$O, determined within the framework of the no-core shell model using the JISP16 $NN$ realistic interaction, typically project at the 85-90% level onto a few of the most deformed symplectic basis states that span only a small fraction of the full model space. The results are nearly independent of whether the bare or renormalized effective interactions are used in the analysis. The outcome confirms Elliott's \\SU{3} model which underpins the symplectic scheme, and above all, points to the relevance of a symplectic no-core shell model that can reproduce experimental B(E2) values without effective charges as well as deformed spatial modes associated with clustering phenomena in nuclei.",
+    "category": "nucl-th"
+  },
+  {
+    "id": "0704.1115",
+    "title": "Strange Nucleon Form Factors from $ep$ and $\\nu p$ Elastic Scattering",
+    "abstract": "The recent parity-violating $ep$ forward-scattering elastic asymmetry data from Jefferson Lab (HAPPEx and G0), when combined with the $\\nu p$ elastic cross section data from Brookhaven (E734), permit an extraction of the strangeness contribution to the vector and axial nucleon form factors for momentum transfers in the range $0.45 < Q^2 < 1.0$ GeV$^2$. These results, combined with the recent determination of the strange vector form factors at $Q^2 = 0.1$ GeV$^2$ (SAMPLE, HAPPEx, PVA4, G0) have been interpreted in terms of $uuds\\bar{s}$ configurations very different from the kaon-loop configurations usually associated with strangeness in the nucleon. New experiments are being proposed to improve the state of our knowledge of the $\\nu p$ elastic cross section -- these new experiments will push the range of $Q^2$ to much lower values, and greatly increase the precision of the $\\nu p$ elastic data. One outcome of this can be a measurement of the strangeness contribution to the nucleon spin, $\\Delta s$. Nuclear targets (e.g. C or Ar) are to be used in these neutrino experiments, and so a deep understanding of the nuclear physics, particularly in regard to final state effects, is needed before the potential of these precision experiments can be fully realized.",
+    "category": "hep-ex"
+  },
+  {
+    "id": "0704.1162",
+    "title": "Binary Capture Rates for Massive Protostars",
+    "abstract": "The high multiplicity of massive stars in dense, young clusters is established early in their evolution. The mechanism behind this remains unresolved. Recent results suggest that massive protostars may capture companions through disk interactions with much higher efficiency than their solar mass counterparts. However, this conclusion is based on analytic determinations of capture rates and estimates of the robustness of the resulting binaries. We present the results of coupled n-body and SPH simulations of star-disk encounters to further test the idea that disk-captured binaries contribute to the observed multiplicity of massive stars.",
+    "category": "astro-ph"
+  },
+  {
+    "id": "0704.1307",
+    "title": "Ke4 decays and Wigner cusp",
+    "abstract": "The NA48/2 experiment at the CERN SPS collected in 2003 and 2004 large samples of the decays K+- -> pi+ pi- e+- nu (Ke4+-), K+- -> pi0 pi0 e+- nu (Ke400) and K+- -> pi0 pi0 pi+-. From the Ke4+- form factors and from the cusp in the M00^2 distribution of the K+- -> pi0 pi0 pi+- events, the pi-pi scattering lengths a00 and a20 could be extracted. This measurement is a fundamental test of Chiral Perturbation Theory (ChPT). The branching fraction and form factors of the Ke400 decay were precisely measured, using a much larger data sample than in previous experiments. An improved measurement of the slope parameters for the decay K+- -> pi0 pi0 pi+- showed evidence for a non-zero value of k.",
+    "category": "hep-ex"
+  },
+  {
+    "id": "0704.1417",
+    "title": "Constraints on Regge models from perturbation theory",
+    "abstract": "We study the constraints that the operator product expansion imposes on large $N_c$ inspired QCD models for current-current correlators. We focus on the constraints obtained by going beyond the leading-order parton computation. We explicitly show that, assumed a given mass spectrum: linear Regge behavior in $n$ (the principal quantum number) plus corrections in $1/n$, we can obtain the logarithmic (and constant) behavior in $n$ of the decay constants within a systematic expansion in $1/n$. Our example shows that it is possible to have different large $n$ behavior for the vector and pseudo-vector mass spectrum and yet comply with all the constraints from the operator product expansion.",
+    "category": "hep-ph"
+  },
+  {
+    "id": "0704.1457",
+    "title": "Chaos and Symmetry in String Cosmology",
+    "abstract": "We review the recently discovered interplay between chaos and symmetry in the general inhomogeneous solution of many string-related Einstein-matter systems in the vicinity of a cosmological singularity. The Belinsky-Khalatnikov-Lifshitz-type chaotic behaviour is found, for many Einstein-matter models (notably those related to the low-energy limit of superstring theory and M-theory), to be connected with certain (infinite-dimensional) hyperbolic Kac-Moody algebras. In particular, the billiard chambers describing the asymptotic cosmological behaviour of pure Einstein gravity in spacetime dimension d+1, or the metric-three-form system of 11-dimensional supergravity, are found to be identical to the Weyl chambers of the Lorentzian Kac-Moody algebras AE_d, or E_{10}, respectively. This suggests that these Kac-Moody algebras are hidden symmetries of the corresponding models. There even exists some evidence of a hidden equivalence between the general solution of the Einstein-three-form system and a null geodesic in the infinite dimensional coset space E_{10} / K(E_{10}), where K(E_{10}) is the maximal compact subgroup of E_{10}.",
+    "category": "gr-qc"
+  },
+  {
+    "id": "0704.1475",
+    "title": "Williams' decomposition of the L\\'evy continuous random tree and   simultaneous extinction probability for populations with neutral mutations",
+    "abstract": "We consider an initial Eve-population and a population of neutral mutants, such that the total population dies out in finite time. We describe the evolution of the Eve-population and the total population with continuous state branching processes, and the neutral mutation procedure can be seen as an immigration process with intensity proportional to the size of the population. First we establish a Williams' decomposition of the genealogy of the total population given by a continuous random tree, according to the ancestral lineage of the last individual alive. This allows us give a closed formula for the probability of simultaneous extinction of the Eve-population and the total population.",
+    "category": "math"
+  },
+  {
+    "id": "0704.1596",
+    "title": "Turbulence and the Navier-Stokes equations",
+    "abstract": "The concept of continuous topological evolution, based upon Cartan's methods of exterior differential systems, is used to develop a topological theory of non-equilibrium thermodynamics, within which there exist processes that exhibit continuous topological change and thermodynamic irreversibility. The technique furnishes a universal, topological foundation for the partial differential equations of hydrodynamics and electrodynamics; the technique does not depend upon a metric, connection or a variational principle. Certain topological classes of solutions to the Navier-Stokes equations are shown to be equivalent to thermodynamically irreversible processes.",
+    "category": "math-ph"
+  },
+  {
+    "id": "0704.1650",
+    "title": "Correlations, fluctuations and stability of a finite-size network of   coupled oscillators",
+    "abstract": "The incoherent state of the Kuramoto model of coupled oscillators exhibits marginal modes in mean field theory. We demonstrate that corrections due to finite size effects render these modes stable in the subcritical case, i.e. when the population is not synchronous. This demonstration is facilitated by the construction of a non-equilibrium statistical field theoretic formulation of a generic model of coupled oscillators. This theory is consistent with previous results. In the all-to-all case, the fluctuations in this theory are due completely to finite size corrections, which can be calculated in an expansion in 1/N, where N is the number of oscillators. The N -> infinity limit of this theory is what is traditionally called mean field theory for the Kuramoto model.",
+    "category": "nlin"
+  },
+  {
+    "id": "0704.2017",
+    "title": "Large System Analysis of Game-Theoretic Power Control in UWB Wireless   Networks with Rake Receivers",
+    "abstract": "This paper studies the performance of partial-Rake (PRake) receivers in impulse-radio ultrawideband wireless networks when an energy-efficient power control scheme is adopted. Due to the large bandwidth of the system, the multipath channel is assumed to be frequency-selective. By using noncooperative game-theoretic models and large system analysis, explicit expressions are derived in terms of network parameters to measure the effects of self- and multiple-access interference at a receiving access point. Performance of the PRake is compared in terms of achieved utilities and loss to that of the all-Rake receiver.",
+    "category": "cs"
+  },
+  {
+    "id": "0704.2148",
+    "title": "Continuous Capillary Condensation",
+    "abstract": "We show that condensation in a capped capillary slit is a continuous interfacial critical phenomenon, related intimately to several other surface phase transitions. In three dimensions (3d), the adsorption and desorption branches correspond to the unbinding of the meniscus from the cap and opening, respectively and are equivalent to 2d-like complete-wetting transitions. For dispersion forces, the singularities on the two branches are distinct, owing to the different interplay of geometry and intermolecular forces. In 2d we establish precise connection, or covariance, with 2d critical-wetting and wedge-filling transitions, i.e. we establish that certain interfacial properties in very different geometries are identical. Our predictions of universal scaling and covariance in finite capillaries are supported by extensive Ising model simulation studies in 2d and 3d.",
+    "category": "cond-mat"
+  },
+  {
+    "id": "0704.2156",
+    "title": "First study of the gluon-quark-antiquark static potential in SU(3)   Lattice QCD",
+    "abstract": "We study the long distance interaction for hybrid hadrons, with a static gluon, a quark and an antiquark with lattice QCD techniques. A Wilson loop adequate to the static hybrid three-body system is developed and, using a 24^3 x 48 periodic lattice with beta=6.2 and a ~ 0.075 fm, two different geometries for the gluon-quark segment and the gluon-antiquark segment are investigated. When these segments are perpendicular, the static potential is compatible with confinement realized with a pair of fundamental strings, one linking the gluon to the quark and another linking the same gluon to the antiquark. When the segments are parallel and superposed, the total string tension is larger and agrees with the Casimir Scaling measured by Bali. This can be interpreted with a type-II superconductor analogy for the confinement in QCD, with repulsion of the fundamental strings and with the string tension of the first topological excitation of the string (the adjoint string) larger than the double of the fundamental string tension.",
+    "category": "hep-lat"
+  },
+  {
+    "id": "0704.2381",
+    "title": "The prime spectrum of algebras of quadratic growth",
+    "abstract": "We study prime algebras of quadratic growth. Our first result is that if $A$ is a prime monomial algebra of quadratic growth then $A$ has finitely many prime ideals $P$ such that $A/P$ has GK dimension one. This shows that prime monomial algebras of quadratic growth have bounded matrix images. We next show that a prime graded algebra of quadratic growth has the property that the intersection of the nonzero prime ideals $P$ such that $A/P$ has GK dimension 2 is non-empty, provided there is at least one such ideal. From this we conclude that a prime monomial algebra of quadratic growth is either primitive or has nonzero locally nilpotent Jacobson radical. Finally, we show that there exists a prime monomial algebra $A$ of GK dimension two with unbounded matrix images and thus the quadratic growth hypothesis is necessary to conclude that there are only finitely many prime ideals such that $A/P$ has GK dimension 1.",
+    "category": "math"
+  },
+  {
+    "id": "0704.2409",
+    "title": "Multilevel Deconstruction of the In Vivo Behavior of Looped DNA-Protein   Complexes",
+    "abstract": "Protein-DNA complexes with loops play a fundamental role in a wide variety of cellular processes, ranging from the regulation of DNA transcription to telomere maintenance. As ubiquitous as they are, their precise in vivo properties and their integration into the cellular function still remain largely unexplored. Here, we present a multilevel approach that efficiently connects in both directions molecular properties with cell physiology and use it to characterize the molecular properties of the looped DNA-lac repressor complex while functioning in vivo. The properties we uncover include the presence of two representative conformations of the complex, the stabilization of one conformation by DNA architectural proteins, and precise values of the underlying twisting elastic constants and bending free energies. Incorporation of all this molecular information into gene-regulation models reveals an unprecedented versatility of looped DNA-protein complexes at shaping the properties of gene expression.",
+    "category": "q-bio"
+  },
+  {
+    "id": "0704.2547",
+    "title": "Inferring DNA sequences from mechanical unzipping data: the   large-bandwidth case",
+    "abstract": "The complementary strands of DNA molecules can be separated when stretched apart by a force; the unzipping signal is correlated to the base content of the sequence but is affected by thermal and instrumental noise. We consider here the ideal case where opening events are known to a very good time resolution (very large bandwidth), and study how the sequence can be reconstructed from the unzipping data. Our approach relies on the use of statistical Bayesian inference and of Viterbi decoding algorithm. Performances are studied numerically on Monte Carlo generated data, and analytically. We show how multiple unzippings of the same molecule may be exploited to improve the quality of the prediction, and calculate analytically the number of required unzippings as a function of the bandwidth, the sequence content, the elasticity parameters of the unzipped strands.",
+    "category": "q-bio"
+  },
+  {
+    "id": "0704.2570",
+    "title": "Inverse Monte-Carlo determination of effective lattice models for SU(3)   Yang-Mills theory at finite temperature",
+    "abstract": "This paper concludes our efforts in describing SU(3)-Yang-Mills theories at different couplings/temperatures in terms of effective Polyakov-loop models. The associated effective couplings are determined through an inverse Monte Carlo procedure based on novel Schwinger-Dyson equations that employ the symmetries of the Haar measure. Due to the first-order nature of the phase transition we encounter a fine-tuning problem in reproducing the correct behavior of the Polyakov-loop from the effective models. The problem remains under control as long as the number of effective couplings is sufficiently small.",
+    "category": "hep-lat"
+  },
+  {
+    "id": "0704.2769",
+    "title": "Towards a Background Independent Quantum Gravity in Eight Dimensions",
+    "abstract": "We start a program of background independent quantum gravity in eight dimensions. We begin by considering canonical gravity \\textit{a la} \"Kaluza-Klein\" in $D=d+1$ dimensions. We show that our canonical gravity approach can be applied to the case of self-dual gravity in four dimensions. Further, by using our previously proposed classical action of Ashtekar self-dual gravity formalism in eight dimensions, we proceed to develop the canonical approach in eight dimensions. Our construction considers different SO(8) symmetry breakings. In particular, the breaking $SO(8)=S_{R}^{7}% \\times S_{L}^{7}\\times G_{2}$ plays an important role in our discussion.",
+    "category": "hep-th"
+  },
+  {
+    "id": "0704.2865",
+    "title": "Classical and quantum randomness and the financial market",
+    "abstract": "We analyze complexity of financial (and general economic) processes by comparing classical and quantum-like models for randomness. Our analysis implies that it might be that a quantum-like probabilistic description is more natural for financial market than the classical one. A part of our analysis is devoted to study the possibility of application of the quantum probabilistic model to agents of financial market. We show that, although the direct quantum (physical) reduction (based on using the scales of quantum mechanics) is meaningless, one may apply so called quantum-like models. In our approach quantum-like probabilistic behaviour is a consequence of contextualy of statistical data in finances (and economics in general). However, our hypothesis on \"quantumness\" of financial data should be tested experimentally (as opposed to the conventional description based on the noncontextual classical probabilistic approach). We present a new statistical test based on a generalization of the well known in quantum physics Bell's inequality.",
+    "category": "q-fin"
+  },
+  {
+    "id": "0704.3016",
+    "title": "Pulse shapes from electron and photon induced events in segmented   high-purity germanium detectors",
+    "abstract": "Experiments built to search for neutrinoless double beta-decay are limited in their sensitivity not only by the exposure but also by the amount of background encountered. Radioactive isotopes in the surrounding of the detectors which emit gamma-radiation are expected to be a significant source of background in the GERmanium Detector Array, GERDA.   Methods to select electron induced events and discriminate against photon induced events inside a germanium detector are presented in this paper. The methods are based on the analysis of the time structure of the detector response. Data were taken with a segmented GERDA prototype detector. It is shown that the analysis of the time response of the detector can be used to distinguish multiply scattered photons from electrons.",
+    "category": "nucl-ex"
+  },
+  {
+    "id": "0704.3071",
+    "title": "Converting genetic network oscillations into somite spatial pattern",
+    "abstract": "In most vertebrate species, the body axis is generated by the formation of repeated transient structures called somites. This spatial periodicity in somitogenesis has been related to the temporally sustained oscillations in certain mRNAs and their associated gene products in the cells forming the presomatic mesoderm. The mechanism underlying these oscillations have been identified as due to the delays involved in the synthesis of mRNA and translation into protein molecules [J. Lewis, Current Biol. {\\bf 13}, 1398 (2003)]. In addition, in the zebrafish embryo intercellular Notch signalling couples these oscillators and a longitudinal positional information signal in the form of an Fgf8 gradient exists that could be used to transform these coupled temporal oscillations into the observed spatial periodicity of somites. Here we consider a simple model based on this known biology and study its consequences for somitogenesis. Comparison is made with the known properties of somite formation in the zebrafish embryo . We also study the effects of localized Fgf8 perturbations on somite patterning.",
+    "category": "q-bio"
+  },
+  {
+    "id": "0704.3208",
+    "title": "Callan-Symanzik method for $m$-axial Lifshitz points",
+    "abstract": "We introduce the Callan-Symanzik method in the description of anisotropic as well as isotropic Lifshitz critical behaviors. Renormalized perturbation theories are defined by normalization conditions with nonvanishing masses and at zero external momenta. The orthogonal approximation is employed to obtain the critical indices $\\eta_{L2}$, $\\nu_{L2}$, $\\eta_{L4}$ and $\\nu_{L4}$ diagramatically at least up to two-loop order in the anisotropic criticalities. This approximation is also utilized to compute the exponents $\\eta_{L4}$ and $\\nu_{L4}$ in the isotropic case. Furthermore, we compute those exponents exactly for the isotropic behaviors at the same loop order. The results obtained for all exponents are in perfect agreement with those previously derived in the massless theories renormalized at nonzero external momenta.",
+    "category": "hep-th"
+  },
+  {
+    "id": "0704.3306",
+    "title": "Quantum mechanics on Hilbert manifolds: The principle of functional   relativity",
+    "abstract": "Quantum mechanics is formulated as a geometric theory on a Hilbert manifold. Images of charts on the manifold are allowed to belong to arbitrary Hilbert spaces of functions including spaces of generalized functions. Tensor equations in this setting, also called functional tensor equations, describe families of functional equations on various Hilbert spaces of functions. The principle of functional relativity is introduced which states that quantum theory is indeed a functional tensor theory, i.e., it can be described by functional tensor equations. The main equations of quantum theory are shown to be compatible with the principle of functional relativity. By accepting the principle as a hypothesis, we then analyze the origin of physical dimensions, provide a geometric interpretation of Planck's constant, and find a simple interpretation of the two-slit experiment and the process of measurement.",
+    "category": "quant-ph"
+  },
+  {
+    "id": "0704.3479",
+    "title": "Elliptic Flow and Jet Quenching of a Parton System after Relativistic   Heavy Ion Collision",
+    "abstract": "We obtain the initial phase space distribution after relativistic heavy ion collision by the CGC shattering method incorporating the uncertainty principle and solve the semi-classical Boltzmann equation which includes the gluon radiation processes. We present as a function of time the attenuation rate of high $p_T$ partons, which have transverse momenta over 6 $GeV/c$, in the medium which is formed after relativistic heavy ion collision. We calculate the elliptic flow as a function of an impact parameter, time and transverse momentum and also present the polar anisotropy, which gives the initial condition for color filamentation.",
+    "category": "nucl-th"
+  },
+  {
+    "id": "0704.3542",
+    "title": "Polynomial solutions of qKZ equation and ground state of XXZ spin chain   at Delta = -1/2",
+    "abstract": "Integral formulae for polynomial solutions of the quantum Knizhnik-Zamolodchikov equations associated with the R-matrix of the six-vertex model are considered. It is proved that when the deformation parameter q is equal to e^{+- 2 pi i/3} and the number of vertical lines of the lattice is odd, the solution under consideration is an eigenvector of the inhomogeneous transfer matrix of the six-vertex model. In the homogeneous limit it is a ground state eigenvector of the antiferromagnetic XXZ spin chain with the anisotropy parameter Delta equal to -1/2 and odd number of sites. The obtained integral representations for the components of this eigenvector allow to prove some conjectures on its properties formulated earlier. A new statement relating the ground state components of XXZ spin chains and Temperley-Lieb loop models is formulated and proved.",
+    "category": "math-ph"
+  },
+  {
+    "id": "0704.3594",
+    "title": "Search for Baryonic Resonances Decaying to Xi pi in Deep-Inelastic   Scattering at HERA",
+    "abstract": "A search for narrow baryonic resonances decaying into Xi- pi- or Xi- pi+ and their antiparticles is carried out with the H1 detector using deep inelastic scattering events at HERA in the range of negative photon four-momentum transfer squared 2 < Q^2 < 100 GeV^2. No signal is observed for a new baryonic state in the mass range 1600 - 2300 MeV in either the doubly charged or the neutral decay channels. The known baryon Xi0 is observed through its decay mode into Xi- pi+. Upper limits are given on the ratio of the production rates of new baryonic states, such as the hypothetical pentaquark states Xi^{--}_{5q} or Xi^{0}_{5q}, relative to the Xi0 baryon state.",
+    "category": "hep-ex"
+  },
+  {
+    "id": "0704.3624",
+    "title": "Anisotropic ac dissipation at the surface of mesoscopic superconductors",
+    "abstract": "In this work we study the ac dissipation of mesoscopic superconductors at microwave frequencies using the time dependent Ginzburg-Landau equations. Our numerical simulations show that the ac dissipation is strongly dependent on the orientation of the ac magnetic field ($h_{ac}$) relative to the dc magnetic field ($H_{dc}$). When $h_{ac}$ is parallel to $H_{dc}$ we observe that each vortex penetration event produces a significant supression of the ac losses because the imaginary part of the ac susceptibility as a function of $H_{dc}$ increases before the penetration of vortices, and then it decreases abruptly after vortices have entered into the sample. In the second case, when $h_{ac}$ is perpendicular to $H_{dc}$, we observe that the jumps in dissipation occur at the same values of $H_{dc}$ but are much smaller than in the parallel configuration. The behavior of the dissipation in the perpendicular configuration is similar to previous results obtained in recent microwave experiments using mesoscopic litographed squares of Pb [J. Low Temp. Phys. 135, 119 (2004)].",
+    "category": "cond-mat"
+  },
+  {
+    "id": "0704.3751",
+    "title": "Theory of magnetic deflagration",
+    "abstract": "Theory of magnetic deflagration (avalanches) in crystals of molecular magnets has been developed. The phenomenon resembles the burning of a chemical substance, with the Zeeman energy playing the role of the chemical energy. Non-destructive reversible character of magnetic deflagration, as well as the possibility to continuously tune the flammability of the crystal by changing the magnetic field, makes molecular magnets an attractive toy system for a detailed study of the burning process. Besides simplicity, new features, as compared to the chemical burning, include possibility of quantum decay of metastable spin states and strong temperature dependence of the heat capacity and thermal conductivity. We obtain analytical and numerical solutions for criteria of the ignition of magnetic deflagration, and compute the ignition rate and the speed of the developed deflagration front.",
+    "category": "cond-mat"
+  },
+  {
+    "id": "0704.3788",
+    "title": "Anderson localization and nonlinearity in one dimensional disordered   photonic lattices",
+    "abstract": "We experimentally investigate the evolution of linear and nonlinear waves in a realization of the Anderson model using disordered one dimensional waveguide lattices. Two types of localized eigenmodes, flat-phased and staggered, are directly measured. Nonlinear perturbations enhances localization in one type, and induce delocalization in the other. In a complementary approach, we study the evolution on short time scales of $\\delta$-like wavepackets in the presence of disorder. A transition from ballistic wavepacket expansion to exponential (Anderson) localization is observed. We find an intermediate regime in which the ballistic and localized components coexist while diffusive dynamics is absent. Evidence is found for a faster transition into localization under nonlinear conditions.",
+    "category": "cond-mat"
+  },
+  {
+    "id": "0704.3862",
+    "title": "An Integrated Human-Computer System for Controlling Interstate Disputes",
+    "abstract": "In this paper we develop a scientific approach to control inter-country conflict. This system makes use of a neural network and a feedback control approach. It was found that by controlling the four controllable inputs: Democracy, Dependency, Allies and Capability simultaneously, all the predicted dispute outcomes could be avoided. Furthermore, it was observed that controlling a single input Dependency or Capability also avoids all the predicted conflicts. When the influence of each input variable on conflict is assessed, Dependency, Capability, and Democracy emerge as key variables that influence conflict.",
+    "category": "stat"
+  },
+  {
+    "id": "0704.3944",
+    "title": "Simultaneous Radio to (Sub-) mm-Monitoring of Variability and Spectral   Shape Evolution of potential GLAST Blazars",
+    "abstract": "The Large Area Telescope (LAT) instrument onboard GLAST offers a tremendous opportunity for future blazar studies. In order to fully benefit from its capabilities and to maximize the scientific return from the LAT, it is of great importance to conduct dedicated multi-frequency monitoring campaigns that will result comprehensive observations. Consequently, we initiated an effort to conduct a GLAST-dedicated, quasi-simultaneous, broad-band flux-density (and polarization) monitoring of potential GLAST blazars with the Effelsberg and OVRO radio telescopes (11cm to 7mm wavelength). Here, we present a short overview of these activities which will complement the multi-wavelengths activities of the GLAST/LAT collaboration towards the 'low-energy' radio bands. Further we will give a brief outlook including the extension of this coordinated campaign towards higher frequencies and future scientific aims.",
+    "category": "astro-ph"
+  },
+  {
+    "id": "0705.0080",
+    "title": "Cosmological test of the Yilmaz theory of gravity",
+    "abstract": "We test the Yilmaz theory of gravitation by working out the corresponding Friedmann-type equations generated by assuming the Friedmann-Robertson-Walker cosmological metrics. In the case that space is flat the theory is consistent only with either a completely empty universe or a negative energy vacuum that decays to produce a constant density of matter. In both cases the total energy remains zero at all times, and in the latter case the acceleration of the expansion is always negative. To obtain a more flexible and potentially more realistic cosmology, the equation of state relating the pressure and energy density of the matter creation process must be different from the vacuum, as for example is the case in the steady-state models of Gold, Bondi, Hoyle and others. The theory does not support the cosmological principle for curved space K =/= 0 cosmological metrics.",
+    "category": "gr-qc"
+  },
+  {
+    "id": "0705.0101",
+    "title": "\\chi_{c0,2} decay into light meson pairs and its implication of the   scalar meson structures",
+    "abstract": "In light of the recent data from BES collaboration for $\\chi_{c0}\\to VV$, $PP$ and $SS$, and from CLEO-c for $\\eta\\eta$, $\\eta^\\prime\\eta^\\prime$ and $\\eta\\eta^\\prime$, we present a detailed analysis of the decays of heavy quarkonia into light meson pairs such as $\\chi_{c0,2}\\to VV$, $PP$ and $SS$ in a recently proposed parametrization scheme. An overall agreement with the data is achieved in $\\chi_{c0,2}\\to VV$ and $PP$, while in $\\chi_{c0}\\to SS$ we find that a possible existence of glueball-$q\\bar{q}$ mixings is correlated with the OZI-rule violations, which can be further examined at CLEO-c and BESIII in $\\chi_{c0}\\to SS$ measurement.",
+    "category": "hep-ph"
+  },
+  {
+    "id": "0705.0254",
+    "title": "Strong and radiative decays of the Ds0*(2317) meson in the DK-molecule   picture",
+    "abstract": "We consider a possible interpretation of the new charm-strange meson Ds0*(2317) as a hadronic molecule - a bound state of D and K mesons. Using an effective Lagrangian approach we calculate the strong Ds0* to Ds pi0 and radiative Ds0* to Ds* gamma decays. A new impact related to the DK molecular structure of the Ds0*(2317) meson is that the presence of u(d) quarks in the D and K mesons gives rise to a direct strong isospin-violating transition Ds0* to Ds pi0 in addition to the decay mechanism induced by eta-pi0 mixing considered previously. We show that the direct transition dominates over the eta-pi0 mixing transition in the Ds0* to Ds pi0 decay. Our results for the partial decay widths are consistent with previous calculations.",
+    "category": "hep-ph"
+  },
+  {
+    "id": "0705.0278",
+    "title": "A general framework for nonholonomic mechanics: Nonholonomic Systems on   Lie affgebroids",
+    "abstract": "This paper presents a geometric description of Lagrangian and Hamiltonian systems on Lie affgebroids subject to affine nonholonomic constraints. We define the notion of nonholonomically constrained system, and characterize regularity conditions that guarantee that the dynamics of the system can be obtained as a suitable projection of the unconstrained dynamics. It is shown that one can define an almost aff-Poisson bracket on the constraint AV-bundle, which plays a prominent role in the description of nonholonomic dynamics. Moreover, these developments give a general description of nonholonomic systems and the unified treatment permits to study nonholonomic systems after or before reduction in the same framework. Also, it is not necessary to distinguish between linear or affine constraints and the methods are valid for explicitly time-dependent systems.",
+    "category": "math-ph"
+  },
+  {
+    "id": "0705.0301",
+    "title": "Planck Scale Unification in a Supersymmetric Standard Model",
+    "abstract": "We show how gauge coupling unification near the Planck scale $M_P\\sim 10^{19}$ GeV can be achieved in the framework of supersymmetry, facilitating a full unification of all forces with gravity. Below the conventional GUT scale $M_{GUT}\\sim 10^{16}$ GeV physics is described by a Supersymmetric Standard Model whose particle content is that of three complete $\\mathbf{27}$ representations of the gauge group $E_6$. Above the conventional GUT scale the gauge group corresponds to a left-right symmetric Supersymmetric Pati-Salam model, which may be regarded as a ``surrogate SUSY GUT'' with all the nice features of SO(10) but without proton decay or doublet-triplet splitting problems. At the TeV scale the extra exotic states may be discovered at the LHC, providing an observable footprint of an underlying $E_6$ gauge group broken at the Planck scale. Assuming an additional low energy $U(1)_X$ gauge group, identified as a non-trivial combination of diagonal $E_6$ generators, the $\\mu$ problem of the MSSM can be resolved.",
+    "category": "hep-ph"
+  },
+  {
+    "id": "0705.0337",
+    "title": "A mathematical and computational review of Hartree-Fock SCF methods in   Quantum Chemistry",
+    "abstract": "We present here a review of the fundamental topics of Hartree-Fock theory in Quantum Chemistry. From the molecular Hamiltonian, using and discussing the Born-Oppenheimer approximation, we arrive to the Hartree and Hartree-Fock equations for the electronic problem. Special emphasis is placed in the most relevant mathematical aspects of the theoretical derivation of the final equations, as well as in the results regarding the existence and uniqueness of their solutions. All Hartree-Fock versions with different spin restrictions are systematically extracted from the general case, thus providing a unifying framework. Then, the discretization of the one-electron orbitals space is reviewed and the Roothaan-Hall formalism introduced. This leads to a exposition of the basic underlying concepts related to the construction and selection of Gaussian basis sets, focusing in algorithmic efficiency issues. Finally, we close the review with a section in which the most relevant modern developments (specially those related to the design of linear-scaling methods) are commented and linked to the issues discussed. The whole work is intentionally introductory and rather self-contained, so that it may be useful for non experts that aim to use quantum chemical methods in interdisciplinary applications. Moreover, much material that is found scattered in the literature has been put together here to facilitate comprehension and to serve as a handy reference.",
+    "category": "physics"
+  },
+  {
+    "id": "0705.0383",
+    "title": "String tension and removal of lattice coarsening effects in Monte Carlo   Renormalization Group",
+    "abstract": "We study the computation of the static quark potential under decimations in the Monte Carlo Renormalization Group (MCRG). Employing a multi-representation plaquette action, we find that fine-tuning the decimation prescription so that the MCRG equilibrium self-consistency condition is satisfied produces dramatic improvement at large distances. In particular, lattice coarsening (change of effective lattice spacing on action-generated lattices after decimation) is nearly eliminated. Failure to correctly tune the decimation, on the other hand, produces large coarsening effects, of order 50% or more, consistent with those seen in previous studies. We also study rotational invariance restoration at short distances, where no particular improvement is seen for this action.",
+    "category": "hep-lat"
+  },
+  {
+    "id": "0705.0550",
+    "title": "Dimensional Duality",
+    "abstract": "We show that string theory on a compact negatively curved manifold, preserving a U(1)^{b_1} winding symmetry, grows at least b_1 new effective dimensions as the space shrinks. The winding currents yield a \"D-dual\" description of a Riemann surface of genus h in terms of its 2h dimensional Jacobian torus, perturbed by a closed string tachyon arising as a potential energy term in the worldsheet sigma model. D-branes on such negatively curved manifolds also reveal this structure, with a classical moduli space consisting of a b_1-torus. In particular, we present an AdS/CFT system which offers a non-perturbative formulation of such supercritical backgrounds. Finally, we discuss generalizations of this new string duality.",
+    "category": "hep-th"
+  },
+  {
+    "id": "0705.0569",
+    "title": "Mixed models for longitudinal left-censored repeated measures",
+    "abstract": "Longitudinal studies could be complicated by left-censored repeated measures. For example, in Human Immunodeficiency Virus infection, there is a detection limit of the assay used to quantify the plasma viral load. Simple imputation of the limit of the detection or of half of this limit for left-censored measures biases estimations and their standard errors. In this paper, we review two likelihood-based methods proposed to handle left-censoring of the outcome in linear mixed model. We show how to fit these models using SAS Proc NLMIXED and we compare this tool with other programs. Indications and limitations of the programs are discussed and an example in the field of HIV infection is shown.",
+    "category": "stat"
+  },
+  {
+    "id": "0705.0608",
+    "title": "Poloidal-toroidal decomposition in a finite cylinder. I. Influence   matrices for the magnetohydrodynamic equations",
+    "abstract": "The Navier-Stokes equations and magnetohydrodynamics equations are written in terms of poloidal and toroidal potentials in a finite cylinder. This formulation insures that the velocity and magnetic fields are divergence-free by construction, but leads to systems of partial differential equations of higher order, whose boundary conditions are coupled. The influence matrix technique is used to transform these systems into decoupled parabolic and elliptic problems. The magnetic field in the induction equation is matched to that in an exterior vacuum by means of the Dirichlet-to-Neumann mapping, thus eliminating the need to discretize the exterior. The influence matrix is scaled in order to attain an acceptable condition number.",
+    "category": "math"
+  },
+  {
+    "id": "0705.0771",
+    "title": "Non-local effects on the heavy-ion fusion at sub-barrier energies",
+    "abstract": "We investigate the effect of Pauli non-locality in the heavy-ion optical potential on sub-barrier fusion reactions. The S\\~{a}o Paulo potential, which takes into account the Pauli non-locality and has been widely used in analyzing elastic scattering, has also recently been applied to heavy-ion fusion. However, the approximation employed in deriving the S\\~{a}o Paulo potential, based on the Perey-Buck semi-classical treatment of neutron induced reactions, must be assessed for charged particles tunneling through a barrier. It is the purpose of this note to look into this question. We consider the widely studied system $^{16}$O + $^{208}$Pb at energies that span the barrier region from 10 MeV below to 10 MeV above. It seems that the non-locality plays a minor role. We find the S\\~{a}o Paulo potential to be quite adequate throughout the region.",
+    "category": "nucl-th"
+  },
+  {
+    "id": "0705.0902",
+    "title": "The role of elastic stresses on leaf venation morphogenesis",
+    "abstract": "We explore the possible role of elastic mismatch between epidermis and mesophyll as a driving force for the development of leaf venation. The current prevalent 'canalization' hypothesis for the formation of veins claims that the transport of the hormone auxin out of the leaves triggers cell differentiation to form veins. Although there is evidence that auxin plays a fundamental role in vein formation, the simple canalization mechanism may not be enough to explain some features observed in the vascular system of leaves, in particular, the abundance of vein loops. We present a model based on the existence of mechanical instabilities that leads very naturally to hierarchical patterns with a large number of closed loops. When applied to the structure of high order veins, the numerical results show the same qualitative features as actual venation patterns and, furthermore, have the same statistical properties. We argue that the agreement between actual and simulated patterns provides strong evidence for the role of mechanical effects on venation development.",
+    "category": "physics"
+  },
+  {
+    "id": "0705.0936",
+    "title": "Performance Comparison of Energy-Efficient Power Control for CDMA and   Multiuser UWB Networks",
+    "abstract": "This paper studies the performance of a wireless data network using energy-efficient power control techniques when different multiple access schemes, namely direct-sequence code division multiple access (DS-CDMA) and impulse-radio ultrawideband (IR-UWB), are considered. Due to the large bandwidth of the system, the multipath channel is assumed to be frequency-selective. By making use of noncooperative game-theoretic models and large-system analysis tools, explicit expressions for the achieved utilities at the Nash equilibrium are derived in terms of the network parameters. A measure of the loss of DS-CDMA with respect to IR-UWB is proposed, which proves substantial equivalence between the two schemes. Simulation results are provided to validate the analysis.",
+    "category": "cs"
+  },
+  {
+    "id": "0705.0953",
+    "title": "Search for color charge dependence of energy loss at RHIC",
+    "abstract": "The non-Abelian feature of quantum chromodynamics (QCD) results in the gluons losing more energy than quarks in the medium formed in high energy heavy-ion collisions. Experimental results in p+p collisions when compared to NLO pQCD calculations show that at high transverse momentum (pT) the produced protons+anti-protons are dominantly from gluon jets and charged pions have substantial contribution from quark jets. If such a scenario is applied to heavy-ion collisions at RHIC, one would expect the difference in quark and gluon energy loss to have an effect on measured observables, such as high pT pbar(p)/pi ratios and the nuclear modification factor for various particles species. We discuss the experimental results and some possible future measurements.",
+    "category": "nucl-ex"
+  },
+  {
+    "id": "0705.0987",
+    "title": "Imprint of Distortions in the Oort Cloud on the CMB Anisotropies",
+    "abstract": "We study the effect of a close encounter of a passing star on the shape of the inner Oort Cloud, using the impulse approximation. The deviation of the perturbed Oort Cloud from sphericity adds angular fluctuations to the brightness of the Cosmic Microwave Background (CMB) due to thermal emission by the comets. An encounter with a solar-mass star at an impact parameter of $1750 \\au$, as expected based on the abundance and velocity dispersion of stars in the solar neighborhood, leads to a quadrupole moment in the square of the fractional CMB intensity fluctuation of $C_2 = 4.5 \\times 10^{-15}, 6.7 \\times 10^{-12}, 1.1 \\times 10^{-9}$ at $\\nu = 30, 353, 545 \\GHz$ (these being the frequency bands of the upcoming Planck satellite). We also quantify the quadrupole spectral distortions produced by the Scattered Disc, which will exist regardless of any perturbation and the subsequent shape of the Oort Cloud. For comparison, the square fractional temperature fluctuation quadrupole moment predicted by the current cosmological model is $C_2 = 1.76 \\times 10^{-10}$, which corresponds to fluctuations in the CMB intensity of $C_2 = 2.9 \\times 10^{-10}, 6.8 \\times 10^{-9}, 1.6 \\times 10^{-8}$ at $\\nu = 30, 353, 545 \\GHz$. Finally, we discuss how a measurement of the anisotropic spectral distortions could be used to constrain the trajectory of the closest stellar fly-by.",
+    "category": "astro-ph"
+  },
+  {
+    "id": "0705.1056",
+    "title": "The log-normal distribution from Non-Gibrat's law in the middle scale   region of profits",
+    "abstract": "Employing profits data of Japanese firms in 2003--2005, we kinematically exhibit the static log-normal distribution in the middle scale region. In the derivation, a Non-Gibrat's law under the detailed balance is adopted together with following two approximations. Firstly, the probability density function of profits growth rate is described as a tent-shaped exponential function. Secondly, the value of the origin of the growth rate distribution divided into bins is constant. The derivation is confirmed in the database consistently.   This static procedure is applied to a quasi-static system. We dynamically describe a quasi-static log-normal distribution in the middle scale region. In the derivation, a Non-Gibrat's law under the detailed quasi-balance is adopted together with two approximations confirmed in the static system. The resultant distribution is power-law with varying Pareto index in the large scale region and the quasi-static log-normal distribution in the middle scale region. In the distribution, not only the change of Pareto index but also the change of the variance of the log-normal distribution depends on the parameter of the detailed quasi-balance. As a result, Pareto index and the variance of the log-normal distribution are related to each other.",
+    "category": "q-fin"
+  },
+  {
+    "id": "0705.1126",
+    "title": "Scattering Dynamics of Driven Closed Billiards",
+    "abstract": "We investigate the classical scattering dynamics of the driven elliptical billiard. Two fundamental scattering mechanisms are identified and employed to understand the rich behavior of the escape rate. A long-time algebraic decay which can be tuned by varying the driving amplitude is established. Pulsed escape rates and decelerated escaping particles are generic properties of the harmonically breathing billiard. This suggests time-dependent billiards as prototype systems to study the nonequilibrium evolution of classical ensembles encountering a multitude of scattering processes off driven targets.",
+    "category": "nlin"
+  },
+  {
+    "id": "0705.1215",
+    "title": "Kinematic Calibration of the Orthoglide-Type Mechanisms",
+    "abstract": "The paper proposes a novel calibration approach for the Orthoglide-type mechanisms based on observations of the manipulator leg parallelism during motions between the prespecified test postures. It employs a low-cost measuring system composed of standard comparator indicators attached to the universal magnetic stands. They are sequentially used for measuring the deviation of the relevant leg location while the manipulator moves the TCP along the Cartesian axes. Using the measured differences, the developed algorithm estimates the joint offsets that are treated as the most essential parameters to be adjusted. The sensitivity of the measurement methods and the calibration accuracy are also studied. Experimental results are presented that demonstrate validity of the proposed calibration technique.",
+    "category": "cs"
+  },
+  {
+    "id": "0705.1291",
+    "title": "Spinodal decomposition of low-density asymmetric nuclear matter",
+    "abstract": "We investigate the dynamical properties of asymmetric nuclear matter at low density. The occurrence of new instabilities, that lead the system to a dynamical fragment formation, is illustrated, discussing in particular the charge symmetry dependence of the structure of the most important unstable modes. We observe that instabilities are reduced by charge asymmetry, leading to larger size and time scales in the fragmentation process. Configurations with less asymmetric fragments surrounded by a more asymmetric gas are favoured. Interesting variances with respect to a pure thermodynamical prediction are revealed, that can be checked experimentally. All these features are deeply related to the structure of the symmetry term in the nuclear Equation of State (EOS) and could be used to extract information on the low density part of the EOS.",
+    "category": "nucl-th"
+  },
+  {
+    "id": "0705.1292",
+    "title": "Improved estimation of Fokker-Planck equations through optimisation",
+    "abstract": "An improved method for the description of hierarchical complex systems by means of a Fokker-Planck equation is presented. In particular the limited-memory Broyden-Fletcher-Goldfarb-Shanno algorithm for constraint problems (L-BFGS-B) is used to minimize the distance between the numerical solutions of the Fokker-Planck equation and the empirical probability density functions and thus to estimate properly the drift and diffusion term of the Fokker-Planck equation. The optimisation routine is applied to a time series of velocity measurements obtained from a turbulent helium gas jet in order to demonstrate the benefits and to quantify the improvements of this new optimisation routine.",
+    "category": "physics"
+  },
+  {
+    "id": "0705.1297",
+    "title": "Pricing Life Insurance under Stochastic Mortality via the Instantaneous   Sharpe Ratio: Theorems and Proofs",
+    "abstract": "We develop a pricing rule for life insurance under stochastic mortality in an incomplete market by assuming that the insurance company requires compensation for its risk in the form of a pre-specified instantaneous Sharpe ratio. Our valuation formula satisfies a number of desirable properties, many of which it shares with the standard deviation premium principle. The major result of the paper is that the price per contract solves a linear partial differential equation as the number of contracts approaches infinity. One can interpret the limiting price as an expectation with respect to an equivalent martingale measure. Another important result is that if the hazard rate is stochastic, then the risk-adjusted premium is greater than the net premium, even as the number of contracts approaches infinity. We present a numerical example to illustrate our results, along with the corresponding algorithms.",
+    "category": "q-fin"
+  },
+  {
+    "id": "0705.1479",
+    "title": "Accumulation of chromium metastable atoms into an Optical Trap",
+    "abstract": "We report the fast accumulation of a large number of metastable 52Cr atoms in a mixed trap, formed by the superposition of a strongly confining optical trap and a quadrupolar magnetic trap. The steady state is reached after about 400 ms, providing a cloud of more than one million metastable atoms at a temperature of about 100 microK, with a peak density of 10^{18} atoms.m^{-3}. We have optimized the loading procedure, and measured the light shift of the 5D4 state by analyzing how the trapped atoms respond to a parametric excitation. We compare this result to a theoretical evaluation based on the available spectroscopic data for chromium atoms.",
+    "category": "physics"
+  },
+  {
+    "id": "0705.1511",
+    "title": "Stationary Dyonic Regular and Black Hole Solutions",
+    "abstract": "We consider globally regular and black hole solutions in SU(2) Einstein-Yang-Mills-Higgs theory, coupled to a dilaton field. The basic solutions represent magnetic monopoles, monopole-antimonopole systems or black holes with monopole or dipole hair. When the globally regular solutions carry additionally electric charge, an angular momentum density results, except in the simplest spherically symmetric case. We evaluate the global charges of the solutions and their effective action, and analyze their dependence on the gravitational coupling strength. We show, that in the presence of a dilaton field, the black hole solutions satisfy a generalized Smarr type mass formula.",
+    "category": "gr-qc"
+  },
+  {
+    "id": "0705.1533",
+    "title": "Neutronic performances of the MEGAPIE target",
+    "abstract": "The MEGAPIE project is a key experiment on the road to Accelerator Driven Systems and it provides the scientific community with unique data on the behavior of a liquid lead-bismuth spallation target under realistic and long term irradiation conditions. The neutronic of such target is of course of prime importance when considering its final destination as an intense neutron source. This is the motivation to characterize the inside neutron flux of the target in operation. A complex detector, made of 8 micro fission-chambers, has been built and installed in the core of the target, few tens of centimeters from the proton/Pb-Bi interaction zone. This detector is designed to measure the absolute neutron flux inside the target, to give its spatial distribution and to correlate its temporal variations with the beam intensity. Moreover, integral information on the neutron energy distribution as a function of the position along the beam axis could be extracted, giving integral constraints on the neutron production models implemented in transport codes such as MCNPX.",
+    "category": "nucl-ex"
+  },
+  {
+    "id": "0705.1979",
+    "title": "Complex chaos in conditional qubit dynamics and purification protocols",
+    "abstract": "Selection of an ensemble of equally prepared quantum systems, based on measurements on it, is a basic step in quantum state purification. For an ensemble of single qubits, iterative application of selective dynamics has been shown to lead to complex chaos, which is a novel form of quantum chaos with true sensitivity to the initial conditions. The Julia set of initial valuse with no convergence shows a complicated structre on the complex plane. The shape of the Julia set varies with the parameter of the dynamics. We present here results for the two qubit case demonstrating how a purification process can be destroyed with chaotic oscillations.",
+    "category": "quant-ph"
+  },
+  {
+    "id": "0705.2245",
+    "title": "Wightman function and vacuum densities for a Z_2-symmetric thick brane   in AdS spacetime",
+    "abstract": "Positive frequency Wightman function, vacuum expectation values of the field square and the energy-momentum tensor induced by a Z_{2}-symmetric brane with finite thickness located on (D+1)- dimensional AdS background are evaluated for a massive scalar field with general curvature coupling parameter. For the general case of static plane symmetric interior structure the expectation values in the region outside the brane are presented as the sum of free AdS and brane induced parts. For a conformally coupled massless scalar the brane induced part in the vacuum energy-momentum tensor vanishes. In the limit of strong gravitational fields the brane induced parts are exponentially suppressed for points not too close to the brane boundary. As an application of general results a special model is considered in which the geometry inside the brane is a slice of the Minkowski spacetime orbifolded along the direction perpendicular to the brane. For this model the Wightman function, vacuum expectation values of the field square and the energy-momentum tensor inside the brane are evaluated as well and their behavior is discussed in various asymptotic regions of the parameters. It is shown that for both minimally and conformally coupled scalar fields the interior vacuum forces acting on the brane boundaries tend to decrease the brane thickness.",
+    "category": "hep-th"
+  },
+  {
+    "id": "0705.2396",
+    "title": "Nonlinear generalized functions and the Heisenberg-Pauli foundations of   Quantum Field Theory",
+    "abstract": "In 1929 Heisenberg and Pauli laid the foundations of QFT by quantizing the fields (method of canonical quantization). This general theory of quantized fields has remained undisputed up to now. We show how the unmodified Heisenberg-Pauli calculations make sense mathematically by using a theory of generalized functions adapted to nonlinear operations. By providing an appropriate mathematical setting, nonlinear generalized functions open doors for their understanding but there remains presumably very hard technical problems. (i) Domains of the interacting field operators: a priori the H-P calculations give time dependent dense domains, what is not very convenient; (ii) Calculations of the resulting matrix elements of the S operator: from the unitarity of the S operator as a whole there are no longer ``infinities,'' but a priori there is no other hope than heavy computer calculations; (iii) Connection with renormalization theory: it should provide an approximation when the coupling constant is small. The aim of this paper is to present, on the grounds of a standard mathematical model of QFT (a self interacting scalar boson field), a basis for improvement without significant prerequisites in mathematics and physics. It is an attempt to use nonlinear generalized functions in QFT, starting directly from the calculations made by physicists, in the same way as they have already been used in classical mechanics and general relativity.",
+    "category": "math-ph"
+  },
+  {
+    "id": "0705.2511",
+    "title": "Enhanced strange baryon production in Au+Au collisions compared to p+p   at sqrts = 200 GeV",
+    "abstract": "We report on the observed differences in production rates of strange and multi-strange baryons in Au+Au collisions at sqrts = 200 GeV compared to pp interactions at the same energy. The strange baryon yields in Au+Au collisions, then scaled down by the number of participating nucleons, are enhanced relative to those measured in pp reactions. The enhancement observed increases with the strangeness content of the baryon, and increases for all strange baryons with collision centrality. The enhancement is qualitatively similar to that observed at lower collision energy sqrts =17.3 GeV. The previous observations are for the bulk production, while at intermediate pT, 1 < pT< 4 GeV/c, the strange baryons even exceed binary scaling from pp yields.",
+    "category": "nucl-ex"
+  },
+  {
+    "id": "0705.2515",
+    "title": "Finite Element Model Updating Using Bayesian Approach",
+    "abstract": "This paper compares the Maximum-likelihood method and Bayesian method for finite element model updating. The Maximum-likelihood method was implemented using genetic algorithm while the Bayesian method was implemented using the Markov Chain Monte Carlo. These methods were tested on a simple beam and an unsymmetrical H-shaped structure. The results show that the Bayesian method gave updated finite element models that predicted more accurate modal properties than the updated finite element models obtained through the use of the Maximum-likelihood method. Furthermore, both these methods were found to require the same levels of computational loads.",
+    "category": "stat"
+  },
+  {
+    "id": "0705.2718",
+    "title": "Coulomb gauge Gribov copies and the confining potential",
+    "abstract": "We study the approach, initiated by Marinari et al., to the static inter-quark potential based on Polyakov lines of finite temporal extent, evaluated in Coulomb gauge. We show that, at small spatial separations, the potential can be understood as being between two separately gauge invariant colour charges. At larger separations Gribov copies obstruct the non-perturbative identification of individually gauge invariant colour states. We demonstrate, for the first time, how gauge invariance can be maintained quite generally by averaging over Gribov copies. This allows us to extend the analysis of the Polyakov lines and the corresponding, gauge invariant quark-antiquark state to all distance scales. Using large scale lattice simulations, we show that this interpolating state possesses a good overlap with the ground state in the quark-antiquark sector and yields the full static inter-quark potential at all distances. A visual representation of the Gribov copies on the lattice is also presented.",
+    "category": "hep-lat"
+  }
+]
