@@ -1,6 +1,11 @@
 package benchmark
 
-import "testing"
+import (
+	"context"
+	"os/exec"
+	"testing"
+	"time"
+)
 
 func TestModeCodeGenBench_TitleAndConst(t *testing.T) {
 	if ModeCodeGenBench != "codegen-bench" {
@@ -9,6 +14,33 @@ func TestModeCodeGenBench_TitleAndConst(t *testing.T) {
 	if ModeCodeGenBench.Title() == string(ModeCodeGenBench) {
 		t.Error("Title() should return a human label")
 	}
+}
+
+func TestRunPython(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not on PATH")
+	}
+	t.Run("pass", func(t *testing.T) {
+		r := runPython(context.Background(), "assert 1 + 1 == 2\n", 5*time.Second)
+		if !r.passed || r.timedOut {
+			t.Errorf("expected pass, got %+v", r)
+		}
+	})
+	t.Run("fail", func(t *testing.T) {
+		r := runPython(context.Background(), "assert 1 == 2\n", 5*time.Second)
+		if r.passed {
+			t.Errorf("expected fail, got %+v", r)
+		}
+		if r.stderr == "" {
+			t.Error("expected stderr on assertion failure")
+		}
+	})
+	t.Run("timeout", func(t *testing.T) {
+		r := runPython(context.Background(), "while True:\n    pass\n", 1*time.Second)
+		if r.passed || !r.timedOut {
+			t.Errorf("expected timeout, got %+v", r)
+		}
+	})
 }
 
 func TestExtractCode(t *testing.T) {
