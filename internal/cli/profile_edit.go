@@ -174,7 +174,12 @@ func runProfileWrite(out, errw io.Writer, deps profileWriteDeps, isEdit bool, re
 			return 1
 		}
 	}
-	// 4. Resolve schema for arg coercion + validation.
+	// 4. Resolve schema for arg coercion + validation. Apply the --backend
+	// override first so the schema/kind reflect the requested backend, not the
+	// catalog default (the rest of the overlay happens in assembleProfile).
+	if in.setBackend {
+		base.Launch.BackendID = in.backend
+	}
 	schema, kind := resolveSchema(deps.resolver, base)
 	// 5. Apply flag overrides.
 	final := assembleProfile(base, in, schema)
@@ -227,11 +232,11 @@ func resolveSchema(resolver backendcatalog.Resolver, p domain.Profile) (domain.F
 	if resolver == nil {
 		return domain.FlagSchema{}, ""
 	}
-	rb, err := resolver.Resolve(p)
+	schema, backend, err := resolver.ResolveSchema(p)
 	if err != nil {
 		return domain.FlagSchema{}, ""
 	}
-	return rb.Schema.ToFlagSchema(), rb.Backend.Kind
+	return schema.ToFlagSchema(), backend.Kind
 }
 
 // assembleProfile overlays the user's flag input onto base, coercing args by schema.

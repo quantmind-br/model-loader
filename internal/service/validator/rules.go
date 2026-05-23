@@ -277,7 +277,7 @@ func applyExistenceRules(p domain.Profile, kind domain.BackendKind, rep Report) 
 	}
 	// File does not exist locally. Only skip the error for
 	// HuggingFace-style repo IDs (e.g. "meta-llama/Llama-3-8B")
-	// on backends that support them natively (vLLM, SGLang, TabbyAPI).
+	// on backends that support them natively (vLLM, SGLang).
 	// Local paths that happen to match the heuristic but exist
 	// are caught by the os.Stat success path above.
 	if domain.LooksLikeHFRepo(p.Model) && supportsHFRepo(kind) {
@@ -306,7 +306,7 @@ func applyExistenceRules(p domain.Profile, kind domain.BackendKind, rep Report) 
 
 func supportsHFRepo(kind domain.BackendKind) bool {
 	switch kind {
-	case domain.BackendKindVLLM, domain.BackendKindSGLang, domain.BackendKindTabbyAPI:
+	case domain.BackendKindVLLM, domain.BackendKindSGLang:
 		return true
 	}
 	return false

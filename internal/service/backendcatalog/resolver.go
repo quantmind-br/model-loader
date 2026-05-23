@@ -12,6 +12,10 @@ import (
 // Resolver resolves a profile to backend, executable path, and schema.
 type Resolver interface {
 	Resolve(profile domain.Profile) (ResolvedBackend, error)
+	// ResolveSchema selects the backend and loads its schema WITHOUT requiring
+	// the executable to be installed. Use it for validation/authoring flows; the
+	// executable is only needed at launch time (Resolve).
+	ResolveSchema(profile domain.Profile) (domain.BackendValidationSchema, domain.Backend, error)
 }
 
 // ResolvedBackend is a fully usable backend selection.
@@ -38,11 +42,41 @@ func NewResolver(store Store, schemaStore SchemaStore, logger *slog.Logger) *res
 
 // Resolve selects a backend, resolves its executable, and loads its schema.
 func (r *resolver) Resolve(profile domain.Profile) (ResolvedBackend, error) {
+	schema, backend, err := r.loadBackendSchema(profile)
+	if err != nil {
+		return ResolvedBackend{}, err
+	}
+
+	executablePath, err := resolveExecutable(backend)
+	if err != nil {
+		r.logger.Error("resolve_failed",
+			"step", "resolve_executable", "profile_id", profile.ID,
+			"backend_id", backend.ID, "executable", backend.Executable, "err", err)
+		return ResolvedBackend{}, err
+	}
+
+	return ResolvedBackend{
+		Backend:        backend,
+		ExecutablePath: executablePath,
+		Schema:         schema,
+	}, nil
+}
+
+// ResolveSchema selects the backend and loads its schema without resolving the
+// executable, so authoring/validation works even when the runtime binary is not
+// installed yet.
+func (r *resolver) ResolveSchema(profile domain.Profile) (domain.BackendValidationSchema, domain.Backend, error) {
+	return r.loadBackendSchema(profile)
+}
+
+// loadBackendSchema performs catalog→backend→schema resolution (with id/kind
+// consistency checks) but does NOT resolve the executable.
+func (r *resolver) loadBackendSchema(profile domain.Profile) (domain.BackendValidationSchema, domain.Backend, error) {
 	catalog, err := r.store.Load()
 	if err != nil {
 		r.logger.Error("resolve_failed",
 			"step", "load_catalog", "profile_id", profile.ID, "err", err)
-		return ResolvedBackend{}, err
+		return domain.BackendValidationSchema{}, domain.Backend{}, err
 	}
 
 	backendID := profile.Launch.BackendID
@@ -52,7 +86,7 @@ func (r *resolver) Resolve(profile domain.Profile) (ResolvedBackend, error) {
 	if backendID == "" {
 		r.logger.Error("resolve_failed",
 			"step", "select_backend", "profile_id", profile.ID, "err", ErrNoBackendSelected)
-		return ResolvedBackend{}, ErrNoBackendSelected
+		return domain.BackendValidationSchema{}, domain.Backend{}, ErrNoBackendSelected
 	}
 
 	backend, ok := findBackend(catalog.Backends, backendID)
@@ -61,15 +95,7 @@ func (r *resolver) Resolve(profile domain.Profile) (ResolvedBackend, error) {
 		r.logger.Error("resolve_failed",
 			"step", "select_backend", "profile_id", profile.ID,
 			"backend_id", backendID, "err", err)
-		return ResolvedBackend{}, err
-	}
-
-	executablePath, err := resolveExecutable(backend)
-	if err != nil {
-		r.logger.Error("resolve_failed",
-			"step", "resolve_executable", "profile_id", profile.ID,
-			"backend_id", backendID, "executable", backend.Executable, "err", err)
-		return ResolvedBackend{}, err
+		return domain.BackendValidationSchema{}, domain.Backend{}, err
 	}
 
 	schema, err := r.schemaStore.Load(schemaStoreRef(backend.SchemaRef))
@@ -78,26 +104,22 @@ func (r *resolver) Resolve(profile domain.Profile) (ResolvedBackend, error) {
 		r.logger.Error("resolve_failed",
 			"step", "load_schema", "profile_id", profile.ID,
 			"backend_id", backendID, "schema_ref", backend.SchemaRef, "err", err)
-		return ResolvedBackend{}, wrapped
+		return domain.BackendValidationSchema{}, domain.Backend{}, wrapped
 	}
 	if schema.BackendID != "" && schema.BackendID != backend.ID {
 		err := fmt.Errorf("schema/backend mismatch: schema has backend_id=%q, expected %q", schema.BackendID, backend.ID)
 		r.logger.Error("resolve_failed",
 			"step", "load_schema", "profile_id", profile.ID, "err", err)
-		return ResolvedBackend{}, err
+		return domain.BackendValidationSchema{}, domain.Backend{}, err
 	}
 	if backend.Kind != "" && schema.BackendKind != "" && schema.BackendKind != backend.Kind {
 		err := fmt.Errorf("schema/backend kind mismatch: schema has kind=%q, expected %q", schema.BackendKind, backend.Kind)
 		r.logger.Error("resolve_failed",
 			"step", "load_schema", "profile_id", profile.ID, "err", err)
-		return ResolvedBackend{}, err
+		return domain.BackendValidationSchema{}, domain.Backend{}, err
 	}
 
-	return ResolvedBackend{
-		Backend:        backend,
-		ExecutablePath: executablePath,
-		Schema:         schema,
-	}, nil
+	return schema, backend, nil
 }
 
 func findBackend(backends []domain.Backend, id string) (domain.Backend, bool) {

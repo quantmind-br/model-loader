@@ -22,7 +22,6 @@ func (s *Session) handleBackendIndex(w http.ResponseWriter, r *http.Request) {
 		Kinds: []domain.BackendKind{
 			domain.BackendKindLlamaServer,
 			domain.BackendKindVLLM,
-			domain.BackendKindTabbyAPI,
 			domain.BackendKindSGLang,
 			domain.BackendKindDFlash,
 			domain.BackendKindBuunLlamaCpp,

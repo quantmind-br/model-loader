@@ -12,6 +12,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/config"
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/backendschema"
 	"github.com/spf13/cobra"
 )
 
@@ -50,8 +51,13 @@ func init() {
 				fmt.Fprintf(cmd.ErrOrStderr(), "config error: %v\n", err)
 				return &ExitError{Code: 1}
 			}
-			return exitOnErr(cmd.ErrOrStderr(),
-				refreshSchema(cmd.OutOrStdout(), buildSchemaManager(cfg), args[0]))
+			if err := refreshSchema(cmd.OutOrStdout(), buildSchemaManager(cfg), args[0]); err != nil {
+				return exitOnErr(cmd.ErrOrStderr(), err)
+			}
+			// Seed a default presentation so `backend schema show` reflects groups
+			// immediately, matching what app.Bootstrap does (idempotent).
+			_, _ = backendschema.EnsurePresentations(buildCatalogStore(cfg), buildSchemaStore(cfg))
+			return nil
 		},
 	}
 	backendSchemaCmd.AddCommand(refreshCmd)

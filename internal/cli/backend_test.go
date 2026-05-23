@@ -7,6 +7,7 @@ import (
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/backendschema"
 )
 
 // --- shared fakes for the backend command tests ---
@@ -17,6 +18,10 @@ type fakeBackendManager struct {
 	listErr    error
 	refreshErr error
 	refreshed  []string
+	added      []domain.Backend
+	deleted    []string
+	setDefault []string
+	gens       map[domain.BackendKind]backendschema.Generator
 }
 
 func (f *fakeBackendManager) ListBackends() ([]domain.Backend, error) {
@@ -31,6 +36,29 @@ func (f *fakeBackendManager) RefreshSchema(id string) error {
 	}
 	f.refreshed = append(f.refreshed, id)
 	return nil
+}
+func (f *fakeBackendManager) AddBackend(_ context.Context, name, executable string, kind domain.BackendKind) (domain.Backend, error) {
+	b := domain.Backend{ID: domain.Slugify(name), Name: name, Kind: kind, Executable: executable}
+	f.added = append(f.added, b)
+	f.backends = append(f.backends, b)
+	return b, nil
+}
+func (f *fakeBackendManager) DeleteBackend(id string) error {
+	f.deleted = append(f.deleted, id)
+	return nil
+}
+func (f *fakeBackendManager) SetDefaultBackend(id string) error {
+	f.setDefault = append(f.setDefault, id)
+	return nil
+}
+func (f *fakeBackendManager) Generators() map[domain.BackendKind]backendschema.Generator {
+	if f.gens != nil {
+		return f.gens
+	}
+	return map[domain.BackendKind]backendschema.Generator{
+		domain.BackendKindLlamaServer: nil,
+		domain.BackendKindVLLM:        nil,
+	}
 }
 
 type fakeProber struct {
@@ -131,7 +159,7 @@ func TestBackendCommandTree(t *testing.T) {
 	if bc == nil {
 		t.Fatal("backend not registered")
 	}
-	for _, name := range []string{"list", "show", "probe", "schema"} {
+	for _, name := range []string{"list", "show", "probe", "schema", "add", "delete", "set-default"} {
 		if childByName(bc, name) == nil {
 			t.Errorf("backend %s not registered", name)
 		}
@@ -141,6 +169,50 @@ func TestBackendCommandTree(t *testing.T) {
 		if childByName(sc, name) == nil {
 			t.Errorf("backend schema %s not registered", name)
 		}
+	}
+}
+
+func TestAddBackend_UnknownKindRejected(t *testing.T) {
+	mgr := twoBackends()
+	var out bytes.Buffer
+	if err := addBackend(&out, mgr, "Tabby", "tabby-api", "tabbyapi"); err == nil {
+		t.Fatal("expected error for unknown kind")
+	}
+	if len(mgr.added) != 0 {
+		t.Fatalf("backend must not be added for unknown kind; added=%v", mgr.added)
+	}
+}
+
+func TestAddBackend_Success(t *testing.T) {
+	mgr := twoBackends()
+	var out bytes.Buffer
+	if err := addBackend(&out, mgr, "My vLLM", "vllm", "vllm"); err != nil {
+		t.Fatalf("addBackend: %v", err)
+	}
+	if len(mgr.added) != 1 || mgr.added[0].Kind != domain.BackendKindVLLM {
+		t.Fatalf("expected one vllm backend added, got %v", mgr.added)
+	}
+}
+
+func TestDeleteBackend_ResolvesAndDeletes(t *testing.T) {
+	mgr := twoBackends()
+	var out bytes.Buffer
+	if err := deleteBackend(&out, mgr, "vllm"); err != nil {
+		t.Fatalf("deleteBackend: %v", err)
+	}
+	if len(mgr.deleted) != 1 || mgr.deleted[0] != "vllm-main" {
+		t.Fatalf("expected delete of vllm-main, got %v", mgr.deleted)
+	}
+}
+
+func TestSetDefaultBackend_ResolvesAndSets(t *testing.T) {
+	mgr := twoBackends()
+	var out bytes.Buffer
+	if err := setDefaultBackend(&out, mgr, "vllm-main"); err != nil {
+		t.Fatalf("setDefaultBackend: %v", err)
+	}
+	if len(mgr.setDefault) != 1 || mgr.setDefault[0] != "vllm-main" {
+		t.Fatalf("expected set-default vllm-main, got %v", mgr.setDefault)
 	}
 }
 
