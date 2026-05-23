@@ -41,3 +41,13 @@ func handlerFor(m Mode) (modeHandler, bool) {
 	h, ok := handlers[m]
 	return h, ok
 }
+
+// CategoryOf reports the UI category for a registered mode. The bool is false
+// for an unregistered mode. Used by the picker to group modes.
+func CategoryOf(m Mode) (Category, bool) {
+	h, ok := handlerFor(m)
+	if !ok {
+		return "", false
+	}
+	return h.Category(), true
+}

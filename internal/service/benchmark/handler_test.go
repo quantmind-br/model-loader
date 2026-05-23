@@ -38,3 +38,27 @@ func TestCountForMode_DelegatesToRegistry(t *testing.T) {
 		t.Errorf("CountForMode(unknown) = %d, want 0", got)
 	}
 }
+
+func TestCategoryOf(t *testing.T) {
+	cases := map[Mode]Category{
+		ModeJudge:        CatQuality,
+		ModeMathBench:    CatQuality,
+		ModeCodeGenBench: CatQuality,
+		ModeLlamaBench:   CatSpeed,
+		ModeLongContext:  CatRobustness,
+		ModeInstBench:    CatRobustness,
+		ModeMMLUBench:    CatKnowledge,
+	}
+	for m, want := range cases {
+		got, ok := CategoryOf(m)
+		if !ok {
+			t.Fatalf("CategoryOf(%q): not found", m)
+		}
+		if got != want {
+			t.Fatalf("CategoryOf(%q) = %q, want %q", m, got, want)
+		}
+	}
+	if _, ok := CategoryOf("nope"); ok {
+		t.Fatal("CategoryOf(unknown) should report not found")
+	}
+}
