@@ -1,10 +1,36 @@
 package benchmark
 
 import (
+	_ "embed"
+	"encoding/json"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 )
+
+//go:embed data/gsm8k_curated.json
+var mathDataset []byte
+
+// MathProblem is one curated math-reasoning item.
+type MathProblem struct {
+	ID         string `json:"id"`
+	Question   string `json:"question"`
+	Answer     string `json:"answer"`     // normalized numeric string (e.g. "42")
+	Difficulty int    `json:"difficulty"` // 1..3 by reasoning-step count
+}
+
+// loadMathProblems decodes the embedded GSM8K subset.
+func loadMathProblems() ([]MathProblem, error) {
+	var ps []MathProblem
+	if err := json.Unmarshal(mathDataset, &ps); err != nil {
+		return nil, fmt.Errorf("decode math dataset: %w", err)
+	}
+	if len(ps) == 0 {
+		return nil, fmt.Errorf("math dataset is empty")
+	}
+	return ps, nil
+}
 
 var (
 	thinkRe  = regexp.MustCompile(`(?is)<think>.*?</think>`)

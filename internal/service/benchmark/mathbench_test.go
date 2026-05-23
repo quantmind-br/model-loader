@@ -53,3 +53,21 @@ func TestMatchAnswer(t *testing.T) {
 		t.Error("42 must not match 43")
 	}
 }
+
+func TestLoadMathProblems(t *testing.T) {
+	ps, err := loadMathProblems()
+	if err != nil {
+		t.Fatalf("loadMathProblems: %v", err)
+	}
+	if len(ps) < 100 {
+		t.Fatalf("got %d math problems, want >= 100", len(ps))
+	}
+	for _, p := range ps {
+		if p.ID == "" || p.Question == "" || p.Answer == "" {
+			t.Fatalf("invalid problem: %+v", p)
+		}
+		if normalizeNumber(p.Answer) != p.Answer {
+			t.Errorf("answer %q for %s is not normalized", p.Answer, p.ID)
+		}
+	}
+}
