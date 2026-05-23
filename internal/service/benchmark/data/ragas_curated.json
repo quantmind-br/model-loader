@@ -1,0 +1,203 @@
+[
+  {
+    "id": "rag-01",
+    "documents": [
+      "The Aldebaran rover landed in the Vallis Marineris region on March 3, 2031.",
+      "The mission was funded jointly by three national space agencies.",
+      "Its primary instrument is a deep-drilling spectrometer."
+    ],
+    "question": "On what date did the Aldebaran rover land?",
+    "groundTruth": "March 3, 2031.",
+    "expectedContext": "The Aldebaran rover landed in the Vallis Marineris region on March 3, 2031."
+  },
+  {
+    "id": "rag-02",
+    "documents": [
+      "Quartzine is a fictional alloy with a melting point of 2,140 degrees Celsius.",
+      "It is prized for corrosion resistance in marine turbines."
+    ],
+    "question": "What is the melting point of quartzine?",
+    "groundTruth": "2,140 degrees Celsius.",
+    "expectedContext": "Quartzine is a fictional alloy with a melting point of 2,140 degrees Celsius."
+  },
+  {
+    "id": "rag-03",
+    "documents": [
+      "The Béker Prize in linguistics was first awarded in 1962.",
+      "It carries a cash award and a two-year research fellowship."
+    ],
+    "question": "In what year was the Béker Prize first awarded?",
+    "groundTruth": "1962.",
+    "expectedContext": "The Béker Prize in linguistics was first awarded in 1962."
+  },
+  {
+    "id": "rag-04",
+    "documents": [
+      "The novel 'Tideglass' was written by Marin Holloway over seven years.",
+      "It is set in a drowned coastal city named Sarn."
+    ],
+    "question": "Who wrote the novel 'Tideglass'?",
+    "groundTruth": "Marin Holloway.",
+    "expectedContext": "The novel 'Tideglass' was written by Marin Holloway over seven years."
+  },
+  {
+    "id": "rag-05",
+    "documents": [
+      "Project Halberd reduced packet loss by 38% in field trials.",
+      "The trials ran across twelve metropolitan test sites."
+    ],
+    "question": "By how much did Project Halberd reduce packet loss?",
+    "groundTruth": "38%.",
+    "expectedContext": "Project Halberd reduced packet loss by 38% in field trials."
+  },
+  {
+    "id": "rag-06",
+    "documents": [
+      "The Sundara Festival is held every third year in the city of Pell.",
+      "It centers on traditional kite-making competitions."
+    ],
+    "question": "How often is the Sundara Festival held?",
+    "groundTruth": "Every third year.",
+    "expectedContext": "The Sundara Festival is held every third year in the city of Pell."
+  },
+  {
+    "id": "rag-07",
+    "documents": [
+      "Enzyme XR-9 catalyzes the breakdown of microplastics at room temperature.",
+      "It was isolated from a deep-sea bacterium in 2029."
+    ],
+    "question": "What does enzyme XR-9 break down?",
+    "groundTruth": "Microplastics.",
+    "expectedContext": "Enzyme XR-9 catalyzes the breakdown of microplastics at room temperature."
+  },
+  {
+    "id": "rag-08",
+    "documents": [
+      "The Korrin Bridge spans 1,480 meters across the Vasser Strait.",
+      "It opened to traffic after nine years of construction."
+    ],
+    "question": "How long is the Korrin Bridge?",
+    "groundTruth": "1,480 meters.",
+    "expectedContext": "The Korrin Bridge spans 1,480 meters across the Vasser Strait."
+  },
+  {
+    "id": "rag-09",
+    "documents": [
+      "Dr. Imani Sefu chairs the Coastal Resilience Council.",
+      "The council advises on flood-defense policy for twelve provinces."
+    ],
+    "question": "Who chairs the Coastal Resilience Council?",
+    "groundTruth": "Dr. Imani Sefu.",
+    "expectedContext": "Dr. Imani Sefu chairs the Coastal Resilience Council."
+  },
+  {
+    "id": "rag-10",
+    "documents": [
+      "The game 'Latticefall' sold 4.2 million copies in its first month.",
+      "It was developed by a studio of just nine people."
+    ],
+    "question": "How many copies did 'Latticefall' sell in its first month?",
+    "groundTruth": "4.2 million.",
+    "expectedContext": "The game 'Latticefall' sold 4.2 million copies in its first month."
+  },
+  {
+    "id": "rag-11",
+    "documents": [
+      "Vantium decays with a half-life of 19 days.",
+      "It is used as a tracer in hydrology studies."
+    ],
+    "question": "What is the half-life of vantium?",
+    "groundTruth": "19 days.",
+    "expectedContext": "Vantium decays with a half-life of 19 days."
+  },
+  {
+    "id": "rag-12",
+    "documents": [
+      "The treaty of Oren Bay was signed by five coastal nations in 1998.",
+      "It established shared fishing quotas."
+    ],
+    "question": "How many nations signed the treaty of Oren Bay?",
+    "groundTruth": "Five.",
+    "expectedContext": "The treaty of Oren Bay was signed by five coastal nations in 1998."
+  },
+  {
+    "id": "rag-13",
+    "documents": [
+      "The Marrow Line subway carries 600,000 riders daily.",
+      "It connects the harbor district to the northern suburbs."
+    ],
+    "question": "How many riders does the Marrow Line carry daily?",
+    "groundTruth": "600,000.",
+    "expectedContext": "The Marrow Line subway carries 600,000 riders daily."
+  },
+  {
+    "id": "rag-14",
+    "documents": [
+      "Solenne coffee is grown only on the slopes of Mount Yaru.",
+      "Its beans are harvested entirely by hand."
+    ],
+    "question": "Where is Solenne coffee grown?",
+    "groundTruth": "On the slopes of Mount Yaru.",
+    "expectedContext": "Solenne coffee is grown only on the slopes of Mount Yaru."
+  },
+  {
+    "id": "rag-15",
+    "documents": [
+      "The Pareli telescope has a primary mirror 11 meters in diameter.",
+      "It observes primarily in the mid-infrared band."
+    ],
+    "question": "How large is the Pareli telescope's primary mirror?",
+    "groundTruth": "11 meters in diameter.",
+    "expectedContext": "The Pareli telescope has a primary mirror 11 meters in diameter."
+  },
+  {
+    "id": "rag-16",
+    "documents": [
+      "The Wexler protocol requires three independent confirmations before release.",
+      "It was adopted by the consortium in 2025."
+    ],
+    "question": "How many independent confirmations does the Wexler protocol require?",
+    "groundTruth": "Three.",
+    "expectedContext": "The Wexler protocol requires three independent confirmations before release."
+  },
+  {
+    "id": "rag-17",
+    "documents": [
+      "The Talin reservoir holds 320 million cubic meters of water.",
+      "It supplies drinking water to two cities."
+    ],
+    "question": "How much water does the Talin reservoir hold?",
+    "groundTruth": "320 million cubic meters.",
+    "expectedContext": "The Talin reservoir holds 320 million cubic meters of water."
+  },
+  {
+    "id": "rag-18",
+    "documents": [
+      "Composer Nadia Brevik wrote the symphony 'Ashlight' in 2014.",
+      "It premiered with a choir of two hundred voices."
+    ],
+    "question": "Who composed 'Ashlight'?",
+    "groundTruth": "Nadia Brevik.",
+    "expectedContext": "Composer Nadia Brevik wrote the symphony 'Ashlight' in 2014."
+  },
+  {
+    "id": "rag-19",
+    "documents": [
+      "The Verda standard mandates a maximum latency of 50 milliseconds.",
+      "It applies to all real-time control systems in the network."
+    ],
+    "question": "What maximum latency does the Verda standard mandate?",
+    "groundTruth": "50 milliseconds.",
+    "expectedContext": "The Verda standard mandates a maximum latency of 50 milliseconds."
+  },
+  {
+    "id": "rag-20",
+    "documents": [
+      "The Hollow Pines trail is 27 kilometers long and rated difficult.",
+      "It gains 1,900 meters of elevation."
+    ],
+    "question": "How long is the Hollow Pines trail?",
+    "groundTruth": "27 kilometers.",
+    "expectedContext": "The Hollow Pines trail is 27 kilometers long and rated difficult."
+  }
+]
