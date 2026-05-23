@@ -37,6 +37,7 @@ var benchModes = []benchmark.Mode{
 	benchmark.ModeLlamaBench,
 	benchmark.ModeMathBench,
 	benchmark.ModeCodeGenBench,
+	benchmark.ModeInstBench,
 }
 
 // BenchmarkPage is the Benchmark tab: pick a profile, run the embedded
@@ -233,6 +234,7 @@ func (p BenchmarkPage) viewModePick() string {
 		benchmark.ModeLlamaBench:   "throughput probe (llama-bench style): TTFT + tokens/s on fixed-size prompts",
 		benchmark.ModeMathBench:    "math reasoning (GSM8K): exact numeric match, accuracy under quantization",
 		benchmark.ModeCodeGenBench: "code generation (HumanEval): sandboxed Pass@1; needs python3 on PATH",
+		benchmark.ModeInstBench:    "instruction following: structured-format, refusal of disallowed prompts, and answer consistency",
 	}
 	rows := make([]string, 0, len(benchModes))
 	for i, m := range benchModes {
