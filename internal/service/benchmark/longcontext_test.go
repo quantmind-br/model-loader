@@ -52,3 +52,30 @@ func TestBuildNeedles_ValuesAreUnique(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildQualityHaystack_EmbedsNeedlesAmongAbstracts(t *testing.T) {
+	docs := []ArxivDoc{
+		{ID: "1", Title: "On Sparse Attention", Abstract: "We study sparse attention mechanisms for long sequences. " + strings.Repeat("Empirical results show consistent gains. ", 30)},
+		{ID: "2", Title: "Quantization Survey", Abstract: "A survey of post-training quantization for transformers. " + strings.Repeat("We compare many schemes carefully. ", 30)},
+	}
+	needles := []needle{{label: "alpha", value: "Reykjavik-1234"}, {label: "beta", value: "Oslo-5678"}, {label: "gamma", value: "Lima-9012"}}
+	hay := buildQualityHaystack(docs, 4000, needles)
+	for _, n := range needles {
+		if !strings.Contains(hay, n.value) {
+			t.Errorf("haystack missing needle %q", n.value)
+		}
+	}
+	if !strings.Contains(hay, "sparse attention") && !strings.Contains(hay, "Sparse Attention") {
+		t.Error("haystack should contain real abstract text as filler")
+	}
+}
+
+func TestBuildQualityHaystack_FallsBackWhenNoDocs(t *testing.T) {
+	needles := []needle{{label: "alpha", value: "A1"}, {label: "beta", value: "B2"}, {label: "gamma", value: "C3"}}
+	hay := buildQualityHaystack(nil, 4000, needles)
+	for _, n := range needles {
+		if !strings.Contains(hay, n.value) {
+			t.Errorf("fallback haystack missing needle %q", n.value)
+		}
+	}
+}

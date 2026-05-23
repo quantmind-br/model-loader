@@ -127,6 +127,7 @@ type Runner struct {
 	codeGenProblems []CodeGenProblem     // embedded HumanEval set for ModeCodeGenBench
 	instProblems    []InstructionProblem // embedded instruction-robustness set for ModeInstBench
 	mmluProblems    []MMLUProblem        // embedded MMLU subset for ModeMMLUBench
+	arxivDocs       []ArxivDoc           // real arXiv abstracts used as long-context quality filler
 	presets         []tpPreset           // parsed ModeLlamaBench configs
 	reps            int                  // ModeLlamaBench repetitions per preset
 	warmup          int                  // discarded warmup reps before measurement
@@ -154,6 +155,10 @@ func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Mana
 	if err != nil {
 		return nil, err
 	}
+	arxivDocs, err := loadArxivDocs()
+	if err != nil {
+		return nil, err
+	}
 	if cfg.MaxTokens <= 0 {
 		cfg.MaxTokens = 1024
 	}
@@ -172,7 +177,7 @@ func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Mana
 	if warmup < 0 {
 		warmup = 1
 	}
-	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, mathProblems: mathProblems, codeGenProblems: codeGenProblems, instProblems: instProblems, mmluProblems: mmluProblems, presets: presets, reps: reps, warmup: warmup}, nil
+	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, mathProblems: mathProblems, codeGenProblems: codeGenProblems, instProblems: instProblems, mmluProblems: mmluProblems, arxivDocs: arxivDocs, presets: presets, reps: reps, warmup: warmup}, nil
 }
 
 // ProblemCount reports how many problems the default executable set contains.
@@ -447,6 +452,39 @@ func buildMultiNeedleHaystack(targetTokens int, needles []needle) string {
 	return b.String()
 }
 
+// buildQualityHaystack generates ~targetTokens of realistic filler from real
+// arXiv abstracts with the needles planted at ~25/50/75% depth as constant
+// definitions the model must recover. Falls back to the pseudo-code haystack
+// when no abstracts are available.
+func buildQualityHaystack(docs []ArxivDoc, targetTokens int, needles []needle) string {
+	if len(docs) == 0 {
+		return buildMultiNeedleHaystack(targetTokens, needles)
+	}
+	charBudget := targetTokens * 4
+	depths := []int{charBudget / 4, charBudget / 2, charBudget * 3 / 4}
+	var b strings.Builder
+	planted := make([]bool, len(needles))
+	i := 0
+	for b.Len() < charBudget {
+		for k := range needles {
+			if !planted[k] && k < len(depths) && b.Len() >= depths[k] {
+				fmt.Fprintf(&b, "\n# === FILE: registry_%s.py ===\n# Internal registration table.\nMAGIC_%s_NUMBER = '%s'\n# End.\n\n",
+					needles[k].label, strings.ToUpper(needles[k].label), needles[k].value)
+				planted[k] = true
+			}
+		}
+		d := docs[i%len(docs)]
+		fmt.Fprintf(&b, "\n# === PAPER %s [%s] ===\n## %s\n%s\n", d.ID, d.Category, d.Title, d.Abstract)
+		i++
+	}
+	for k := range needles {
+		if !planted[k] {
+			fmt.Fprintf(&b, "\nMAGIC_%s_NUMBER = '%s'\n", strings.ToUpper(needles[k].label), needles[k].value)
+		}
+	}
+	return b.String()
+}
+
 // runLongContext packs a large synthetic code corpus with three randomized
 // needles planted at varied depths, then asks the model to retrieve all three.
 // Score = fraction recovered; resolved = all three found.
@@ -459,7 +497,7 @@ func (r *Runner) runLongContext(ctx context.Context, base, model string) (Proble
 		targetTokens = 8000
 	}
 	needles := buildNeedles()
-	haystack := buildMultiNeedleHaystack(targetTokens, needles)
+	haystack := buildQualityHaystack(r.arxivDocs, targetTokens, needles)
 	user := "Below is a dump of a Python codebase. Read it carefully.\n\n" + haystack +
 		"\n\nQuestion: three files define a constant named MAGIC_<NAME>_NUMBER. " +
 		"List all three literal values, one per line, no explanation."
