@@ -30,14 +30,20 @@ const (
 	bvHistory                      // runs of one profile over time
 )
 
-// benchModes is the selectable scoring-mode order in the mode picker.
+// benchModes is the selectable scoring-mode order in the mode picker, grouped
+// by Category (Quality, Speed, Robustness, Knowledge) so the picker can render
+// one header per group. Keep modes of the same category contiguous.
 var benchModes = []benchmark.Mode{
+	// Quality
 	benchmark.ModeJudge,
-	benchmark.ModeLongContext,
-	benchmark.ModeLlamaBench,
 	benchmark.ModeMathBench,
 	benchmark.ModeCodeGenBench,
+	// Speed
+	benchmark.ModeLlamaBench,
+	// Robustness
+	benchmark.ModeLongContext,
 	benchmark.ModeInstBench,
+	// Knowledge
 	benchmark.ModeMMLUBench,
 }
 
@@ -238,8 +244,13 @@ func (p BenchmarkPage) viewModePick() string {
 		benchmark.ModeInstBench:    "instruction following: structured-format, refusal of disallowed prompts, and answer consistency",
 		benchmark.ModeMMLUBench:    "factual knowledge (MMLU): multiple-choice exact-match across STEM/humanities/social/other",
 	}
-	rows := make([]string, 0, len(benchModes))
+	rows := make([]string, 0, len(benchModes)+4)
+	var lastCat benchmark.Category
 	for i, m := range benchModes {
+		if c, ok := benchmark.CategoryOf(m); ok && c != lastCat {
+			rows = append(rows, theme.Subtitle.Render(string(c)))
+			lastCat = c
+		}
 		line := fmt.Sprintf("%-22s  %s", m.Title(), descs[m])
 		if i == p.modeCursor {
 			if theme.NoColor() {
