@@ -71,3 +71,26 @@ func TestLoadMathProblems(t *testing.T) {
 		}
 	}
 }
+
+func TestMathHandler_RegisteredAndCounts(t *testing.T) {
+	h, ok := handlerFor(ModeMathBench)
+	if !ok {
+		t.Fatal("ModeMathBench not registered")
+	}
+	if h.Category() != CatQuality {
+		t.Errorf("category = %q, want Quality", h.Category())
+	}
+	r := &Runner{mathProblems: make([]MathProblem, 5)}
+	if h.Count(r) != 5 {
+		t.Errorf("Count = %d, want 5", h.Count(r))
+	}
+}
+
+func TestMathFinalize_SetsAccuracy(t *testing.T) {
+	var agg Aggregate
+	results := []ProblemResult{{Resolved: true}, {Resolved: false}, {Resolved: true}, {Resolved: true}}
+	mathHandler{}.Finalize(&agg, results)
+	if agg.MathAccuracy != 0.75 {
+		t.Errorf("MathAccuracy = %v, want 0.75", agg.MathAccuracy)
+	}
+}

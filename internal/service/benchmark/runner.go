@@ -117,20 +117,25 @@ type Progress struct {
 
 // Runner orchestrates a full benchmark run against one profile.
 type Runner struct {
-	store    profilestore.Store
-	pm       processmgr.Manager
-	mon      monitor.Manager
-	resolver backendcatalog.Resolver
-	cfg      Config
-	problems []Problem  // embedded SWE-bench Lite coding set
-	presets  []tpPreset // parsed ModeLlamaBench configs
-	reps     int        // ModeLlamaBench repetitions per preset
-	warmup   int        // discarded warmup reps before measurement
+	store        profilestore.Store
+	pm           processmgr.Manager
+	mon          monitor.Manager
+	resolver     backendcatalog.Resolver
+	cfg          Config
+	problems     []Problem     // embedded SWE-bench Lite coding set
+	mathProblems []MathProblem // embedded GSM8K set for ModeMathBench
+	presets      []tpPreset    // parsed ModeLlamaBench configs
+	reps         int           // ModeLlamaBench repetitions per preset
+	warmup       int           // discarded warmup reps before measurement
 }
 
 // NewRunner builds a Runner and loads the embedded dataset.
 func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Manager, resolver backendcatalog.Resolver, cfg Config) (*Runner, error) {
 	problems, err := Load()
+	if err != nil {
+		return nil, err
+	}
+	mathProblems, err := loadMathProblems()
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +157,7 @@ func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Mana
 	if warmup < 0 {
 		warmup = 1
 	}
-	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, presets: presets, reps: reps, warmup: warmup}, nil
+	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, mathProblems: mathProblems, presets: presets, reps: reps, warmup: warmup}, nil
 }
 
 // ProblemCount reports how many problems the default executable set contains.

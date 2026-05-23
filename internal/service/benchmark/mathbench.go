@@ -1,6 +1,7 @@
 package benchmark
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -74,4 +75,95 @@ func matchAnswer(expected, response string) bool {
 	got := extractFinalAnswer(response)
 	want := normalizeNumber(expected)
 	return got != "" && got == want
+}
+
+// runMathBench asks the model one math question and scores an exact numeric
+// match. Objective (no grader). Temperature 0 for determinism.
+func (r *Runner) runMathBench(ctx context.Context, base, model string, p MathProblem) (ProblemResult, ProblemTranscript) {
+	res := ProblemResult{ProblemID: p.ID, ProblemName: truncateQuestion(p.Question)}
+	tr := ProblemTranscript{ProblemID: p.ID, ProblemName: res.ProblemName}
+
+	reqCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout)
+	defer cancel()
+	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
+		Model:       model,
+		Temperature: 0,
+		MaxTokens:   r.cfg.MaxTokens,
+		Messages: []ChatMessage{
+			{Role: "system", Content: "You are a careful math solver. Reason step by step, then end with 'The answer is <number>'."},
+			{Role: "user", Content: p.Question},
+		},
+	})
+	if err != nil {
+		res.Err = err.Error()
+		tr.Error = err.Error()
+		return res, tr
+	}
+	res.TTFTms = comp.TTFT.Milliseconds()
+	res.TotalMs = comp.Total.Milliseconds()
+	res.TokensPerSecond = comp.TokensPerSecond
+	res.DecodeTPS = comp.TokensPerSecond
+	res.PromptProcessingTPS = comp.PromptProcessingTPS
+	res.PromptTokens = comp.PromptTokens
+	res.CompletionTokens = comp.CompletionTokens
+	tr.ModelResponse = comp.Content
+
+	got := extractFinalAnswer(comp.Content)
+	res.Resolved = got != "" && got == normalizeNumber(p.Answer)
+	if res.Resolved {
+		res.Score = 1
+	}
+	res.Detail = fmt.Sprintf("expected %s, got %q (difficulty %d)", p.Answer, got, p.Difficulty)
+	return res, tr
+}
+
+func truncateQuestion(q string) string {
+	q = strings.ReplaceAll(q, "\n", " ")
+	if len(q) > 60 {
+		return q[:57] + "..."
+	}
+	return q
+}
+
+type mathHandler struct{}
+
+func (mathHandler) Mode() Mode                      { return ModeMathBench }
+func (mathHandler) Category() Category              { return CatQuality }
+func (mathHandler) Count(r *Runner) int             { return len(r.mathProblems) }
+func (mathHandler) Prepare(*Runner) (Scorer, error) { return nil, nil }
+
+func (mathHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
+	if len(problems) == 0 {
+		return
+	}
+	solved := 0
+	for _, p := range problems {
+		if p.Resolved {
+			solved++
+		}
+	}
+	agg.MathAccuracy = float64(solved) / float64(len(problems))
+}
+
+func (mathHandler) Execute(ctx context.Context, r *Runner, base, model string, _ Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
+	var results []ProblemResult
+	var transcripts []ProblemTranscript
+	for i, p := range r.mathProblems {
+		select {
+		case <-ctx.Done():
+			return results, transcripts, ctx.Err()
+		default:
+		}
+		send(progress, Progress{Index: i + 1, Total: len(r.mathProblems), ProblemID: p.ID, ProblemName: truncateQuestion(p.Question), Phase: "infer"})
+		pr, tr := r.runMathBench(ctx, base, model, p)
+		results = append(results, pr)
+		if r.cfg.SaveTranscripts {
+			transcripts = append(transcripts, tr)
+		}
+	}
+	return results, transcripts, nil
+}
+
+func init() {
+	registerHandler(mathHandler{})
 }
