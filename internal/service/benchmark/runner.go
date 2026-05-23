@@ -129,6 +129,7 @@ type Runner struct {
 	mmluProblems    []MMLUProblem        // embedded MMLU subset for ModeMMLUBench
 	arxivDocs       []ArxivDoc           // real arXiv abstracts used as long-context quality filler
 	ragasProblems   []RagasProblem       // synthetic RAG scenarios for ModeRagasBench
+	summaryProblems []SummaryProblem     // synthetic multi-doc bundles for ModeSummaryBench
 	presets         []tpPreset           // parsed ModeLlamaBench configs
 	reps            int                  // ModeLlamaBench repetitions per preset
 	warmup          int                  // discarded warmup reps before measurement
@@ -164,6 +165,10 @@ func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Mana
 	if err != nil {
 		return nil, err
 	}
+	summaryProblems, err := loadSummaryProblems()
+	if err != nil {
+		return nil, err
+	}
 	if cfg.MaxTokens <= 0 {
 		cfg.MaxTokens = 1024
 	}
@@ -182,7 +187,7 @@ func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Mana
 	if warmup < 0 {
 		warmup = 1
 	}
-	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, mathProblems: mathProblems, codeGenProblems: codeGenProblems, instProblems: instProblems, mmluProblems: mmluProblems, arxivDocs: arxivDocs, ragasProblems: ragasProblems, presets: presets, reps: reps, warmup: warmup}, nil
+	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, mathProblems: mathProblems, codeGenProblems: codeGenProblems, instProblems: instProblems, mmluProblems: mmluProblems, arxivDocs: arxivDocs, ragasProblems: ragasProblems, summaryProblems: summaryProblems, presets: presets, reps: reps, warmup: warmup}, nil
 }
 
 // ProblemCount reports how many problems the default executable set contains.
