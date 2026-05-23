@@ -35,6 +35,7 @@ var benchModes = []benchmark.Mode{
 	benchmark.ModeJudge,
 	benchmark.ModeLongContext,
 	benchmark.ModeLlamaBench,
+	benchmark.ModeMathBench,
 }
 
 // BenchmarkPage is the Benchmark tab: pick a profile, run the embedded
@@ -229,6 +230,7 @@ func (p BenchmarkPage) viewModePick() string {
 		benchmark.ModeJudge:       "SWE-bench Lite; reference-guided LLM judge, median of N samples (needs benchmark.judge config)",
 		benchmark.ModeLongContext: "needle retrieval in a long prompt — objective diagnostic of KV-cache-quant decay",
 		benchmark.ModeLlamaBench:  "throughput probe (llama-bench style): TTFT + tokens/s on fixed-size prompts",
+		benchmark.ModeMathBench:   "math reasoning (GSM8K): exact numeric match, accuracy under quantization",
 	}
 	rows := make([]string, 0, len(benchModes))
 	for i, m := range benchModes {
