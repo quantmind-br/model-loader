@@ -35,6 +35,15 @@ const (
 	// multiple-choice letter exact-match (not judged). A direct signal of
 	// knowledge degradation from quantization.
 	ModeMMLUBench Mode = "mmlu-bench"
+	// ModeRagasBench: retrieval-augmented-generation quality probe — synthetic
+	// scenarios where the model answers a question strictly from supplied
+	// documents. A grader scores faithfulness (no hallucination beyond the
+	// docs), answer relevancy, and context precision. Graded (external or self).
+	ModeRagasBench Mode = "ragas-bench"
+	// ModeSummaryBench: multi-document summarization-coherence probe — the model
+	// summarizes ~10 short documents and must cover a known set of key facts. A
+	// grader scores coherence + fact coverage. Graded (external or self).
+	ModeSummaryBench Mode = "summary-bench"
 )
 
 // Title returns a short human label for the mode.
@@ -54,6 +63,10 @@ func (m Mode) Title() string {
 		return "Instruction following"
 	case ModeMMLUBench:
 		return "Factual knowledge (MMLU)"
+	case ModeRagasBench:
+		return "RAG faithfulness (synthetic)"
+	case ModeSummaryBench:
+		return "Summarization coherence"
 	default:
 		return string(m)
 	}
@@ -102,6 +115,10 @@ type Aggregate struct {
 	InstRefusalRate        float64 `json:"instRefusalRate,omitempty"`        // 0..1 disallowed-request refusal
 	InstConsistency        float64 `json:"instConsistency,omitempty"`        // 0..1 mean pairwise similarity
 	MMLUAccuracy           float64 `json:"mmluAccuracy,omitempty"`           // 0..1 multiple-choice exact-match rate
+	RagasFaithfulness      float64 `json:"ragasFaithfulness,omitempty"`      // 0..1 grounded-in-docs score
+	RagasRelevancy         float64 `json:"ragasRelevancy,omitempty"`         // 0..1 answers-the-question score
+	RagasPrecision         float64 `json:"ragasPrecision,omitempty"`         // 0..1 uses-the-right-context score
+	SummaryCoherence       float64 `json:"summaryCoherence,omitempty"`       // 0..1 multi-doc coherence + fact coverage
 	AvgTTFTms              float64 `json:"avgTtftMs"`
 	TotalPromptTokens      int     `json:"totalPromptTokens"`
 	TotalCompletionTokens  int     `json:"totalCompletionTokens"`

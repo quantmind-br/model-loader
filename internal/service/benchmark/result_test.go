@@ -1,6 +1,10 @@
 package benchmark
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
 func TestModeInstBenchTitle(t *testing.T) {
 	if got := ModeInstBench.Title(); got != "Instruction following" {
@@ -37,5 +41,29 @@ func TestMMLUAggregateField(t *testing.T) {
 	a.MMLUAccuracy = 1
 	if a.MMLUAccuracy != 1 {
 		t.Fatal("MMLUAccuracy not assignable")
+	}
+}
+
+func TestTitle_Phase3Modes(t *testing.T) {
+	cases := map[Mode]string{
+		ModeRagasBench:   "RAG faithfulness (synthetic)",
+		ModeSummaryBench: "Summarization coherence",
+	}
+	for m, want := range cases {
+		if got := m.Title(); got != want {
+			t.Errorf("Title(%q) = %q, want %q", m, got, want)
+		}
+	}
+}
+
+func TestAggregate_Phase3FieldsOmitEmpty(t *testing.T) {
+	b, err := json.Marshal(Aggregate{Total: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"ragasFaithfulness", "ragasRelevancy", "ragasPrecision", "summaryCoherence"} {
+		if strings.Contains(string(b), k) {
+			t.Errorf("zero %s should be omitted, got %s", k, b)
+		}
 	}
 }
