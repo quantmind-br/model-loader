@@ -228,10 +228,10 @@ func (p BenchmarkPage) viewProfilePick() string {
 func (p BenchmarkPage) viewModePick() string {
 	title := theme.Title.Render("Scoring mode")
 	descs := map[benchmark.Mode]string{
-		benchmark.ModeJudge:       "SWE-bench Lite; reference-guided LLM judge, median of N samples (needs benchmark.judge config)",
-		benchmark.ModeLongContext: "needle retrieval in a long prompt — objective diagnostic of KV-cache-quant decay",
-		benchmark.ModeLlamaBench:  "throughput probe (llama-bench style): TTFT + tokens/s on fixed-size prompts",
-		benchmark.ModeMathBench:   "math reasoning (GSM8K): exact numeric match, accuracy under quantization",
+		benchmark.ModeJudge:        "SWE-bench Lite; reference-guided LLM judge, median of N samples (needs benchmark.judge config)",
+		benchmark.ModeLongContext:  "needle retrieval in a long prompt — objective diagnostic of KV-cache-quant decay",
+		benchmark.ModeLlamaBench:   "throughput probe (llama-bench style): TTFT + tokens/s on fixed-size prompts",
+		benchmark.ModeMathBench:    "math reasoning (GSM8K): exact numeric match, accuracy under quantization",
 		benchmark.ModeCodeGenBench: "code generation (HumanEval): sandboxed Pass@1; needs python3 on PATH",
 	}
 	rows := make([]string, 0, len(benchModes))
