@@ -51,7 +51,6 @@ type ServerPage struct {
 	width              int
 	height             int
 	flash              components.Flash
-	pauseFlash         string
 	restartConfirm     components.Confirm
 	killConfirm        components.Confirm
 

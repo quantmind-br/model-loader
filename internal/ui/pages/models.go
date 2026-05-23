@@ -51,7 +51,6 @@ type ModelsPage struct {
 	hfFilePicker   *components.HFFilePicker
 	downloads      *components.DownloadProgress
 	downloadEvents <-chan downloadmgr.Event
-	searchEpoch    int    // bumped per search keystroke for debounce
 	pendingRepoID  string // carried between RepoInfo lookup and file picker open
 
 	keys modelsKeyMap

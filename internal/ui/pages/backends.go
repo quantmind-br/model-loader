@@ -81,7 +81,7 @@ type BackendsPage struct {
 	deleteConfirm  components.Confirm
 	refreshConfirm components.Confirm
 
-	flash components.Flash
+	flash        components.Flash
 	spinnerModel spinner.Model
 
 	pendingRefresh bool
@@ -133,10 +133,10 @@ func NewBackendsPage(manager *backendschema.Manager) BackendsPage {
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
 	return BackendsPage{
-		manager: manager,
-		list:    l,
-		keys:    defaultBackendsKeys(),
-		flash:   components.NewFlash("backends"),
+		manager:      manager,
+		list:         l,
+		keys:         defaultBackendsKeys(),
+		flash:        components.NewFlash("backends"),
 		spinnerModel: components.NewLoadingSpinner(),
 	}
 }
@@ -520,26 +520,6 @@ func (p BackendsPage) startEditSelected() (tea.Model, tea.Cmd) {
 	return p, p.startBackendWebEdit(d)
 }
 
-func (p BackendsPage) buildAddForm() *huh.Form {
-	return huh.NewForm(huh.NewGroup(
-		huh.NewInput().Title("Name").Value(&p.draft.Name).Validate(required("name")),
-		huh.NewSelect[string]().Title("Kind").Options(p.kindOptions()...).Value(&p.draft.Kind),
-		huh.NewInput().Title("Executable").Value(&p.draft.Executable).Validate(required("executable")),
-		huh.NewInput().Title("Description").Value(&p.draft.Description),
-		huh.NewInput().Title("Tags").Description("comma-separated").Value(&p.draft.Tags),
-	)).WithShowHelp(true)
-}
-
-func (p BackendsPage) buildEditForm() *huh.Form {
-	return huh.NewForm(huh.NewGroup(
-		huh.NewInput().Title("Name").Value(&p.draft.Name).Validate(required("name")),
-		huh.NewInput().Title("Executable").Value(&p.draft.Executable).Validate(required("executable")),
-		huh.NewInput().Title("Description").Value(&p.draft.Description),
-		huh.NewInput().Title("Tags").Description("comma-separated").Value(&p.draft.Tags),
-		huh.NewNote().Title("Kind").Description(p.draft.Kind),
-	)).WithShowHelp(true)
-}
-
 func (p BackendsPage) forwardToForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if p.form == nil {
 		return p, nil
@@ -766,15 +746,6 @@ func (p BackendsPage) hasKind(kind domain.BackendKind) bool {
 	}
 	_, ok := p.manager.Generators()[kind]
 	return ok
-}
-
-func required(name string) func(string) error {
-	return func(v string) error {
-		if strings.TrimSpace(v) == "" {
-			return fmt.Errorf("%s is required", name)
-		}
-		return nil
-	}
 }
 
 func parseTags(s string) []string {
