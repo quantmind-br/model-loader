@@ -21,6 +21,10 @@ const (
 	// exact numeric match (objective, not judged). The most direct signal of
 	// reasoning degradation from quantization.
 	ModeMathBench Mode = "math-bench"
+	// ModeCodeGenBench: code-generation probe — curated HumanEval problems whose
+	// generated solutions are executed against unit tests in a sandboxed python3
+	// subprocess (objective Pass@1, not judged).
+	ModeCodeGenBench Mode = "codegen-bench"
 )
 
 // Title returns a short human label for the mode.
@@ -34,6 +38,8 @@ func (m Mode) Title() string {
 		return "Throughput (llama-bench)"
 	case ModeMathBench:
 		return "Math reasoning (GSM8K)"
+	case ModeCodeGenBench:
+		return "Code generation (HumanEval)"
 	default:
 		return string(m)
 	}
@@ -77,6 +83,7 @@ type Aggregate struct {
 	AvgPromptProcessingTPS float64 `json:"avgPromptProcessingTps,omitempty"` // avg prefill tok/s
 	AvgDecodeTPS           float64 `json:"avgDecodeTps,omitempty"`           // avg decode tok/s
 	MathAccuracy           float64 `json:"mathAccuracy,omitempty"`           // 0..1, exact-match rate
+	CodePassRate           float64 `json:"codePassRate,omitempty"`           // 0..1 over executed problems
 	AvgTTFTms              float64 `json:"avgTtftMs"`
 	TotalPromptTokens      int     `json:"totalPromptTokens"`
 	TotalCompletionTokens  int     `json:"totalCompletionTokens"`
