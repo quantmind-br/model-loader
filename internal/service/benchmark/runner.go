@@ -126,6 +126,7 @@ type Runner struct {
 	mathProblems    []MathProblem        // embedded GSM8K set for ModeMathBench
 	codeGenProblems []CodeGenProblem     // embedded HumanEval set for ModeCodeGenBench
 	instProblems    []InstructionProblem // embedded instruction-robustness set for ModeInstBench
+	mmluProblems    []MMLUProblem        // embedded MMLU subset for ModeMMLUBench
 	presets         []tpPreset           // parsed ModeLlamaBench configs
 	reps            int                  // ModeLlamaBench repetitions per preset
 	warmup          int                  // discarded warmup reps before measurement
@@ -149,6 +150,10 @@ func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Mana
 	if err != nil {
 		return nil, err
 	}
+	mmluProblems, err := loadMMLUProblems()
+	if err != nil {
+		return nil, err
+	}
 	if cfg.MaxTokens <= 0 {
 		cfg.MaxTokens = 1024
 	}
@@ -167,7 +172,7 @@ func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Mana
 	if warmup < 0 {
 		warmup = 1
 	}
-	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, mathProblems: mathProblems, codeGenProblems: codeGenProblems, instProblems: instProblems, presets: presets, reps: reps, warmup: warmup}, nil
+	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, mathProblems: mathProblems, codeGenProblems: codeGenProblems, instProblems: instProblems, mmluProblems: mmluProblems, presets: presets, reps: reps, warmup: warmup}, nil
 }
 
 // ProblemCount reports how many problems the default executable set contains.
