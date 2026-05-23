@@ -200,7 +200,7 @@ func applyExtraArgsRules(p domain.Profile, schema domain.FlagSchema, rep Report)
 			rep = appendIssue(rep, FieldIssue{
 				Field:    flag,
 				Message:  "unknown flag in extra args (not in backend schema)",
-				Severity: SeverityError,
+				Severity: SeverityWarning,
 			})
 			i++
 			continue

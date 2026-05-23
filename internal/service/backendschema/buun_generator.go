@@ -26,7 +26,17 @@ func (g *BuunServerGenerator) Generate(backend domain.Backend) (domain.BackendVa
 		return existing, nil
 	}
 
-	schema := CuratedBuunSchema()
+	var schema domain.BackendValidationSchema
+	if resolved, err := resolve(backend.Executable); err == nil {
+		parsed, parseErr := parseHelpSchema(backend, resolved)
+		if parseErr == nil {
+			schema = mergeWithCurated(parsed, CuratedBuunSchema())
+		}
+	}
+	if schema.Flags == nil {
+		schema = CuratedBuunSchema()
+	}
+
 	schema.BackendID = backend.ID
 	if err := g.schemaStore.Save(ref, schema); err != nil {
 		return domain.BackendValidationSchema{}, fmt.Errorf("save schema: %w", err)

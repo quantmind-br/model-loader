@@ -1,0 +1,2007 @@
+{
+  "Version": "",
+  "BackendKind": "",
+  "Flags": {
+    "alias": {
+      "Long": "alias",
+      "Short": "a",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "set alias for model name (to be used by REST API)",
+      "Group": "example-specific"
+    },
+    "api-key": {
+      "Long": "api-key",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "none",
+      "HelpText": "API key to use for authentication (default: none)",
+      "Group": "example-specific"
+    },
+    "api-key-file": {
+      "Long": "api-key-file",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "none",
+      "HelpText": "path to file containing API keys (default: none)",
+      "Group": "example-specific"
+    },
+    "api-prefix": {
+      "Long": "api-prefix",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "prefix path the server serves from, without the trailing slash",
+      "Group": "example-specific"
+    },
+    "batch-size": {
+      "Long": "batch-size",
+      "Short": "b",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 2048,
+      "HelpText": "logical maximum batch size (default: 2048)",
+      "Group": "common"
+    },
+    "cache-list": {
+      "Long": "cache-list",
+      "Short": "cl",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "show list of models in cache",
+      "Group": "common"
+    },
+    "cache-ram": {
+      "Long": "cache-ram",
+      "Short": "cram",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 8192,
+      "HelpText": "set the maximum cache size in MiB (default: 8192, -1 - no limit, 0 -",
+      "Group": "example-specific"
+    },
+    "cache-reuse": {
+      "Long": "cache-reuse",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "min chunk size to attempt reusing from the cache via KV shifting",
+      "Group": "example-specific"
+    },
+    "cache-type-k": {
+      "Long": "cache-type-k",
+      "Short": "ctk",
+      "Aliases": null,
+      "Type": 4,
+      "EnumValues": [
+        "f32",
+        "f16",
+        "bf16",
+        "q8_0",
+        "q4_0",
+        "q4_1",
+        "iq4_nl",
+        "q5_0",
+        "q5_1"
+      ],
+      "Default": null,
+      "HelpText": "KV cache data type for K",
+      "Group": "common"
+    },
+    "cache-type-k-draft": {
+      "Long": "cache-type-k-draft",
+      "Short": "ctkd",
+      "Aliases": null,
+      "Type": 4,
+      "EnumValues": [
+        "f32",
+        "f16",
+        "bf16",
+        "q8_0",
+        "q4_0",
+        "q4_1",
+        "iq4_nl",
+        "q5_0",
+        "q5_1"
+      ],
+      "Default": null,
+      "HelpText": "KV cache data type for K for the draft model",
+      "Group": "common"
+    },
+    "cache-type-v": {
+      "Long": "cache-type-v",
+      "Short": "ctv",
+      "Aliases": null,
+      "Type": 4,
+      "EnumValues": [
+        "f32",
+        "f16",
+        "bf16",
+        "q8_0",
+        "q4_0",
+        "q4_1",
+        "iq4_nl",
+        "q5_0",
+        "q5_1"
+      ],
+      "Default": null,
+      "HelpText": "KV cache data type for V",
+      "Group": "common"
+    },
+    "cache-type-v-draft": {
+      "Long": "cache-type-v-draft",
+      "Short": "ctvd",
+      "Aliases": null,
+      "Type": 4,
+      "EnumValues": [
+        "f32",
+        "f16",
+        "bf16",
+        "q8_0",
+        "q4_0",
+        "q4_1",
+        "iq4_nl",
+        "q5_0",
+        "q5_1"
+      ],
+      "Default": null,
+      "HelpText": "KV cache data type for V for the draft model",
+      "Group": "common"
+    },
+    "chat-template": {
+      "Long": "chat-template",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "template taken from model's",
+      "HelpText": "set custom jinja chat template (default: template taken from model's",
+      "Group": "example-specific"
+    },
+    "chat-template-file": {
+      "Long": "chat-template-file",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "template taken from",
+      "HelpText": "set custom jinja chat template file (default: template taken from",
+      "Group": "example-specific"
+    },
+    "chat-template-kwargs": {
+      "Long": "chat-template-kwargs",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "sets additional params for the json template parser",
+      "Group": "example-specific"
+    },
+    "check-tensors": {
+      "Long": "check-tensors",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": false,
+      "HelpText": "check model tensor data for invalid values (default: false)",
+      "Group": "common"
+    },
+    "completion-bash": {
+      "Long": "completion-bash",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "print source-able bash completion script for llama.cpp",
+      "Group": "common"
+    },
+    "cont-batching": {
+      "Long": "cont-batching",
+      "Short": "cb",
+      "Aliases": [
+        "no-cont-batching"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "whether to enable continuous batching (a.k.a dynamic batching)",
+      "Group": "example-specific"
+    },
+    "context-shift": {
+      "Long": "context-shift",
+      "Short": "",
+      "Aliases": [
+        "no-context-shift"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "whether to use context shift on infinite text generation (default:",
+      "Group": "example-specific"
+    },
+    "control-vector": {
+      "Long": "control-vector",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "add a control vector",
+      "Group": "common"
+    },
+    "control-vector-layer-range": {
+      "Long": "control-vector-layer-range",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "layer range to apply the control vector(s) to, start and end inclusive",
+      "Group": "common"
+    },
+    "control-vector-scaled": {
+      "Long": "control-vector-scaled",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "add a control vector with user defined scaling SCALE",
+      "Group": "common"
+    },
+    "cpu-mask": {
+      "Long": "cpu-mask",
+      "Short": "C",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "CPU affinity mask: arbitrarily long hex. Complements cpu-range",
+      "Group": "common"
+    },
+    "cpu-mask-batch": {
+      "Long": "cpu-mask-batch",
+      "Short": "Cb",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "CPU affinity mask: arbitrarily long hex. Complements cpu-range-batch",
+      "Group": "common"
+    },
+    "cpu-moe": {
+      "Long": "cpu-moe",
+      "Short": "cmoe",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "keep all Mixture of Experts (MoE) weights in the CPU",
+      "Group": "common"
+    },
+    "cpu-moe-draft": {
+      "Long": "cpu-moe-draft",
+      "Short": "cmoed",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "keep all Mixture of Experts (MoE) weights in the CPU for the draft",
+      "Group": "example-specific"
+    },
+    "cpu-range": {
+      "Long": "cpu-range",
+      "Short": "Cr",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "range of CPUs for affinity. Complements --cpu-mask",
+      "Group": "common"
+    },
+    "cpu-range-batch": {
+      "Long": "cpu-range-batch",
+      "Short": "Crb",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "ranges of CPUs for affinity. Complements --cpu-mask-batch",
+      "Group": "common"
+    },
+    "cpu-strict": {
+      "Long": "cpu-strict",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "0",
+      "HelpText": "use strict CPU placement (default: 0)",
+      "Group": "common"
+    },
+    "cpu-strict-batch": {
+      "Long": "cpu-strict-batch",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "same as --cpu-strict",
+      "HelpText": "use strict CPU placement (default: same as --cpu-strict)",
+      "Group": "common"
+    },
+    "ctx-size": {
+      "Long": "ctx-size",
+      "Short": "c",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 4096,
+      "HelpText": "size of the prompt context (default: 4096, 0 = loaded from model)",
+      "Group": "common"
+    },
+    "ctx-size-draft": {
+      "Long": "ctx-size-draft",
+      "Short": "cd",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 0,
+      "HelpText": "size of the prompt context for the draft model (default: 0, 0 = loaded",
+      "Group": "example-specific"
+    },
+    "defrag-thold": {
+      "Long": "defrag-thold",
+      "Short": "dt",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "KV cache defragmentation threshold (DEPRECATED)",
+      "Group": "common"
+    },
+    "device": {
+      "Long": "device",
+      "Short": "dev",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "comma-separated list of devices to use for offloading (none = don't",
+      "Group": "common"
+    },
+    "device-draft": {
+      "Long": "device-draft",
+      "Short": "devd",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "comma-separated list of devices to use for offloading the draft model",
+      "Group": "example-specific"
+    },
+    "docker-repo": {
+      "Long": "docker-repo",
+      "Short": "dr",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Docker Hub model repository. repo is optional, default to ai/. quant",
+      "Group": "common"
+    },
+    "draft-n": {
+      "Long": "draft-n",
+      "Short": "",
+      "Aliases": [
+        "draft-max",
+        "draft"
+      ],
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 16,
+      "HelpText": "number of tokens to draft for speculative decoding (default: 16)",
+      "Group": "example-specific"
+    },
+    "draft-n-min": {
+      "Long": "draft-n-min",
+      "Short": "",
+      "Aliases": [
+        "draft-min"
+      ],
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "minimum number of draft tokens to use for speculative decoding",
+      "Group": "example-specific"
+    },
+    "draft-p-min": {
+      "Long": "draft-p-min",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "0.8",
+      "HelpText": "minimum speculative decoding probability (greedy) (default: 0.8)",
+      "Group": "example-specific"
+    },
+    "dry-allowed-length": {
+      "Long": "dry-allowed-length",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 2,
+      "HelpText": "set allowed length for DRY sampling (default: 2)",
+      "Group": "sampling"
+    },
+    "dry-base": {
+      "Long": "dry-base",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 1.75,
+      "HelpText": "set DRY sampling base value (default: 1.75)",
+      "Group": "sampling"
+    },
+    "dry-multiplier": {
+      "Long": "dry-multiplier",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 0,
+      "HelpText": "set DRY sampling multiplier (default: 0.0, 0.0 = disabled)",
+      "Group": "sampling"
+    },
+    "dry-penalty-last-n": {
+      "Long": "dry-penalty-last-n",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": -1,
+      "HelpText": "set DRY penalty for the last n tokens (default: -1, 0 = disable, -1 =",
+      "Group": "sampling"
+    },
+    "dry-sequence-breaker": {
+      "Long": "dry-sequence-breaker",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "add sequence breaker for DRY sampling, clearing out default breakers",
+      "Group": "sampling"
+    },
+    "dynatemp-exp": {
+      "Long": "dynatemp-exp",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 1,
+      "HelpText": "dynamic temperature exponent (default: 1.0)",
+      "Group": "sampling"
+    },
+    "dynatemp-range": {
+      "Long": "dynatemp-range",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 0,
+      "HelpText": "dynamic temperature range (default: 0.0, 0.0 = disabled)",
+      "Group": "sampling"
+    },
+    "embd-gemma-default": {
+      "Long": "embd-gemma-default",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "use default EmbeddingGemma model (note: can download weights from the",
+      "Group": "example-specific"
+    },
+    "embeddings": {
+      "Long": "embeddings",
+      "Short": "",
+      "Aliases": [
+        "embedding"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "restrict to only support embedding use case; use only with dedicated",
+      "Group": "example-specific"
+    },
+    "escape": {
+      "Long": "escape",
+      "Short": "e",
+      "Aliases": [
+        "no-escape"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "whether to process escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)",
+      "Group": "common"
+    },
+    "fim-qwen-1.5b-default": {
+      "Long": "fim-qwen-1.5b-default",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "use default Qwen 2.5 Coder 1.5B (note: can download weights from the",
+      "Group": "example-specific"
+    },
+    "fim-qwen-14b-spec": {
+      "Long": "fim-qwen-14b-spec",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "use Qwen 2.5 Coder 14B + 0.5B draft for speculative decoding (note:",
+      "Group": "example-specific"
+    },
+    "fim-qwen-30b-default": {
+      "Long": "fim-qwen-30b-default",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "use default Qwen 3 Coder 30B A3B Instruct (note: can download weights",
+      "Group": "example-specific"
+    },
+    "fim-qwen-3b-default": {
+      "Long": "fim-qwen-3b-default",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "use default Qwen 2.5 Coder 3B (note: can download weights from the",
+      "Group": "example-specific"
+    },
+    "fim-qwen-7b-default": {
+      "Long": "fim-qwen-7b-default",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "use default Qwen 2.5 Coder 7B (note: can download weights from the",
+      "Group": "example-specific"
+    },
+    "fim-qwen-7b-spec": {
+      "Long": "fim-qwen-7b-spec",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "use Qwen 2.5 Coder 7B + 0.5B draft for speculative decoding (note: can",
+      "Group": "example-specific"
+    },
+    "flash-attn": {
+      "Long": "flash-attn",
+      "Short": "fa",
+      "Aliases": null,
+      "Type": 4,
+      "EnumValues": [
+        "on",
+        "off",
+        "auto"
+      ],
+      "Default": "auto",
+      "HelpText": "set Flash Attention use ('on', 'off', or 'auto', default: 'auto')",
+      "Group": "common"
+    },
+    "frequency-penalty": {
+      "Long": "frequency-penalty",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 0,
+      "HelpText": "repeat alpha frequency penalty (default: 0.0, 0.0 = disabled)",
+      "Group": "sampling"
+    },
+    "gpt-oss-120b-default": {
+      "Long": "gpt-oss-120b-default",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "use gpt-oss-120b (note: can download weights from the internet)",
+      "Group": "example-specific"
+    },
+    "gpt-oss-20b-default": {
+      "Long": "gpt-oss-20b-default",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "use gpt-oss-20b (note: can download weights from the internet)",
+      "Group": "example-specific"
+    },
+    "grammar": {
+      "Long": "grammar",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "BNF-like grammar to constrain generations (see samples in grammars/",
+      "Group": "sampling"
+    },
+    "grammar-file": {
+      "Long": "grammar-file",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "file to read grammar from",
+      "Group": "sampling"
+    },
+    "hf-file": {
+      "Long": "hf-file",
+      "Short": "hff",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Hugging Face model file. If specified, it will override the quant in",
+      "Group": "common"
+    },
+    "hf-file-v": {
+      "Long": "hf-file-v",
+      "Short": "hffv",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "unused",
+      "HelpText": "Hugging Face model file for the vocoder model (default: unused)",
+      "Group": "common"
+    },
+    "hf-repo": {
+      "Long": "hf-repo",
+      "Short": "hf",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Hugging Face model repository; quant is optional, case-insensitive,",
+      "Group": "common"
+    },
+    "hf-repo-draft": {
+      "Long": "hf-repo-draft",
+      "Short": "hfd",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "unused",
+      "HelpText": "Same as --hf-repo, but for the draft model (default: unused)",
+      "Group": "common"
+    },
+    "hf-repo-v": {
+      "Long": "hf-repo-v",
+      "Short": "hfv",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "unused",
+      "HelpText": "Hugging Face model repository for the vocoder model (default: unused)",
+      "Group": "common"
+    },
+    "hf-token": {
+      "Long": "hf-token",
+      "Short": "hft",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "value from HF_TOKEN environment",
+      "HelpText": "Hugging Face access token (default: value from HF_TOKEN environment",
+      "Group": "common"
+    },
+    "host": {
+      "Long": "host",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "ip address to listen, or bind to an UNIX socket if the address ends",
+      "Group": "example-specific"
+    },
+    "ignore-eos": {
+      "Long": "ignore-eos",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "ignore end of stream token and continue generating (implies",
+      "Group": "sampling"
+    },
+    "image-max-tokens": {
+      "Long": "image-max-tokens",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "maximum number of tokens each image can take, only used by vision",
+      "Group": "example-specific"
+    },
+    "image-min-tokens": {
+      "Long": "image-min-tokens",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "minimum number of tokens each image can take, only used by vision",
+      "Group": "example-specific"
+    },
+    "jinja": {
+      "Long": "jinja",
+      "Short": "",
+      "Aliases": [
+        "no-jinja"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": "enabled",
+      "HelpText": "whether to use jinja template engine for chat (default: enabled)",
+      "Group": "example-specific"
+    },
+    "json-schema": {
+      "Long": "json-schema",
+      "Short": "j",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "JSON schema to constrain generations (https://json-schema.org/), e.g.",
+      "Group": "sampling"
+    },
+    "json-schema-file": {
+      "Long": "json-schema-file",
+      "Short": "jf",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "File containing a JSON schema to constrain generations",
+      "Group": "sampling"
+    },
+    "keep": {
+      "Long": "keep",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 0,
+      "HelpText": "number of tokens to keep from the initial prompt (default: 0, -1 =",
+      "Group": "common"
+    },
+    "kv-offload": {
+      "Long": "kv-offload",
+      "Short": "kvo",
+      "Aliases": [
+        "no-kv-offload"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": "enabled",
+      "HelpText": "whether to enable KV cache offloading (default: enabled)",
+      "Group": "common"
+    },
+    "kv-unified": {
+      "Long": "kv-unified",
+      "Short": "kvu",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "use single unified KV buffer for the KV cache of all sequences",
+      "Group": "common"
+    },
+    "list-devices": {
+      "Long": "list-devices",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "print list of available devices and exit",
+      "Group": "common"
+    },
+    "log-colors": {
+      "Long": "log-colors",
+      "Short": "",
+      "Aliases": null,
+      "Type": 4,
+      "EnumValues": [
+        "on",
+        "off",
+        "auto"
+      ],
+      "Default": "auto",
+      "HelpText": "Set colored logging ('on', 'off', or 'auto', default: 'auto')",
+      "Group": "common"
+    },
+    "log-disable": {
+      "Long": "log-disable",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Log disable",
+      "Group": "common"
+    },
+    "log-file": {
+      "Long": "log-file",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Log to file",
+      "Group": "common"
+    },
+    "log-prefix": {
+      "Long": "log-prefix",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Enable prefix in log messages",
+      "Group": "common"
+    },
+    "log-timestamps": {
+      "Long": "log-timestamps",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Enable timestamps in log messages",
+      "Group": "common"
+    },
+    "log-verbose": {
+      "Long": "log-verbose",
+      "Short": "v",
+      "Aliases": [
+        "verbose"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Set verbosity level to infinity (i.e. log all messages, useful for",
+      "Group": "common"
+    },
+    "log-verbosity": {
+      "Long": "log-verbosity",
+      "Short": "lv",
+      "Aliases": [
+        "verbosity"
+      ],
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Set the verbosity threshold. Messages with a higher verbosity will be",
+      "Group": "common"
+    },
+    "logit-bias": {
+      "Long": "logit-bias",
+      "Short": "l",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "modifies the likelihood of token appearing in the completion,",
+      "Group": "sampling"
+    },
+    "lora": {
+      "Long": "lora",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "path to LoRA adapter (can be repeated to use multiple adapters)",
+      "Group": "common"
+    },
+    "lora-init-without-apply": {
+      "Long": "lora-init-without-apply",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "load LoRA adapters without applying them (apply later via POST",
+      "Group": "example-specific"
+    },
+    "lora-scaled": {
+      "Long": "lora-scaled",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "path to LoRA adapter with user defined scaling (can be repeated to use",
+      "Group": "common"
+    },
+    "main-gpu": {
+      "Long": "main-gpu",
+      "Short": "mg",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "the GPU to use for the model (with split-mode = none), or for",
+      "Group": "common"
+    },
+    "media-path": {
+      "Long": "media-path",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "directory for loading local media files; files can be accessed via",
+      "Group": "example-specific"
+    },
+    "metrics": {
+      "Long": "metrics",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": "disabled",
+      "HelpText": "enable prometheus compatible metrics endpoint (default: disabled)",
+      "Group": "example-specific"
+    },
+    "min-p": {
+      "Long": "min-p",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 0.1,
+      "HelpText": "min-p sampling (default: 0.1, 0.0 = disabled)",
+      "Group": "sampling"
+    },
+    "mirostat": {
+      "Long": "mirostat",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "use Mirostat sampling.",
+      "Group": "sampling"
+    },
+    "mirostat-ent": {
+      "Long": "mirostat-ent",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 5,
+      "HelpText": "Mirostat target entropy, parameter tau (default: 5.0)",
+      "Group": "sampling"
+    },
+    "mirostat-lr": {
+      "Long": "mirostat-lr",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 0.1,
+      "HelpText": "Mirostat learning rate, parameter eta (default: 0.1)",
+      "Group": "sampling"
+    },
+    "mlock": {
+      "Long": "mlock",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "force system to keep model in RAM rather than swapping or compressing",
+      "Group": "common"
+    },
+    "mmap": {
+      "Long": "mmap",
+      "Short": "",
+      "Aliases": [
+        "no-mmap"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "whether to memory-map model (if disabled, slower load but may reduce",
+      "Group": "common"
+    },
+    "mmproj": {
+      "Long": "mmproj",
+      "Short": "mm",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "path to a multimodal projector file. see tools/mtmd/README.md",
+      "Group": "example-specific"
+    },
+    "mmproj-auto": {
+      "Long": "mmproj-auto",
+      "Short": "",
+      "Aliases": [
+        "no-mmproj",
+        "no-mmproj-auto"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "whether to use multimodal projector file (if available), useful when",
+      "Group": "example-specific"
+    },
+    "mmproj-offload": {
+      "Long": "mmproj-offload",
+      "Short": "",
+      "Aliases": [
+        "no-mmproj-offload"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "whether to enable GPU offloading for multimodal projector (default:",
+      "Group": "example-specific"
+    },
+    "mmproj-url": {
+      "Long": "mmproj-url",
+      "Short": "mmu",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "URL to a multimodal projector file. see tools/mtmd/README.md",
+      "Group": "example-specific"
+    },
+    "model": {
+      "Long": "model",
+      "Short": "m",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "model path to load",
+      "Group": "common"
+    },
+    "model-draft": {
+      "Long": "model-draft",
+      "Short": "md",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "unused",
+      "HelpText": "draft model for speculative decoding (default: unused)",
+      "Group": "example-specific"
+    },
+    "model-url": {
+      "Long": "model-url",
+      "Short": "mu",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "unused",
+      "HelpText": "model download url (default: unused)",
+      "Group": "common"
+    },
+    "model-vocoder": {
+      "Long": "model-vocoder",
+      "Short": "mv",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "unused",
+      "HelpText": "vocoder model for audio generation (default: unused)",
+      "Group": "example-specific"
+    },
+    "models-autoload": {
+      "Long": "models-autoload",
+      "Short": "",
+      "Aliases": [
+        "no-models-autoload"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "for router server, whether to automatically load models (default:",
+      "Group": "example-specific"
+    },
+    "models-dir": {
+      "Long": "models-dir",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "disabled",
+      "HelpText": "directory containing models for the router server (default: disabled)",
+      "Group": "example-specific"
+    },
+    "models-max": {
+      "Long": "models-max",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "for router server, maximum number of models to load simultaneously",
+      "Group": "example-specific"
+    },
+    "models-preset": {
+      "Long": "models-preset",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "path to INI file containing model presets for the router server",
+      "Group": "example-specific"
+    },
+    "n-cpu-moe": {
+      "Long": "n-cpu-moe",
+      "Short": "ncmoe",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "keep the Mixture of Experts (MoE) weights of the first N layers in the",
+      "Group": "common"
+    },
+    "n-cpu-moe-draft": {
+      "Long": "n-cpu-moe-draft",
+      "Short": "ncmoed",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "keep the Mixture of Experts (MoE) weights of the first N layers in the",
+      "Group": "example-specific"
+    },
+    "n-gpu-layers": {
+      "Long": "n-gpu-layers",
+      "Short": "ngl",
+      "Aliases": [
+        "gpu-layers"
+      ],
+      "Type": 1,
+      "EnumValues": null,
+      "Default": -1,
+      "HelpText": "max. number of layers to store in VRAM (default: -1)",
+      "Group": "common"
+    },
+    "n-gpu-layers-draft": {
+      "Long": "n-gpu-layers-draft",
+      "Short": "ngld",
+      "Aliases": [
+        "gpu-layers-draft"
+      ],
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "number of layers to store in VRAM for the draft model",
+      "Group": "example-specific"
+    },
+    "n-predict": {
+      "Long": "n-predict",
+      "Short": "n",
+      "Aliases": [
+        "predict"
+      ],
+      "Type": 1,
+      "EnumValues": null,
+      "Default": -1,
+      "HelpText": "number of tokens to predict (default: -1, -1 = infinity)",
+      "Group": "common"
+    },
+    "no-host": {
+      "Long": "no-host",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "bypass host buffer allowing extra buffers to be used",
+      "Group": "common"
+    },
+    "numa": {
+      "Long": "numa",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "attempt optimizations that help on some NUMA systems",
+      "Group": "common"
+    },
+    "offline": {
+      "Long": "offline",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Offline mode: forces use of cache, prevents network access",
+      "Group": "common"
+    },
+    "op-offload": {
+      "Long": "op-offload",
+      "Short": "",
+      "Aliases": [
+        "no-op-offload"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": true,
+      "HelpText": "whether to offload host tensor operations to device (default: true)",
+      "Group": "common"
+    },
+    "override-kv": {
+      "Long": "override-kv",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "advanced option to override model metadata by key. may be specified",
+      "Group": "common"
+    },
+    "override-tensor": {
+      "Long": "override-tensor",
+      "Short": "ot",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "override tensor buffer type",
+      "Group": "common"
+    },
+    "override-tensor-draft": {
+      "Long": "override-tensor-draft",
+      "Short": "otd",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "override tensor buffer type for draft model",
+      "Group": "example-specific"
+    },
+    "parallel": {
+      "Long": "parallel",
+      "Short": "np",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 1,
+      "HelpText": "number of parallel sequences to decode (default: 1)",
+      "Group": "common"
+    },
+    "path": {
+      "Long": "path",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "",
+      "HelpText": "path to serve static files from (default: )",
+      "Group": "example-specific"
+    },
+    "perf": {
+      "Long": "perf",
+      "Short": "",
+      "Aliases": [
+        "no-perf"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "whether to enable internal libllama performance timings (default:",
+      "Group": "common"
+    },
+    "poll": {
+      "Long": "poll",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "50",
+      "HelpText": "use polling level to wait for work (0 - no polling, default: 50)",
+      "Group": "common"
+    },
+    "poll-batch": {
+      "Long": "poll-batch",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "same as --poll",
+      "HelpText": "use polling to wait for work (default: same as --poll)",
+      "Group": "common"
+    },
+    "pooling": {
+      "Long": "pooling",
+      "Short": "",
+      "Aliases": null,
+      "Type": 4,
+      "EnumValues": [
+        "none",
+        "mean",
+        "cls",
+        "last",
+        "rank"
+      ],
+      "Default": null,
+      "HelpText": "pooling type for embeddings, use model default if unspecified",
+      "Group": "example-specific"
+    },
+    "port": {
+      "Long": "port",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 8080,
+      "HelpText": "port to listen (default: 8080)",
+      "Group": "example-specific"
+    },
+    "prefill-assistant": {
+      "Long": "prefill-assistant",
+      "Short": "",
+      "Aliases": [
+        "no-prefill-assistant"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "whether to prefill the assistant's response if the last message is an",
+      "Group": "example-specific"
+    },
+    "presence-penalty": {
+      "Long": "presence-penalty",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 0,
+      "HelpText": "repeat alpha presence penalty (default: 0.0, 0.0 = disabled)",
+      "Group": "sampling"
+    },
+    "prio": {
+      "Long": "prio",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "set process/thread priority : low(-1), normal(0), medium(1), high(2),",
+      "Group": "common"
+    },
+    "prio-batch": {
+      "Long": "prio-batch",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "set process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime",
+      "Group": "common"
+    },
+    "props": {
+      "Long": "props",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": "disabled",
+      "HelpText": "enable changing global properties via POST /props (default: disabled)",
+      "Group": "example-specific"
+    },
+    "reasoning-budget": {
+      "Long": "reasoning-budget",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "controls the amount of thinking allowed; currently only one of: -1 for",
+      "Group": "example-specific"
+    },
+    "reasoning-format": {
+      "Long": "reasoning-format",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "controls whether thought tags are allowed and/or extracted from the",
+      "Group": "example-specific"
+    },
+    "repack": {
+      "Long": "repack",
+      "Short": "nr",
+      "Aliases": [
+        "no-repack"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": "enabled",
+      "HelpText": "whether to enable weight repacking (default: enabled)",
+      "Group": "common"
+    },
+    "repeat-last-n": {
+      "Long": "repeat-last-n",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 64,
+      "HelpText": "last n tokens to consider for penalize (default: 64, 0 = disabled, -1",
+      "Group": "sampling"
+    },
+    "repeat-penalty": {
+      "Long": "repeat-penalty",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 1,
+      "HelpText": "penalize repeat sequence of tokens (default: 1.0, 1.0 = disabled)",
+      "Group": "sampling"
+    },
+    "rerank": {
+      "Long": "rerank",
+      "Short": "",
+      "Aliases": [
+        "reranking"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": "disabled",
+      "HelpText": "enable reranking endpoint on server (default: disabled)",
+      "Group": "example-specific"
+    },
+    "reverse-prompt": {
+      "Long": "reverse-prompt",
+      "Short": "r",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "halt generation at PROMPT, return control in interactive mode",
+      "Group": "example-specific"
+    },
+    "rope-freq-base": {
+      "Long": "rope-freq-base",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": "loaded from",
+      "HelpText": "RoPE base frequency, used by NTK-aware scaling (default: loaded from",
+      "Group": "common"
+    },
+    "rope-freq-scale": {
+      "Long": "rope-freq-scale",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "RoPE frequency scaling factor, expands context by a factor of 1/N",
+      "Group": "common"
+    },
+    "rope-scale": {
+      "Long": "rope-scale",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "RoPE context scaling factor, expands context by a factor of N",
+      "Group": "common"
+    },
+    "rope-scaling": {
+      "Long": "rope-scaling",
+      "Short": "",
+      "Aliases": null,
+      "Type": 4,
+      "EnumValues": [
+        "none",
+        "linear",
+        "yarn"
+      ],
+      "Default": null,
+      "HelpText": "RoPE frequency scaling method, defaults to linear unless specified by",
+      "Group": "common"
+    },
+    "rpc": {
+      "Long": "rpc",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "comma separated list of RPC servers",
+      "Group": "common"
+    },
+    "sampler-seq": {
+      "Long": "sampler-seq",
+      "Short": "",
+      "Aliases": [
+        "sampling-seq"
+      ],
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "simplified sequence for samplers that will be used (default:",
+      "Group": "sampling"
+    },
+    "samplers": {
+      "Long": "samplers",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "samplers that will be used for generation in the order, separated by",
+      "Group": "sampling"
+    },
+    "seed": {
+      "Long": "seed",
+      "Short": "s",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "-1",
+      "HelpText": "RNG seed (default: -1, use random seed for -1)",
+      "Group": "sampling"
+    },
+    "slot-prompt-similarity": {
+      "Long": "slot-prompt-similarity",
+      "Short": "sps",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "how much the prompt of a request must match the prompt of a slot in",
+      "Group": "example-specific"
+    },
+    "slot-save-path": {
+      "Long": "slot-save-path",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "disabled",
+      "HelpText": "path to save slot kv cache (default: disabled)",
+      "Group": "example-specific"
+    },
+    "slots": {
+      "Long": "slots",
+      "Short": "",
+      "Aliases": [
+        "no-slots"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": "enabled",
+      "HelpText": "expose slots monitoring endpoint (default: enabled)",
+      "Group": "example-specific"
+    },
+    "spec-replace": {
+      "Long": "spec-replace",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "translate the string in TARGET into DRAFT if the draft model and main",
+      "Group": "example-specific"
+    },
+    "special": {
+      "Long": "special",
+      "Short": "sp",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": false,
+      "HelpText": "special tokens output enabled (default: false)",
+      "Group": "example-specific"
+    },
+    "split-mode": {
+      "Long": "split-mode",
+      "Short": "sm",
+      "Aliases": null,
+      "Type": 4,
+      "EnumValues": [
+        "none",
+        "layer",
+        "row"
+      ],
+      "Default": null,
+      "HelpText": "how to split the model across multiple GPUs, one of:",
+      "Group": "common"
+    },
+    "spm-infill": {
+      "Long": "spm-infill",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "use Suffix/Prefix/Middle pattern for infill (instead of",
+      "Group": "example-specific"
+    },
+    "ssl-cert-file": {
+      "Long": "ssl-cert-file",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "path to file a PEM-encoded SSL certificate",
+      "Group": "example-specific"
+    },
+    "ssl-key-file": {
+      "Long": "ssl-key-file",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "path to file a PEM-encoded SSL private key",
+      "Group": "example-specific"
+    },
+    "swa-checkpoints": {
+      "Long": "swa-checkpoints",
+      "Short": "",
+      "Aliases": [
+        "ctx-checkpoints"
+      ],
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 8,
+      "HelpText": "max number of context checkpoints to create per slot (default: 8)",
+      "Group": "example-specific"
+    },
+    "swa-full": {
+      "Long": "swa-full",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": false,
+      "HelpText": "use full-size SWA cache (default: false)",
+      "Group": "common"
+    },
+    "temp": {
+      "Long": "temp",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 0.8,
+      "HelpText": "temperature (default: 0.8)",
+      "Group": "sampling"
+    },
+    "tensor-split": {
+      "Long": "tensor-split",
+      "Short": "ts",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "fraction of the model to offload to each GPU, comma-separated list of",
+      "Group": "common"
+    },
+    "threads": {
+      "Long": "threads",
+      "Short": "t",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": -1,
+      "HelpText": "number of CPU threads to use during generation (default: -1)",
+      "Group": "common"
+    },
+    "threads-batch": {
+      "Long": "threads-batch",
+      "Short": "tb",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "number of threads to use during batch and prompt processing (default:",
+      "Group": "common"
+    },
+    "threads-batch-draft": {
+      "Long": "threads-batch-draft",
+      "Short": "tbd",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "number of threads to use during batch and prompt processing (default:",
+      "Group": "example-specific"
+    },
+    "threads-draft": {
+      "Long": "threads-draft",
+      "Short": "td",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": "same as",
+      "HelpText": "number of threads to use during generation (default: same as",
+      "Group": "example-specific"
+    },
+    "threads-http": {
+      "Long": "threads-http",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": -1,
+      "HelpText": "number of threads used to process HTTP requests (default: -1)",
+      "Group": "example-specific"
+    },
+    "timeout": {
+      "Long": "timeout",
+      "Short": "to",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 600,
+      "HelpText": "server read/write timeout in seconds (default: 600)",
+      "Group": "example-specific"
+    },
+    "top-k": {
+      "Long": "top-k",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 40,
+      "HelpText": "top-k sampling (default: 40, 0 = disabled)",
+      "Group": "sampling"
+    },
+    "top-nsigma": {
+      "Long": "top-nsigma",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": -1,
+      "HelpText": "top-n-sigma sampling (default: -1.0, -1.0 = disabled)",
+      "Group": "sampling"
+    },
+    "top-p": {
+      "Long": "top-p",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 0.9,
+      "HelpText": "top-p sampling (default: 0.9, 1.0 = disabled)",
+      "Group": "sampling"
+    },
+    "tts-use-guide-tokens": {
+      "Long": "tts-use-guide-tokens",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Use guide tokens to improve TTS word recall",
+      "Group": "example-specific"
+    },
+    "typical": {
+      "Long": "typical",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 1,
+      "HelpText": "locally typical sampling, parameter p (default: 1.0, 1.0 = disabled)",
+      "Group": "sampling"
+    },
+    "ubatch-size": {
+      "Long": "ubatch-size",
+      "Short": "ub",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 512,
+      "HelpText": "physical maximum batch size (default: 512)",
+      "Group": "common"
+    },
+    "usage": {
+      "Long": "usage",
+      "Short": "h",
+      "Aliases": [
+        "help"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "print usage and exit",
+      "Group": "common"
+    },
+    "verbose-prompt": {
+      "Long": "verbose-prompt",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": false,
+      "HelpText": "print a verbose prompt before generation (default: false)",
+      "Group": "common"
+    },
+    "version": {
+      "Long": "version",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "show version and build info",
+      "Group": "common"
+    },
+    "vision-gemma-12b-default": {
+      "Long": "vision-gemma-12b-default",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "use Gemma 3 12B QAT (note: can download weights from the internet)",
+      "Group": "example-specific"
+    },
+    "vision-gemma-4b-default": {
+      "Long": "vision-gemma-4b-default",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "use Gemma 3 4B QAT (note: can download weights from the internet)",
+      "Group": "example-specific"
+    },
+    "warmup": {
+      "Long": "warmup",
+      "Short": "",
+      "Aliases": [
+        "no-warmup"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": "enabled",
+      "HelpText": "whether to perform warmup with an empty run (default: enabled)",
+      "Group": "example-specific"
+    },
+    "webui": {
+      "Long": "webui",
+      "Short": "",
+      "Aliases": [
+        "no-webui"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": "enabled",
+      "HelpText": "whether to enable the Web UI (default: enabled)",
+      "Group": "example-specific"
+    },
+    "xtc-probability": {
+      "Long": "xtc-probability",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 0,
+      "HelpText": "xtc probability (default: 0.0, 0.0 = disabled)",
+      "Group": "sampling"
+    },
+    "xtc-threshold": {
+      "Long": "xtc-threshold",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 0.1,
+      "HelpText": "xtc threshold (default: 0.1, 1.0 = disabled)",
+      "Group": "sampling"
+    },
+    "yarn-attn-factor": {
+      "Long": "yarn-attn-factor",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": -1,
+      "HelpText": "YaRN: scale sqrt(t) or attention magnitude (default: -1.0)",
+      "Group": "common"
+    },
+    "yarn-beta-fast": {
+      "Long": "yarn-beta-fast",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": -1,
+      "HelpText": "YaRN: low correction dim or beta (default: -1.0)",
+      "Group": "common"
+    },
+    "yarn-beta-slow": {
+      "Long": "yarn-beta-slow",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": -1,
+      "HelpText": "YaRN: high correction dim or alpha (default: -1.0)",
+      "Group": "common"
+    },
+    "yarn-ext-factor": {
+      "Long": "yarn-ext-factor",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": -1,
+      "HelpText": "YaRN: extrapolation mix factor (default: -1.0, 0.0 = full",
+      "Group": "common"
+    },
+    "yarn-orig-ctx": {
+      "Long": "yarn-orig-ctx",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 0,
+      "HelpText": "YaRN: original context size of model (default: 0 = model training",
+      "Group": "common"
+    }
+  },
+  "Rules": null
+}

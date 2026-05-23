@@ -8,6 +8,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/llamahelp"
+	"github.com/quantmind-br/model-loader/internal/service/llamabin"
 )
 
 func schemaStoreRef(ref string) string {
@@ -33,8 +34,15 @@ func NewLlamaServerGenerator(schemaStore backendcatalog.SchemaStore) *LlamaServe
 	return &LlamaServerGenerator{schemaStore: schemaStore}
 }
 
-// Generate returns the hand-curated llama-server schema without runtime --help parsing.
-// If the existing schema has source.editable=true, generation is skipped to preserve manual edits.
+func resolve(raw string) (string, error) {
+	return llamabin.Resolve(raw)
+}
+
+// Generate returns the llama-server schema by first trying to parse --help from
+// the resolved binary, falling back to the embedded golden JSON (188 flags), and
+// then overlaying curated metadata (groups, descriptions, aliases). If the
+// existing schema has source.editable=true, generation is skipped to preserve
+// manual edits.
 func (g *LlamaServerGenerator) Generate(backend domain.Backend) (domain.BackendValidationSchema, error) {
 	if backend.Kind != domain.BackendKindLlamaServer {
 		return domain.BackendValidationSchema{}, fmt.Errorf("unsupported backend kind: %s", backend.Kind)
@@ -46,7 +54,27 @@ func (g *LlamaServerGenerator) Generate(backend domain.Backend) (domain.BackendV
 		return existing, nil
 	}
 
-	schema := CuratedLlamaSchema()
+	var full domain.BackendValidationSchema
+	if resolved, err := resolve(backend.Executable); err == nil {
+		parsed, parseErr := parseHelpSchema(backend, resolved)
+		if parseErr == nil {
+			full = parsed
+		}
+	}
+	if full.Flags == nil {
+		fs, loadErr := loadGoldenSchema()
+		if loadErr != nil {
+			return domain.BackendValidationSchema{}, fmt.Errorf("load golden schema: %w", loadErr)
+		}
+		src := domain.SchemaSource{
+			GeneratedFrom: "embedded-golden",
+			GeneratedAt:   time.Now().UTC(),
+			Editable:      true,
+		}
+		full = domain.FlagSchemaToBackend(fs, backend.Kind, backend.ID, src)
+	}
+
+	schema := mergeWithCurated(full, CuratedLlamaSchema())
 	schema.BackendID = backend.ID
 	if err := g.schemaStore.Save(ref, schema); err != nil {
 		return domain.BackendValidationSchema{}, fmt.Errorf("save schema: %w", err)
