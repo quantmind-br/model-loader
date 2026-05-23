@@ -73,3 +73,31 @@ func TestLoadCodeGenProblems(t *testing.T) {
 		}
 	}
 }
+
+func TestCodeGenHandler_RegisteredAndCounts(t *testing.T) {
+	h, ok := handlerFor(ModeCodeGenBench)
+	if !ok {
+		t.Fatal("ModeCodeGenBench not registered")
+	}
+	if h.Category() != CatQuality {
+		t.Errorf("category = %q, want Quality", h.Category())
+	}
+	r := &Runner{codeGenProblems: make([]CodeGenProblem, 6)}
+	if h.Count(r) != 6 {
+		t.Errorf("Count = %d, want 6", h.Count(r))
+	}
+}
+
+func TestCodeGenFinalize_RateOverExecuted(t *testing.T) {
+	var agg Aggregate
+	results := []ProblemResult{
+		{Resolved: true},
+		{Resolved: true},
+		{Resolved: false},
+		{Resolved: false, Err: "skipped: python3 not on PATH"},
+	}
+	codeGenHandler{}.Finalize(&agg, results)
+	if agg.CodePassRate < 0.66 || agg.CodePassRate > 0.67 {
+		t.Errorf("CodePassRate = %v, want ~0.667 (over executed only)", agg.CodePassRate)
+	}
+}
