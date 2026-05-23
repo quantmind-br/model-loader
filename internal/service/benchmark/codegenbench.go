@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-var codeFenceRe = regexp.MustCompile("(?s)```(?:python|py)?\\s*\\n(.*?)```")
+var codeFenceRe = regexp.MustCompile("(?s)```[A-Za-z0-9+]*[ \\t]*\\n(.*?)```")
 
 // extractCode pulls the first fenced code block from a model reply; if there is
 // no fence, the whole trimmed reply is treated as code.

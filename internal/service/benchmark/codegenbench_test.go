@@ -17,6 +17,8 @@ func TestExtractCode(t *testing.T) {
 		"prose\n```\ndef g():\n    pass\n```\nmore": "def g():\n    pass",
 		"no fence def h(): return 2":                "no fence def h(): return 2",
 		"```py\nx = 1\n```":                         "x = 1",
+		"```python3\ndef k():\n    return 3\n```":   "def k():\n    return 3",
+		"```Python\ny = 2\n```":                     "y = 2",
 	}
 	for in, want := range cases {
 		if got := extractCode(in); got != want {
