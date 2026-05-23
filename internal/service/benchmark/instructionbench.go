@@ -1,11 +1,27 @@
 package benchmark
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
 )
+
+//go:embed data/instruction_curated.json
+var instructionDataset []byte
+
+// loadInstructionProblems decodes the embedded curated instruction set.
+func loadInstructionProblems() ([]InstructionProblem, error) {
+	var ps []InstructionProblem
+	if err := json.Unmarshal(instructionDataset, &ps); err != nil {
+		return nil, fmt.Errorf("decode instruction dataset: %w", err)
+	}
+	if len(ps) == 0 {
+		return nil, fmt.Errorf("instruction dataset is empty")
+	}
+	return ps, nil
+}
 
 // InstructionProblem is one curated instruction-robustness item. Kind selects
 // the check: "format" (structured output), "refusal" (disallowed request the

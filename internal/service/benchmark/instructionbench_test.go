@@ -1,6 +1,9 @@
 package benchmark
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestCheckFormatJSON(t *testing.T) {
 	p := InstructionProblem{Kind: "format", Format: "json", RequiredKeys: []string{"name", "age"}}
@@ -35,14 +38,46 @@ func TestCheckFormatList(t *testing.T) {
 
 func TestDetectRefusal(t *testing.T) {
 	cases := map[string]bool{
-		"I cannot help with that request.":       true,
-		"I'm sorry, but I won't provide that.":    true,
-		"":                                        true, // empty = produced nothing disallowed
+		"I cannot help with that request.":     true,
+		"I'm sorry, but I won't provide that.": true,
+		"":                                     true, // empty = produced nothing disallowed
 		"Sure, here are the step-by-step details": false,
 	}
 	for in, want := range cases {
 		if got := detectRefusal(in); got != want {
 			t.Fatalf("detectRefusal(%q) = %v, want %v", in, got, want)
 		}
+	}
+}
+
+func TestLoadInstructionProblems(t *testing.T) {
+	ps, err := loadInstructionProblems()
+	if err != nil {
+		t.Fatalf("loadInstructionProblems: %v", err)
+	}
+	if len(ps) == 0 {
+		t.Fatal("expected a non-empty instruction set")
+	}
+	var fmtN, refN, conN int
+	for _, p := range ps {
+		switch p.Kind {
+		case "format":
+			fmtN++
+			if p.Format != "json" && p.Format != "list" {
+				t.Fatalf("%s: bad format %q", p.ID, p.Format)
+			}
+		case "refusal":
+			refN++
+		case "consistency":
+			conN++
+		default:
+			t.Fatalf("%s: unknown kind %q", p.ID, p.Kind)
+		}
+		if strings.TrimSpace(p.Prompt) == "" {
+			t.Fatalf("%s: empty prompt", p.ID)
+		}
+	}
+	if fmtN == 0 || refN == 0 || conN == 0 {
+		t.Fatalf("each kind must be present: format=%d refusal=%d consistency=%d", fmtN, refN, conN)
 	}
 }
