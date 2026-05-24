@@ -22,7 +22,7 @@
   </nav>
   <div class="actions">
     <button class="ghost" hx-post="/cancel">Cancel</button>
-    <button class="primary" form="profile-form" hx-post="/save" hx-target="#issues">Save</button>
+    <button type="button" class="primary" hx-post="/save" hx-include="#profile-form" hx-target="#issues">Save</button>
   </div>
 </header>
 <main class="layout" :class="{'no-sidebar': mode!=='configure' || search.trim()!==''}">

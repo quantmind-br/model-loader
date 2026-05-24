@@ -171,6 +171,46 @@ func TestConfigureRendersSingleIDInput(t *testing.T) {
 	}
 }
 
+func TestSaveButtonIsNotNativeSubmit(t *testing.T) {
+	// The Save button must NOT be a native form-submit button: a submit button
+	// associated with #profile-form fires a native GET navigation that reloads
+	// the editor (discarding the edit) before HTMX can POST /save. It must be
+	// type="button" and pull the form values via hx-include instead.
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	s := &Session{deps: Deps{
+		Schemas:      stubSchemaStore{schema: schema},
+		Catalog:      stubCatalog{id: "llama", ref: "llama.json"},
+		InitialDraft: Draft{ID: "old-id", OrigID: "old-id", Name: "Old", BackendID: "llama"},
+	}}
+	rec := httptest.NewRecorder()
+	s.handleIndex(rec, httptest.NewRequest("GET", "/", nil))
+	body := rec.Body.String()
+
+	i := strings.Index(body, `hx-post="/save"`)
+	if i < 0 {
+		t.Fatalf("save button not found")
+	}
+	// Inspect the button tag around the hx-post="/save" attribute.
+	start := strings.LastIndex(body[:i], "<button")
+	end := strings.Index(body[i:], ">")
+	if start < 0 || end < 0 {
+		t.Fatalf("malformed save button")
+	}
+	btn := body[start : i+end+1]
+	if !strings.Contains(btn, `type="button"`) {
+		t.Fatalf("save button must be type=button to avoid native submit: %s", btn)
+	}
+	if strings.Contains(btn, `form="profile-form"`) {
+		t.Fatalf("save button must not be a form-associated submit button: %s", btn)
+	}
+	if !strings.Contains(btn, `hx-include="#profile-form"`) {
+		t.Fatalf("save button must hx-include the form to send its values: %s", btn)
+	}
+}
+
 // --- captureSchemaStore ---
 
 type captureSchemaStore struct {
