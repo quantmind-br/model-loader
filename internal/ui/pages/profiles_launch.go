@@ -34,8 +34,19 @@ func (p ProfilesPage) launchSelected() (tea.Model, tea.Cmd) {
 func (p ProfilesPage) handleLaunched(msg launchedMsg) (tea.Model, tea.Cmd) {
 	p.running = append(p.running, msg.inst)
 	p.launch.waitPID = msg.inst.PID
-	p.launch.status = fmt.Sprintf("pid=%d port=%d — waiting for /health…", msg.inst.PID, msg.inst.Port)
+	mode := "foreground"
+	if msg.inst.Background {
+		mode = "background"
+	}
+	p.launch.status = fmt.Sprintf("launched %s pid=%d port=%d (%s) — waiting for /health…",
+		msg.inst.ProfileID, msg.inst.PID, msg.inst.Port, mode)
 	p.launch.statusAt = time.Time{}
+	// F-02 audit: also emit a flash so the user gets a high-contrast
+	// success message rather than a single grey "waiting for /health…"
+	// line that's easy to miss while they're scanning the screen for
+	// a confirmation.
+	p, startedFlash := p.withFlash(fmt.Sprintf("launched pid=%d port=%d (%s) — waiting for /health…",
+		msg.inst.PID, msg.inst.Port, mode))
 	mgr := p.manager
 	port := msg.inst.Port
 	pid := msg.inst.PID
@@ -46,12 +57,29 @@ func (p ProfilesPage) handleLaunched(msg launchedMsg) (tea.Model, tea.Cmd) {
 		}
 		return healthyMsg{pid: pid}
 	}
-	return p, tea.Batch(p.launch.spinner.Tick, waitCmd)
+	return p, tea.Batch(p.launch.spinner.Tick, waitCmd, startedFlash)
 }
 
 func (p ProfilesPage) handleHealthy(msg healthyMsg) (tea.Model, tea.Cmd) {
 	p.launch.waitPID = 0
-	p, fc := p.withFlash(fmt.Sprintf("healthy pid=%d", msg.pid))
+	// Look up the instance so we can include the port in the confirmation
+	// flash — a bare "healthy pid=N" gives the user nothing to act on
+	// (F-02 audit).
+	port := 0
+	for _, ri := range p.running {
+		if ri.PID == msg.pid {
+			port = ri.Port
+			break
+		}
+	}
+	var text string
+	if port > 0 {
+		text = fmt.Sprintf("healthy pid=%d port=%d — switched to Server tab", msg.pid, port)
+	} else {
+		text = fmt.Sprintf("healthy pid=%d — switched to Server tab", msg.pid)
+	}
+	p.launch.status = ""
+	p, fc := p.withFlash(text)
 	pid := msg.pid
 	return p, tea.Batch(fc, func() tea.Msg { return SwitchToServerMsg{PID: pid} })
 }
@@ -59,13 +87,20 @@ func (p ProfilesPage) handleHealthy(msg healthyMsg) (tea.Model, tea.Cmd) {
 func (p ProfilesPage) handleLaunchErr(msg launchErrMsg) (tea.Model, tea.Cmd) {
 	pid := p.launch.waitPID
 	p.launch.waitPID = 0
+	p.launch.status = ""
 	base := friendlyLaunchError(msg.err)
+	if msg.firstIssue != "" {
+		base += " \u2014 " + msg.firstIssue
+	}
 	if pid != 0 && p.manager != nil {
 		if exit, ok := p.manager.GetExitInfo(pid); ok {
 			base = enrichWithExit(base, exit)
 		}
 	}
-	p, fc := p.withFlash(base)
+	// F-01 audit: failures must use the high-contrast error styling and
+	// the longer FlashLifetimeError so the user actually notices that
+	// the launch was rejected rather than mistaking it for a no-op.
+	p, fc := p.withFlashError(base)
 	return p, fc
 }
 
@@ -156,7 +191,12 @@ func (p ProfilesPage) launchProfileCmd(selected domain.Profile) tea.Cmd {
 			if rep.HasBlockingErrors() {
 				evt.Error("launch_pipeline_failed",
 					"step", "validate", "err_count", len(rep.Errors))
-				return launchErrMsg{err: fmt.Errorf("validation failed: %d errors", len(rep.Errors))}
+				first := rep.Errors[0]
+				firstHint := first.Field + ": " + first.Message
+				return launchErrMsg{
+					err:        fmt.Errorf("validation failed: %d error(s)", len(rep.Errors)),
+					firstIssue: firstHint,
+				}
 			}
 		}
 		selected.Launch.ResolvedExecutable = rb.ExecutablePath

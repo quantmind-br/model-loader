@@ -252,8 +252,41 @@ func (p ProfilesPage) detailView() string {
 	)
 }
 
+// StatusMessage implements ui.StatusMessageProvider so the page's flash
+// text — launch errors, export confirmations, kill confirmations — also
+// lands in the always-visible status bar. Without this the flash gets
+// clipped below the viewport at 80x24 (TUI_AUDIT bonus: F-01 visibility).
+func (p ProfilesPage) StatusMessage() (string, components.StatusLevel) {
+	msg := p.flash.Message()
+	if msg == "" {
+		return "", components.StatusInfo
+	}
+	level := components.StatusInfo
+	low := strings.ToLower(msg)
+	switch {
+	case strings.HasPrefix(low, "error"):
+		level = components.StatusError
+	case strings.HasPrefix(low, "launch failed"):
+		level = components.StatusError
+	case strings.HasPrefix(low, "export failed"):
+		level = components.StatusError
+	case strings.HasPrefix(low, "pin failed"):
+		level = components.StatusError
+	case strings.HasPrefix(low, "delete failed"):
+		level = components.StatusError
+	case strings.HasPrefix(low, "duplicate failed"):
+		level = components.StatusError
+	case strings.HasPrefix(low, "web editor"):
+		level = components.StatusError
+	}
+	return msg, level
+}
+
 // Hints implements ui.HintProvider — returns page-local key reminders for
 // the status bar. Varies by editor / picker / confirm / list mode.
+// F-10 audit: the full binding list overflowed at 160 cols and even wider.
+// We now keep only the high-frequency actions inline; the long tail
+// (export, pin, import, undo) is documented in the [?] help screen.
 func (p ProfilesPage) Hints() string {
 	switch {
 	case p.picker.active:
@@ -261,15 +294,26 @@ func (p ProfilesPage) Hints() string {
 	case p.deleteConfirm.Active():
 		return "[←→] choose  [enter] confirm"
 	default:
-		return "[enter] launch  [E] edit  [n] new  [d] dup  [x] del  [b] bg/fg  [k] kill  [r] refresh  [e] export  [p] pin  [I] import  [u] undo  [/] filter"
+		return "[enter] launch  [E] edit  [n] new  [d] dup  [x] del  [b] bg/fg  [k] kill  [/] filter  (more: ?)"
 	}
 }
 
 func (p ProfilesPage) renderRunningList() string {
-	if len(p.running) == 0 {
-		return "Running: " + components.EmptyState("(none)", "Press [enter] to launch selected profile")
+	// F-04 audit: the launch-mode toggle had no visible state. The header
+	// now always shows the current bg/fg mode so the user can see what
+	// [enter] will do before pressing it.
+	modeTag := "background"
+	if !p.bgMode {
+		modeTag = "foreground"
 	}
-	lines := []string{theme.Subtitle.Render("Running")}
+	modeIndicator := theme.Subtitle.Render("Launch mode: " + modeTag + "  ([b] toggles)")
+	if len(p.running) == 0 {
+		return lipgloss.JoinVertical(lipgloss.Left,
+			modeIndicator,
+			"Running: "+components.EmptyState("(none)", "Press [enter] to launch selected profile"),
+		)
+	}
+	lines := []string{modeIndicator, theme.Subtitle.Render("Running")}
 	for _, ri := range p.running {
 		tag := "fg"
 		if ri.Background {

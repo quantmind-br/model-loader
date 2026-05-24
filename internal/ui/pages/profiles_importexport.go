@@ -15,16 +15,23 @@ import (
 
 func (p ProfilesPage) exportProfiles() (tea.Model, tea.Cmd) {
 	if p.exportDir == "" {
-		p, fc := p.withFlashError("export directory not configured")
+		p.logger.Warn("profiles_export_skipped", "reason", "export_dir_not_configured")
+		p, fc := p.withFlashError("export failed: directory not configured (check ~/.local/state/model-loader/exports)")
 		return p, fc
 	}
 	bundle, err := profilestore.ExportAll(p.store, p.exportDir)
 	if err != nil {
+		p.logger.Error("profiles_export_failed", "export_dir", p.exportDir, "err", err)
 		p, fc := p.withFlashError("export failed: " + err.Error())
 		return p, fc
 	}
-	filename := filepath.Base(profilestore.ExportFilename(p.exportDir, bundle.ExportedAt))
-	p, fc := p.withFlash("exported to " + filename)
+	fullPath := profilestore.ExportFilename(p.exportDir, bundle.ExportedAt)
+	filename := filepath.Base(fullPath)
+	p.logger.Info("profiles_export_done", "path", fullPath, "count", len(bundle.Profiles))
+	// F-03 audit: show count + filename and log the full path so the user
+	// can see where the bundle landed without the action looking like a
+	// silent no-op.
+	p, fc := p.withFlash(fmt.Sprintf("exported %d profile(s) → %s", len(bundle.Profiles), filename))
 	return p, fc
 }
 

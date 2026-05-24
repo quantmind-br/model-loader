@@ -410,8 +410,11 @@ func TestProfilesPage_HintsIncludeLaunchAndEdit(t *testing.T) {
 	if !strings.Contains(hints, "[E] edit") {
 		t.Errorf("list-mode Hints missing [E] edit; got %q", hints)
 	}
-	if !strings.Contains(hints, "[e] export") {
-		t.Errorf("list-mode Hints missing [e] export; got %q", hints)
+	// F-10 audit: [e] export moved off the inline footer into the [?] help
+	// pane to keep the footer fitting at common widths. The escape hatch
+	// "(more: ?)" tail remains so the user knows additional bindings exist.
+	if !strings.Contains(hints, "(more: ?)") {
+		t.Errorf("list-mode Hints missing (more: ?) tail; got %q", hints)
 	}
 }
 
@@ -612,8 +615,12 @@ func TestProfilesPage_ExportWithoutDirFlashesNotConfigured(t *testing.T) {
 	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	page = updated.(ProfilesPage)
 
-	if got := page.flash.Message(); got != "export directory not configured" {
-		t.Errorf("flash = %q, want %q", got, "export directory not configured")
+	// F-03 audit: the "directory not configured" flash now spells out the
+	// remediation hint (the expected exports path) instead of a bare
+	// status line, but it still must surface as an error flash.
+	got := page.flash.Message()
+	if !strings.HasPrefix(got, "export failed: directory not configured") {
+		t.Errorf("flash = %q, want prefix %q", got, "export failed: directory not configured")
 	}
 }
 
@@ -640,9 +647,14 @@ func TestProfilesPage_ExportWritesBundleAndFlashesFilename(t *testing.T) {
 	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	page = updated.(ProfilesPage)
 
+	// F-03 audit: the success flash now reports the count and the bundle
+	// filename so the user sees both "how many" and "where".
 	flash := page.flash.Message()
-	if !strings.HasPrefix(flash, "exported to profiles-export-") {
-		t.Errorf("flash = %q, want prefix 'exported to profiles-export-'", flash)
+	if !strings.Contains(flash, "exported") || !strings.Contains(flash, "profile") {
+		t.Errorf("flash = %q, want substring 'exported' and 'profile'", flash)
+	}
+	if !strings.Contains(flash, "profiles-export-") {
+		t.Errorf("flash = %q, want substring 'profiles-export-'", flash)
 	}
 	if !strings.HasSuffix(flash, ".json") {
 		t.Errorf("flash = %q, want .json suffix", flash)
@@ -844,8 +856,9 @@ func TestProfilesPage_ExportFlashesOnSuccess(t *testing.T) {
 	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	page = updated.(ProfilesPage)
 
-	if got := page.flash.Message(); !strings.HasPrefix(got, "exported to ") {
-		t.Errorf("flash=%q; want 'exported to …'", got)
+	// F-03 audit: success flash now includes profile count + filename.
+	if got := page.flash.Message(); !strings.Contains(got, "exported") || !strings.Contains(got, "profiles-export-") {
+		t.Errorf("flash=%q; want substring 'exported' and 'profiles-export-'", got)
 	}
 }
 

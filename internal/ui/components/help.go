@@ -60,6 +60,18 @@ _Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or
 - ` + "`R`" + ` — refresh selected backend schema
 - ` + "`P`" + ` — probe selected backend (latency / version)
 - ` + "`/`" + ` — filter
+
+## Benchmark tab
+
+- ` + "`b`" + ` — run a benchmark on a profile
+- ` + "`enter`" + ` — open details for the selected run
+- ` + "`c`" + ` — compare two runs
+- ` + "`e`" + ` — export selected run to JSON
+- ` + "`x`" + ` — delete selected run
+- ` + "`r`" + ` — reload runs from disk
+- ` + "`h`" + ` — history chart (when runs exist)
+- ` + "`/`" + ` — filter (in profile picker)
+- ` + "`esc`" + ` — back / cancel
 `
 
 // RenderHelp returns HelpMarkdown rendered through glamour.

@@ -3,7 +3,13 @@ package components
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
+
+// confirmFocusStyle styles the focus-hint footer beneath a Confirm so it
+// reads as auxiliary text rather than competing with the button row.
+var confirmFocusStyle = theme.Subtitle.Bold(true)
 
 // Confirm is a yes/no dialog wrapping a *huh.Form. It is a value type so it
 // can be embedded by-value in pages with value receivers; the inner form,
@@ -52,12 +58,29 @@ func NewConfirm(title string, payload any, onYes func(any) tea.Cmd, affirmative,
 // Active reports whether the dialog is still on screen (form not yet cleared).
 func (c Confirm) Active() bool { return c.form != nil }
 
-// View delegates to the inner form. Empty string when inactive.
+// View delegates to the inner form, then appends a focus-hint footer so
+// the user can tell at a glance which button currently captures Enter
+// (F-06 audit: huh's reverse-colored "focused" button is too subtle on
+// some terminal themes to make the Enter behavior obvious, especially
+// on destructive confirms that default to Negative).
 func (c Confirm) View() string {
 	if c.form == nil {
 		return ""
 	}
-	return c.form.View()
+	base := c.form.View()
+	if base == "" {
+		return ""
+	}
+	focus := ""
+	if c.answer != nil {
+		if *c.answer {
+			focus = "[→ Enter confirms]"
+		} else {
+			focus = "[→ Enter cancels]"
+		}
+	}
+	hint := confirmFocusStyle.Render(focus + "   ←/→ switch · esc cancel")
+	return base + "\n" + hint
 }
 
 // Init delegates to the inner form so its Cmd→Msg handshake (focus, button

@@ -180,15 +180,28 @@ func (p ModelsPage) regularBodyView() string {
 		}
 	}
 	if p.infoPanel != nil {
-		w := p.width / 3
-		if w > 60 {
-			w = 60
+		// F-09 audit: at narrow widths (≤80 cols) splitting the row
+		// crams the panel into the table cells; stack vertically instead
+		// so the panel still reads cleanly. Above the narrow threshold
+		// fall back to the side-by-side layout.
+		if p.width > 0 && p.width < theme.NarrowWidthThreshold {
+			panelW := p.width
+			if panelW > 80 {
+				panelW = 80
+			}
+			panel := p.infoPanel.Render(panelW)
+			content = lipgloss.JoinVertical(lipgloss.Left, content, panel)
+		} else {
+			w := p.width / 3
+			if w > 60 {
+				w = 60
+			}
+			if w < 30 {
+				w = 30
+			}
+			panel := p.infoPanel.Render(w)
+			content = lipgloss.JoinHorizontal(lipgloss.Top, content, panel)
 		}
-		if w < 30 {
-			w = 30
-		}
-		panel := p.infoPanel.Render(w)
-		content = lipgloss.JoinHorizontal(lipgloss.Top, content, panel)
 	}
 	return content
 }

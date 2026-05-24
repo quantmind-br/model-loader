@@ -194,7 +194,16 @@ func (p ProfilesPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.launchSelected()
 	case key.Matches(msg, p.listKeys.BgToggle):
 		p.bgMode = !p.bgMode
-		return p, nil
+		// F-04 audit: the toggle was previously a silent state flip with
+		// no on-screen indicator anywhere. Emit a flash so the user can
+		// confirm the launch mode at the moment they press [b]; the
+		// persistent indicator ("Mode: bg | fg") lives in renderRunningList.
+		mode := "background"
+		if !p.bgMode {
+			mode = "foreground"
+		}
+		p, fc := p.withFlash("launch mode: " + mode)
+		return p, fc
 	case key.Matches(msg, p.listKeys.Kill):
 		return p.askKillMostRecent()
 	case key.Matches(msg, p.listKeys.Refresh):

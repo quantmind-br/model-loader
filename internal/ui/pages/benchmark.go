@@ -179,20 +179,66 @@ func (p BenchmarkPage) viewList() string {
 		return lipgloss.JoinVertical(lipgloss.Left, title,
 			components.EmptyState("No benchmark runs yet", "Press [b] to evaluate a profile"))
 	}
-	header := theme.Subtitle.Render(fmt.Sprintf("%-16s  %-20s  %-18s  %7s  %8s  %8s",
-		"when", "profile", "mode", "solve", "tok/s", "vram"))
+	cols := benchListColumns(p.width)
+	header := theme.Subtitle.Render(fmt.Sprintf("%-*s  %-*s  %-*s  %7s  %8s  %8s",
+		cols.when, "when",
+		cols.profile, "profile",
+		cols.mode, "mode",
+		"solve", "tok/s", "vram"))
 	rows := []string{header}
 	for i, r := range p.runs {
-		rows = append(rows, p.runRow(i, r))
+		rows = append(rows, p.runRow(i, r, cols))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, title, strings.Join(rows, "\n"))
 }
 
-func (p BenchmarkPage) runRow(i int, r benchmark.Run) string {
-	row := fmt.Sprintf("%-16s  %-20s  %-18s  %6.0f%%  %8.1f  %6dMB",
-		r.StartedAt.Format("01-02 15:04"),
-		truncate(r.ProfileName, 20),
-		truncate(r.Mode.Title(), 18),
+// benchListCols holds the flexed text widths for the variable-width
+// columns in the benchmark run table. The numeric columns (solve/tok/s/vram)
+// always reserve fixed widths so number alignment stays consistent.
+type benchListCols struct {
+	when    int
+	profile int
+	mode    int
+}
+
+// benchListColumns derives the variable-column widths from the available
+// terminal width so the table fits at ≤80 cols without wrapping (F-08
+// audit). The numeric tail (solve/tok/s/vram = 7+2+8+2+8 = 27 cols plus 4
+// inter-column separators) is always reserved; the remaining width is
+// distributed proportionally across when/profile/mode.
+func benchListColumns(width int) benchListCols {
+	const (
+		numericTail = 7 + 2 + 8 + 2 + 8 // "solve  tok/s  vram" columns
+		interCol    = 2 * 5             // 5 inter-column "  " separators
+		cursorGutter = 2                 // "> " / "  " prefix
+	)
+	avail := width - numericTail - interCol - cursorGutter
+	if avail < 30 {
+		avail = 30
+	}
+	whenW := 11 // matches MM-DD HH:MM format width
+	flex := avail - whenW
+	if flex < 16 {
+		flex = 16
+	}
+	// 55% profile / 45% mode — mode strings ("SWE-bench Lite" etc.) are
+	// shorter on average than profile names.
+	profileW := flex * 55 / 100
+	if profileW < 8 {
+		profileW = 8
+	}
+	modeW := flex - profileW
+	if modeW < 6 {
+		modeW = 6
+	}
+	return benchListCols{when: whenW, profile: profileW, mode: modeW}
+}
+
+func (p BenchmarkPage) runRow(i int, r benchmark.Run, cols benchListCols) string {
+	row := fmt.Sprintf("%-*s  %-*s  %-*s  %6.0f%%  %8.1f  %6dMB",
+		cols.when, r.StartedAt.Format("01-02 15:04"),
+		cols.profile, truncate(r.ProfileName, cols.profile),
+		cols.mode, truncate(r.Mode.Title(), cols.mode),
 		r.Aggregate.SolveRate*100,
 		r.Aggregate.AvgTokensPerSecond,
 		r.Aggregate.PeakVRAMMB,

@@ -45,6 +45,13 @@ func (p ModelsPage) IsCapturingInput() bool {
 		func() bool { return p.hfSearch != nil && p.hfSearch.IsActive() },
 		func() bool { return p.hfFilePicker != nil && p.hfFilePicker.IsActive() },
 		func() bool { return p.downloads != nil && p.downloads.IsFocusVisible() },
+		// Audit bonus: the info panel listens for `esc` (close), `right`/`g`
+		// (navigate to sizing) inside the page. The root's `esc` no-op
+		// shortcut would otherwise eat the keystroke before ModelsPage saw
+		// it. Claim capture while the panel is open — the user closes it
+		// with `esc` or `i` before switching tabs, matching the convention
+		// used by the web-edit modal and confirm dialogs.
+		func() bool { return p.infoPanel != nil },
 	)
 }
 

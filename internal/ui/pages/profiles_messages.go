@@ -41,8 +41,13 @@ type launchedMsg struct {
 }
 
 // launchErrMsg is emitted when validation or Launch itself fails.
+// firstIssue carries the first validation issue (when the failure was a
+// validation error) so the flash can surface a human-readable hint —
+// otherwise the user sees only "validation failed: N errors" with no
+// indication of WHICH fields broke (F-01 audit).
 type launchErrMsg struct {
-	err error
+	err        error
+	firstIssue string
 }
 
 type healthyMsg struct{ pid int }

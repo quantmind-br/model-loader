@@ -112,6 +112,21 @@ type HelpContextProvider interface {
 	HelpContext() string
 }
 
+// StatusMessageProvider is the optional contract a page implements to
+// publish a short status string (success, warning, error) to the always-
+// visible right side of the status bar. This complements the in-body
+// flash component: at narrow geometries (e.g. 80x24) the flash can be
+// clipped below the visible viewport, so critical feedback (launch
+// failures, export results) ALSO needs to land in the status bar where
+// it is always rendered.
+//
+// Returning an empty message clears the status bar. The level controls
+// styling (info/warn/error). The root reads this after every event in
+// recomputeHints — pages do not need to push imperatively.
+type StatusMessageProvider interface {
+	StatusMessage() (msg string, level components.StatusLevel)
+}
+
 // Overlayer is the optional contract a page implements to expose an active
 // modal overlay that should be rendered on top of the page content.
 type Overlayer interface {
@@ -535,7 +550,10 @@ func (m RootModel) activate(t Tab) (tea.Model, tea.Cmd) {
 // recomputeHints reads page-local hints (when the active page implements
 // HintProvider) and updates the status bar to globalHints + " | " +
 // page hints. Called after every page state change so the status footer
-// always reflects what the user can do right now.
+// always reflects what the user can do right now. Also pulls the active
+// page's StatusMessage so critical feedback (launch errors, export
+// results) lands in the always-visible status bar instead of being
+// clipped to the in-body flash at narrow geometries.
 func (m *RootModel) recomputeHints() {
 	if h, ok := m.pages[m.active].(HintProvider); ok {
 		if ph := h.Hints(); ph != "" {
@@ -545,6 +563,17 @@ func (m *RootModel) recomputeHints() {
 		}
 	} else {
 		m.status.Hints = globalHints
+	}
+	if sp, ok := m.pages[m.active].(StatusMessageProvider); ok {
+		msg, level := sp.StatusMessage()
+		if msg != "" {
+			m.status.SetMessage(level, msg)
+		} else if m.status.Message != "" && m.status.Level != components.StatusWarn {
+			// Clear stale page-sourced messages but preserve the boot
+			// warning (StatusWarn from WithStatusWarn) until it's
+			// explicitly replaced.
+			m.status.SetMessage(components.StatusInfo, "")
+		}
 	}
 	m.status.RestartCount = 0
 	if m.pm != nil {

@@ -134,6 +134,16 @@ func (p *ModelsPage) refreshRows() {
 		})
 	}
 	p.table.SetRows(rows)
+	// F-07 audit: keep a valid selection so [enter]/[i] never appear dead.
+	// bubbles' table.SetRows clamps cursor down when len shrinks but does
+	// NOT pull cursor up from a stale negative/out-of-range value when
+	// rows arrive. Always land cursor on row 0 once we have at least one
+	// visible row and the cursor would otherwise be out of range.
+	if len(rows) > 0 {
+		if p.table.Cursor() < 0 || p.table.Cursor() >= len(rows) {
+			p.table.SetCursor(0)
+		}
+	}
 }
 
 // resizeColumns recomputes the Name/Path column widths so the table fits
@@ -146,8 +156,11 @@ func (p *ModelsPage) resizeColumns(width int) {
 	}
 	const sizeW, quantW, paramsW = 10, 10, 8
 	avail := width
-	// Leave room for the info panel when it's open (rendered side-by-side).
-	if p.infoPanel != nil {
+	// Leave room for the info panel only when it's actually rendered
+	// side-by-side. At narrow widths (≤ NarrowWidthThreshold) the panel
+	// stacks below the table (F-09 audit) and the table can use the full
+	// row.
+	if p.infoPanel != nil && width >= theme.NarrowWidthThreshold {
 		panelW := width / 3
 		if panelW > 60 {
 			panelW = 60

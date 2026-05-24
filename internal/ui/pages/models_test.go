@@ -998,12 +998,18 @@ func TestModelsPage_EscClosesInfoPanel(t *testing.T) {
 	}
 }
 
-// F-02 regression: info panel is read-only, so it must NOT mark the page
-// as capturing input. Otherwise global tab shortcuts would be eaten.
-func TestModelsPage_InfoPanelDoesNotCaptureInput(t *testing.T) {
+// TUI_AUDIT bonus regression: while the info panel is open the page MUST
+// claim input. Earlier the panel was "read-only, doesn't capture" so
+// global tab shortcuts stayed alive, BUT that also meant the global `esc`
+// no-op in root.go ate the keystroke before ModelsPage's keys.Cancel
+// handler could close the panel — making `esc` to close the info panel a
+// dead key. The user closes the panel with `esc` or `i` before switching
+// tabs, matching the convention of every other in-page overlay (web-edit
+// modal, confirm dialogs, profile picker).
+func TestModelsPage_InfoPanelCapturesInputSoEscCloses(t *testing.T) {
 	page := NewModelsPage(&fakeScanner{}, nil)
 	page.infoPanel = &components.InfoPanel{}
-	if page.IsCapturingInput() {
-		t.Error("info panel must not mark page as capturing input")
+	if !page.IsCapturingInput() {
+		t.Error("info panel must mark page as capturing input so esc reaches the page handler")
 	}
 }
