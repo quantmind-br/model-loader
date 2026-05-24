@@ -153,6 +153,43 @@ func TestSaveHandler_RenamesProfileOnIDChange(t *testing.T) {
 	}
 }
 
+func TestSaveHandler_PreservesDescriptionAndTags(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	ps := newMemProfileStore()
+	ps.m["p"] = domain.Profile{
+		ID: "p", Name: "P", Model: "/m.gguf",
+		Description: "old desc", Tags: []string{"x"},
+		Launch: domain.LaunchConfig{BackendID: "llama"},
+	}
+	s := &Session{
+		deps: Deps{Profiles: ps, Schemas: stubSchemaStore{schema: schema}, Catalog: stubCatalog{id: "llama", ref: "llama.json"}},
+		done: make(chan Result, 1),
+	}
+	form := url.Values{
+		"isNew": {"false"}, "id": {"p"}, "origId": {"p"},
+		"name": {"P"}, "backendId": {"llama"}, "model": {"/m.gguf"},
+		"description": {"new description"}, "tags": {"red, green, blue"},
+	}
+	req := httptest.NewRequest("POST", "/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.handleSave(httptest.NewRecorder(), req)
+	<-s.Done()
+
+	got, err := ps.Get("p")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.Description != "new description" {
+		t.Fatalf("description not saved: %q", got.Description)
+	}
+	if strings.Join(got.Tags, ",") != "red,green,blue" {
+		t.Fatalf("tags not saved: %v", got.Tags)
+	}
+}
+
 func TestConfigureRendersSingleIDInput(t *testing.T) {
 	schema := domain.BackendValidationSchema{
 		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",

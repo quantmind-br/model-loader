@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"html/template"
 	"net/http"
+	"strings"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/configweb/assets"
@@ -13,6 +14,9 @@ var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
 	"toJSON": func(v any) (template.JS, error) {
 		b, err := json.Marshal(v)
 		return template.JS(b), err
+	},
+	"joinCSV": func(v []string) string {
+		return strings.Join(v, ", ")
 	},
 }).ParseFS(assets.FS,
 	"templates/base.gohtml",

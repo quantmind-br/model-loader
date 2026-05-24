@@ -27,6 +27,33 @@ func TestCustomizeModeRendersFlagEditors(t *testing.T) {
 	}
 }
 
+func TestConfigureRendersDescriptionAndTags(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	s := &Session{deps: Deps{
+		Schemas:      stubSchemaStore{schema: schema},
+		Catalog:      stubCatalog{id: "llama", ref: "llama.json"},
+		InitialDraft: Draft{ID: "p", OrigID: "p", Name: "P", BackendID: "llama", Description: "long desc here", Tags: []string{"alpha", "beta"}},
+	}}
+	rec := httptest.NewRecorder()
+	s.handleIndex(rec, httptest.NewRequest("GET", "/", nil))
+	body := rec.Body.String()
+	if !strings.Contains(body, `name="description"`) {
+		t.Fatalf("description field missing")
+	}
+	if !strings.Contains(body, "long desc here") {
+		t.Fatalf("description value not rendered: %s", body)
+	}
+	if !strings.Contains(body, `name="tags"`) {
+		t.Fatalf("tags field missing")
+	}
+	if !strings.Contains(body, `value="alpha, beta"`) {
+		t.Fatalf("tags value not rendered joined: %s", body)
+	}
+}
+
 func TestIndexRendersGroupedFields(t *testing.T) {
 	schema := domain.BackendValidationSchema{
 		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",

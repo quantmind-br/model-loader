@@ -46,6 +46,17 @@
       <input name="model" value="{{.Draft.Model}}" placeholder="model path or repo">
       <small class="field-error"></small>
     </div>
+    <div class="field" data-field="tags">
+      <label>Tags</label>
+      <input name="tags" value="{{joinCSV .Draft.Tags}}" placeholder="comma-separated tags">
+      <small class="field-error"></small>
+    </div>
+  </div>
+
+  <div class="field full-width" data-field="description">
+    <label>Description</label>
+    <textarea name="description" rows="2" placeholder="optional notes about this profile">{{.Draft.Description}}</textarea>
+    <small class="field-error"></small>
   </div>
 
   <div class="env-section" x-data="{ envVars: {{if .Draft.Env}}{{toJSON .Draft.Env}}{{else}}[]{{end}} }">
