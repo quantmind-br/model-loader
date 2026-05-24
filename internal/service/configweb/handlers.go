@@ -116,6 +116,13 @@ func (s *Session) handleSave(w http.ResponseWriter, r *http.Request) {
 	}
 	fs := schema.ToFlagSchema()
 
+	// Block persistence when the profile has validation errors. Warnings pass.
+	rep := validator.New(nil).Validate(d.ToProfile(fs), fs, schema.BackendKind)
+	if len(rep.Errors) > 0 {
+		renderIssues(w, rep)
+		return
+	}
+
 	var perr error
 	if d.IsNew {
 		perr = s.deps.Profiles.Create(d.ToProfile(fs))
@@ -133,7 +140,7 @@ func (s *Session) handleSave(w http.ResponseWriter, r *http.Request) {
 	}
 	if perr != nil {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(`<div class="issue error">` + htmlEscape(perr.Error()) + `</div>`))
+		_, _ = w.Write([]byte(`<div id="issues" hx-swap-oob="true"><div class="issue error">` + htmlEscape(perr.Error()) + `</div></div>`))
 		return
 	}
 	w.Header().Set("HX-Redirect", "/closed")

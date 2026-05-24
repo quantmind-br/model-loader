@@ -3,6 +3,7 @@ package configweb
 import (
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 
@@ -74,6 +75,11 @@ func (s *memProfileStore) Duplicate(srcID, newID string) (domain.Profile, error)
 func (s *memProfileStore) Rename(oldID string, p domain.Profile) error { return nil }
 
 func TestSaveHandler_PersistsAndCompletes(t *testing.T) {
+	// Create a real model file so the existence validator passes.
+	modelPath := t.TempDir() + "/m.gguf"
+	if err := os.WriteFile(modelPath, []byte("gguf"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	schema := domain.BackendValidationSchema{
 		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
 		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
@@ -85,7 +91,7 @@ func TestSaveHandler_PersistsAndCompletes(t *testing.T) {
 	}
 	form := url.Values{
 		"isNew": {"true"}, "id": {"qwen"}, "name": {"Qwen"},
-		"backendId": {"llama"}, "model": {"/m.gguf"}, "arg.ctx-size": {"8192"},
+		"backendId": {"llama"}, "model": {modelPath}, "arg.ctx-size": {"8192"},
 	}
 	req := httptest.NewRequest("POST", "/save", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -179,6 +185,44 @@ func TestValidateHandler_ReportsUnknownFlag(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "unknown flag") {
 		t.Fatalf("expected unknown-flag issue, got: %s", rec.Body.String())
+	}
+}
+
+func TestSaveHandler_BlocksOnValidationError(t *testing.T) {
+	// Schema has a required flag "port"; form omits it → validator fires SeverityError.
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{
+			"port": {Long: "port", Type: domain.FlagTypeInt, Required: true},
+		},
+	}
+	ps := newMemProfileStore()
+	s := &Session{
+		deps: Deps{Profiles: ps, Schemas: stubSchemaStore{schema: schema}, Catalog: stubCatalog{id: "llama", ref: "llama.json"}},
+		done: make(chan Result, 1),
+	}
+	// "port" is intentionally absent — required flag missing triggers an error.
+	form := url.Values{
+		"isNew": {"true"}, "id": {"blocked-profile"}, "name": {"Blocked"},
+		"backendId": {"llama"}, "model": {"/m.gguf"},
+	}
+	req := httptest.NewRequest("POST", "/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleSave(rec, req)
+
+	// Must NOT redirect.
+	if got := rec.Header().Get("HX-Redirect"); got != "" {
+		t.Fatalf("expected no HX-Redirect on blocked save, got %q", got)
+	}
+	// Must NOT persist the profile.
+	if _, err := ps.Get("blocked-profile"); err == nil {
+		t.Fatal("profile should not have been persisted when validation fails")
+	}
+	// Must render the #issues partial.
+	body := rec.Body.String()
+	if !strings.Contains(body, `id="issues"`) {
+		t.Fatalf("expected issues partial in body, got: %s", body)
 	}
 }
 

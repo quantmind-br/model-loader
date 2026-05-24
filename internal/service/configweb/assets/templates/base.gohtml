@@ -61,7 +61,13 @@ function decorateIssues() {
 }
 
 document.addEventListener('htmx:afterSwap', function (e) {
-  if (e.target && e.target.id === 'issues') decorateIssues();
+  if (e.target && e.target.id === 'issues') {
+    decorateIssues();
+    if (e.detail && e.detail.requestConfig && e.detail.requestConfig.path === '/save'
+        && document.querySelectorAll('#issues .issue.error').length > 0) {
+      window.dispatchEvent(new CustomEvent('toast', {detail:{msg:'Fix errors before saving',type:'error'}}));
+    }
+  }
 });
 </script>
 </body>
