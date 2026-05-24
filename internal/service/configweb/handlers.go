@@ -201,6 +201,7 @@ const donePageHTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"
 func (s *Session) handleClosed(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(donePageHTML))
+	s.requestShutdown()
 }
 
 // loadSchemaRef returns the schema plus its store ref for a backend.

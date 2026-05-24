@@ -89,6 +89,7 @@ func (s *Session) handleBackendCancel(w http.ResponseWriter, r *http.Request) {
 func (s *Session) handleBackendClosed(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(donePageHTML))
+	s.requestShutdown()
 }
 
 func (s *Session) handleBackendValidate(w http.ResponseWriter, r *http.Request) {
