@@ -226,6 +226,37 @@ func TestSaveHandler_BlocksOnValidationError(t *testing.T) {
 	}
 }
 
+func TestSaveHandler_AllowsMissingModelFile(t *testing.T) {
+	// Model file does NOT exist — configure now, download later flow.
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	ps := newMemProfileStore()
+	s := &Session{
+		deps: Deps{Profiles: ps, Schemas: stubSchemaStore{schema: schema}, Catalog: stubCatalog{id: "llama", ref: "llama.json"}},
+		done: make(chan Result, 1),
+	}
+	form := url.Values{
+		"isNew": {"true"}, "id": {"qwen"}, "name": {"Qwen"},
+		"backendId": {"llama"}, "model": {"/nonexistent/model.gguf"}, "arg.ctx-size": {"4096"},
+	}
+	req := httptest.NewRequest("POST", "/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleSave(rec, req)
+	res := <-s.Done()
+	if !res.Saved || res.ProfileID != "qwen" {
+		t.Fatalf("expected save to succeed with missing model file, got: %+v", res)
+	}
+	if _, err := ps.Get("qwen"); err != nil {
+		t.Fatalf("profile not persisted: %v", err)
+	}
+	if got := rec.Header().Get("HX-Redirect"); got != "/closed" {
+		t.Fatalf("expected HX-Redirect=/closed, got %q", got)
+	}
+}
+
 func TestDraftFromForm_ParsesEnvVars(t *testing.T) {
 	form := url.Values{
 		"id":          []string{"test"},

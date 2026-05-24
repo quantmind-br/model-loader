@@ -78,7 +78,7 @@ func (s *Session) handleValidate(w http.ResponseWriter, r *http.Request) {
 	}
 	fs := schema.ToFlagSchema()
 	p := d.ToProfile(fs)
-	rep := validator.New(nil).Validate(p, fs, schema.BackendKind)
+	rep := downgradeModelExistence(validator.New(nil).Validate(p, fs, schema.BackendKind))
 	renderIssues(w, rep)
 }
 
@@ -104,6 +104,35 @@ func htmlEscape(s string) string {
 	return html.EscapeString(s)
 }
 
+// modelExistenceErr reports whether a validator issue is one of the model-file
+// existence errors (file missing / permission / stat failure). These are the
+// only errors applyExistenceRules emits and all carry Field "model".
+func modelExistenceErr(it validator.FieldIssue) bool {
+	if it.Field != "model" {
+		return false
+	}
+	return it.Message == "model file does not exist" ||
+		it.Message == "permission denied for model path" ||
+		strings.HasPrefix(it.Message, "model path stat failed: ")
+}
+
+// downgradeModelExistence moves model-existence errors out of rep.Errors into
+// rep.Warnings so the web editor never blocks Save on a not-yet-present model
+// (configure now, download later). Real config errors keep blocking.
+func downgradeModelExistence(rep validator.Report) validator.Report {
+	var kept []validator.FieldIssue
+	for _, e := range rep.Errors {
+		if modelExistenceErr(e) {
+			e.Severity = validator.SeverityWarning
+			rep.Warnings = append(rep.Warnings, e)
+			continue
+		}
+		kept = append(kept, e)
+	}
+	rep.Errors = kept
+	return rep
+}
+
 func (s *Session) handleSave(w http.ResponseWriter, r *http.Request) {
 	d := draftFromForm(r)
 	if d.ID == "" {
@@ -117,7 +146,9 @@ func (s *Session) handleSave(w http.ResponseWriter, r *http.Request) {
 	fs := schema.ToFlagSchema()
 
 	// Block persistence when the profile has validation errors. Warnings pass.
-	rep := validator.New(nil).Validate(d.ToProfile(fs), fs, schema.BackendKind)
+	// Model-existence errors are downgraded to warnings so a profile can be
+	// configured before the model file is downloaded (or for HF repo IDs).
+	rep := downgradeModelExistence(validator.New(nil).Validate(d.ToProfile(fs), fs, schema.BackendKind))
 	if len(rep.Errors) > 0 {
 		renderIssues(w, rep)
 		return
