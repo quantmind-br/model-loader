@@ -379,6 +379,7 @@ form{
 }
 
 .field-error{
+  display:none;
   font-size:var(--text-xs);
   color:var(--err);
   margin:0;
@@ -810,9 +811,6 @@ button.secondary:hover{
 .tab-btn.hl{font-weight:600}
 
 /* ── Inline field error ── */
-.field-error{
-  display:none;
-}
 .field.has-error .field-error{
   display:block;
 }
