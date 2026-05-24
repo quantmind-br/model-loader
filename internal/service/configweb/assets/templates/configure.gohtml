@@ -1,11 +1,12 @@
 {{define "sidebar"}}
 <div class="sidebar-title">Groups</div>
 {{range .Groups}}
-<button 
+<button
   class="tab-btn{{if .Highlighted}} hl{{end}}"
   @click="activeGroup='{{.Name}}'"
   :class="(activeGroup==='{{.Name}}' ? 'tab-btn active' : 'tab-btn') + '{{if .Highlighted}} hl{{end}}'"
 >
+  {{if .Highlighted}}<span class="star"></span>{{end}}
   {{.Name}}
   <span class="count">{{len .Fields}}</span>
 </button>
