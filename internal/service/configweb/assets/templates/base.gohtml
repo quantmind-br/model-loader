@@ -39,6 +39,30 @@ function fuzzyMatch(q, text) {
   }
   return qi === q.length;
 }
+
+// Read the server-rendered #issues partial and decorate matching fields inline.
+function decorateIssues() {
+  document.querySelectorAll('.field.has-error').forEach(function (f) {
+    f.classList.remove('has-error');
+    var slot = f.querySelector('.field-error');
+    if (slot) slot.textContent = '';
+  });
+  var issues = document.querySelectorAll('#issues .issue[data-field]');
+  issues.forEach(function (el) {
+    var field = el.getAttribute('data-field');
+    var isErr = el.classList.contains('error');
+    if (!field || !isErr) return;
+    var wrap = document.querySelector('.field[data-field="' + CSS.escape(field) + '"]');
+    if (!wrap) return;
+    wrap.classList.add('has-error');
+    var slot = wrap.querySelector('.field-error');
+    if (slot && !slot.textContent) slot.textContent = el.textContent.replace(/^[^:]*:\s*/, '');
+  });
+}
+
+document.addEventListener('htmx:afterSwap', function (e) {
+  if (e.target && e.target.id === 'issues') decorateIssues();
+});
 </script>
 </body>
 </html>{{end}}

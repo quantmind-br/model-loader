@@ -32,17 +32,20 @@
     {{else}}
     <input type="hidden" name="backendId" value="{{.Draft.BackendID}}">
     {{end}}
-    <div class="field">
+    <div class="field" data-field="id">
       <label>ID {{if not .Draft.ID}}<span class="req">*</span>{{end}}</label>
       <input name="id" value="{{.Draft.ID}}" placeholder="profile identifier (slug)">
+      <small class="field-error"></small>
     </div>
-    <div class="field">
+    <div class="field" data-field="name">
       <label>Name {{if not .Draft.Name}}<span class="req">*</span>{{end}}</label>
       <input name="name" value="{{.Draft.Name}}" placeholder="profile name">
+      <small class="field-error"></small>
     </div>
-    <div class="field">
+    <div class="field" data-field="model">
       <label>Model <span class="req">*</span></label>
       <input name="model" value="{{.Draft.Model}}" placeholder="model path or repo">
+      <small class="field-error"></small>
     </div>
   </div>
 
@@ -76,7 +79,7 @@
     </div>
     <div class="fields-grid">
       {{range .Fields}}
-      <div class="field{{if eq .Widget "text"}} full-width{{end}}" x-show="search.trim()==='' || fuzzyMatch(search, '{{.Flag}} {{.Label}} {{.Help}}')">
+      <div class="field{{if eq .Widget "text"}} full-width{{end}}" data-field="{{.Flag}}" x-show="search.trim()==='' || fuzzyMatch(search, '{{.Flag}} {{.Label}} {{.Help}}')">
         <label>{{.Label}}{{if .Required}} <span class="req">required</span>{{end}}</label>
         {{if eq .Widget "select"}}
           {{$val := .Value}}
@@ -97,6 +100,7 @@
           <input name="arg.{{.Flag}}" value="{{.Value}}" placeholder="{{if .Default}}{{.Default}} (default){{else}}not configured{{end}}">
         {{end}}
         {{if .Help}}<small class="muted">{{.Help}}</small>{{end}}
+        <small class="field-error"></small>
       </div>
       {{end}}
     </div>
