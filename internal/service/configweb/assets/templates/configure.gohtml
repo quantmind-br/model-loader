@@ -4,7 +4,7 @@
 <button
   class="tab-btn{{if .Highlighted}} hl{{end}}"
   @click="activeGroup='{{.Name}}'"
-  :class="(activeGroup==='{{.Name}}' ? 'tab-btn active' : 'tab-btn') + '{{if .Highlighted}} hl{{end}}'"
+  :class="{active: activeGroup==='{{.Name}}'}"
 >
   {{if .Highlighted}}<span class="star"></span>{{end}}
   {{.Name}}
