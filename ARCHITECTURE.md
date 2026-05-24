@@ -1,9 +1,9 @@
 # Architecture
 
 **Project:** model-loader  
-**Generated:** 2026-05-23 from GitNexus knowledge graph  
-**Stats:** 309 files · 7,414 symbols · 30,571 relationships · 300 execution flows  
-**Indexed commit:** 0cc9eae
+**Generated:** 2026-05-24 from GitNexus knowledge graph  
+**Stats:** 424 files · 9,411 symbols · 30,723 relationships · 300 execution flows  
+**Indexed commit:** f5d2a92
 
 ## Overview
 
@@ -17,22 +17,22 @@ GitNexus clusters the codebase into 27 functional modules. The most significant 
 
 | Module | Symbols | Cohesion | Responsibility |
 |--------|---------|----------|----------------|
-| **Pages** | 453 | 73% | 5 TUI tabs (Profiles, Models, Backends, Server, Benchmark) + page logic |
+| **Pages** | 441 | 72% | 5 TUI tabs (Profiles, Models, Backends, Server, Benchmark) + page logic |
 | **Components** | 251 | 82% | Reusable UI widgets: Help, Modal, Picker, Sparkline, Statusbar |
-| **Cli** | 196 | 71% | Subcommand dispatch, argument parsing, TUI/CLI dual entry |
+| **Cli** | 199 | 71% | Subcommand dispatch, argument parsing, TUI/CLI dual entry |
 | **Benchmark** | 179 | 81% | SWE-bench Lite + long-context needle probe engine |
+| **Processmgr** | 119 | 81% | `llama-server` process lifecycle + instance recovery |
 | **Backendschema** | 117 | 84% | Schema generation orchestrator across all backend kinds |
-| **Processmgr** | 114 | 82% | `llama-server` process lifecycle + instance recovery |
+| **Configweb** | 88 | 77% | On-demand HTTP server for web-based profile editing |
 | **Profilestore** | 81 | 82% | FS-based profile CRUD |
-| **Ui** | 69 | 83% | Root model, tab orchestration, global input routing |
+| **Ui** | 71 | 83% | Root model, tab orchestration, global input routing |
 | **Downloadmgr** | 62 | 84% | HuggingFace file downloader with progress events + state |
-| **Configweb** | 60 | 78% | On-demand HTTP server for web-based profile editing |
-| **Httpproxy** | 49 | 85% | OpenAI-shaped reverse proxy |
 | **Monitor** | 46 | 90% | GPU metrics via `nvidia-smi` |
-| **Validator** | 39 | 83% | Flag validation rules + cross-field rule engine |
+| **Httpproxy** | 44 | 89% | OpenAI-shaped reverse proxy |
+| **Validator** | 40 | 84% | Flag validation rules + cross-field rule engine |
 | **Modelscanner** | 35 | 89% | GGUF model metadata extraction |
 | **Llamahelp** | 31 | 89% | `llama-server --help` parser + embedded schema (v7376) |
-| **Domain** | 24 | 70% | Shared types: Profile, Instance, Model, BackendValidationSchema |
+| **Domain** | 16 | 79% | Shared types: Profile, Instance, Model, BackendValidationSchema |
 | **Hfhub** | 21 | 74% | HuggingFace Hub API client (search, file listing) |
 | **Backendcatalog** | 16 | 76% | Multi-backend catalog + binary resolver |
 | **Proxysupervisor** | 14 | 98% | HTTP proxy lifecycle state machine |
@@ -42,73 +42,69 @@ Plus smaller modules: Config, Log, Migration, Metricsstore, Playground, SGLang/v
 
 ## Key Execution Flows
 
-The graph holds 300 flows. The five highest-impact cross-community traces, read directly from the knowledge graph:
+The graph holds 300 flows. The five highest-impact traces, read directly from the knowledge graph:
 
-### 1. Backend Binary Probing — `Probe → CheckExecutable` (7 steps)
+### 1. TUI Bootstrap — `RunTUI → ApplyDefaults` (5 steps)
+
+Cross-community flow connecting **main**, **app**, and **Config**. The TUI entry point bootstraps the application, loads the TOML config, and fills in any missing defaults.
+
+```
+runTUI (cmd/model-loader/main.go)
+  → Bootstrap (internal/app/bootstrap.go)
+    → Load (internal/config/config.go)
+      → LoadFrom (internal/config/config.go)
+        → applyDefaults (internal/config/config.go)
+```
+
+### 2. HTTP Proxy On-Demand Launch — `HandleForward → LaunchProfile` (3 steps)
+
+Cross-community flow connecting **Httpproxy** and **Proxysupervisor**. When a request hits the OpenAI-compatible proxy, the handler ensures the target profile is loaded, triggering an on-demand backend start if necessary.
+
+```
+handleForward (internal/service/httpproxy/handler.go)
+  → ensureLoaded (internal/service/httpproxy/handler.go)
+    → launchProfile (internal/service/httpproxy/handler.go)
+```
+
+### 3. Backend Binary Probing — `Probe → CheckExecutable` (7 steps)
 
 Cross-community flow connecting **Backendcatalog** and **Llamabin**. Health-checks a configured backend by resolving its executable (PATH lookup, then a Python-launcher fallback) before probing it.
 
 ```
-Probe (backendcatalog/probe.go)
-  → probeOne (backendcatalog/probe.go)
-    → resolveExecutable (backendcatalog/resolver.go)
-      → ResolveCommandWithPythonFallback (llamabin/resolver.go)
-        → Resolve (llamabin/resolver.go)
-          → resolveInPATH (llamabin/resolver.go)
-            → checkExecutable (llamabin/resolver.go)
+Probe (internal/service/backendcatalog/probe.go)
+  → probeOne (internal/service/backendcatalog/probe.go)
+    → resolveExecutable (internal/service/backendcatalog/resolver.go)
+      → ResolveCommandWithPythonFallback (internal/service/llamabin/resolver.go)
+        → Resolve (internal/service/llamabin/resolver.go)
+          → resolveInPATH (internal/service/llamabin/resolver.go)
+            → checkExecutable (internal/service/llamabin/resolver.go)
 ```
 
-### 2. Benchmark Streaming — `Execute → StreamChunk` (6 steps)
+### 4. Download Worker & Persistence — `Init → StateFilename` (7 steps)
 
-Cross-community flow connecting **Benchmark** and its OpenAI-compatible client. Drives an instruction-consistency benchmark against a running backend instance and parses streaming SSE chunks.
-
-```
-Execute (benchmark/instructionbench.go)
-  → runInstructionBench (benchmark/instructionbench.go)
-    → runInstConsistency (benchmark/instructionbench.go)
-      → Complete (benchmark/client.go)
-        → parseChunk (benchmark/client.go)
-          → streamChunk (benchmark/client.go)
-```
-
-### 3. Download Persistence — `Init → WriteJSONAtomic` (6 steps)
-
-Cross-community flow connecting **Cli**, **Downloadmgr**, and the internal `fsx` helper. A download worker streams an HF file to disk and atomically persists its state record so progress survives a crash.
+Cross-community flow connecting **Cli**, **Downloadmgr**, and internal state. A download worker streams an HF file to disk and atomically persists its state record so progress survives a crash.
 
 ```
-init (cli/download.go)
-  → RunWorker (downloadmgr/worker.go)
-    → runDownload (downloadmgr/worker.go)
-      → streamWithProgress (downloadmgr/worker.go)
-        → SaveRecord (downloadmgr/state.go)
-          → WriteJSONAtomic (internal/fsx/atomic_write.go)
+init (internal/cli/download.go)
+  → RunWorker (internal/service/downloadmgr/worker.go)
+    → runDownload (internal/service/downloadmgr/worker.go)
+      → streamWithProgress (internal/service/downloadmgr/worker.go)
+        → SaveRecord (internal/service/downloadmgr/state.go)
+          → StatePath (internal/service/downloadmgr/state.go)
+            → stateFilename (internal/service/downloadmgr/state.go)
 ```
 
-### 4. Config Bootstrap — `Init → ApplyDefaults` (6 steps)
+### 5. Profile Import Validation — `HandleKey → ProfileExists` (6 steps)
 
-Cross-community flow connecting **Cli**, **app**, and **Config**. A profile subcommand bootstraps the application, which loads the TOML config and fills in defaults for any unset key.
-
-```
-init (cli/profile_crud.go)
-  → profileMutationRunE (cli/profile_crud.go)
-    → Bootstrap (app/bootstrap.go)
-      → Load (config/config.go)
-        → LoadFrom (config/config.go)
-          → applyDefaults (config/config.go)
-```
-
-### 5. Profile Picker Scan — `Update → PickerScanClosedMsg` (7 steps)
-
-Cross-community flow spanning **Pages** and **Components**. When an async model/profile scan goroutine finishes, the picker component emits `PickerScanClosedMsg` back up through the page's `Update` loop.
+Cross-community flow connecting **Pages** and **Profilestore**. A keypress in the Profiles tab triggers a bundle import, which checks for existing IDs to avoid collisions.
 
 ```
-Update (ui/pages/profiles_update.go)
-  → handlePickerScan (ui/pages/profiles_update.go)
-    → updatePicker (ui/pages/profiles_picker.go)
-      → Update (ui/components/picker.go)
-        → handleScanStarted (ui/components/picker.go)
-          → pickerWaitForEvent (ui/components/picker.go)
-            → PickerScanClosedMsg (ui/components/picker.go)
+handleKey (internal/ui/pages/profiles_update.go)
+  → startImportWithPath (internal/ui/pages/profiles_importexport.go)
+    → importBundleCmd (internal/ui/pages/profiles_importexport.go)
+      → ImportBundle (internal/service/profilestore/import.go)
+        → nextImportedID (internal/service/profilestore/import.go)
+          → profileExists (internal/service/profilestore/import.go)
 ```
 
 ## Architecture Diagram
