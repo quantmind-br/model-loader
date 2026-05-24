@@ -61,5 +61,17 @@
   </section>
 </main>
 <footer class="statusbar"><div id="issues"><span class="ok">✓ valid</span></div></footer>
+<div class="toast-root" x-data="toastHost()" x-init="init()">
+  <template x-for="t in items" :key="t.id">
+    <div class="toast" :class="t.type" x-text="t.msg"></div>
+  </template>
+</div>
+<script>
+function toastHost(){return{
+  items:[],
+  init(){var self=this;window.addEventListener('toast',function(e){self.push(e.detail.msg,e.detail.type||'info');});},
+  push(msg,type){var id=Date.now()+Math.random();this.items.push({id:id,msg:msg,type:type});var self=this;setTimeout(function(){self.items=self.items.filter(function(x){return x.id!==id});},2600);}
+}}
+</script>
 </body>
 </html>{{end}}

@@ -7,7 +7,8 @@
       <h2>＋ New flag</h2>
       <span class="muted">Add a custom parameter to this backend</span>
     </div>
-    <form class="flag-card flag-card-new" hx-post="/customize/flag/add">
+    <form class="flag-card flag-card-new" hx-post="/customize/flag/add"
+      hx-on::after-request="if(event.detail.successful){window.dispatchEvent(new CustomEvent('toast',{detail:{msg:'Flag added — reload to edit it',type:'ok'}}))}">
       <input type="hidden" name="backendId" value="{{.BackendID}}">
       <div class="flag-card-body">
         <div class="flag-fields-grid">
@@ -45,7 +46,8 @@
     </div>
     <div class="flags-grid">
       {{range .AllFlags}}
-      <form class="flag-card" hx-post="/customize/flag" hx-target="#issues">
+      <form class="flag-card" hx-post="/customize/flag" hx-target="#issues"
+        hx-on::after-request='if(event.detail.successful) window.dispatchEvent(new CustomEvent("toast",{detail:{msg:"Flag {{.Flag}} saved",type:"ok"}}))'>
         <input type="hidden" name="backendId" value="{{$.BackendID}}">
         <input type="hidden" name="flag" value="{{.Flag}}">
 
@@ -98,7 +100,9 @@
         <div class="flag-card-footer">
           <button class="primary" type="submit">Save</button>
           <button class="ghost danger" type="button"
-            hx-post="/customize/flag/remove" hx-vals='{"backendId":"{{$.BackendID}}","flag":"{{.Flag}}"}'>Remove</button>
+            hx-post="/customize/flag/remove" hx-vals='{"backendId":"{{$.BackendID}}","flag":"{{.Flag}}"}'
+            hx-target="closest .flag-card" hx-swap="outerHTML swap:0.15s"
+            hx-on::after-request='if(event.detail.successful) window.dispatchEvent(new CustomEvent("toast",{detail:{msg:"Flag {{.Flag}} removed",type:"ok"}}))'>Remove</button>
         </div>
       </form>
       {{end}}
@@ -174,7 +178,11 @@
       async saveRules(){
         const r=await fetch('/customize/rules?backendId='+encodeURIComponent(this.backendId),
           {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(this.rules)});
-        if(!r.ok){alert(await r.text())}
+        if(!r.ok){
+          window.dispatchEvent(new CustomEvent('toast',{detail:{msg:(await r.text())||'Failed to save rules',type:'error'}}));
+        } else {
+          window.dispatchEvent(new CustomEvent('toast',{detail:{msg:'Rules saved',type:'ok'}}));
+        }
       }
     }}
   </script>
