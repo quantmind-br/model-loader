@@ -739,3 +739,150 @@ button.danger:hover{
 .backend-fields .field label{
   font-size:var(--text-base);
 }
+
+/* ── Environment variables section ── */
+.env-section{
+  margin:var(--sp-6) 0 var(--sp-8);
+  padding:var(--sp-5);
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+}
+.env-section .section-header{margin-bottom:var(--sp-4)}
+.env-section .section-header h3{
+  font-size:var(--text-md);
+  font-weight:700;
+  margin:0;
+  color:var(--ink);
+}
+.env-list{
+  display:flex;
+  flex-direction:column;
+  gap:var(--sp-3);
+  margin-bottom:var(--sp-4);
+}
+.env-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,2fr) auto;
+  gap:var(--sp-3);
+  align-items:center;
+}
+.env-row input{
+  background:var(--input-bg);
+  border:1px solid var(--input-bd);
+  color:var(--ink);
+  border-radius:var(--radius-md);
+  padding:0.6rem 0.85rem;
+  font-size:var(--text-sm);
+  outline:none;
+  transition:border-color var(--dur) var(--ease),box-shadow var(--dur) var(--ease);
+}
+.env-row input.env-key{font-family:'SF Mono',ui-monospace,monospace}
+.env-row input:focus{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-dim);
+}
+.env-row .ghost{
+  padding:0.45rem 0.7rem;
+  font-size:var(--text-md);
+  line-height:1;
+}
+
+/* ── Secondary button (add env var, low-emphasis adds) ── */
+button.secondary{
+  background:var(--accent-dim);
+  border:1px solid transparent;
+  color:var(--accent);
+  padding:0.5rem 1rem;
+  border-radius:var(--radius-md);
+  font-size:var(--text-sm);
+  font-weight:600;
+  cursor:pointer;
+  transition:all var(--dur) var(--ease);
+}
+button.secondary:hover{
+  background:var(--accent-glow);
+  color:var(--accent-hover);
+}
+
+/* ── Highlighted sidebar group (Essentials) ── */
+.tab-btn.hl .star::before{content:"★ ";color:var(--warn)}
+.tab-btn.hl{font-weight:600}
+
+/* ── Inline field error ── */
+.field-error{
+  display:none;
+}
+.field.has-error .field-error{
+  display:block;
+}
+.field.has-error input,
+.field.has-error select{
+  border-color:var(--err);
+  box-shadow:0 0 0 3px var(--err-dim);
+}
+
+/* ── Toasts ── */
+.toast-root{
+  position:fixed;
+  bottom:var(--sp-6);
+  right:var(--sp-6);
+  z-index:1000;
+  display:flex;
+  flex-direction:column;
+  gap:var(--sp-3);
+  pointer-events:none;
+}
+.toast{
+  pointer-events:auto;
+  min-width:200px;
+  max-width:360px;
+  padding:var(--sp-3) var(--sp-4);
+  border-radius:var(--radius-md);
+  background:var(--elevated);
+  border:1px solid var(--border-strong);
+  box-shadow:var(--shadow-lg);
+  font-size:var(--text-sm);
+  font-weight:500;
+  color:var(--ink);
+  display:flex;
+  align-items:center;
+  gap:var(--sp-3);
+  animation:toast-in var(--dur) var(--ease);
+}
+.toast.ok{border-left:3px solid var(--ok)}
+.toast.error{border-left:3px solid var(--err)}
+.toast.info{border-left:3px solid var(--accent)}
+@keyframes toast-in{
+  from{opacity:0;transform:translateY(8px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+/* ── Done page ── */
+.done-page{
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:var(--sp-4);
+  text-align:center;
+  padding:var(--sp-8);
+}
+.done-page .done-icon{
+  width:64px;height:64px;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:2rem;
+  background:var(--ok-dim);
+  color:var(--ok);
+}
+.done-page h2{margin:0;font-size:var(--text-xl);font-weight:700}
+.done-page p{margin:0;color:var(--muted)}
+
+/* ── Responsive: collapse 2-col grids on narrow viewports ── */
+@media (max-width:720px){
+  .top-fields,.fields-grid,.flag-fields-grid{grid-template-columns:1fr!important}
+  .layout{grid-template-columns:1fr!important}
+  .sidebar{display:none}
+}
