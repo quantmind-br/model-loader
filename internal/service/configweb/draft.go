@@ -45,6 +45,7 @@ func (d Draft) ToProfile(schema domain.FlagSchema) domain.Profile {
 // ApplyTo overlays the draft onto an existing profile, preserving Meta/Launch
 // fields the web form does not edit.
 func (d Draft) ApplyTo(existing domain.Profile, schema domain.FlagSchema) domain.Profile {
+	existing.ID = d.ID
 	existing.Name = d.Name
 	existing.Description = d.Description
 	existing.Tags = d.Tags

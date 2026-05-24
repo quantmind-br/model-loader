@@ -72,7 +72,19 @@ func (s *memProfileStore) Delete(id string) error      { delete(s.m, id); return
 func (s *memProfileStore) Duplicate(srcID, newID string) (domain.Profile, error) {
 	return domain.Profile{}, nil
 }
-func (s *memProfileStore) Rename(oldID string, p domain.Profile) error { return nil }
+func (s *memProfileStore) Rename(oldID string, p domain.Profile) error {
+	if oldID != p.ID {
+		if _, ok := s.m[p.ID]; ok {
+			return profilestore.ErrDuplicateID
+		}
+		if _, ok := s.m[oldID]; !ok {
+			return profilestore.ErrNotFound
+		}
+		delete(s.m, oldID)
+	}
+	s.m[p.ID] = p
+	return nil
+}
 
 func TestSaveHandler_PersistsAndCompletes(t *testing.T) {
 	// Create a real model file so the existence validator passes.
@@ -106,7 +118,58 @@ func TestSaveHandler_PersistsAndCompletes(t *testing.T) {
 	}
 }
 
-// --- test ---
+func TestSaveHandler_RenamesProfileOnIDChange(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	ps := newMemProfileStore()
+	ps.m["old-id"] = domain.Profile{
+		ID: "old-id", Name: "Old", Model: "/m.gguf",
+		Launch: domain.LaunchConfig{BackendID: "llama"},
+	}
+	s := &Session{
+		deps: Deps{Profiles: ps, Schemas: stubSchemaStore{schema: schema}, Catalog: stubCatalog{id: "llama", ref: "llama.json"}},
+		done: make(chan Result, 1),
+	}
+	form := url.Values{
+		"isNew": {"false"}, "id": {"new-id"}, "origId": {"old-id"},
+		"name": {"Old"}, "backendId": {"llama"}, "model": {"/m.gguf"},
+	}
+	req := httptest.NewRequest("POST", "/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleSave(rec, req)
+	res := <-s.Done()
+
+	if !res.Saved || res.ProfileID != "new-id" {
+		t.Fatalf("expected save under new-id, got: %+v", res)
+	}
+	if _, err := ps.Get("new-id"); err != nil {
+		t.Fatalf("renamed profile not persisted under new id: %v", err)
+	}
+	if _, err := ps.Get("old-id"); err == nil {
+		t.Fatal("old id should no longer exist after rename")
+	}
+}
+
+func TestConfigureRendersSingleIDInput(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	s := &Session{deps: Deps{
+		Schemas:      stubSchemaStore{schema: schema},
+		Catalog:      stubCatalog{id: "llama", ref: "llama.json"},
+		InitialDraft: Draft{ID: "old-id", OrigID: "old-id", Name: "Old", BackendID: "llama"},
+	}}
+	rec := httptest.NewRecorder()
+	s.handleIndex(rec, httptest.NewRequest("GET", "/", nil))
+	body := rec.Body.String()
+	if n := strings.Count(body, `name="id"`); n != 1 {
+		t.Fatalf("expected exactly one id input, got %d:\n%s", n, body)
+	}
+}
 
 // --- captureSchemaStore ---
 

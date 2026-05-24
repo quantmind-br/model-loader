@@ -28,7 +28,7 @@ func draftFromForm(r *http.Request) Draft {
 		Args:        map[string]string{},
 	}
 	if tags := strings.TrimSpace(r.FormValue("tags")); tags != "" {
-		for _, t := range strings.Split(tags, ",") {
+		for t := range strings.SplitSeq(tags, ",") {
 			if t = strings.TrimSpace(t); t != "" {
 				d.Tags = append(d.Tags, t)
 			}
@@ -166,7 +166,14 @@ func (s *Session) handleSave(w http.ResponseWriter, r *http.Request) {
 		if gerr != nil {
 			perr = s.deps.Profiles.Create(d.ToProfile(fs))
 		} else {
-			perr = s.deps.Profiles.Save(d.ApplyTo(existing, fs))
+			final := d.ApplyTo(existing, fs)
+			if lookup != final.ID {
+				// The user changed the ID: move the file (write new, drop old)
+				// instead of leaving an orphaned copy under the original id.
+				perr = s.deps.Profiles.Rename(lookup, final)
+			} else {
+				perr = s.deps.Profiles.Save(final)
+			}
 		}
 	}
 	if perr != nil {
@@ -267,7 +274,7 @@ func (s *Session) handleCustomizeFlag(w http.ResponseWriter, r *http.Request) {
 
 func splitCSV(s string) []string {
 	var out []string
-	for _, p := range strings.Split(s, ",") {
+	for p := range strings.SplitSeq(s, ",") {
 		if p = strings.TrimSpace(p); p != "" {
 			out = append(out, p)
 		}
