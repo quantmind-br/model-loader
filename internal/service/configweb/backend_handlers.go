@@ -88,7 +88,7 @@ func (s *Session) handleBackendCancel(w http.ResponseWriter, r *http.Request) {
 
 func (s *Session) handleBackendClosed(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(`<!doctype html><meta charset="utf-8"><title>Done</title><body style="font-family:sans-serif;padding:3rem;text-align:center"><h2>Done — you can close this tab.</h2></body>`))
+	_, _ = w.Write([]byte(donePageHTML))
 }
 
 func (s *Session) handleBackendValidate(w http.ResponseWriter, r *http.Request) {

@@ -8,7 +8,12 @@
 <script src="/static/htmx.min.js"></script>
 <script defer src="/static/alpine.min.js"></script>
 </head>
-<body x-data="{mode:'configure',activeGroup:'{{if .Groups}}{{(index .Groups 0).Name}}{{end}}',search:''}">
+<body x-data="{mode:'configure',activeGroup:'{{if .Groups}}{{(index .Groups 0).Name}}{{end}}',search:'',dirty:false}"
+  @input.capture="dirty=true"
+  @keydown.window.prevent.ctrl.s="document.querySelector('header .actions .primary').click()"
+  @keydown.window.prevent.meta.s="document.querySelector('header .actions .primary').click()"
+  @keydown.window.escape="if(!dirty || confirm('Discard unsaved changes?')) htmx.ajax('POST','/cancel',{})"
+  @keydown.window.slash="if(mode==='configure' && document.activeElement.tagName!=='INPUT' && document.activeElement.tagName!=='SELECT' && document.activeElement.tagName!=='TEXTAREA'){$event.preventDefault(); if($refs.search) $refs.search.focus();}">
 <header class="topbar">
   <div class="title">{{.Draft.Name}} <span class="muted">· {{.Draft.BackendID}}</span></div>
   <nav class="modes">

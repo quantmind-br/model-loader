@@ -67,7 +67,7 @@
   </div>
 
   <div class="search-box">
-    <input type="text" x-model="search" placeholder="🔍 Search parameter..." class="search-input">
+    <input type="text" x-ref="search" x-model="search" placeholder="Search parameter…  ( / )" class="search-input">
     <button type="button" x-show="search.length > 0" @click="search=''" class="clear-btn">×</button>
   </div>
 

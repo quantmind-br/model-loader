@@ -185,9 +185,15 @@ func (s *Session) handleCancel(w http.ResponseWriter, r *http.Request) {
 	s.complete(Result{Saved: false})
 }
 
+const donePageHTML = `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
+	`<title>Done · model-loader</title><link rel="stylesheet" href="/static/app.css"></head>` +
+	`<body><div class="done-page"><div class="done-icon">✓</div>` +
+	`<h2>All set</h2><p>You can close this tab.</p></div>` +
+	`<script>setTimeout(function(){try{window.close();}catch(e){}},400);</script></body></html>`
+
 func (s *Session) handleClosed(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(`<!doctype html><meta charset="utf-8"><title>Pronto</title><body style="font-family:sans-serif;padding:3rem;text-align:center"><h2>Pronto — pode fechar esta aba.</h2></body>`))
+	_, _ = w.Write([]byte(donePageHTML))
 }
 
 // loadSchemaRef returns the schema plus its store ref for a backend.
