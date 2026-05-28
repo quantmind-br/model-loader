@@ -212,6 +212,41 @@ func TestRepoInfo_Success(t *testing.T) {
 	}
 }
 
+func TestRepoInfo_LFSSizeAndBlobsParam(t *testing.T) {
+	// HF only populates per-sibling sizes when ?blobs=true is requested.
+	// For LFS-tracked files (GGUF), the real size lives in lfs.size while the
+	// top-level size is the pointer size; we must prefer lfs.size.
+	body := `{
+		"id": "org/model",
+		"tags": ["gguf"],
+		"siblings": [
+			{"rfilename": "config.json", "size": 1024},
+			{"rfilename": "model.gguf", "size": 135, "lfs": {"size": 5368709120}}
+		]
+	}`
+
+	var gotQuery string
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, body)
+	})
+
+	info, err := c.RepoInfo(context.Background(), "org/model")
+	if err != nil {
+		t.Fatalf("RepoInfo: %v", err)
+	}
+	if !strings.Contains(gotQuery, "blobs=true") {
+		t.Errorf("query = %q, want it to contain blobs=true", gotQuery)
+	}
+	if info.Siblings[0].Size != 1024 {
+		t.Errorf("non-LFS size = %d, want 1024", info.Siblings[0].Size)
+	}
+	if info.Siblings[1].Size != 5368709120 {
+		t.Errorf("LFS size = %d, want lfs.size 5368709120", info.Siblings[1].Size)
+	}
+}
+
 func TestRepoInfo_NotFound(t *testing.T) {
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no such repo", http.StatusNotFound)

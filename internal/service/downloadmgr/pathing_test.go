@@ -8,28 +8,29 @@ import (
 )
 
 func TestResolveDest(t *testing.T) {
-	t.Run("happy individual file", func(t *testing.T) {
+	t.Run("happy individual file nests under publisher/repo", func(t *testing.T) {
 		dir := t.TempDir()
 		destDir, destFile, err := ResolveDest(dir, "org/repo", "model.gguf", false)
 		if err != nil {
 			t.Fatalf("expected nil err, got %v", err)
 		}
-		if destDir != dir {
-			t.Errorf("destDir: want %q, got %q", dir, destDir)
+		wantDir := filepath.Join(dir, "org", "repo")
+		if destDir != wantDir {
+			t.Errorf("destDir: want %q, got %q", wantDir, destDir)
 		}
-		wantFile := filepath.Join(dir, "model.gguf")
+		wantFile := filepath.Join(wantDir, "model.gguf")
 		if destFile != wantFile {
 			t.Errorf("destFile: want %q, got %q", wantFile, destFile)
 		}
 	})
 
-	t.Run("happy snapshot", func(t *testing.T) {
+	t.Run("happy snapshot nests under publisher/repo", func(t *testing.T) {
 		dir := t.TempDir()
 		destDir, destFile, err := ResolveDest(dir, "org/repo", "config.json", true)
 		if err != nil {
 			t.Fatalf("expected nil err, got %v", err)
 		}
-		wantDir := filepath.Join(dir, "org__repo")
+		wantDir := filepath.Join(dir, "org", "repo")
 		if destDir != wantDir {
 			t.Errorf("destDir: want %q, got %q", wantDir, destDir)
 		}
@@ -45,7 +46,7 @@ func TestResolveDest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected nil err, got %v", err)
 		}
-		wantDir := filepath.Join(dir, "org__repo")
+		wantDir := filepath.Join(dir, "org", "repo")
 		if destDir != wantDir {
 			t.Errorf("destDir: want %q, got %q", wantDir, destDir)
 		}
@@ -85,7 +86,11 @@ func TestResolveDest(t *testing.T) {
 
 	t.Run("existing file in individual mode returns ErrAlreadyExists", func(t *testing.T) {
 		dir := t.TempDir()
-		existing := filepath.Join(dir, "model.gguf")
+		nested := filepath.Join(dir, "org", "repo")
+		if err := os.MkdirAll(nested, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		existing := filepath.Join(nested, "model.gguf")
 		if err := os.WriteFile(existing, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -97,13 +102,21 @@ func TestResolveDest(t *testing.T) {
 
 	t.Run("existing snapshot dir returns ErrAlreadyExists", func(t *testing.T) {
 		dir := t.TempDir()
-		existingDir := filepath.Join(dir, "org__repo")
-		if err := os.Mkdir(existingDir, 0o755); err != nil {
+		existingDir := filepath.Join(dir, "org", "repo")
+		if err := os.MkdirAll(existingDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 		_, _, err := ResolveDest(dir, "org/repo", "config.json", true)
 		if !errors.Is(err, ErrAlreadyExists) {
 			t.Errorf("want ErrAlreadyExists, got %v", err)
+		}
+	})
+
+	t.Run("repoID with .. is rejected as traversal", func(t *testing.T) {
+		dir := t.TempDir()
+		_, _, err := ResolveDest(dir, "../../etc", "model.gguf", false)
+		if !errors.Is(err, ErrPathTraversal) {
+			t.Errorf("want ErrPathTraversal, got %v", err)
 		}
 	})
 

@@ -39,12 +39,15 @@ func defaultModelsKeys() modelsKeyMap {
 func (p ModelsPage) IsCapturingInput() bool {
 	return CaptureAny(
 		func() bool { return p.action != nil },
+		func() bool { return p.pathChooser != nil },
 		func() bool { return p.deleteConfirm.Active() },
 		func() bool { return p.filterMode },
 		func() bool { return p.profilePicker != nil },
 		func() bool { return p.hfSearch != nil && p.hfSearch.IsActive() },
 		func() bool { return p.hfFilePicker != nil && p.hfFilePicker.IsActive() },
-		func() bool { return p.downloads != nil && p.downloads.IsFocusVisible() },
+		// The Downloads section deliberately does NOT capture: it uses only
+		// non-global keys (↑↓/x/r/c) so the user can still tab away with the
+		// global shortcuts while transfers run in the background.
 		// Audit bonus: the info panel listens for `esc` (close), `right`/`g`
 		// (navigate to sizing) inside the page. The root's `esc` no-op
 		// shortcut would otherwise eat the keystroke before ModelsPage saw
@@ -161,10 +164,38 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return p, p.hfFilePicker.Update(msg)
 	}
-	if p.downloads != nil && p.downloads.IsFocusVisible() {
-		return p, p.downloads.Update(msg)
+
+	// Section switching with ←/→. No text-input surface is focused at this
+	// point (the search/file-picker branches above already returned), so the
+	// arrows are free. The info panel keeps `right`/`g` for the sizing jump.
+	switch msg.String() {
+	case "left":
+		if p.infoPanel == nil {
+			return p.switchSubView(-1)
+		}
+	case "right", "g":
+		if p.infoPanel != nil {
+			return p.infoPanelSizing()
+		}
+		if msg.String() == "right" {
+			return p.switchSubView(1)
+		}
 	}
 
+	switch p.subView {
+	case mvDownloads:
+		return p.handleDownloadsKey(msg)
+	case mvDiscover:
+		switch {
+		case key.Matches(msg, p.keys.Enter), msg.String() == "s":
+			return p.openHFSearch()
+		case key.Matches(msg, p.keys.Cancel):
+			return p.switchSubView(-1) // esc → back to Library
+		}
+		return p, nil
+	}
+
+	// Library section.
 	switch {
 	case key.Matches(msg, p.keys.Filter):
 		p.filterMode = !p.filterMode
@@ -200,51 +231,54 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return p.openInfoPanel()
 		}
-	case msg.String() == "right", msg.String() == "g":
-		if p.infoPanel != nil {
-			visible := p.visibleFiles()
-			idx := p.table.Cursor()
-			var path string
-			if idx >= 0 && idx < len(visible) {
-				path = visible[idx].Path
-			}
-			if len(p.infoPanelUsedBy) == 1 {
-				return p, func() tea.Msg {
-					return NavigateToSizingMsg{ModelPath: path, ProfileID: p.infoPanelUsedBy[0].ID}
-				}
-			}
-			if len(p.infoPanelUsedBy) > 1 {
-				p, fc := p.withFlash("Multiple profiles use this model — switch to Profiles tab manually")
-				return p, fc
-			}
-			p, fc := p.withFlash("No profile uses this model — create one first")
-			return p, fc
-		}
 	case msg.String() == "s":
-		if !p.filterMode && p.hfClient != nil {
-			p.hfSearch = components.NewHFSearchPicker(hfSearcherAdapter{client: p.hfClient}, p.width, p.height)
-			return p, p.hfSearch.Init()
-		}
-	case msg.String() == "x":
-		if p.downloads != nil && p.downloads.IsVisible() {
-			return p, p.downloads.Update(msg)
-		}
-	case msg.String() == "d":
-		// Toggle download footer visibility even when currently
-		// hidden — the component's own forwarding only kicks in
-		// after IsVisible(), so we need an unconditional entry point.
-		if p.downloads != nil {
-			return p, p.downloads.Update(msg)
-		}
-	case msg.String() == "r":
-		if p.downloads != nil && p.downloads.IsVisible() {
-			return p, p.downloads.Update(msg)
+		if !p.filterMode {
+			return p.openHFSearch()
 		}
 	}
 
 	t, cmd := p.table.Update(msg)
 	p.table = t
 	return p, cmd
+}
+
+// switchSubView moves the active section by delta (wrapping across the three
+// sections) and resets Downloads focus when leaving it.
+func (p ModelsPage) switchSubView(delta int) (tea.Model, tea.Cmd) {
+	p.subView = modelsSubView((int(p.subView) + delta + 3) % 3)
+	p.dlFocus = 0
+	return p, nil
+}
+
+// openHFSearch jumps to the Discover section and opens the Hugging Face search
+// overlay. No-op (with a flash) when the HF client is not wired.
+func (p ModelsPage) openHFSearch() (tea.Model, tea.Cmd) {
+	if p.hfClient == nil {
+		return p.withFlashError("Hugging Face search is not available")
+	}
+	p.subView = mvDiscover
+	p.hfSearch = components.NewHFSearchPicker(hfSearcherAdapter{client: p.hfClient}, p.width, p.height)
+	return p, p.hfSearch.Init()
+}
+
+// infoPanelSizing handles the right/g jump from the info panel to the Profiles
+// tab sizing editor for the model used by exactly one profile.
+func (p ModelsPage) infoPanelSizing() (tea.Model, tea.Cmd) {
+	visible := p.visibleFiles()
+	idx := p.table.Cursor()
+	var path string
+	if idx >= 0 && idx < len(visible) {
+		path = visible[idx].Path
+	}
+	if len(p.infoPanelUsedBy) == 1 {
+		return p, func() tea.Msg {
+			return NavigateToSizingMsg{ModelPath: path, ProfileID: p.infoPanelUsedBy[0].ID}
+		}
+	}
+	if len(p.infoPanelUsedBy) > 1 {
+		return p.withFlash("Multiple profiles use this model — switch to Profiles tab manually")
+	}
+	return p.withFlash("No profile uses this model — create one first")
 }
 
 type modelDeleteConfirmedMsg struct{ path string }

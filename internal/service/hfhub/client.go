@@ -95,8 +95,15 @@ type repoInfoDTO struct {
 }
 
 type siblingDTO struct {
-	RFilename string `json:"rfilename"`
-	Size      int64  `json:"size"`
+	RFilename string  `json:"rfilename"`
+	Size      int64   `json:"size"`
+	LFS       *lfsDTO `json:"lfs"`
+}
+
+// lfsDTO carries the real size of an LFS-tracked file. For GGUF (always LFS)
+// the top-level size is just the pointer size, so lfs.size is authoritative.
+type lfsDTO struct {
+	Size int64 `json:"size"`
 }
 
 func (d repoInfoDTO) toRepoInfo() *RepoInfo {
@@ -107,7 +114,11 @@ func (d repoInfoDTO) toRepoInfo() *RepoInfo {
 	if len(d.Siblings) > 0 {
 		out.Siblings = make([]Sibling, len(d.Siblings))
 		for i, s := range d.Siblings {
-			out.Siblings[i] = Sibling{RFilename: s.RFilename, Size: s.Size}
+			size := s.Size
+			if s.LFS != nil && s.LFS.Size > 0 {
+				size = s.LFS.Size
+			}
+			out.Siblings[i] = Sibling{RFilename: s.RFilename, Size: size}
 		}
 	}
 	return out
@@ -154,6 +165,9 @@ func (c *Client) RepoInfo(ctx context.Context, repoID string) (*RepoInfo, error)
 		return nil, fmt.Errorf("hfhub: parse baseURL: %w", err)
 	}
 	u.Path = "/api/models/" + repoID
+	// blobs=true makes the Hub populate per-sibling size (and lfs.size for
+	// LFS-tracked files like GGUF); without it sizes come back as 0.
+	u.RawQuery = "blobs=true"
 
 	resp, err := c.doJSON(ctx, u.String())
 	if err != nil {

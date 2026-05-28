@@ -38,6 +38,10 @@ type ModelsPage struct {
 	filterMode bool
 	flash      components.Flash
 
+	// subView selects which section the page renders: the local model
+	// Library, the Downloads queue, or HuggingFace Discover.
+	subView modelsSubView
+
 	action        *actionMenu
 	deleteConfirm components.Confirm
 
@@ -49,15 +53,35 @@ type ModelsPage struct {
 	dlManager      *downloadmgr.Manager
 	hfSearch       *components.HFSearchPicker
 	hfFilePicker   *components.HFFilePicker
-	downloads      *components.DownloadProgress
 	downloadEvents <-chan downloadmgr.Event
 	pendingRepoID  string // carried between RepoInfo lookup and file picker open
+
+	// Destination chooser: when more than one search path is configured, the
+	// file-picker selection is parked in pendingDL while pathChooser asks the
+	// user which root to download into.
+	pendingDL   *pendingDownload
+	pathChooser *pathChooser
+
+	// Downloads section state: per-download transfer-rate samples (for
+	// speed/ETA), keyboard focus index, and a visual "clear completed" flag.
+	rates    map[string]rateSample
+	dlFocus  int
+	hideDone bool
 
 	keys modelsKeyMap
 
 	infoPanel       *components.InfoPanel
 	infoPanelUsedBy []components.ProfileRef
 }
+
+// modelsSubView selects which section the Models tab renders.
+type modelsSubView int
+
+const (
+	mvLibrary modelsSubView = iota
+	mvDownloads
+	mvDiscover
+)
 
 func (p ModelsPage) withFlash(msg string) (ModelsPage, tea.Cmd) {
 	var cmd tea.Cmd
@@ -95,6 +119,7 @@ func NewModelsPage(scanner modelscanner.Scanner, paths []string) ModelsPage {
 		pathColW:  40,
 		keys:      defaultModelsKeys(),
 		flash:     components.NewFlash("models"),
+		rates:     make(map[string]rateSample),
 	}
 }
 
@@ -120,13 +145,16 @@ func (p ModelsPage) WithDownloadManager(m *downloadmgr.Manager) ModelsPage {
 	p.dlManager = m
 	if m != nil {
 		p.downloadEvents = m.Subscribe()
-		p.downloads = components.NewDownloadProgress(downloadSnapshotAdapter{manager: m}, p.width)
 	}
 	return p
 }
 
 func (p ModelsPage) Init() tea.Cmd {
-	return startScanCmd(p.scanner, p.paths, p.scanID)
+	cmds := []tea.Cmd{startScanCmd(p.scanner, p.paths, p.scanID)}
+	if p.dlManager != nil {
+		cmds = append(cmds, p.tickCmd())
+	}
+	return tea.Batch(cmds...)
 }
 
 // Reload implements the ui.Reloader contract. RootModel calls this on
@@ -146,38 +174,64 @@ func (p ModelsPage) View() string {
 	if p.action != nil {
 		return p.renderActionMenu()
 	}
-	return p.regularBodyView()
+	if p.pathChooser != nil {
+		return components.Modal("", p.renderPathChooser(), p.width, p.height)
+	}
+
+	header := theme.Title.Render("Models")
+	tabs := p.renderSubTabs()
+	var body string
+	switch p.subView {
+	case mvDownloads:
+		body = p.renderDownloadsView()
+	case mvDiscover:
+		body = p.renderDiscoverView()
+	default:
+		body = p.renderLibraryView()
+	}
+	footer := p.flash.View()
+	return lipgloss.JoinVertical(lipgloss.Left, header, tabs, body, footer)
 }
 
-func (p ModelsPage) regularBodyView() string {
-	header := theme.Title.Render("Models")
+// renderSubTabs draws the Library / Downloads / Discover section strip with
+// the active section highlighted. The Downloads label carries a live count of
+// in-flight transfers so the user notices background activity from any tab.
+func (p ModelsPage) renderSubTabs() string {
+	label := func(v modelsSubView, text string) string {
+		if v == p.subView {
+			return theme.TabActive.Render(text)
+		}
+		return theme.TabInactive.Render(text)
+	}
+	dl := "Downloads"
+	if n := p.activeDownloadCount(); n > 0 {
+		dl = fmt.Sprintf("Downloads (%d)", n)
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top,
+		label(mvLibrary, "Library"),
+		label(mvDownloads, dl),
+		label(mvDiscover, "Discover"),
+	)
+}
+
+// renderLibraryView renders the local model table (or empty state) plus the
+// filter line and the optional info panel. The page header, section tabs and
+// flash are added by View.
+func (p ModelsPage) renderLibraryView() string {
 	statusLine := p.renderStatus()
 	filterLine := ""
 	if p.filterMode || p.filter != "" {
 		filterLine = theme.Subtitle.Render(fmt.Sprintf("filter: %q", p.filter))
 	}
-	footer := p.flash.View()
 	var content string
 	if len(p.files) == 0 && (len(p.paths) == 0 || p.hasScannedRoot()) {
 		emptyMsg := components.EmptyState("No .gguf files in configured search paths", "Press [R] to rescan, or edit ~/.config/model-loader/config.toml")
-		content = lipgloss.JoinVertical(lipgloss.Left, header, statusLine, emptyMsg, filterLine, footer)
+		content = lipgloss.JoinVertical(lipgloss.Left, statusLine, emptyMsg, filterLine)
 	} else if len(p.visibleFiles()) == 0 && p.filter != "" {
 		emptyMsg := components.EmptyState("No models match the current filter", "Press [esc] to clear filter, or [/] to edit filter")
-		content = lipgloss.JoinVertical(lipgloss.Left, header, statusLine, emptyMsg, filterLine, footer)
+		content = lipgloss.JoinVertical(lipgloss.Left, statusLine, emptyMsg, filterLine)
 	} else {
-		content = lipgloss.JoinVertical(lipgloss.Left, header, statusLine, p.table.View(), filterLine, footer)
-	}
-	if p.hfSearch != nil && p.hfSearch.IsActive() {
-		content = p.hfSearch.View()
-	}
-	if p.hfFilePicker != nil && p.hfFilePicker.IsActive() {
-		content = p.hfFilePicker.View()
-	}
-	if p.downloads != nil && p.downloads.IsVisible() {
-		progressView := p.downloads.View()
-		if progressView != "" {
-			content = content + "\n" + progressView
-		}
+		content = lipgloss.JoinVertical(lipgloss.Left, statusLine, p.table.View(), filterLine)
 	}
 	if p.infoPanel != nil {
 		// F-09 audit: at narrow widths (≤80 cols) splitting the row
@@ -217,15 +271,27 @@ func (p ModelsPage) Hints() string {
 	if p.action != nil {
 		return "[↑↓] move  [enter] select  [esc] cancel"
 	}
+	if p.pathChooser != nil {
+		return "[↑↓] move  [enter] choose path  [esc] cancel"
+	}
 	if p.filterMode {
 		return "[type] filter  [esc] clear"
 	}
-	hints := "[/] filter  [R] rescan  [s] search HF  [enter] actions  [i] info  [esc] clear"
-	if p.downloads != nil && p.downloads.IsVisible() {
-		hints += "  [x] cancel dl  [r] resume"
+	if p.hfSearch != nil && p.hfSearch.IsActive() {
+		return "[↑↓] move  [enter] select  [esc] back  [ctrl+g] GGUF-only"
+	}
+	if p.hfFilePicker != nil && p.hfFilePicker.IsActive() {
+		return "[↑↓] move  [space] toggle  [enter] download  [esc] back"
 	}
 	if p.infoPanel != nil {
-		hints = "[→/g] sizing  [esc] close info"
+		return "[→/g] sizing  [esc] close info"
 	}
-	return hints
+	switch p.subView {
+	case mvDownloads:
+		return "[←/→] section  [↑↓] focus  [x] cancel  [r] resume  [c] clear done"
+	case mvDiscover:
+		return "[←/→] section  [enter] search HF  [esc] back to library"
+	default:
+		return "[←/→] section  [/] filter  [R] rescan  [s] search HF  [enter] actions  [i] info  [esc] clear"
+	}
 }

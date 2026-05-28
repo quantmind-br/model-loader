@@ -75,7 +75,7 @@ func TestStartDownload_SingleFile(t *testing.T) {
 	if spec.RepoID != "org/model" || spec.Filename != "model.gguf" {
 		t.Fatalf("bad spec: %+v", spec)
 	}
-	if spec.DestFile != filepath.Join(root, "model.gguf") {
+	if spec.DestFile != filepath.Join(root, "org", "model", "model.gguf") {
 		t.Fatalf("bad destFile: %q", spec.DestFile)
 	}
 	if spec.URL != "https://hf/org/model/model.gguf" {
@@ -90,7 +90,7 @@ func TestStartDownload_Snapshot(t *testing.T) {
 	if err := startDownload(&out, mgr, &fakeHub{}, root, "org/model", "file.bin", true, false); err != nil {
 		t.Fatalf("startDownload: %v", err)
 	}
-	want := filepath.Join(root, "org__model", "file.bin")
+	want := filepath.Join(root, "org", "model", "file.bin")
 	if mgr.started[0].DestFile != want {
 		t.Fatalf("snapshot destFile = %q, want %q", mgr.started[0].DestFile, want)
 	}
@@ -105,7 +105,11 @@ func TestStartDownload_NoSearchPath(t *testing.T) {
 
 func TestStartDownload_AlreadyExists(t *testing.T) {
 	root := tempSearchPath(t)
-	if err := os.WriteFile(filepath.Join(root, "f.gguf"), []byte("x"), 0o644); err != nil {
+	nested := filepath.Join(root, "org", "m")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nested, "f.gguf"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer

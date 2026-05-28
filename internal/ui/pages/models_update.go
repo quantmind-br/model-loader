@@ -49,6 +49,12 @@ func (p ModelsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case modelsReloadMsg:
 		next, cmd := p.beginRescan(false)
 		return next, cmd
+	case modelsTickMsg:
+		if p.dlManager != nil {
+			p.updateRates(p.dlManager.Snapshot())
+			return p, p.tickCmd()
+		}
+		return p, nil
 	case downloadEventMsg:
 		return p.handleDownloadEvent(msg.event)
 	case components.HFSearchResultMsg:
@@ -114,13 +120,13 @@ func (p ModelsPage) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	if p.hfFilePicker != nil {
 		p.hfFilePicker.SetSize(msg.Width, msg.Height)
 	}
-	if p.downloads != nil {
-		p.downloads.SetWidth(msg.Width)
-	}
 	return p, nil
 }
 
 func (p ModelsPage) dispatchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if p.pathChooser != nil {
+		return p.updatePathChooser(msg)
+	}
 	if p.profilePicker != nil {
 		np, cmd := p.profilePicker.Update(msg)
 		p.profilePicker = &np

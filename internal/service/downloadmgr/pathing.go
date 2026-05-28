@@ -19,11 +19,13 @@ var (
 )
 
 // ResolveDest computes the destination directory and file for a download.
-// Individual mode places rfilename's basename directly under searchPath.
-// Snapshot mode places files inside a sanitized "{org}__{repo}" subdir,
-// preserving any nested subdirectories in rfilename. The function refuses
-// to overwrite existing destinations and rejects rfilename values that
-// would escape searchPath via "..".
+// Both modes nest files under a "{publisher}/{repo}" subdirectory so the
+// on-disk layout mirrors the Hugging Face cache and LM Studio conventions
+// (e.g. ~/.lmstudio/models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/model.gguf) instead
+// of piling every file flat into the search root. Individual mode keeps only
+// rfilename's basename; snapshot mode preserves any nested subdirectories in
+// rfilename. The function refuses to overwrite existing destinations and
+// rejects repoID/rfilename values that would escape searchPath via "..".
 func ResolveDest(searchPath, repoID, rfilename string, isSnapshot bool) (destDir, destFile string, err error) {
 	if searchPath == "" {
 		return "", "", ErrNoSearchPath
@@ -35,9 +37,15 @@ func ResolveDest(searchPath, repoID, rfilename string, isSnapshot bool) (destDir
 
 	cleanRoot := filepath.Clean(searchPath)
 
+	// repoID is "{publisher}/{repo}"; map it to a real nested path. A repoID
+	// containing ".." (or an absolute segment) is rejected by the withinRoot
+	// guard below.
+	destDir = filepath.Join(searchPath, filepath.FromSlash(repoID))
+	if !withinRoot(destDir, cleanRoot) {
+		return "", "", ErrPathTraversal
+	}
+
 	if isSnapshot {
-		sanitized := strings.ReplaceAll(repoID, "/", "__")
-		destDir = filepath.Join(searchPath, sanitized)
 		if _, err := os.Stat(destDir); err == nil {
 			return "", "", ErrAlreadyExists
 		}
@@ -48,13 +56,12 @@ func ResolveDest(searchPath, repoID, rfilename string, isSnapshot bool) (destDir
 		return destDir, destFile, nil
 	}
 
-	destDir = searchPath
-	destFile = filepath.Join(searchPath, filepath.Base(rfilename))
-	if _, err := os.Stat(destFile); err == nil {
-		return "", "", ErrAlreadyExists
-	}
+	destFile = filepath.Join(destDir, filepath.Base(rfilename))
 	if !withinRoot(destFile, cleanRoot) {
 		return "", "", ErrPathTraversal
+	}
+	if _, err := os.Stat(destFile); err == nil {
+		return "", "", ErrAlreadyExists
 	}
 	return destDir, destFile, nil
 }
