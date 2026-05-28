@@ -56,6 +56,20 @@ Bind address for the headless HTTP proxy started by `model-loader serve` (an Ope
 | `host` | `127.0.0.1` | Bind host for the headless proxy. Overridable with `serve --host` |
 | `port` | `4321` | Bind port for the headless proxy. Overridable with `serve --port` |
 
+#### Endpoints
+
+The proxy exposes both the OpenAI-compatible inference surface and dedicated admin endpoints. All return JSON; failures use the OpenAI `{"error":{...}}` envelope.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/v1/chat/completions`, `/v1/completions`, … | Proxied to the loaded backend. The `"model"` field (or `?model=` query param) triggers an implicit swap when needed |
+| `GET`  | `/v1/models` | OpenAI-shaped list of registered profiles |
+| `GET`  | `/_status` | Current state: `running`, `loaded_profile_id`, `loaded_pid`, `loaded_port`, `inflight_requests`, `last_swap_at`, `last_swap_dur`, `last_error` |
+| `POST` | `/_admin/load` | Explicitly load a profile. Body: `{"profile_id":"<id>"}` (alias: `{"model":"<id>"}`). Returns the same `Status` shape as `/_status` |
+| `POST` | `/_admin/unload` | Kill the loaded backend, freeing its VRAM. Query params: `?force=true` (skip drain), `?drain_timeout=10s` (cap on in-flight drain wait, defaults to the shutdown grace period). Idempotent: 200 when nothing is loaded |
+
+The proxy binds to loopback by default and has no built-in authentication; do not expose it directly to a public interface.
+
 ### `[benchmark]`
 
 Profile evaluation engine settings (Benchmark tab and `model-loader benchmark`).

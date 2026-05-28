@@ -15,6 +15,7 @@ A terminal UI (TUI) for managing [llama.cpp](https://github.com/ggerganov/llama.
 - **Per-Profile Backend Selection** — Each profile selects a backend from the catalog; validation uses that backend's schema exclusively
 - **Hugging Face Integration** — Search the Hub and download `.gguf` files with queued, progress-tracked downloads
 - **Benchmark** — Evaluate profiles with a built-in engine: SWE-bench Lite coding tasks, a long-context needle probe, and `llama-bench` throughput measurement (optional LLM-as-judge grading)
+- **OpenAI-compatible HTTP Proxy** — Headless `model-loader serve` exposes an OpenAI-shaped reverse proxy with implicit model swap (per-request `"model"` field) plus dedicated admin endpoints (`POST /_admin/load`, `POST /_admin/unload`) for explicit control and to free VRAM on demand
 
 ## Requirements
 
@@ -138,6 +139,47 @@ default_tab = "profiles"
 ```
 
 See [docs/config.md](docs/config.md) for detailed configuration options.
+
+## HTTP API
+
+The `model-loader serve` subcommand starts a headless OpenAI-shaped reverse proxy on `[serve].host:[serve].port` (default `127.0.0.1:4321`). The same proxy can be started/stopped from the TUI Server tab (`s` / `x`).
+
+### Endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/v1/chat/completions`, `/v1/completions`, etc. | OpenAI-compatible inference. The proxy reads the `"model"` field (or `?model=` query param) and hot-swaps the backend if needed |
+| `GET`  | `/v1/models` | OpenAI-shaped list of registered profiles (each profile shows up as a "model") |
+| `GET`  | `/_status` | JSON snapshot: `running`, `loaded_profile_id`, `loaded_pid`, `loaded_port`, `inflight_requests`, last swap timing, last error |
+| `POST` | `/_admin/load` | Explicitly load a profile without sending an inference request. Body: `{"profile_id":"<id>"}` (or `{"model":"<id>"}` as alias). Reuses the same swap path as the catch-all forwarder |
+| `POST` | `/_admin/unload` | Kill the currently-loaded backend. Frees its VRAM (the OS reclaims memory when the process exits). Idempotent: returns 200 when nothing is loaded |
+
+#### Admin endpoint behavior
+
+- Both admin endpoints serialize against in-flight model swaps (single internal mutex), so a load/unload cannot collide with the implicit swap triggered by an inference request.
+- `POST /_admin/unload` accepts optional query params:
+  - `?force=true` — skip waiting for in-flight requests before killing.
+  - `?drain_timeout=10s` — upper bound on the drain wait (defaults to `[serve]` shutdown grace, currently 10s). After the timeout, the backend is killed even if requests are still in flight.
+- All endpoints return JSON with the same `Status` shape as `GET /_status` on success and an OpenAI-style `{"error":{...}}` envelope on failure.
+- The proxy binds to loopback (`127.0.0.1`) by default and ships **no authentication**. Do not expose it to a public interface without a fronting reverse proxy that adds auth.
+
+### Examples
+
+```bash
+# Current state
+curl -s http://127.0.0.1:4321/_status | jq
+
+# Explicitly load a profile
+curl -sX POST http://127.0.0.1:4321/_admin/load \
+  -H 'content-type: application/json' \
+  -d '{"profile_id":"my-profile"}' | jq
+
+# Unload + free VRAM (drains in-flight requests first)
+curl -sX POST http://127.0.0.1:4321/_admin/unload | jq
+
+# Force unload (do not wait for in-flight requests)
+curl -sX POST 'http://127.0.0.1:4321/_admin/unload?force=true' | jq
+```
 
 ## Directory Structure
 

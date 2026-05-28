@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
@@ -19,6 +21,8 @@ import (
 func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/models", s.handleModelsList)
 	mux.HandleFunc("/_status", s.handleStatus)
+	mux.HandleFunc("/_admin/load", s.handleAdminLoad)
+	mux.HandleFunc("/_admin/unload", s.handleAdminUnload)
 	mux.HandleFunc("/", s.handleForward)
 }
 
@@ -221,6 +225,140 @@ func (s *Server) ensureLoaded(ctx context.Context, profileID string) (*loadedBac
 // launchProfile is a thin wrapper to keep the swap path readable.
 func (s *Server) launchProfile(p domain.Profile, attemptID string) (domain.RunningInstance, error) {
 	return s.deps.ProcessMgr.Launch(p, processmgr.LaunchBackground, attemptID)
+}
+
+// adminLoadRequest is the JSON body accepted by POST /_admin/load. Either
+// `profile_id` (preferred) or `model` (OpenAI-style alias) names the target.
+type adminLoadRequest struct {
+	ProfileID string `json:"profile_id"`
+	Model     string `json:"model"`
+}
+
+// handleAdminLoad explicitly loads a profile without piggybacking on a chat
+// completion. Reuses the same ensureLoaded swap path as the catch-all proxy,
+// so concurrency, kill-old/launch-new ordering, and health checks are
+// identical. Returns 200 + Status JSON on success.
+func (s *Server) handleAdminLoad(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeOpenAIError(w, http.StatusMethodNotAllowed, "invalid_request_error",
+			"method_not_allowed", "method "+r.Method+" not allowed on /_admin/load")
+		return
+	}
+	var req adminLoadRequest
+	if r.Body != nil && r.Body != http.NoBody {
+		defer r.Body.Close()
+		limited := io.LimitReader(r.Body, s.cfg.MaxBodyBuffer)
+		dec := json.NewDecoder(limited)
+		if err := dec.Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+			writeOpenAIError(w, http.StatusBadRequest, "invalid_request_error",
+				"invalid_body", "invalid JSON body: "+err.Error())
+			return
+		}
+	}
+	profileID := strings.TrimSpace(req.ProfileID)
+	if profileID == "" {
+		profileID = strings.TrimSpace(req.Model)
+	}
+	if profileID == "" {
+		writeOpenAIError(w, http.StatusBadRequest, "invalid_request_error",
+			"missing_profile_id", `request body must include "profile_id" or "model"`)
+		return
+	}
+	if !validProfileID(profileID) {
+		writeOpenAIError(w, http.StatusBadRequest, "invalid_request_error",
+			"invalid_model_id",
+			"profile id must match [A-Za-z0-9._-]+ (got: "+truncate(profileID, 64)+")")
+		return
+	}
+
+	_, status, err := s.ensureLoaded(r.Context(), profileID)
+	if err != nil {
+		switch status {
+		case http.StatusNotFound:
+			writeOpenAIError(w, status, "invalid_request_error", "model_not_found", err.Error())
+		case http.StatusGatewayTimeout:
+			writeOpenAIError(w, status, "backend_error", "backend_unhealthy", err.Error())
+		case http.StatusBadGateway:
+			writeOpenAIError(w, status, "backend_error", "backend_launch_failed", err.Error())
+		default:
+			if status == 0 {
+				status = http.StatusInternalServerError
+			}
+			writeOpenAIError(w, status, "server_error", "load_failed", err.Error())
+		}
+		return
+	}
+	s.logger.Info("proxy_admin_load_ok", "profile_id", profileID)
+	writeStatusJSON(w, s.Status())
+}
+
+// handleAdminUnload kills the currently-loaded backend, freeing its VRAM.
+// Optional query params:
+//   - force=true       skip draining in-flight requests
+//   - drain_timeout=10s upper bound on the drain wait (default: ShutdownGracePeriod)
+//
+// Idempotent: returns 200 with the same Status JSON shape when nothing is loaded.
+func (s *Server) handleAdminUnload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeOpenAIError(w, http.StatusMethodNotAllowed, "invalid_request_error",
+			"method_not_allowed", "method "+r.Method+" not allowed on /_admin/unload")
+		return
+	}
+	force := r.URL.Query().Get("force") == "true"
+	drainTimeout := s.cfg.ShutdownGracePeriod
+	if raw := r.URL.Query().Get("drain_timeout"); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d >= 0 {
+			drainTimeout = d
+		}
+	}
+
+	// Serialize against ensureLoaded so a swap-in-progress cannot collide
+	// with the kill below.
+	s.swapMu.Lock()
+	defer s.swapMu.Unlock()
+
+	s.stateMu.RLock()
+	empty := s.current == nil
+	s.stateMu.RUnlock()
+	if empty {
+		s.logger.Info("proxy_admin_unload_noop")
+		writeStatusJSON(w, s.Status())
+		return
+	}
+
+	if !force && drainTimeout > 0 {
+		drained := make(chan struct{})
+		go func() {
+			s.inflightWG.Wait()
+			close(drained)
+		}()
+		select {
+		case <-drained:
+		case <-time.After(drainTimeout):
+			s.logger.Warn("proxy_admin_unload_drain_timeout",
+				"timeout_ms", drainTimeout.Milliseconds())
+		}
+	}
+
+	if err := s.killCurrentBackend(); err != nil {
+		s.recordError("admin_unload_kill: " + err.Error())
+		s.logger.Error("proxy_admin_unload_kill_failed", "err", err)
+		writeOpenAIError(w, http.StatusInternalServerError, "server_error",
+			"unload_failed", err.Error())
+		return
+	}
+	s.logger.Info("proxy_admin_unload_ok")
+	writeStatusJSON(w, s.Status())
+}
+
+// writeStatusJSON is the shared 200 response for admin endpoints — same shape
+// as GET /_status so a client can treat the bodies interchangeably.
+func writeStatusJSON(w http.ResponseWriter, st Status) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(st)
 }
 
 // truncate returns s clipped to n runes, appending "..." when clipped.

@@ -83,6 +83,18 @@ Common issues and their solutions.
 - If a schema is missing or outdated, delete and re-add the backend, or manually edit the schema JSON in the backends directory
 - Use the Advanced tab to enter flags not available in the Essentials tab
 
+## VRAM still allocated after stopping inference
+
+**Symptom:** GPU memory stays full after you stop sending requests, even though no chat is active.
+
+**Solution:**
+- VRAM is held by the running backend process (e.g. `llama-server`), not by individual requests
+- To fully release GPU memory, the backend has to exit. Either:
+  - From the headless HTTP proxy: `curl -sX POST http://127.0.0.1:4321/_admin/unload` (use `?force=true` to skip waiting for in-flight requests)
+  - From the TUI: Server tab → `k` to kill the selected instance
+- Verify with `nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits` before and after
+- The proxy does **not** call `nvidia-smi --gpu-reset` — that requires root and can disturb other GPU clients. Killing the process is the supported way
+
 ## Clipboard not working
 
 **Symptom:** Copying model path from the Models tab does nothing.
