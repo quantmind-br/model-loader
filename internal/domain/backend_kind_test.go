@@ -7,3 +7,9 @@ func TestBackendKindBuunLlamaCppValue(t *testing.T) {
 		t.Fatalf("got %q, want %q", BackendKindBuunLlamaCpp, "buun-llama-cpp")
 	}
 }
+
+func TestBackendKindBeeLlamaCppValue(t *testing.T) {
+	if BackendKindBeeLlamaCpp != "beellama-cpp" {
+		t.Fatalf("got %q, want %q", BackendKindBeeLlamaCpp, "beellama-cpp")
+	}
+}

@@ -28,6 +28,7 @@ func main() {
 	mgr.Register(domain.BackendKindVLLM, backendschema.NewVLLMGenerator(schemaStore))
 	mgr.Register(domain.BackendKindDFlash, backendschema.NewDFlashGenerator(schemaStore))
 	mgr.Register(domain.BackendKindBuunLlamaCpp, backendschema.NewBuunServerGenerator(schemaStore))
+	mgr.Register(domain.BackendKindBeeLlamaCpp, backendschema.NewBeeLlamaServerGenerator(schemaStore))
 
 	catalog, err := catalogStore.Load()
 	if err != nil {

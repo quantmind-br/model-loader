@@ -14,4 +14,5 @@ func RegisterDefaults(m *Manager, schemaStore backendcatalog.SchemaStore) {
 	m.Register(domain.BackendKindVLLM, NewVLLMGenerator(schemaStore))
 	m.Register(domain.BackendKindDFlash, NewDFlashGenerator(schemaStore))
 	m.Register(domain.BackendKindBuunLlamaCpp, NewBuunServerGenerator(schemaStore))
+	m.Register(domain.BackendKindBeeLlamaCpp, NewBeeLlamaServerGenerator(schemaStore))
 }

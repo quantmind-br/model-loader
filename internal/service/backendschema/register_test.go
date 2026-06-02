@@ -18,6 +18,7 @@ func TestRegisterDefaults_RegistersAllGeneratorKinds(t *testing.T) {
 		domain.BackendKindVLLM,
 		domain.BackendKindDFlash,
 		domain.BackendKindBuunLlamaCpp,
+		domain.BackendKindBeeLlamaCpp,
 	}
 	gens := m.Generators()
 	if len(gens) != len(want) {

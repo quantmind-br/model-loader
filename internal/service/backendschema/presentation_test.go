@@ -57,6 +57,17 @@ func TestEssentialSeed_MatchesCuratedBackends(t *testing.T) {
 			t.Fatalf("buun seed missing curated flag %q", want)
 		}
 	}
+	for _, want := range []string{"spec-type", "spec-dflash-cross-ctx", "flash-attn"} {
+		found := false
+		for _, f := range essentialSeed[domain.BackendKindBeeLlamaCpp] {
+			if f == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("beellama seed missing curated flag %q", want)
+		}
+	}
 }
 
 func TestEnsurePresentations_SeedsCatalog(t *testing.T) {
