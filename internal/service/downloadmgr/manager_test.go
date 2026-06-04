@@ -197,6 +197,53 @@ func TestManager_ReconcileKeepsLiveWorkers(t *testing.T) {
 	}
 }
 
+func TestManager_ClearTerminalRemovesFinishedRecords(t *testing.T) {
+	dir := t.TempDir()
+	live := ID("rec-live")
+	terminal := map[ID]Status{
+		"rec-done":      StatusCompleted,
+		"rec-failed":    StatusFailed,
+		"rec-cancelled": StatusCancelled,
+		"rec-abandoned": StatusAbandoned,
+	}
+	for id, status := range terminal {
+		if err := SaveRecord(dir, DownloadRecord{ID: id, URL: "http://x", DestFile: filepath.Join(dir, string(id)), Status: status}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A genuinely running download (live PID) must survive the clear.
+	if err := SaveRecord(dir, DownloadRecord{ID: live, PID: syscall.Getpid(), URL: "http://x", DestFile: filepath.Join(dir, "live"), Status: StatusActive}); err != nil {
+		t.Fatal(err)
+	}
+
+	mgr := NewManager(dir, 1)
+	if err := mgr.Reconcile(); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+
+	removed, err := mgr.ClearTerminal()
+	if err != nil {
+		t.Fatalf("ClearTerminal: %v", err)
+	}
+	if removed != len(terminal) {
+		t.Errorf("removed = %d, want %d", removed, len(terminal))
+	}
+
+	// Terminal records are gone from disk and from the snapshot.
+	for id := range terminal {
+		if _, err := LoadRecord(StatePath(dir, id)); err == nil {
+			t.Errorf("record %s still on disk after ClearTerminal", id)
+		}
+	}
+	remaining := make(map[ID]bool)
+	for _, st := range mgr.Snapshot() {
+		remaining[st.ID] = true
+	}
+	if len(remaining) != 1 || !remaining[live] {
+		t.Errorf("Snapshot after clear = %v, want only the live download", remaining)
+	}
+}
+
 func TestManager_ResumeRespawnsAbandoned(t *testing.T) {
 	body := "abc12345"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

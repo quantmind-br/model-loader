@@ -255,6 +255,35 @@ func (m *Manager) Resume(id ID) error {
 	return nil
 }
 
+// ClearTerminal permanently deletes every finished download record
+// (completed, failed, cancelled, or abandoned) from disk and drops it
+// from the in-memory snapshot, leaving active and queued downloads
+// untouched. It returns the number of records removed. This is the
+// persistent counterpart to the Downloads view's hide-done filter.
+func (m *Manager) ClearTerminal() (int, error) {
+	recs, err := ListRecords(m.stateDir)
+	if err != nil {
+		return 0, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return 0, ErrManagerClosed
+	}
+	removed := 0
+	for _, r := range recs {
+		if !r.Status.IsTerminal() {
+			continue
+		}
+		if err := DeleteRecord(m.stateDir, r.ID); err != nil {
+			return removed, err
+		}
+		delete(m.lastSnapshot, r.ID)
+		removed++
+	}
+	return removed, nil
+}
+
 // Snapshot returns the union of in-memory tracked records and on-disk
 // records, sorted by StartedAt ascending so the UI shows oldest first.
 func (m *Manager) Snapshot() []State {

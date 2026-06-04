@@ -288,7 +288,7 @@ func (p ModelsPage) Hints() string {
 	}
 	switch p.subView {
 	case mvDownloads:
-		return "[←/→] section  [↑↓] focus  [x] cancel  [r] resume  [c] clear done"
+		return "[←/→] section  [↑↓] focus  [x] cancel  [r] resume  [c] hide done  [C] clear done"
 	case mvDiscover:
 		return "[←/→] section  [enter] search HF  [esc] back to library"
 	default:

@@ -140,6 +140,19 @@ func (p ModelsPage) handleDownloadsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p.hideDone = !p.hideDone
 		p.dlFocus = 0
 		return p, nil
+	case "C":
+		p.dlFocus = 0
+		if p.dlManager == nil {
+			return p, nil
+		}
+		removed, err := p.dlManager.ClearTerminal()
+		if err != nil {
+			return p.withFlashError("clear history: " + err.Error())
+		}
+		if removed == 0 {
+			return p.withFlash("no finished downloads to clear")
+		}
+		return p.withFlash(fmt.Sprintf("cleared %d finished download(s)", removed))
 	case "x":
 		if st, ok := p.focusedDownload(list); ok && st.Status == downloadmgr.StatusActive {
 			if p.dlManager != nil {

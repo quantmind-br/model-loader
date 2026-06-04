@@ -1,12 +1,14 @@
 package pages
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/downloadmgr"
 	"github.com/quantmind-br/model-loader/internal/service/hfhub"
 )
 
@@ -118,6 +120,34 @@ func TestModelsPage_DownloadsKeyFocusSafeWithoutManager(t *testing.T) {
 	mp := updated.(ModelsPage)
 	if mp.dlFocus != 0 {
 		t.Errorf("dlFocus = %d, want 0 with no downloads", mp.dlFocus)
+	}
+}
+
+func TestModelsPage_ClearDoneKeyDeletesHistoryFromDisk(t *testing.T) {
+	dir := t.TempDir()
+	id := downloadmgr.ID("rec-done")
+	if err := downloadmgr.SaveRecord(dir, downloadmgr.DownloadRecord{
+		ID:       id,
+		URL:      "http://x",
+		DestFile: filepath.Join(dir, "out.gguf"),
+		Status:   downloadmgr.StatusCompleted,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	mgr := downloadmgr.NewManager(dir, 1)
+	page := NewModelsPage(&fakeScanner{}, nil).WithDownloadManager(mgr)
+	page.subView = mvDownloads
+
+	updated, _ := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}})
+	mp := updated.(ModelsPage)
+
+	// The finished record is gone from disk — it will NOT come back on restart.
+	if _, err := downloadmgr.LoadRecord(downloadmgr.StatePath(dir, id)); err == nil {
+		t.Error("completed download still on disk after [C] clear done")
+	}
+	if !strings.Contains(mp.flash.Message(), "cleared 1") {
+		t.Errorf("flash = %q, want it to confirm 'cleared 1'", mp.flash.Message())
 	}
 }
 
