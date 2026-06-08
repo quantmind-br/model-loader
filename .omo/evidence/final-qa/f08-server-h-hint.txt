@@ -1,0 +1,40 @@
+ 1 Profiles  │  2 Server  │  3 Models  │  4 Backends
+● RUNNING   127.0.0.1:4321
+profile=—
+swap 4h ago (1502ms)
+⚠ healthcheck qwen3.6-35b-a3b-200k: port 4329: llama-server did not become healthy within timeout
+history: no metrics directory configured
+Running instances
+No instances running.
+Switch to Profiles [1] to start one
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1-4] tabs  [tab] next  [q] quit  [?] help | [s] start  [x] stop  [v] cycle view  [Space] pause  [k] kill  [r] restart…

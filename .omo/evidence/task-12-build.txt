@@ -1,0 +1,11 @@
+$ go build ./internal/ui/pages/...
+(no output)
+EXIT=0
+
+$ go vet ./internal/ui/pages/...
+(no output)
+VET_EXIT=0
+
+$ go build ./...
+(no output)
+BUILD_ALL_EXIT=0

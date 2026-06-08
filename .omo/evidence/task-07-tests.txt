@@ -1,0 +1,22 @@
+=== RUN   TestSearch_Success
+--- PASS: TestSearch_Success (0.00s)
+=== RUN   TestSearch_EmptyQuery
+--- PASS: TestSearch_EmptyQuery (0.00s)
+=== RUN   TestSearch_HTTPError
+--- PASS: TestSearch_HTTPError (0.00s)
+=== RUN   TestSearch_RateLimit
+--- PASS: TestSearch_RateLimit (1.00s)
+=== RUN   TestRepoInfo_Success
+--- PASS: TestRepoInfo_Success (0.00s)
+=== RUN   TestRepoInfo_NotFound
+--- PASS: TestRepoInfo_NotFound (0.00s)
+=== RUN   TestOpenDownload_Success
+--- PASS: TestOpenDownload_Success (0.00s)
+=== RUN   TestOpenDownload_SubdirFilename
+--- PASS: TestOpenDownload_SubdirFilename (0.00s)
+=== RUN   TestOpenDownload_NotFound
+--- PASS: TestOpenDownload_NotFound (0.00s)
+=== RUN   TestParseRetryAfter
+--- PASS: TestParseRetryAfter (0.00s)
+PASS
+ok  	github.com/quantmind-br/model-loader/internal/service/hfhub	1.004s

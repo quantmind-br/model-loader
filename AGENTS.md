@@ -1,142 +1,128 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-05-22
-**Commit:** defda2f
+**Generated:** 2026-06-02
+**Commit:** 58b279a
 **Branch:** main
 
+> **AGENTS.md is in `.gitignore`** — this file is generated locally and not tracked. The canonical per-directory knowledge bases are the `CLAUDE.md` files throughout the repo.
+
+---
+
 ## OVERVIEW
+
 TUI application for managing llama.cpp profiles and llama-server processes. Built with Go 1.26.2 + Charmbracelet bubbletea. 5-tab interface.
 
-## STRUCTURE
-```
-./
-├── cmd/model-loader/   # Entry point (subcommand dispatch)
-├── internal/
-│   ├── config/             # Viper TOML loader
-│   ├── domain/             # Profile, Instance, Model, FlagSchema
-│   ├── log/                # slog wiring + rotation
-│   ├── service/
-│   │   ├── backendcatalog/ # Multi-backend catalog + resolver
-│   │   ├── backendschema/  # Schema generation orchestrator
-│   │   ├── benchmark/      # Profile eval engine (SWE-bench Lite + needle probe)
-│   │   ├── benchmarkstore/ # Benchmark run persistence (1 JSON per run)
-│   │   ├── buunhelp/       # Embedded schema for buun-llama-cpp backend
-│   │   ├── configweb/      # On-demand web GUI for profile editing (HTMX/Alpine, embedded assets)
-│   │   ├── downloadmgr/    # HuggingFace file downloader with progress
-│   │   ├── dflashhelp/     # Embedded schema for DFlash backend
-│   │   ├── hfhub/          # HuggingFace Hub API client
-│   │   ├── httpproxy/      # OpenAI-shaped reverse proxy
-│   │   ├── llamahelp/      # --help parser + embedded schema
-│   │   ├── llamabin/       # Binary path resolver
-│   │   ├── metricsstore/   # Rolling metrics persistence (Append/Read/Compact)
-│   │   ├── migration/      # One-time config/state migrations
-│   │   ├── modelscanner/   # GGUF model scanning
-│   │   ├── monitor/        # GPU metrics via nvidia-smi
-│   │   ├── playground/     # OpenAI-compatible chat streaming client
-│   │   ├── processmgr/     # Process lifecycle + instance recovery
-│   │   ├── profilestore/   # Profile persistence (FS)
-│   │   ├── proxysupervisor/ # HTTP proxy lifecycle manager
-│   │   ├── sglanghelp/     # Embedded schema for SGLang
-│   │   ├── sizing/         # GPU memory fit calculator
-│   │   ├── validator/      # Flag validation rules
-│   │   └── vllmhelp/       # Embedded schema for vLLM
-│   └── ui/
-│       ├── components/    # Help, Modal, Picker, Sparkline, Statusbar
-│       ├── pages/         # 5 tabs (profile create/edit launches the web GUI)
-│       └── theme/
-├── testdata/              # Golden test fixtures
-├── docs/superpowers/      # Design specs
-└── Makefile
-```
+- **Entry point**: `cmd/model-loader/main.go` (subcommand dispatch: TUI, serve, download, benchmark, import)
+- **Shared bootstrap**: `internal/app/bootstrap.go` — DI container for TUI, CLI, and headless modes
+- **Domain model**: `internal/domain/` — Profile, Instance, Model, FlagSchema, BackendValidationSchema
+- **24 service packages**: `internal/service/*` — each owns one domain concern (processmgr, profilestore, backendschema, httpproxy, etc.)
+- **TUI layer**: `internal/ui/` — bubbletea 5-tab model with reusable components
 
 ## WHERE TO LOOK
+
 | Task | Location | Notes |
 |------|----------|-------|
-| llama-server --help parsing | internal/service/llamahelp/ | embedded schema pinned to v7376 |
-| Buun embedded schema | internal/service/buunhelp/ | buun-llama-cpp fork — merges upstream + fork-specific flags |
-| DFlash embedded schema | internal/service/dflashhelp/ | Lucebox speculative-decoding runtime — hand-curated |
-| Multi-backend catalog | internal/service/backendcatalog/ | catalog.json + schema resolver |
-| Schema generation | internal/service/backendschema/ | orchestrates AddBackend for all kinds |
-| GGUF model metadata | internal/service/modelscanner/gguf.go | |
-| Process lifecycle | internal/service/processmgr/ | survives TUI exit, recovers from instances.json |
-| Profile CRUD | internal/service/profilestore/ | FS-based |
-| Flag validation | internal/service/validator/ | |
-| GPU monitoring | internal/service/monitor/ | nvidia-smi |
-| HTTP proxy / Server tab | internal/service/httpproxy/ | OpenAI-shaped reverse proxy |
-| HF download manager | internal/service/downloadmgr/ | queued downloads with progress events |
-| HF Hub API client | internal/service/hfhub/ | model search, file listing |
-| Binary resolution | internal/service/llamabin/ | PATH lookup + Python fallback |
-| Proxy lifecycle | internal/service/proxysupervisor/ | state machine driving httpproxy |
-| Benchmark engine | internal/service/benchmark/ | SWE-bench Lite + long-context needle probe |
-| Benchmark store | internal/service/benchmarkstore/ | 1 JSON per run |
-| Metrics persistence | internal/service/metricsstore/ | per-profile JSONL |
-| TUI pages | internal/ui/pages/ | 5 tabs; Profiles tab launches the web editor for create/edit |
-| Web profile editor | internal/service/configweb/ | on-demand in-process HTTP GUI (HTMX/Alpine); replaces the old huh editor |
-| Editor presentation/rules | internal/domain/backend_schema.go | `Presentation` + `CrossFieldRule` on the schema envelope |
-| Essentials seed | internal/service/backendschema/presentation.go | `essentialSeed` + `BuildPresentation` — curated per-backend highlights |
-| Config | internal/config/ | Viper TOML at ~/.config/model-loader/ |
-| Logging | internal/log/ | file-only slog, rotate-by-session |
-| Profile config schema (canonical) | docs/profile-schema.json | JSON Schema for the persisted profile file format — authoritative reference, keep in sync with `domain.Profile` |
-
-## CONVENTIONS
-- **Tests**: Golden tests in `testdata/` — update via `go test ./... -update`
-- **Build**: `make build` → `bin/model-loader`
-- **Embedded schema**: Pinned to llama.cpp build "v7376 (380b4c9)" — refresh in embedded.go
-- **Instance recovery**: Background llama-server processes survive TUI exit; processmgr.Reconcile restores at boot
-- **Profile config schema is canonical**: `docs/profile-schema.json` is the authoritative JSON Schema (draft 2020-12) for the persisted profile file format (envelope: `schemaVersion`/`id`/`name`/`model`/`args`/`extraArgs`/`launch`/`meta`/`pinned`). Treat it as the source of truth when authoring or validating profiles. ANY change to the persisted profile shape — adding/renaming/removing fields in `domain.Profile`, `launch`, or `meta`; bumping `schemaVersion`; changing accepted `args`/`extraArgs` value types — MUST update `docs/profile-schema.json` in the SAME change so the doc never drifts from the code.
-
-## WEB PROFILE EDITOR CONTRACT
-- Profile create/edit no longer uses an in-TUI huh form. The Profiles tab launches an **on-demand, in-process** HTTP server (`internal/service/configweb`) bound to `127.0.0.1:0`, opens the browser, and shows an "editing in browser…" modal. On save/cancel the server shuts down and the TUI reloads the list.
-- The form is **schema-driven**: one render engine builds the page from `domain.BackendValidationSchema.Flags` + an editable `Presentation` (groups/order/highlights). `configweb.BuildViewModel` produces the per-field widgets (number/select/toggle/text) from `FlagType`.
-- The GUI's **Customize mode** edits the backend schema itself — per-flag constraints (min/max/enum/default/required), add/remove flags, presentation, and `CrossFieldRule`s. Every customize handler sets `schema.Source.Editable = true` so `backendschema.Manager.RefreshSchema` preserves manual edits across `--help` re-parsing.
-- The curated highlights live in `essentialSeed` (`internal/service/backendschema/presentation.go`); `BuildPresentation` seeds the highlighted "Essentials" group. A one-time migration (`migration.ensurePresentations`) seeds a default `Presentation` into any schema lacking one (it does NOT mark `Editable`, since a synthesized default is not a manual edit).
-- Cross-field rules are evaluated by the validator (`internal/service/validator/crossfield.go`, `applyCrossFieldRules`).
-
-## ANTI-PATTERNS (THIS PROJECT)
-- DO NOT hand-edit a backend schema's `presentation`/`rules` blocks in JSON — edit them through the web Customize mode so `Source.Editable` is set and `RefreshSchema` preserves them
-- DO NOT extend `essentialSeed` (in `backendschema/presentation.go`) without explicit user request — it's a curated seed for the highlighted group, not a generic form abstraction
-- DO NOT run `llama-server` manually while TUI is managing instances
-- DO NOT edit `testdata/help-v7376.golden.json` directly — regenerate via golden test update
-- DO NOT assume process cleanup on TUI exit — processes are intentionally orphaned
-- DO NOT change the persisted profile structure (`domain.Profile` / profilestore JSON) without mirroring the change in `docs/profile-schema.json` — the schema doc and the code must never drift apart
-- DO NOT intercept printable runes (`q`, `1-5`, `?`, letters, digits) globally in `internal/ui/root.go` without first checking `activePageCapturesInput()`. Only `ctrl+c` may bypass this gate. Pages with active huh forms / pickers / inline modals / the web-edit modal must implement `InputCapture.IsCapturingInput() bool` returning `true` while in those states (e.g. `ProfilesPage` returns `true` while `webEditing`). Otherwise the global shortcut steals the keystroke.
-
-## LANGUAGE RULES
-- ALL UI/UX interfaces (TUI labels, web editor labels, help text, modals, status messages, menu items) MUST be in English. Do not introduce Portuguese, Spanish, or any other language in the user-facing interface.
-- ALL configuration schemas (flag names, field names, JSON keys, TOML keys, `BackendValidationSchema` descriptions, `Presentation` group labels) MUST be in English. No non-English identifiers or schema metadata.
-
-## TUI INPUT ROUTING RULES
-- **Global shortcut gate**: every shortcut in `RootModel.Update` that consumes a printable rune MUST be wrapped in `if !m.activePageCapturesInput() { ... }`. Exception: `ctrl+c` is unconditional escape.
-- **Page capture contract**: a page that opens any editable surface (huh form, text input, inline picker, confirm dialog, the web-edit modal) MUST implement `InputCapture` and return `true` while that surface is on screen. See `ProfilesPage.IsCapturingInput()` for the pattern (captures while `webEditing`, `pickerActive`, or `confirmDelete`).
-- **Forwarding non-key messages to huh**: when a page hosts a `*huh.Form` (e.g. the Backends page), its `Update` MUST forward non-`tea.KeyMsg` messages to the form so its internal Cmd→Msg handshake (Init focus, async validation) completes.
-- **Tests**: any new global shortcut MUST have a paired test using the `capturingPage` test double in `internal/ui/root_test.go` proving the key is forwarded (not consumed) when the active page captures input.
-
-## UNIQUE STYLES
-- Charmbracelet TUI with 5-tab model (tea.Program)
-- Viper config with mapstructure tags
-- Domain-driven service layer under internal/service/
-- Embedded fallback schema for llama-server --help (parses at runtime if binary present)
-- Pages optionally implement `Reloader` for on-demand refresh on tab focus
+| Service wiring / DI | `cmd/model-loader/bootstrap.go` | `bootServices` builds all services |
+| llama-server --help parsing | `internal/service/llamahelp/` | embedded schema pinned to v7376 |
+| Multi-backend catalog | `internal/service/backendcatalog/` | `catalog.json` + schema resolver |
+| Schema generation | `internal/service/backendschema/` | orchestrates `AddBackend` for all kinds |
+| Process lifecycle | `internal/service/processmgr/` | survives TUI exit, recovers from `instances.json` |
+| Profile CRUD | `internal/service/profilestore/` | FS-based JSON |
+| HTTP proxy | `internal/service/httpproxy/` | OpenAI-shaped reverse proxy |
+| Web profile editor | `internal/service/configweb/` | on-demand HTTP GUI (HTMX/Alpine) |
+| Benchmark engine | `internal/service/benchmark/` | SWE-bench Lite + needle probe |
+| GPU monitoring | `internal/service/monitor/` | `nvidia-smi` |
+| HF downloads | `internal/service/downloadmgr/` | queued with progress events |
+| TUI pages | `internal/ui/pages/` | 5 tabs; web editor for profile create/edit |
+| Profile schema (canonical) | `docs/profile-schema.json` | authoritative JSON Schema — must stay in sync with `domain.Profile` |
 
 ## COMMANDS
+
 ```bash
-make build    # Build binary to bin/model-loader
-make install  # Install to $GOPATH/bin
-make tests    # Run all tests including golden tests
-go test ./... -update  # Update golden test fixtures
+make build              # Build binary to bin/model-loader
+make install            # Install to ~/.local/bin
+make tests              # Run all tests (golden + unit)
+go test ./... -update   # Update golden test fixtures
+go test ./pkg/...       # Run a single package
+go test ./pkg/... -run TestName  # Run a single test
 ```
 
+> No linter, no formatter, no CI. Just `go test` and `make build`.
+
+## CONVENTIONS
+
+### Service Layer
+- **Manager/Store suffix**: services are `*Manager` or `*Store` (e.g., `processmgr`, `profilestore`)
+- **Interface in package**: each service exports its own interface; consumers import the interface
+- **Config struct**: `type Config struct { ... }` with functional options (`WithLogger`, `WithWaitFunc`)
+- **Logger fallback**: `log.Nop()` if no logger provided; never pass `nil`
+- **Error sentinels**: `var ErrNotFound = errors.New(...)` at package level, never dynamic errors for sentinel conditions
+- **Atomic JSON writes**: `fsx.WriteJSONAtomic` (write-temp + rename) for all on-disk JSON
+
+### CLI (`internal/cli/`)
+- **TUIRunner pattern**: `main.go` sets `cli.TUIRunner = runTUI` so CLI never imports `internal/ui`
+- **ExitError**: commands return `&ExitError{Code: N}` for non-1 exit codes; `Execute()` unwraps
+- **Bootstrap per command**: every leaf command calls `app.Bootstrap(logLevel)` and defers `svc.Close()`
+- **JSON output**: `--json` is a persistent root flag; all table commands respect it
+- **Resolve helpers**: `resolveProfileRef`, `resolveBackend`, `resolveInstance` — by ID then exact name then unique prefix
+
+### TUI (`internal/ui/`)
+- **Global shortcut gate**: every printable-rune shortcut in `RootModel.Update` MUST be wrapped in `if !m.activePageCapturesInput() { ... }`. Exception: `ctrl+c` is unconditional escape.
+- **Page capture contract**: pages with editable surfaces (huh forms, pickers, modals, web-edit modal) MUST implement `InputCapture.IsCapturingInput() bool` returning `true` while active.
+- **Forward non-key messages**: when a page hosts a `*huh.Form`, its `Update` MUST forward non-`tea.KeyMsg` messages to the form so focus/validation handshakes complete.
+- **Tests**: use `teatest.NewTestModel(t, model, teatest.WithInitialTermSize(w, h))` with `WaitFor` helpers.
+
+### Tests
+- **Table-driven**: standard Go pattern throughout
+- **Golden tests**: fixtures in `testdata/` — update via `go test ./... -update`
+- **Test helpers**:
+  - `fakeBinary(t)` — returns path to `testdata/fake-llama-server.sh` (no-op executable)
+  - `freePort(t)` — binds `127.0.0.1:0` and returns the allocated port
+  - `newTestManager(t)` — constructs a `processmgr` with temp dir + fake binary
+  - `newManager(t)` — constructs a `backendschema.Manager` with temp dir + fake generator
+
+## ANTI-PATTERNS
+
+- **NEVER** call `app.Bootstrap()` twice — it performs filesystem side-effects (log rotation, migration)
+- **NEVER** forget to defer `svc.Close()` — stops process manager and flushes logger
+- **NEVER** import `internal/ui` from `internal/cli` — use the `TUIRunner` callback to avoid cycles
+- **NEVER** hand-edit a backend schema's `presentation`/`rules` blocks in JSON — edit through the web Customize mode so `Source.Editable` is set and `RefreshSchema` preserves them
+- **NEVER** extend `essentialSeed` (`backendschema/presentation.go`) without explicit user request — it's a curated seed, not a generic form abstraction
+- **NEVER** run `llama-server` manually while TUI is managing instances
+- **NEVER** edit `testdata/help-v7376.golden.json` directly — regenerate via `go test ./... -update`
+- **NEVER** assume process cleanup on TUI exit — processes are intentionally orphaned
+- **NEVER** change the persisted profile structure (`domain.Profile` / profilestore JSON) without mirroring the change in `docs/profile-schema.json`
+- **NEVER** intercept printable runes globally in `internal/ui/root.go` without first checking `activePageCapturesInput()`
+- **NEVER** use `fmt.Print` directly in CLI commands — go through `cmd.OutOrStdout()` / `cmd.ErrOrStderr()` for testability
+
+## LANGUAGE RULES
+
+- ALL UI/UX interfaces (labels, help text, modals, messages) MUST be in English. No Portuguese, Spanish, or other languages.
+- ALL configuration schemas (flag names, field names, JSON keys, TOML keys, `BackendValidationSchema` descriptions, `Presentation` group labels) MUST be in English.
+
+## WEB PROFILE EDITOR CONTRACT
+
+- Profile create/edit uses an **on-demand, in-process** HTTP server (`internal/service/configweb`) bound to `127.0.0.1:0`, opens the browser, and shows an "editing in browser…" modal. On save/cancel the server shuts down and the TUI reloads the list.
+- The form is **schema-driven**: one render engine builds the page from `domain.BackendValidationSchema.Flags` + an editable `Presentation`.
+- **Customize mode** edits the backend schema itself — per-flag constraints, add/remove flags, presentation, and `CrossFieldRule`s. Every customize handler sets `schema.Source.Editable = true` so `RefreshSchema` preserves manual edits across `--help` re-parsing.
+- Curated highlights live in `essentialSeed` (`backendschema/presentation.go`); `BuildPresentation` seeds the "Essentials" group.
+- Cross-field rules are evaluated by `validator/crossfield.go`.
+
 ## NOTES
-- Binary managed: `llama-server` (not model-loader)
-- Config path: ~/.config/model-loader/config.toml
-- State path: ~/.local/state/model-loader/instances.json
-- Profiles dir: ~/.config/model-loader/profiles/ (config `paths.profiles_dir`; default in config.go:166)
-- Schema version: embedded-v7376
+
+- **Binary managed**: `llama-server` (not model-loader)
+- **Config path**: `~/.config/model-loader/config.toml`
+- **State path**: `~/.local/state/model-loader/instances.json`
+- **Profiles dir**: `~/.config/model-loader/profiles/` (config `paths.profiles_dir`)
+- **Backend catalog**: `~/.config/model-loader/backends/catalog.json` + `schemas/*.json`
+- **Schema version**: embedded-v7376
+- **Docs**: `docs/superpowers/` contains design specs and PRDs
+- **Embedded data**: `//go:embed` used for datasets (SWE-bench, instruction problems) and fallback schemas
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **model-loader** (9411 symbols, 30723 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **model-loader** (9918 symbols, 31837 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

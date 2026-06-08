@@ -1,0 +1,4 @@
+client created: *hfhub.Client
+search result: ID=TheBloke/Llama-2-7B-GGUF HasGGUF=true
+repo info: foo/bar
+error: huggingface hub HTTP 404: https://huggingface.co/api/models/foo/bar

@@ -1,0 +1,3 @@
+Build: go build ./internal/ui/components/... — PASS (no output)
+Vet:   go vet ./internal/ui/components/... — PASS (no output)
+Note:  File already committed in 519fcf8 with message "feat(components): add download progress skeleton"

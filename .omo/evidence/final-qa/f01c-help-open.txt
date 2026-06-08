@@ -1,0 +1,40 @@
+  │    •  /  — filter                                                                                                │
+  │                                                                                                                  │
+  │    ## Server tab                                                                                                 │
+  │                                                                                                                  │
+  │    •  v  — cycle Logs / Slots / Metrics / History sub-views                                                      │
+  │    •  Space  — pause/resume log scroll                                                                           │
+  │    •  k  — kill selected instance                                                                                │
+  │    •  r  — restart selected instance (Kill + Launch)                                                             │
+  │    •  H  — open history chart for the selected instance                                                          │
+  │    •  1  /  2  /  3  /  4  — history chart window: 1h / 6h / 24h / 7d (only while chart is open)                 │
+  │    •  s  — start HTTP proxy listener                                                                             │
+  │    •  x  — stop HTTP proxy listener                                                                              │
+  │                                                                                                                  │
+  │    ## Models tab                                                                                                 │
+  │                                                                                                                  │
+  │    •  R  — rescan all configured paths                                                                           │
+  │    •  /  — filter                                                                                                │
+  │    •  enter  — actions: use in new profile / existing profile / reveal path                                      │
+  │    •  s  — search Hugging Face                                                                                   │
+  │    •  i  — show model info panel                                                                                 │
+  │    •  →  /  g  — navigate to sizing for this model                                                               │
+  │                                                                                                                  │
+  │    ## Backends tab                                                                                               │
+  │                                                                                                                  │
+  │    •  n  — new backend                                                                                           │
+  │    •  enter  /  e  — edit selected backend                                                                       │
+  │    •  x  — delete selected backend                                                                               │
+  │    •  D  — set selected backend as default                                                                       │
+  │    •  R  — refresh selected backend schema                                                                       │
+  │    •  P  — probe selected backend (latency / version)                                                            │
+  │    •  /  — filter                                                                                                │
+  │                                                                                                                  │
+  │    ## Current Page                                                                                               │
+  │                                                                                                                  │
+  │    [enter] launch  [E] edit  [n] new  [d] dup  [x] del  [b] bg/fg  [k] kill  [r] refresh  [e] export  [p] pin    │
+  │    [I] import  [u] undo  [/] filter                                                                              │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

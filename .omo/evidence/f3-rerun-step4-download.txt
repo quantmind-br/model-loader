@@ -1,0 +1,50 @@
+ 1 Launcher  │  2 Profiles  │  3 Monitor  │  4 Models  │  5 Backends  │  6 Server
+Models
+/tmp/ml-qa-test/models [1]
+ Name                                  Size        Quant       Params    Path
+ model-Q4_K_M.gguf                     208B        Q4_K_M                /tmp/ml-qa-test/models/model-Q4_K_M.gguf
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+downloaded: model-Q4_K_M.gguf
+[1-6] tabs  [tab] next  [q] quit  [?] help | [/] filter  [R] rescan  [s] search HF  [enter] actions  [esc] clear
+
+
+
+

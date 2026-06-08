@@ -1,0 +1,24 @@
+  │    path                                                                  │
+  │    •  s  — search Hugging Face                                           │
+  │    •  i  — show model info panel                                         │
+  │    •  →  /  g  — navigate to sizing for this model                       │
+  │                                                                          │
+  │    ## Backends tab                                                       │
+  │                                                                          │
+  │    •  n  — new backend                                                   │
+  │    •  enter  /  e  — edit selected backend                               │
+  │    •  x  — delete selected backend                                       │
+  │    •  D  — set selected backend as default                               │
+  │    •  R  — refresh selected backend schema                               │
+  │    •  P  — probe selected backend (latency / version)                    │
+  │    •  /  — filter                                                        │
+  │                                                                          │
+  │    ## Current Page                                                       │
+  │                                                                          │
+  │    [enter] launch  [E] edit  [n] new  [d] dup  [x] del  [b] bg/fg  [k]   │
+  │    kill  [r] refresh  [e] export  [p] pin  [I] import  [u] undo  [/]     │
+  │    filter                                                                │
+  │                                                                          │
+  │                                                                          │
+  │                                                                          │
+  ╰──────────────────────────────────────────────────────────────────────────╯

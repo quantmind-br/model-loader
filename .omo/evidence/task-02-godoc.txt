@@ -1,0 +1,11 @@
+package downloadmgr // import "github.com/quantmind-br/model-loader/internal/service/downloadmgr"
+
+type Event struct{ ... }
+type ID string
+    func NewID() ID
+type Manager struct{ ... }
+    func NewManager(httpClient *http.Client, maxConcurrent int) *Manager
+type Spec struct{ ... }
+type State struct{ ... }
+type Status int
+    const StatusQueued Status = iota ...

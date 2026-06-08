@@ -1,0 +1,8 @@
+
+--- go vet ./internal/ui/pages/... ---
+
+--- go test ./internal/ui/pages/... -count=1 ---
+ok  	github.com/quantmind-br/model-loader/internal/ui/pages	0.558s
+ok  	github.com/quantmind-br/model-loader/internal/ui/pages/profile_editor	0.053s
+
+RESULTS build=0 vet=0 test=0

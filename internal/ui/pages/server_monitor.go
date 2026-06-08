@@ -11,7 +11,6 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/metricsstore"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
-	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // monitorEventMsg wraps a monitor.MonitorEvent received from a per-instance
@@ -154,8 +153,17 @@ func (p *ServerPage) applyInstances(insts []domain.RunningInstance) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// renderRows formats one table row per instance. Crashed instances get an
-// error-styled badge across every column.
+// renderRows formats one table row per instance. Crashed instances are
+// marked with a "✗ " prefix on the PID column and " (crashed)" suffix on
+// the profile column — both plain ASCII, never wrapped in ANSI styles.
+//
+// Why no per-cell theme.Error.Render: bubbles/table.renderRow truncates each
+// cell with runewidth.Truncate, which is not ANSI-aware. When an ANSI-styled
+// cell exceeds the column width, the escape sequence is sliced mid-byte,
+// producing replacement glyphs (U+FFFD) and leaving the SGR state open so
+// the red color bleeds into the next cell. In GPU-accelerated terminals
+// (Kitty/Ghostty) the corrupted SGR state also defeats subsequent redraws,
+// causing residual text from the previous tab to remain on screen.
 func (p *ServerPage) renderRows(insts []domain.RunningInstance) []table.Row {
 	rows := make([]table.Row, 0, len(insts))
 	for _, ri := range insts {
@@ -174,14 +182,6 @@ func (p *ServerPage) renderRows(insts []domain.RunningInstance) []table.Row {
 			toks = formatTokensPerSec(st.mets.TokensPerSec)
 		}
 		portCol := fmt.Sprintf("%d", ri.Port)
-		if ri.Crashed {
-			pidCol = theme.Error.Render(pidCol)
-			portCol = theme.Error.Render(portCol)
-			profileCol = theme.Error.Render(profileCol)
-			uptime = theme.Error.Render(uptime)
-			vram = theme.Error.Render(vram)
-			toks = theme.Error.Render(toks)
-		}
 		rows = append(rows, table.Row{
 			pidCol,
 			portCol,

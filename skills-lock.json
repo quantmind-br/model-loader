@@ -12,10 +12,20 @@
       "sourceType": "local",
       "computedHash": "d99b92723cc416c4b2c8c984dd5b61b605118e0f0df4d2592a320f45db7b71fe"
     },
+    "tui-design": {
+      "source": "/home/diogo/dev/skills/tui-design",
+      "sourceType": "local",
+      "computedHash": "f57002f0386c7b97a3137b980ccaf4a037929e326d72664c2a4577741bef17b0"
+    },
+    "tui-refactor": {
+      "source": "/home/diogo/dev/skills/tui-refactor",
+      "sourceType": "local",
+      "computedHash": "e4ffdc74b62876ac4784113a1cdd9de0cb1a6f58c65e253ce56958828061fb02"
+    },
     "tui-validator": {
       "source": "/home/diogo/dev/skills/tui-validator",
       "sourceType": "local",
-      "computedHash": "4b1342c58e8e02b023c050207609d312b1dd9183ed134869efd8c7034e193c63"
+      "computedHash": "d3ef90919d2adb68c2aab9dbdc5e6001ed0d8bbf5529efd44505d72dd5035337"
     }
   }
 }

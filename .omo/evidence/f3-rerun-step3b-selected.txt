@@ -1,0 +1,50 @@
+ 1 Launcher  │  2 Profiles  │  3 Monitor  │  4 Models  │  5 Backends  │  6 Server
+Select .gguf files
+
+> [x] model-Q4_K_M.gguf (4.00KB)
+  [ ] model-Q8_0.gguf (8.00KB)
+
+space: toggle, enter: confirm, esc: cancel
+[1-6] tabs  [tab] next  [q] quit  [?] help | [/] filter  [R] rescan  [s] search HF  [enter] actions  [esc] clear
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

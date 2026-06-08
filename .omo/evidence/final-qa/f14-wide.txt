@@ -1,0 +1,40 @@
+ 1 Profiles  │  2 Server  │  3 Models  │  4 Backends
+
+
+
+
+
+
+                    Editor — [Essentials]   ctrl+t to switch  ctrl+p to pick model
+                    ┃ Name
+                    ┃ Unique profile identifier
+                    ┃ > New Profile中文 한글
+
+                      Description
+                      >
+
+                      Tags
+                      comma-separated
+                      >
+
+                      Model path (.gguf)
+                      Path to the GGUF model file (ctrl+p to pick)
+                      >
+
+                      Backend
+                      Which backend engine to use
+                      > llama.cpp default
+                        llama-server (cublas16f env)
+                        llama-server buun-cublas16f
+                        llama-server (v11 autoresearch build)
+
+                    enter next
+
+
+
+
+
+
+
+
+[1-4] tabs  [tab] next  [q] quit  [?] help | [ctrl+t] sub-tab  [ctrl+p] pick model  [esc] cancel

@@ -900,7 +900,15 @@ func TestServerPage_RowFallbackDashesWhenNoState(t *testing.T) {
 	}
 }
 
-func TestServerPage_CrashedRowStyledViaThemeError(t *testing.T) {
+// TestServerPage_CrashedRowPlainCells asserts that crashed instance cells
+// are NEVER wrapped in ANSI styles. bubbles/table.renderRow truncates each
+// cell with runewidth.Truncate, which is not ANSI-aware — wrapping a cell
+// in theme.Error.Render produced sliced escape sequences that the terminal
+// rendered as replacement glyphs (U+FFFD) and left SGR state open, causing
+// color bleed and residual-text artifacts on Kitty/Ghostty. Crashed status
+// is conveyed via plain-ASCII markers: "✗ " prefix on PID, " (crashed)"
+// suffix on profile.
+func TestServerPage_CrashedRowPlainCells(t *testing.T) {
 	pm := &fakeProcMgr{insts: []domain.RunningInstance{{PID: 13, Port: 8080, ProfileID: "p1", Crashed: true, LogPath: "/tmp/x.log"}}}
 	mm := fakeMonMgr{}
 	p := NewServerPage(pm, mm, nil)
@@ -911,11 +919,73 @@ func TestServerPage_CrashedRowStyledViaThemeError(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("rows = %d, want 1", len(rows))
 	}
-	if rows[0][0] != theme.Error.Render("✗ 13") {
-		t.Errorf("crashed pid cell not styled via theme.Error; got %q want %q", rows[0][0], theme.Error.Render("✗ 13"))
+	if rows[0][0] != "✗ 13" {
+		t.Errorf("crashed pid cell = %q, want %q (plain, no ANSI)", rows[0][0], "✗ 13")
 	}
 	if !strings.Contains(rows[0][2], "crashed") {
 		t.Errorf("profile cell should mention crashed; got %q", rows[0][2])
+	}
+	// Regression: no cell may contain an ANSI escape (\x1b). Otherwise
+	// bubbles/table.renderRow truncates mid-sequence and corrupts output.
+	for i, cell := range rows[0] {
+		if strings.ContainsRune(cell, '\x1b') {
+			t.Errorf("cell[%d] contains ANSI escape: %q", i, cell)
+		}
+	}
+}
+
+// TestServerPage_CrashedView_NoBrokenANSI is a render-pipeline regression
+// for the reported crash where Server tab cells appeared as U+FFFD glyphs
+// after a proxy swap. The original cause was per-cell theme.Error.Render
+// being truncated by bubbles/table → broken SGR sequences. This test
+// drives a real View() with a crashed instance under a narrow column
+// width and asserts the output contains no replacement chars and no
+// unterminated CSI sequences.
+func TestServerPage_CrashedView_NoBrokenANSI(t *testing.T) {
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{{
+		PID:       9999999,
+		Port:      4331,
+		ProfileID: "qwen3-vl-32b-16k",
+		LogPath:   "/tmp/x.log",
+		Crashed:   true,
+		StartedAt: time.Now().Add(-7 * time.Second),
+	}}}
+	mm := &fakeMonMgr{}
+	p := NewServerPage(pm, mm, nil)
+	p.SetSize(95, 30) // matches the screenshot terminal width
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+	out := p.View()
+
+	if strings.ContainsRune(out, '�') {
+		t.Fatalf("View output contains U+FFFD replacement char (broken UTF-8 / sliced ANSI):\n%q", out)
+	}
+	// Every \x1b[ (CSI introducer) must be followed by a valid SGR terminator
+	// ('m') before another \x1b or EOF — otherwise the sequence is sliced.
+	for i := 0; i < len(out); i++ {
+		if out[i] != '\x1b' {
+			continue
+		}
+		// CSI form: ESC '[' params 'm'. Find the next final byte.
+		if i+1 >= len(out) || out[i+1] != '[' {
+			t.Fatalf("ESC at byte %d not followed by '[': %q", i, out[i:min(i+8, len(out))])
+		}
+		// Walk params until a final byte (range 0x40..0x7E) or another ESC.
+		j := i + 2
+		for j < len(out) {
+			c := out[j]
+			if c == '\x1b' {
+				t.Fatalf("CSI started at byte %d truncated at next ESC (byte %d): %q",
+					i, j, out[i:j])
+			}
+			if c >= 0x40 && c <= 0x7E {
+				break
+			}
+			j++
+		}
+		if j >= len(out) {
+			t.Fatalf("CSI started at byte %d never terminated", i)
+		}
+		i = j
 	}
 }
 

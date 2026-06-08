@@ -343,30 +343,40 @@ form{
 }
 
 .field input,
-.field select{
+.field select,
+.field textarea{
   background:var(--input-bg);
   border:1px solid var(--input-bd);
   color:var(--ink);
   border-radius:var(--radius-md);
   padding:0.7rem 1rem;
   font-size:var(--text-base);
+  font-family:inherit;
   width:100%;
   transition:all .15s ease;
   outline:none;
 }
 
-.field input::placeholder{
+.field textarea{
+  resize:vertical;
+  line-height:1.5;
+}
+
+.field input::placeholder,
+.field textarea::placeholder{
   color:#3a4666;
 }
 
 .field input:focus,
-.field select:focus{
+.field select:focus,
+.field textarea:focus{
   border-color:var(--accent);
   box-shadow:0 0 0 3px var(--accent-dim);
 }
 
 .field input.error,
-.field select.error{
+.field select.error,
+.field textarea.error{
   border-color:var(--err);
   box-shadow:0 0 0 3px rgba(255,107,107,0.15);
 }
@@ -815,7 +825,8 @@ button.secondary:hover{
   display:block;
 }
 .field.has-error input,
-.field.has-error select{
+.field.has-error select,
+.field.has-error textarea{
   border-color:var(--err);
   box-shadow:0 0 0 3px var(--err-dim);
 }

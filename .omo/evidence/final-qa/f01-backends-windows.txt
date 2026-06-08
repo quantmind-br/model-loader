@@ -1,0 +1,1 @@
+0: zsh* (1 panes) [120x40] [layout aafd,120x40,0,0,0] @0 (active)

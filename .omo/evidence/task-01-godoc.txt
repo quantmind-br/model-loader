@@ -1,0 +1,9 @@
+package hfhub // import "github.com/quantmind-br/model-loader/internal/service/hfhub"
+
+const DefaultBaseURL = "https://huggingface.co"
+type Client struct{ ... }
+    func NewClient(httpClient *http.Client, userAgent string) *Client
+type ErrHTTP struct{ ... }
+type RepoInfo struct{ ... }
+type SearchResult struct{ ... }
+type Sibling struct{ ... }
