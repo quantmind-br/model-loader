@@ -45,12 +45,11 @@ func newTestManager(t *testing.T) (*fsManager, string) {
 
 func TestManager_LaunchBackground_WaitsHealthyAndPersists(t *testing.T) {
 	mgr, _ := newTestManager(t)
-	port := freePort(t)
 	p := domain.Profile{
 		ID:    "smoke",
 		Name:  "Smoke",
 		Model: "/dev/null",
-		Args:  map[string]any{"port": float64(port)},
+		Args:  map[string]any{},
 	}
 	inst, err := mgr.Launch(p, LaunchBackground, "")
 	if err != nil {
@@ -58,11 +57,11 @@ func TestManager_LaunchBackground_WaitsHealthyAndPersists(t *testing.T) {
 	}
 	defer mgr.Kill(inst.PID)
 
-	if inst.PID <= 0 || inst.Port != port || !inst.Background {
+	if inst.PID <= 0 || inst.Port <= 0 || !inst.Background {
 		t.Fatalf("inst = %+v", inst)
 	}
 
-	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second, ""); err != nil {
+	if err := mgr.WaitHealthy(inst.PID, inst.Port, 5*time.Second, ""); err != nil {
 		t.Fatalf("WaitHealthy: %v", err)
 	}
 
@@ -104,7 +103,7 @@ func TestManager_LaunchBackground_ProfileOverrideUsesEffectiveBinary(t *testing.
 	if inst.BinaryPath != overrideBinary {
 		t.Fatalf("BinaryPath = %q, want %q", inst.BinaryPath, overrideBinary)
 	}
-	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second, ""); err != nil {
+	if err := mgr.WaitHealthy(inst.PID, inst.Port, 5*time.Second, ""); err != nil {
 		t.Fatalf("WaitHealthy: %v", err)
 	}
 }
@@ -234,30 +233,6 @@ func TestManager_Launch_ModelMissing(t *testing.T) {
 	}
 }
 
-func TestManager_LaunchBackground_PortBusy(t *testing.T) {
-	mgr, _ := newTestManager(t)
-
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer l.Close()
-	port := l.Addr().(*net.TCPAddr).Port
-
-	p := domain.Profile{
-		ID:    "busy",
-		Model: "/dev/null",
-		Args:  map[string]any{"port": float64(port)},
-	}
-	_, err = mgr.Launch(p, LaunchBackground, "")
-	if err == nil {
-		t.Fatal("expected ErrPortBusy, got nil")
-	}
-	if !errors.Is(err, ErrPortBusy) {
-		t.Fatalf("err = %v, want ErrPortBusy", err)
-	}
-}
-
 func TestManager_WaitHealthy_TimesOut(t *testing.T) {
 	mgr, _ := newTestManager(t)
 	port := freePort(t)
@@ -296,7 +271,7 @@ func TestManager_Launch_NotifiesLastUsedSink(t *testing.T) {
 	}
 	defer mgr.Kill(inst.PID)
 
-	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second, ""); err != nil {
+	if err := mgr.WaitHealthy(inst.PID, inst.Port, 5*time.Second, ""); err != nil {
 		t.Fatalf("WaitHealthy: %v", err)
 	}
 	if len(spy.calls) != 1 || spy.calls[0] != "tracked" {
@@ -319,7 +294,7 @@ func TestTailLogs_HappyPath(t *testing.T) {
 	}
 	defer mgr.Kill(inst.PID)
 
-	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second, ""); err != nil {
+	if err := mgr.WaitHealthy(inst.PID, inst.Port, 5*time.Second, ""); err != nil {
 		t.Fatalf("WaitHealthy: %v", err)
 	}
 

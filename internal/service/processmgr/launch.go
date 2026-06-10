@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -24,13 +23,19 @@ type launchPlan struct {
 }
 
 func (m *fsManager) prepareLaunch(p domain.Profile) (launchPlan, error) {
-	port, ok := portFromProfile(p)
-	if !ok {
-		return launchPlan{}, fmt.Errorf("profile %q: missing or invalid port arg", p.ID)
-	}
-	if err := checkPortFree(port); err != nil {
+	port, err := allocateEphemeralPort()
+	if err != nil {
 		return launchPlan{}, err
 	}
+	// The manager owns the port. Clone Args so the caller's map is untouched,
+	// discard any user-supplied value, and inject the allocated one so every
+	// backend arg builder emits its --port flag.
+	args := make(map[string]any, len(p.Args)+1)
+	for k, v := range p.Args {
+		args[k] = v
+	}
+	args["port"] = port
+	p.Args = args
 	resolvedBinary := p.Launch.ResolvedExecutable
 	resolvedKind := p.Launch.ResolvedBackendKind
 	// Resolve when either the executable or the backend kind is missing. Callers
@@ -86,7 +91,7 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 		return domain.RunningInstance{}, err
 	}
 	if mode == LaunchForeground {
-		return m.launchForeground(p, plan.port, attemptID)
+		return m.launchForeground(p, plan, attemptID)
 	}
 
 	if err := os.MkdirAll(m.logDir, 0o755); err != nil {
@@ -148,51 +153,25 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 	return inst, nil
 }
 
-func portFromProfile(p domain.Profile) (int, bool) {
-	v, ok := p.Args["port"]
-	if !ok {
-		return 0, false
-	}
-	switch v := v.(type) {
-	case float64:
-		if v <= 0 || v > 65535 {
-			return 0, false
-		}
-		return int(v), true
-	case int:
-		if v <= 0 || v > 65535 {
-			return 0, false
-		}
-		return v, true
-	case string:
-		n, err := strconv.Atoi(v)
-		if err != nil || n <= 0 || n > 65535 {
-			return 0, false
-		}
-		return n, true
-	}
-	return 0, false
-}
-
-func checkPortFree(port int) error {
-	l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+// allocateEphemeralPort asks the OS for a free loopback port by binding
+// 127.0.0.1:0 and immediately releasing it. The window between Close and the
+// backend's own bind is accepted — the OS does not reuse a just-released
+// ephemeral port under normal churn.
+func allocateEphemeralPort() (int, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return fmt.Errorf("port %d: %w", port, ErrPortBusy)
+		return 0, fmt.Errorf("allocate port: %w", err)
 	}
+	port := l.Addr().(*net.TCPAddr).Port
 	_ = l.Close()
-	return nil
+	return port, nil
 }
 
 // launchForeground spawns a single foreground instance. Stdout/Stderr are
 // redirected to a log file so the monitor can tail them, and the process
 // is NOT detached via Setsid: it remains in the TUI's process group so
 // Ctrl+C from the TUI propagates if desired.
-func (m *fsManager) launchForeground(p domain.Profile, port int, attemptID string) (domain.RunningInstance, error) {
-	plan, err := m.prepareLaunch(p)
-	if err != nil {
-		return domain.RunningInstance{}, err
-	}
-
+func (m *fsManager) launchForeground(p domain.Profile, plan launchPlan, attemptID string) (domain.RunningInstance, error) {
 	m.mu.Lock()
 	if m.fgPID != 0 {
 		m.mu.Unlock()
@@ -204,7 +183,7 @@ func (m *fsManager) launchForeground(p domain.Profile, port int, attemptID strin
 	if err := os.MkdirAll(m.logDir, 0o755); err != nil {
 		return domain.RunningInstance{}, fmt.Errorf("mkdir log dir: %w", err)
 	}
-	logPath := filepath.Join(m.logDir, fmt.Sprintf("%s-%d.log", p.ID, port))
+	logPath := filepath.Join(m.logDir, fmt.Sprintf("%s-%d.log", p.ID, plan.port))
 	logF, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return domain.RunningInstance{}, fmt.Errorf("open log: %w", err)
@@ -229,7 +208,7 @@ func (m *fsManager) launchForeground(p domain.Profile, port int, attemptID strin
 	inst := domain.RunningInstance{
 		ProfileID:  p.ID,
 		PID:        cmd.Process.Pid,
-		Port:       port,
+		Port:       plan.port,
 		LogPath:    logPath,
 		BinaryPath: plan.binary,
 		StartedAt:  time.Now().UTC(),

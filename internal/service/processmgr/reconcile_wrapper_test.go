@@ -18,7 +18,7 @@ func TestReconcile_WrapperScriptExec(t *testing.T) {
 	}
 	defer mgr.Kill(inst.PID)
 
-	if err := mgr.WaitHealthy(inst.PID, port, 5*time.Second, ""); err != nil {
+	if err := mgr.WaitHealthy(inst.PID, inst.Port, 5*time.Second, ""); err != nil {
 		t.Fatalf("WaitHealthy: %v", err)
 	}
 

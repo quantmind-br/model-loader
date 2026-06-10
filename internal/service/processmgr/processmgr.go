@@ -55,7 +55,6 @@ type LastUsedSink interface {
 
 // Sentinel errors. UI maps these to status bar messages.
 var (
-	ErrPortBusy           = errors.New("port already in use")
 	ErrModelNotFound      = errors.New("model file not found")
 	ErrForegroundBusy     = errors.New("a foreground instance is already running")
 	ErrUnknownPID         = errors.New("pid is not tracked by this manager")

@@ -212,8 +212,6 @@ func (p ProfilesPage) launchProfileCmd(selected domain.Profile) tea.Cmd {
 
 func friendlyLaunchError(err error) string {
 	switch {
-	case errors.Is(err, processmgr.ErrPortBusy):
-		return "error: port in use — change the profile port or kill the running PID"
 	case errors.Is(err, processmgr.ErrModelNotFound):
 		return "error: model file not found — fix the profile's Model path"
 	case errors.Is(err, processmgr.ErrForegroundBusy):
