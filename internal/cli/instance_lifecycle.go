@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -163,16 +164,49 @@ func stopInstance(ctx context.Context, out io.Writer, proxy proxyClient, mgr pro
 	}
 	if st.LoadedPID != 0 && ri.PID == st.LoadedPID {
 		// A profile-prefix ref resolved to the proxy-loaded backend.
-		if _, err := proxy.Unload(ctx, false); err != nil {
+		unloaded, err := proxy.Unload(ctx, false)
+		if err != nil {
 			return fmt.Errorf("unload: %w", err)
+		}
+		if jsonOut {
+			return emitJSON(out, unloaded)
 		}
 		fmt.Fprintf(out, "unloaded %s (pid %d)\n", st.LoadedProfileID, st.LoadedPID)
 		return nil
 	}
+	if err := refuseKillOnDegradedProxy(proxy, st, ri.PID); err != nil {
+		return err
+	}
 	if err := mgr.Kill(ri.PID); err != nil {
+		if errors.Is(err, processmgr.ErrUnknownPID) {
+			// The process is already gone — stopping it is a no-op success.
+			fmt.Fprintf(out, "pid %d (%s) already exited\n", ri.PID, ri.ProfileID)
+			return nil
+		}
 		return fmt.Errorf("kill: %w", err)
 	}
 	fmt.Fprintf(out, "stopped pid %d (%s)\n", ri.PID, ri.ProfileID)
+	return nil
+}
+
+// refuseKillOnDegradedProxy guards the orphan-kill path: never kill a pid
+// directly while the proxy might be routing to it. A running proxy whose
+// /_status probe failed reports empty loaded fields exactly like a healthy
+// proxy with nothing loaded, so we key off the explicit probe-failure marker
+// set by proxysupervisor.Status. The probe has a short timeout and can fail
+// transiently, so we re-fetch once before refusing.
+func refuseKillOnDegradedProxy(proxy proxyClient, st httpproxy.Status, pid int) error {
+	if !st.Running || !strings.HasPrefix(st.LastError, "status_probe_failed") {
+		return nil
+	}
+	st = proxy.Status()
+	if st.Running && strings.HasPrefix(st.LastError, "status_probe_failed") {
+		return fmt.Errorf("proxy is running but its status is unavailable; refusing to kill pid %d directly — retry or stop the proxy first", pid)
+	}
+	if st.LoadedPID == pid {
+		// The refreshed status reveals the pid is the proxy-loaded backend.
+		return fmt.Errorf("pid %d is loaded behind the proxy; refusing to kill it directly — retry the command so it goes through the proxy", pid)
+	}
 	return nil
 }
 
@@ -188,6 +222,9 @@ func restartInstance(ctx context.Context, out io.Writer, proxy proxyClient, mgr 
 			return err
 		}
 		profileID = ri.ProfileID
+		if err := refuseKillOnDegradedProxy(proxy, st, ri.PID); err != nil {
+			return err
+		}
 		// Kill the orphan OS process before loading so VRAM is freed first.
 		if err := mgr.Kill(ri.PID); err != nil && !errors.Is(err, processmgr.ErrUnknownPID) {
 			return fmt.Errorf("kill orphan before restart: %w", err)

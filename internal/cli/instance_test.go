@@ -19,6 +19,7 @@ type fakeManager struct {
 	killed    []int
 	launched  []domain.Profile
 	launchErr error
+	killErr   error
 	tail      string
 }
 
@@ -31,7 +32,13 @@ func (f *fakeManager) Launch(p domain.Profile, mode processmgr.LaunchMode, attem
 	f.running = append(f.running, ri)
 	return ri, nil
 }
-func (f *fakeManager) Kill(pid int) error { f.killed = append(f.killed, pid); return nil }
+func (f *fakeManager) Kill(pid int) error {
+	if f.killErr != nil {
+		return f.killErr
+	}
+	f.killed = append(f.killed, pid)
+	return nil
+}
 func (f *fakeManager) List() []domain.RunningInstance { return f.running }
 func (f *fakeManager) WaitHealthy(pid, port int, timeout time.Duration, attemptID string) error {
 	return nil

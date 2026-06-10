@@ -2,21 +2,24 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
+	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 )
 
 // fakeProxy implements proxyClient for CLI tests.
 type fakeProxy struct {
-	ensured int
-	calls   []string // ordered: "load:<id>", "unload"
-	unloads []bool   // force flag per Unload call
-	status  httpproxy.Status
-	loadErr error
+	ensured   int
+	calls     []string // ordered: "load:<id>", "unload"
+	unloads   []bool   // force flag per Unload call
+	status    httpproxy.Status
+	statusSeq []httpproxy.Status // optional: consumed per Status() call before falling back to status
+	loadErr   error
 }
 
 func (f *fakeProxy) EnsureRunning(ctx context.Context) error { f.ensured++; return nil }
@@ -38,7 +41,14 @@ func (f *fakeProxy) Unload(ctx context.Context, force bool) (httpproxy.Status, e
 	return f.status, nil
 }
 
-func (f *fakeProxy) Status() httpproxy.Status { return f.status }
+func (f *fakeProxy) Status() httpproxy.Status {
+	if len(f.statusSeq) > 0 {
+		st := f.statusSeq[0]
+		f.statusSeq = f.statusSeq[1:]
+		return st
+	}
+	return f.status
+}
 func (f *fakeProxy) BaseURL() string          { return "http://127.0.0.1:9099" }
 
 func TestStartInstance_LoadsResolvedProfileViaProxy(t *testing.T) {
@@ -112,6 +122,109 @@ func TestStopInstance_KillsOrphanPID(t *testing.T) {
 	}
 	if len(p.calls) != 0 {
 		t.Fatalf("must not touch the proxy for orphans: %+v", p.calls)
+	}
+}
+
+func TestStopInstance_UnloadsResolvedProfilePrefix(t *testing.T) {
+	// "alp" is neither the pid nor the exact loaded profile id, so proxyOwnsRef
+	// misses; resolveInstance prefix-resolves it to the proxy-loaded PID.
+	p := &fakeProxy{status: httpproxy.Status{Running: true, LoadedProfileID: "alpha", LoadedPID: 100}}
+	m := &fakeManager{running: []domain.RunningInstance{{ProfileID: "alpha", PID: 100}}}
+	var out strings.Builder
+	if err := stopInstance(context.Background(), &out, p, m, "alp"); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+	if len(p.calls) != 1 || p.calls[0] != "unload" {
+		t.Fatalf("expected unload via proxy: %+v", p.calls)
+	}
+	if len(m.killed) != 0 {
+		t.Fatalf("must not Kill the proxy-loaded backend: %+v", m.killed)
+	}
+	if !strings.Contains(out.String(), "unloaded alpha (pid 100)") {
+		t.Fatalf("expected unload message, got %q", out.String())
+	}
+}
+
+func TestStopInstance_UnloadsResolvedProfilePrefix_JSON(t *testing.T) {
+	jsonOut = true
+	t.Cleanup(func() { jsonOut = false })
+	p := &fakeProxy{status: httpproxy.Status{Running: true, LoadedProfileID: "alpha", LoadedPID: 100}}
+	m := &fakeManager{running: []domain.RunningInstance{{ProfileID: "alpha", PID: 100}}}
+	var out strings.Builder
+	if err := stopInstance(context.Background(), &out, p, m, "alp"); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+	if len(p.calls) != 1 || p.calls[0] != "unload" {
+		t.Fatalf("expected unload via proxy: %+v", p.calls)
+	}
+	var st httpproxy.Status
+	if err := json.Unmarshal([]byte(out.String()), &st); err != nil {
+		t.Fatalf("expected JSON status output, got %q: %v", out.String(), err)
+	}
+	if st.LoadedPID != 0 || st.LoadedProfileID != "" {
+		t.Fatalf("expected post-unload status in JSON output: %+v", st)
+	}
+}
+
+func TestStopInstance_OrphanAlreadyExited(t *testing.T) {
+	p := &fakeProxy{} // proxy has nothing loaded
+	m := &fakeManager{
+		running: []domain.RunningInstance{{ProfileID: "alpha", PID: 100}},
+		killErr: processmgr.ErrUnknownPID,
+	}
+	var out strings.Builder
+	if err := stopInstance(context.Background(), &out, p, m, "100"); err != nil {
+		t.Fatalf("stop should tolerate ErrUnknownPID: %v", err)
+	}
+	if !strings.Contains(out.String(), "already exited") {
+		t.Fatalf("expected already-exited note, got %q", out.String())
+	}
+}
+
+func TestStopInstance_RefusesKillWhenProxyStatusDegraded(t *testing.T) {
+	degraded := httpproxy.Status{Running: true, LastError: "status_probe_failed: connection refused"}
+	p := &fakeProxy{status: degraded}
+	m := &fakeManager{running: []domain.RunningInstance{{ProfileID: "alpha", PID: 100}}}
+	var out strings.Builder
+	err := stopInstance(context.Background(), &out, p, m, "100")
+	if err == nil || !strings.Contains(err.Error(), "refusing to kill pid 100") {
+		t.Fatalf("expected refusal on degraded proxy status, got: %v", err)
+	}
+	if len(m.killed) != 0 {
+		t.Fatalf("must not kill while proxy status is unavailable: %+v", m.killed)
+	}
+	if len(p.calls) != 0 {
+		t.Fatalf("must not touch the proxy: %+v", p.calls)
+	}
+}
+
+func TestStopInstance_TransientProbeFailureRecovers(t *testing.T) {
+	degraded := httpproxy.Status{Running: true, LastError: "status_probe_failed: connection refused"}
+	healthy := httpproxy.Status{Running: true} // nothing loaded
+	p := &fakeProxy{statusSeq: []httpproxy.Status{degraded, healthy}}
+	m := &fakeManager{running: []domain.RunningInstance{{ProfileID: "alpha", PID: 100}}}
+	var out strings.Builder
+	if err := stopInstance(context.Background(), &out, p, m, "100"); err != nil {
+		t.Fatalf("stop after transient probe failure: %v", err)
+	}
+	if len(m.killed) != 1 || m.killed[0] != 100 {
+		t.Fatalf("expected orphan kill after status recovered: %+v", m.killed)
+	}
+}
+
+func TestRestartInstance_RefusesKillWhenProxyStatusDegraded(t *testing.T) {
+	store := newTempStore(t)
+	seed(t, store, "alpha", "Alpha")
+	degraded := httpproxy.Status{Running: true, LastError: "status_probe_failed: connection refused"}
+	p := &fakeProxy{status: degraded}
+	m := &fakeManager{running: []domain.RunningInstance{{ProfileID: "alpha", PID: 100}}}
+	var out strings.Builder
+	err := restartInstance(context.Background(), &out, p, m, store, "100")
+	if err == nil || !strings.Contains(err.Error(), "refusing to kill pid 100") {
+		t.Fatalf("expected refusal on degraded proxy status, got: %v", err)
+	}
+	if len(m.killed) != 0 {
+		t.Fatalf("must not kill while proxy status is unavailable: %+v", m.killed)
 	}
 }
 

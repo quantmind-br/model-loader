@@ -2,8 +2,10 @@ package proxysupervisor
 
 import (
 	"context"
+	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -28,6 +30,34 @@ func TestSupervisorLifecycle(t *testing.T) {
 
 	if err := s.Start(ctx); err == nil {
 		t.Fatal("expected start to fail because port 54321 is not actually serving")
+	}
+}
+
+func TestStatusProbeFailureSetsLastError(t *testing.T) {
+	// A raw TCP listener that never accepts: pidAlive and portOpen succeed
+	// (the process is "alive" and the port dials), but the /_status HTTP GET
+	// times out — the degraded case Status must surface via LastError.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	s := New(Config{
+		StatePath: filepath.Join(t.TempDir(), "proxy-state.json"),
+		Host:      "127.0.0.1",
+		Port:      port,
+	})
+	// Inject alive state: our own PID is alive and the port above is open.
+	s.state = &State{PID: os.Getpid(), Host: "127.0.0.1", Port: port, StartedAt: time.Now().UTC()}
+
+	st := s.Status()
+	if !st.Running {
+		t.Fatalf("expected Running=true, got %+v", st)
+	}
+	if !strings.HasPrefix(st.LastError, "status_probe_failed") {
+		t.Fatalf("expected status_probe_failed LastError, got %q", st.LastError)
 	}
 }
 

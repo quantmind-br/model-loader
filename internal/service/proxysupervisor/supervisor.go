@@ -204,10 +204,19 @@ func (s *Supervisor) Status() httpproxy.Status {
 	url := "http://" + s.addr(s.state) + "/_status"
 	client := &http.Client{Timeout: 500 * time.Millisecond}
 	resp, err := client.Get(url)
-	if err == nil && resp.StatusCode == http.StatusOK {
-		_ = json.NewDecoder(resp.Body).Decode(&st)
-		_ = resp.Body.Close()
+	if err != nil {
+		// The process is alive but /_status did not answer. Surface the
+		// failure so callers can distinguish "running with nothing loaded"
+		// (healthy: empty loaded fields, no error) from "running but status
+		// unknown" — e.g. the CLI must not kill a pid directly while the
+		// proxy might still be routing to it.
+		st.LastError = "status_probe_failed: " + err.Error()
+		return st
 	}
+	if resp.StatusCode == http.StatusOK {
+		_ = json.NewDecoder(resp.Body).Decode(&st)
+	}
+	_ = resp.Body.Close()
 	return st
 }
 
