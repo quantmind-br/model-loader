@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os/signal"
@@ -178,7 +179,8 @@ func stopInstance(ctx context.Context, out io.Writer, proxy proxyClient, mgr pro
 func restartInstance(ctx context.Context, out io.Writer, proxy proxyClient, mgr processmgr.Manager, store profilestore.Store, ref string) error {
 	st := proxy.Status()
 	var profileID string
-	if proxyOwnsRef(st, ref) {
+	proxyOwned := proxyOwnsRef(st, ref)
+	if proxyOwned {
 		profileID = st.LoadedProfileID
 	} else {
 		ri, err := resolveInstance(mgr, ref)
@@ -186,6 +188,10 @@ func restartInstance(ctx context.Context, out io.Writer, proxy proxyClient, mgr 
 			return err
 		}
 		profileID = ri.ProfileID
+		// Kill the orphan OS process before loading so VRAM is freed first.
+		if err := mgr.Kill(ri.PID); err != nil && !errors.Is(err, processmgr.ErrUnknownPID) {
+			return fmt.Errorf("kill orphan before restart: %w", err)
+		}
 	}
 	if _, err := store.Get(profileID); err != nil {
 		return fmt.Errorf("load profile %s: %w", profileID, err)
@@ -193,8 +199,12 @@ func restartInstance(ctx context.Context, out io.Writer, proxy proxyClient, mgr 
 	if err := proxy.EnsureRunning(ctx); err != nil {
 		return fmt.Errorf("start http proxy: %w", err)
 	}
-	if _, err := proxy.Unload(ctx, false); err != nil {
-		return fmt.Errorf("unload: %w", err)
+	// For proxy-owned instances, Unload terminates the backend through the proxy.
+	// For orphans, we already killed the process above; no Unload needed.
+	if proxyOwned {
+		if _, err := proxy.Unload(ctx, false); err != nil {
+			return fmt.Errorf("unload: %w", err)
+		}
 	}
 	loadCtx, cancel := context.WithTimeout(ctx, proxyLoadTimeout)
 	defer cancel()

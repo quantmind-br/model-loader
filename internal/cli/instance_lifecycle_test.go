@@ -142,8 +142,13 @@ func TestRestartInstance_ResolvesOrphanViaManager(t *testing.T) {
 	if err := restartInstance(context.Background(), &out, p, m, store, "100"); err != nil {
 		t.Fatalf("restart: %v", err)
 	}
-	want := []string{"unload", "load:alpha"}
-	if len(p.calls) != 2 || p.calls[0] != want[0] || p.calls[1] != want[1] {
-		t.Fatalf("expected unload then load, got: %+v", p.calls)
+	// Orphan must be killed before load so VRAM is freed first.
+	if len(m.killed) != 1 || m.killed[0] != 100 {
+		t.Fatalf("expected orphan pid 100 to be killed before restart, got killed=%v", m.killed)
+	}
+	// Proxy owns nothing, so no Unload needed — only Load.
+	want := []string{"load:alpha"}
+	if len(p.calls) != len(want) || p.calls[0] != want[0] {
+		t.Fatalf("expected proxy calls %v for orphan restart, got: %+v", want, p.calls)
 	}
 }
