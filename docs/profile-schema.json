@@ -38,11 +38,11 @@
     },
     "args": {
       "type": "object",
-      "description": "Structured backend command-line flags as key/value pairs. Each key is a flag name in canonical long form (e.g. 'ctx-size', 'flash-attn'). Values must match the type declared in the backend's FlagSchema (bool, int, float, or string). Note: due to JSON round-tripping, integer values may deserialize as float64; the validator accepts whole-number floats as integers.",
+      "description": "Structured backend command-line flags as key/value pairs. Each key is a flag name in canonical long form (e.g. 'ctx-size', 'flash-attn'). Values must match the type declared in the backend's FlagSchema (bool, int, float, or string). Note: due to JSON round-tripping, integer values may deserialize as float64; the validator accepts whole-number floats as integers. 'port' is reserved: it is assigned automatically by the process manager; if present in a profile it is ignored and stripped on load/save.",
       "additionalProperties": {
         "anyOf": [
           { "type": "boolean", "description": "FlagTypeBool: true/false flags (e.g. --flash-attn, --cont-batching)." },
-          { "type": "integer", "description": "FlagTypeInt: whole numbers (e.g. ctx-size, port, n-gpu-layers)." },
+          { "type": "integer", "description": "FlagTypeInt: whole numbers (e.g. ctx-size, n-gpu-layers)." },
           { "type": "number", "description": "FlagTypeFloat: floating-point values (e.g. temp, top-p, defrag-thold). Accepts both integers and floats." },
           { "type": "string", "description": "FlagTypeString: free-text values (e.g. cache-type-k, host). FlagTypeEnum values are also strings restricted to a fixed set validated against the backend schema's EnumValues." }
         ]
@@ -162,7 +162,6 @@
           "flash-attn": true,
           "host": "127.0.0.1",
           "n-gpu-layers": 99,
-          "port": 8080,
           "temp": 1.0,
           "cache-type-k": "q8_0"
         }

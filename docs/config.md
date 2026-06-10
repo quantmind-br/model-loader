@@ -49,12 +49,14 @@ Debug logging settings. Logs are written to files only (never stdout) under `log
 
 ### `[serve]`
 
-Bind address for the headless HTTP proxy started by `model-loader serve` (an OpenAI-shaped reverse proxy in front of running instances).
+Bind address for the HTTP proxy (an OpenAI-shaped reverse proxy in front of running instances). The proxy is started headlessly by `model-loader serve` and is also auto-started by the TUI — it is the only communication channel with profile backends. Clients select a backend by sending the profile ID as the OpenAI `model` field; the proxy loads/swaps the matching instance on demand.
+
+Instance ports are ephemeral and internal: the process manager assigns each backend a free port at launch, and clients never talk to backends directly — always go through the proxy. Backends that validate model names server-side (vLLM, SGLang) should set `served-model-name` to the profile ID so inference requests carrying the profile ID as `model` are accepted.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `host` | `127.0.0.1` | Bind host for the headless proxy. Overridable with `serve --host` |
-| `port` | `4321` | Bind port for the headless proxy. Overridable with `serve --port` |
+| `host` | `127.0.0.1` | Bind host for the proxy. Overridable with `serve --host` |
+| `port` | `4321` | Bind port for the proxy. Overridable with `serve --port` |
 
 #### Endpoints
 
@@ -67,6 +69,8 @@ The proxy exposes both the OpenAI-compatible inference surface and dedicated adm
 | `GET`  | `/_status` | Current state: `running`, `loaded_profile_id`, `loaded_pid`, `loaded_port`, `inflight_requests`, `last_swap_at`, `last_swap_dur`, `last_error` |
 | `POST` | `/_admin/load` | Explicitly load a profile. Body: `{"profile_id":"<id>"}` (alias: `{"model":"<id>"}`). Returns the same `Status` shape as `/_status` |
 | `POST` | `/_admin/unload` | Kill the loaded backend, freeing its VRAM. Query params: `?force=true` (skip drain), `?drain_timeout=10s` (cap on in-flight drain wait, defaults to the shutdown grace period). Idempotent: 200 when nothing is loaded |
+
+When a request targets a profile that is not loaded yet, the proxy launches the backend and waits for it to become healthy before forwarding (up to 180 seconds by default, to accommodate slow model loads).
 
 The proxy binds to loopback by default and has no built-in authentication; do not expose it directly to a public interface.
 

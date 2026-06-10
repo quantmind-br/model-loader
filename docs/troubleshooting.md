@@ -16,12 +16,12 @@ Common issues and their solutions.
 
 ## Port already in use
 
-**Symptom:** Launch fails with "port already in use".
+**Symptom:** Starting the proxy fails with "port already in use".
 
 **Solution:**
-- Edit the profile and change the `port` argument
-- Or kill the existing instance from the Server tab (`k`)
-- Use the Profiles tab to check if an instance is already running on that port
+- Instance ports are assigned automatically by the process manager (a `port` argument in a profile is ignored and stripped), so backend port conflicts no longer occur
+- If the proxy port (default `4321`) is taken, change `port` under `[serve]` in `config.toml` or pass `serve --port`
+- Kill a stuck instance from the Server tab (`k`)
 
 ## Model file not found
 
@@ -62,7 +62,7 @@ Common issues and their solutions.
 - The instance may be taking longer than expected to load the model
 - Check the logs in the Server tab for errors
 - Verify the model file is valid and compatible with your llama-server version
-- Large models may require a longer timeout; this is not currently configurable
+- The health-check wait defaults to 180 seconds to accommodate slow model loads; if a very large model still exceeds it, the timeout is not currently configurable
 
 ## Model browser shows no files
 
