@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -14,14 +15,20 @@ import (
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
-	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 )
 
-// healthTimeout bounds how long Run waits for a freshly launched backend to
-// answer /health (model load can be slow for large GGUFs).
-const healthTimeout = 3 * time.Minute
+// ProxyController is how the runner reaches backends: ensure the proxy is up,
+// swap the profile in, and address all inference at the proxy. The instance
+// port never leaks into this package.
+type ProxyController interface {
+	EnsureRunning(context.Context) error
+	Load(ctx context.Context, profileID string) (httpproxy.Status, error)
+	Status() httpproxy.Status
+	BaseURL() string
+}
 
 // Config tunes the engine. main.go maps config.BenchmarkConfig onto it so the
 // benchmark package stays decoupled from the config package.
@@ -119,9 +126,9 @@ type Progress struct {
 // Runner orchestrates a full benchmark run against one profile.
 type Runner struct {
 	store           profilestore.Store
-	pm              processmgr.Manager
 	mon             monitor.Manager
 	resolver        backendcatalog.Resolver
+	proxy           ProxyController
 	cfg             Config
 	problems        []Problem            // embedded SWE-bench Lite coding set
 	mathProblems    []MathProblem        // embedded GSM8K set for ModeMathBench
@@ -137,7 +144,7 @@ type Runner struct {
 }
 
 // NewRunner builds a Runner and loads the embedded dataset.
-func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Manager, resolver backendcatalog.Resolver, cfg Config) (*Runner, error) {
+func NewRunner(store profilestore.Store, mon monitor.Manager, resolver backendcatalog.Resolver, proxy ProxyController, cfg Config) (*Runner, error) {
 	problems, err := Load()
 	if err != nil {
 		return nil, err
@@ -188,7 +195,7 @@ func NewRunner(store profilestore.Store, pm processmgr.Manager, mon monitor.Mana
 	if warmup < 0 {
 		warmup = 1
 	}
-	return &Runner{store: store, pm: pm, mon: mon, resolver: resolver, cfg: cfg, problems: problems, mathProblems: mathProblems, codeGenProblems: codeGenProblems, instProblems: instProblems, mmluProblems: mmluProblems, arxivDocs: arxivDocs, ragasProblems: ragasProblems, summaryProblems: summaryProblems, presets: presets, reps: reps, warmup: warmup}, nil
+	return &Runner{store: store, mon: mon, resolver: resolver, proxy: proxy, cfg: cfg, problems: problems, mathProblems: mathProblems, codeGenProblems: codeGenProblems, instProblems: instProblems, mmluProblems: mmluProblems, arxivDocs: arxivDocs, ragasProblems: ragasProblems, summaryProblems: summaryProblems, presets: presets, reps: reps, warmup: warmup}, nil
 }
 
 // ProblemCount reports how many problems the default executable set contains.
@@ -235,22 +242,21 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 
 	send(progress, Progress{Total: h.Count(r), Phase: "launch"})
 
-	port, logPath, pid, owned, err := r.ensureInstance(ctx, profile)
+	base, logPath, pid, reused, err := r.ensureLoaded(ctx, profile)
 	if err != nil {
 		return Run{}, err
 	}
-	// A reused (warm, possibly busy) instance can skew performance numbers;
-	// record it so comparisons can tell warm and fresh runs apart.
-	run.ReusedInstance = !owned
-	if owned {
-		defer func() { _ = r.pm.Kill(pid) }()
-	}
+	// A reused (warm, possibly busy) backend can skew performance numbers;
+	// record it so comparisons can tell warm and fresh runs apart. The proxy
+	// owns the backend lifecycle: the model stays loaded after the run instead
+	// of being killed here.
+	run.ReusedInstance = reused
 
-	gpu := r.startGPUSampler(pid, port, logPath)
+	gpu := r.startGPUSampler(pid, base, logPath)
 	defer gpu.stop()
 
-	base := fmt.Sprintf("http://127.0.0.1:%d", port)
-	model := requestModelName(profile)
+	// The proxy routes requests by profile id (OpenAI "model" field).
+	model := profile.ID
 
 	results, transcripts, err := h.Execute(ctx, r, base, model, scorer, progress)
 	run.Problems = results
@@ -323,54 +329,22 @@ func (r *Runner) scoreProblem(ctx context.Context, scorer Scorer, p Problem, con
 	res.Detail = score.Detail
 }
 
-// ensureInstance reuses a live instance for the profile or launches a new one.
-// Returns the port, log path, pid, and whether Run owns (must kill) it. It is
-// cancellation-aware: a cancelled ctx aborts before launch and kills a
-// just-launched backend instead of blocking on the health timeout.
-func (r *Runner) ensureInstance(ctx context.Context, profile domain.Profile) (port int, logPath string, pid int, owned bool, err error) {
-	for _, inst := range r.pm.List() {
-		if inst.ProfileID == profile.ID && !inst.Crashed {
-			return inst.Port, inst.LogPath, inst.PID, false, nil
-		}
+// ensureLoaded swaps the profile in through the proxy. Returns the proxy base
+// URL plus the backend's pid/log path (GPU sampling + diagnostics) and whether
+// the profile was already loaded (warm run — perf numbers may be skewed).
+func (r *Runner) ensureLoaded(ctx context.Context, profile domain.Profile) (base, logPath string, pid int, reused bool, err error) {
+	if r.proxy == nil {
+		return "", "", 0, false, fmt.Errorf("http proxy not configured")
 	}
-	if err := ctx.Err(); err != nil {
-		return 0, "", 0, false, err
+	if err := r.proxy.EnsureRunning(ctx); err != nil {
+		return "", "", 0, false, fmt.Errorf("start proxy: %w", err)
 	}
-	rb, err := r.resolver.Resolve(profile)
+	reused = r.proxy.Status().LoadedProfileID == profile.ID
+	st, err := r.proxy.Load(ctx, profile.ID)
 	if err != nil {
-		return 0, "", 0, false, fmt.Errorf("resolve backend: %w", err)
+		return "", "", 0, false, fmt.Errorf("load profile via proxy: %w", err)
 	}
-	profile.Launch.ResolvedExecutable = rb.ExecutablePath
-	profile.Launch.ResolvedBackendKind = rb.Backend.Kind
-
-	attemptID := fmt.Sprintf("bench-%d", time.Now().UnixNano())
-	inst, err := r.pm.Launch(profile, processmgr.LaunchBackground, attemptID)
-	if err != nil {
-		return 0, "", 0, false, fmt.Errorf("launch backend: %w", err)
-	}
-	if err := r.waitHealthy(ctx, inst.PID, inst.Port, attemptID); err != nil {
-		_ = r.pm.Kill(inst.PID)
-		return 0, "", 0, false, err
-	}
-	return inst.Port, inst.LogPath, inst.PID, true, nil
-}
-
-// waitHealthy runs the (context-unaware) processmgr health poll in a goroutine
-// and races it against ctx cancellation. On cancel it kills the PID so a
-// launched-but-not-yet-ready backend doesn't keep consuming GPU/VRAM.
-func (r *Runner) waitHealthy(ctx context.Context, pid, port int, attemptID string) error {
-	done := make(chan error, 1)
-	go func() { done <- r.pm.WaitHealthy(pid, port, healthTimeout, attemptID) }()
-	select {
-	case <-ctx.Done():
-		_ = r.pm.Kill(pid)
-		return ctx.Err()
-	case err := <-done:
-		if err != nil {
-			return fmt.Errorf("backend not healthy: %w", err)
-		}
-		return nil
-	}
+	return r.proxy.BaseURL(), st.LoadedLogPath, st.LoadedPID, reused, nil
 }
 
 // graderFor returns the grader used for semantic scoring. If an external judge
@@ -761,9 +735,12 @@ func (g *gpuSampler) stop() {
 
 // startGPUSampler subscribes to the monitor and accumulates GPU stats in the
 // background. Failures are non-fatal: the sampler simply records nothing.
-func (r *Runner) startGPUSampler(pid, port int, logPath string) *gpuSampler {
+// base is the proxy base URL; its port feeds the monitor's HTTP pollers, whose
+// per-instance /slots (and metrics-ish) probes go through the proxy catch-all,
+// which forwards them to the loaded backend. The backend port stays hidden.
+func (r *Runner) startGPUSampler(pid int, base, logPath string) *gpuSampler {
 	g := &gpuSampler{}
-	ch, cancel, err := r.mon.Subscribe(pid, port, logPath)
+	ch, cancel, err := r.mon.Subscribe(pid, portFromBase(base), logPath)
 	if err != nil {
 		return g
 	}
@@ -896,16 +873,17 @@ func argString(args map[string]any, key string) string {
 	}
 }
 
-// requestModelName picks the model field sent in the chat request. llama.cpp
-// ignores it, but vLLM/SGLang validate it against the served model id — which
-// is the full repo ID/path the server was launched with, so send p.Model whole
-// (not its basename).
-func requestModelName(p domain.Profile) string {
-	if v := argString(p.Args, "served-model-name"); v != "" {
-		return v
+// portFromBase extracts the TCP port from a base URL like
+// "http://127.0.0.1:4321" for the monitor's port-oriented Subscribe API.
+// Returns 0 (HTTP pollers no-op) when the URL has no parseable port.
+func portFromBase(base string) int {
+	u, err := url.Parse(base)
+	if err != nil {
+		return 0
 	}
-	if p.Model != "" {
-		return p.Model
+	port, err := strconv.Atoi(u.Port())
+	if err != nil {
+		return 0
 	}
-	return "default"
+	return port
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/service/benchmark"
 	"github.com/quantmind-br/model-loader/internal/service/benchmarkstore"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
+	"github.com/quantmind-br/model-loader/internal/service/proxysupervisor"
 )
 
 func init() {
@@ -85,8 +86,21 @@ func init() {
 			}
 			defer svc.Close()
 
+			// The proxy is the only client channel to backends: the benchmark
+			// swaps profiles in through it and addresses all inference at it.
+			supervisor := proxysupervisor.New(proxysupervisor.Config{
+				StatePath: filepath.Join(svc.Cfg.Paths.StateDir, "proxy-state.json"),
+				LogDir:    svc.Cfg.Paths.LogDir,
+				Host:      svc.Cfg.Serve.Host,
+				Port:      svc.Cfg.Serve.Port,
+				Logger:    svc.Logger,
+			})
+			if err := supervisor.Reconcile(); err != nil {
+				svc.Logger.Error("proxy_reconcile_failed", "err", err)
+			}
+
 			mon := monitor.New(monitor.Config{NvidiaSMIPath: "nvidia-smi"})
-			runner, err := benchmark.NewRunner(svc.Store, svc.Mgr, mon, svc.Resolver, benchmark.Config{
+			runner, err := benchmark.NewRunner(svc.Store, mon, svc.Resolver, supervisor, benchmark.Config{
 				MaxTokens:         cfg.Benchmark.MaxTokens,
 				Temperature:       cfg.Benchmark.Temperature,
 				Timeout:           time.Duration(cfg.Benchmark.TimeoutSec) * time.Second,
@@ -110,13 +124,18 @@ func init() {
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
 
+			if err := supervisor.EnsureRunning(ctx); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "start http proxy: %v\n", err)
+				return &ExitError{Code: 1}
+			}
+
 			progress := make(chan benchmark.Progress, 32)
 			drained := make(chan struct{})
 			go func() {
 				for p := range progress {
 					switch p.Phase {
 					case "launch":
-						fmt.Fprintln(cmd.ErrOrStderr(), "launching backend / waiting for /health…")
+						fmt.Fprintln(cmd.ErrOrStderr(), "loading profile via proxy / waiting for backend health…")
 					case "infer", "score":
 						fmt.Fprintf(cmd.ErrOrStderr(), "[%d/%d] %s (%s)\n", p.Index, p.Total, p.ProblemName, p.Phase)
 					}

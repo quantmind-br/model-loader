@@ -167,9 +167,9 @@ type Run struct {
 	Problems    []ProblemResult `json:"problems"`
 	Aggregate   Aggregate       `json:"aggregate"`
 	Err         string          `json:"err,omitempty"`
-	// ReusedInstance is true when the run rode an already-running backend
-	// instance (warm, possibly serving other traffic) instead of launching a
-	// fresh one — performance numbers may be affected.
+	// ReusedInstance is true when the profile was already loaded in the proxy
+	// when the run started (warm backend, possibly serving other traffic)
+	// instead of being swapped in fresh — performance numbers may be affected.
 	ReusedInstance bool `json:"reusedInstance,omitempty"`
 
 	// Transcript holds raw per-problem I/O for debugging. Excluded from the run
