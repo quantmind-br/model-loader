@@ -180,8 +180,9 @@ func (m *stubManager) killCount() int {
 }
 
 // portFromArgs extracts the "port" value from a profile's Args map.
-// Ports are manager-allocated at runtime; this helper fabricates the
-// instance port from the args so tests can stand up a real backend server.
+// The stub echoes this value back in the returned RunningInstance so that
+// port assertions in tests remain stable — a real manager allocates ephemeral
+// ports and ignores the args port entirely.
 func portFromArgs(args map[string]any) (int, bool) {
 	v, ok := args["port"]
 	if !ok {

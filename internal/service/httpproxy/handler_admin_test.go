@@ -1,9 +1,11 @@
 package httpproxy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -135,9 +137,29 @@ func TestStatus_IncludesLoadedLogPath(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
 	}
+
+	// Check in-memory snapshot.
 	st := srv.Status()
 	if st.LoadedLogPath != "/tmp/x.log" {
-		t.Fatalf("LoadedLogPath = %q, want /tmp/x.log", st.LoadedLogPath)
+		t.Fatalf("LoadedLogPath (in-memory) = %q, want /tmp/x.log", st.LoadedLogPath)
+	}
+
+	// Check wire format: read the raw response body and assert the snake_case
+	// JSON key is present. A typo'd tag (e.g. "loadedLogPath") would pass the
+	// in-memory check above but fail here.
+	raw, err := io.ReadAll(rr.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if !bytes.Contains(raw, []byte(`"loaded_log_path":"/tmp/x.log"`)) {
+		t.Fatalf("JSON missing loaded_log_path with expected value; body=%s", raw)
+	}
+	var decoded Status
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("decode response body: %v", err)
+	}
+	if decoded.LoadedLogPath != "/tmp/x.log" {
+		t.Fatalf("LoadedLogPath (decoded from wire) = %q, want /tmp/x.log", decoded.LoadedLogPath)
 	}
 }
 
