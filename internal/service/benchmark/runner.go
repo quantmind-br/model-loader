@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
-	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
@@ -127,7 +126,6 @@ type Progress struct {
 type Runner struct {
 	store           profilestore.Store
 	mon             monitor.Manager
-	resolver        backendcatalog.Resolver
 	proxy           ProxyController
 	cfg             Config
 	problems        []Problem            // embedded SWE-bench Lite coding set
@@ -144,7 +142,7 @@ type Runner struct {
 }
 
 // NewRunner builds a Runner and loads the embedded dataset.
-func NewRunner(store profilestore.Store, mon monitor.Manager, resolver backendcatalog.Resolver, proxy ProxyController, cfg Config) (*Runner, error) {
+func NewRunner(store profilestore.Store, mon monitor.Manager, proxy ProxyController, cfg Config) (*Runner, error) {
 	problems, err := Load()
 	if err != nil {
 		return nil, err
@@ -195,7 +193,7 @@ func NewRunner(store profilestore.Store, mon monitor.Manager, resolver backendca
 	if warmup < 0 {
 		warmup = 1
 	}
-	return &Runner{store: store, mon: mon, resolver: resolver, proxy: proxy, cfg: cfg, problems: problems, mathProblems: mathProblems, codeGenProblems: codeGenProblems, instProblems: instProblems, mmluProblems: mmluProblems, arxivDocs: arxivDocs, ragasProblems: ragasProblems, summaryProblems: summaryProblems, presets: presets, reps: reps, warmup: warmup}, nil
+	return &Runner{store: store, mon: mon, proxy: proxy, cfg: cfg, problems: problems, mathProblems: mathProblems, codeGenProblems: codeGenProblems, instProblems: instProblems, mmluProblems: mmluProblems, arxivDocs: arxivDocs, ragasProblems: ragasProblems, summaryProblems: summaryProblems, presets: presets, reps: reps, warmup: warmup}, nil
 }
 
 // ProblemCount reports how many problems the default executable set contains.

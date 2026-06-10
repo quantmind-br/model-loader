@@ -3,7 +3,7 @@ package benchmark
 import "testing"
 
 func TestNewRunnerLoadsInstructionSet(t *testing.T) {
-	r, err := NewRunner(nil, nil, nil, nil, Config{})
+	r, err := NewRunner(nil, nil, nil, Config{})
 	if err != nil {
 		t.Fatalf("NewRunner: %v", err)
 	}

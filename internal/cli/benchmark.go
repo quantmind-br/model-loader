@@ -100,7 +100,7 @@ func init() {
 			}
 
 			mon := monitor.New(monitor.Config{NvidiaSMIPath: "nvidia-smi"})
-			runner, err := benchmark.NewRunner(svc.Store, mon, svc.Resolver, supervisor, benchmark.Config{
+			runner, err := benchmark.NewRunner(svc.Store, mon, supervisor, benchmark.Config{
 				MaxTokens:         cfg.Benchmark.MaxTokens,
 				Temperature:       cfg.Benchmark.Temperature,
 				Timeout:           time.Duration(cfg.Benchmark.TimeoutSec) * time.Second,

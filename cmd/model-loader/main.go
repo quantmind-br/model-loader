@@ -114,7 +114,7 @@ func runTUI(cliLevel string) int {
 	backendsPage := pages.NewBackendsPage(svc.SchemaManager).WithStores(svc.CatalogStore, svc.SchemaStore).WithProber(prober)
 
 	benchStore := benchmarkstore.New(filepath.Join(svc.Cfg.Paths.StateDir, "benchmark", "runs"))
-	benchRunner, err := benchmark.NewRunner(svc.Store, mon, svc.Resolver, supervisor, benchmark.Config{
+	benchRunner, err := benchmark.NewRunner(svc.Store, mon, supervisor, benchmark.Config{
 		MaxTokens:         svc.Cfg.Benchmark.MaxTokens,
 		Temperature:       svc.Cfg.Benchmark.Temperature,
 		Timeout:           time.Duration(svc.Cfg.Benchmark.TimeoutSec) * time.Second,
