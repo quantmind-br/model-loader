@@ -51,8 +51,9 @@ func TestReconcile_KeepsLiveLlamaServer(t *testing.T) {
 
 	// Wait for the fake server to actually serve /health — this guarantees
 	// the bash→python3 exec transition has completed and /proc/<pid>/comm
-	// reads "python3" deterministically.
-	if err := mgr.WaitHealthy(inst.PID, inst.Port, 5*time.Second, ""); err != nil {
+	// reads "python3" deterministically. Generous bound: under full-suite
+	// parallel load the python3 startup alone can exceed several seconds.
+	if err := mgr.WaitHealthy(inst.PID, inst.Port, 30*time.Second, ""); err != nil {
 		t.Fatalf("WaitHealthy: %v", err)
 	}
 	entries := []domain.RunningInstance{inst}
