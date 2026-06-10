@@ -155,6 +155,7 @@ func (s *FSStore) Create(p domain.Profile) error {
 	if p.ID == "" {
 		return ErrInvalidID
 	}
+	stripReservedArgs(&p)
 	if p.SchemaVersion == 0 {
 		p.SchemaVersion = domain.SchemaVersion
 	}

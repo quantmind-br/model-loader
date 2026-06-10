@@ -563,6 +563,35 @@ func TestSave_StripsReservedPortArg(t *testing.T) {
 	}
 }
 
+func TestCreate_StripsReservedPortArg(t *testing.T) {
+	s, dir := newStore(t)
+	p := domain.Profile{ID: "c1", Name: "C1", Args: map[string]any{"port": float64(9090), "ctx-size": float64(4096)}}
+	if err := s.Create(p); err != nil {
+		t.Fatal(err)
+	}
+	// Read the raw bytes BEFORE calling Get (which would silently heal the file
+	// via read-repair, masking the original on-disk content).
+	// Create must strip reserved args before writing — not rely on Get's repair.
+	data, _ := os.ReadFile(filepath.Join(dir, "c1.json"))
+	if strings.Contains(string(data), `"port"`) {
+		t.Fatal("port must not be written to disk by Create")
+	}
+	got, err := s.Get("c1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got.Args["port"]; ok {
+		t.Fatal("port must be stripped on create")
+	}
+	if got.Args["ctx-size"] != float64(4096) {
+		t.Fatal("other args must survive create")
+	}
+	// Caller's map must not be mutated.
+	if p.Args["port"] != float64(9090) {
+		t.Fatal("caller Args mutated by Create")
+	}
+}
+
 func TestDuplicate_NoPortHandling(t *testing.T) {
 	s, _ := newStore(t)
 	if err := s.Save(domain.Profile{ID: "src", Name: "Src", Args: map[string]any{"ctx-size": float64(2048)}}); err != nil {
