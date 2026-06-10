@@ -56,6 +56,7 @@ type Status struct {
 	LoadedProfileID  string        `json:"loaded_profile_id"`
 	LoadedPID        int           `json:"loaded_pid,omitempty"`
 	LoadedPort       int           `json:"loaded_port,omitempty"`
+	LoadedLogPath    string        `json:"loaded_log_path,omitempty"`
 	LastSwapAt       time.Time     `json:"last_swap_at,omitempty"`
 	LastSwapDur      time.Duration `json:"last_swap_dur,omitempty"`
 	LastError        string        `json:"last_error,omitempty"`
@@ -121,6 +122,7 @@ type loadedBackend struct {
 	profileID string
 	pid       int
 	port      int
+	logPath   string
 	proxy     *httputil.ReverseProxy
 }
 
@@ -310,6 +312,7 @@ func (s *Server) Status() Status {
 		st.LoadedProfileID = cur.profileID
 		st.LoadedPID = cur.pid
 		st.LoadedPort = cur.port
+		st.LoadedLogPath = cur.logPath
 	}
 	return st
 }

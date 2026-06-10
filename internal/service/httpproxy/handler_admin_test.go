@@ -119,6 +119,28 @@ func TestHandleAdminLoad_FirstCallLaunches_200(t *testing.T) {
 	}
 }
 
+func TestStatus_IncludesLoadedLogPath(t *testing.T) {
+	store := newStubStore(makeProfile("alpha", 9220))
+	mgr := newStubManager()
+	srv := newTestServer(t, store, mgr)
+	mux := http.NewServeMux()
+	srv.registerRoutes(mux)
+
+	rr := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/_admin/load",
+		strings.NewReader(`{"profile_id":"alpha"}`))
+	r.Header.Set("Content-Type", "application/json")
+	mux.ServeHTTP(rr, r)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	st := srv.Status()
+	if st.LoadedLogPath != "/tmp/x.log" {
+		t.Fatalf("LoadedLogPath = %q, want /tmp/x.log", st.LoadedLogPath)
+	}
+}
+
 func TestHandleAdminLoad_AlreadyLoaded_NoRelaunch_200(t *testing.T) {
 	store := newStubStore(makeProfile("alpha", 9202))
 	mgr := newStubManager()

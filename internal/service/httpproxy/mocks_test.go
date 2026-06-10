@@ -119,6 +119,7 @@ func (m *stubManager) Launch(p domain.Profile, mode processmgr.LaunchMode, attem
 		ProfileID:  p.ID,
 		PID:        m.nextPID,
 		Port:       port,
+		LogPath:    "/tmp/x.log",
 		StartedAt:  time.Now(),
 		Background: true,
 	}
@@ -178,9 +179,9 @@ func (m *stubManager) killCount() int {
 	return len(m.kills)
 }
 
-// portFromArgs is a small helper that mirrors processmgr's portFromProfile
-// but works on the args map directly (since the package-private helper
-// isn't exported).
+// portFromArgs extracts the "port" value from a profile's Args map.
+// Ports are manager-allocated at runtime; this helper fabricates the
+// instance port from the args so tests can stand up a real backend server.
 func portFromArgs(args map[string]any) (int, bool) {
 	v, ok := args["port"]
 	if !ok {

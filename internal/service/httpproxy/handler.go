@@ -208,6 +208,7 @@ func (s *Server) ensureLoaded(ctx context.Context, profileID string) (*loadedBac
 		profileID: profileID,
 		pid:       inst.PID,
 		port:      inst.Port,
+		logPath:   inst.LogPath,
 		proxy:     newReverseProxy(inst.Port),
 	}
 	s.stateMu.Lock()
