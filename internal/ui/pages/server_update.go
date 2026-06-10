@@ -10,12 +10,11 @@ func (p *ServerPage) refreshInstancesCmd() tea.Cmd {
 	pm := p.pm
 	return func() tea.Msg {
 		// Instances are launched by the detached proxy process, so this TUI's
-		// in-memory tracking goes stale. Re-read instances.json via Reconcile
-		// (when the manager supports it) so externally launched instances
-		// appear. Safe: this process never launches instances itself.
-		if r, ok := pm.(interface{ Reconcile() error }); ok {
-			_ = r.Reconcile()
-		}
+		// in-memory tracking goes stale. Re-read instances.json (read-only)
+		// so externally launched instances appear. Never Reconcile here: a
+		// TUI-side registry write can race the proxy's writes and erase a
+		// freshly-launched instance (cross-process last-writer-wins).
+		_ = pm.RefreshFromDisk()
 		return monitorInstancesRefreshedMsg{insts: pm.List()}
 	}
 }

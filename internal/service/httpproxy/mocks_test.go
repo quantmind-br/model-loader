@@ -167,6 +167,8 @@ func (m *stubManager) History() []domain.ExitedInstance {
 	return nil
 }
 
+func (m *stubManager) RefreshFromDisk() error { return nil }
+
 func (m *stubManager) launchCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -2,7 +2,6 @@ package pages
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
-	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
 
@@ -48,8 +46,12 @@ func (p ProfilesPage) launchSelected() (tea.Model, tea.Cmd) {
 		return p, fc
 	}
 	sel, ok := p.list.SelectedItem().(item)
-	if !ok || p.proxy == nil {
+	if !ok {
 		return p, nil
+	}
+	if p.proxy == nil {
+		p, fc := p.withFlashError("launch failed: HTTP proxy unavailable")
+		return p, fc
 	}
 	return p.startLaunch(sel.p)
 }
@@ -201,13 +203,10 @@ func (p ProfilesPage) launchProfileCmd(selected domain.Profile) tea.Cmd {
 	}
 }
 
+// friendlyLaunchError prefixes the launch failure for the flash bar. Errors
+// arrive over the proxy's HTTP boundary, so processmgr sentinel matching via
+// errors.Is is impossible here — the proxy already serializes a readable
+// message into the error string.
 func friendlyLaunchError(err error) string {
-	switch {
-	case errors.Is(err, processmgr.ErrModelNotFound):
-		return "error: model file not found — fix the profile's Model path"
-	case errors.Is(err, processmgr.ErrHealthCheckTimeout):
-		return "error: server did not become healthy within timeout — check logs"
-	default:
-		return "error: " + err.Error()
-	}
+	return "error: " + err.Error()
 }

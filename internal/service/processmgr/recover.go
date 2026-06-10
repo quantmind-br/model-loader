@@ -26,14 +26,47 @@ import (
 //
 // Linux-only. Other platforms: this method drops every entry (safe default).
 func (m *fsManager) Reconcile() error {
-	loaded, err := loadRegistry(m.registryPath)
+	survivors, dropped, total, err := m.refreshTracked("reconcile")
 	if err != nil {
-		m.logger.Error("reconcile_failed", "step", "load", "err", err)
 		return err
 	}
-	survivors := make([]domain.RunningInstance, 0, len(loaded))
+	if err := saveRegistry(m.registryPath, survivors); err != nil {
+		m.logger.Error("reconcile_failed", "step", "save", "err", err)
+		return fmt.Errorf("rewrite registry: %w", err)
+	}
+	m.logger.Info("reconcile_done",
+		"kept", len(survivors), "dropped", dropped, "total", total)
+	return nil
+}
+
+// RefreshFromDisk re-reads instances.json and replaces the in-memory tracked
+// set with the live subset, WITHOUT writing the registry back. Safe to call
+// periodically from observer processes (the TUI): persisting drops is the
+// owning process's job — a concurrent writer's fresh launch must not be
+// erased by an observer's stale snapshot.
+func (m *fsManager) RefreshFromDisk() error {
+	survivors, dropped, total, err := m.refreshTracked("refresh")
+	if err != nil {
+		return err
+	}
+	m.logger.Info("refresh_done",
+		"kept", len(survivors), "dropped", dropped, "total", total)
+	return nil
+}
+
+// refreshTracked loads the on-disk registry, filters it down to the entries
+// whose PID is alive AND still names the expected binary, and replaces
+// m.tracked wholesale with the live subset. It returns the survivors so the
+// caller decides whether to persist them (Reconcile) or not (RefreshFromDisk).
+// event prefixes the structured log records ("reconcile" or "refresh").
+func (m *fsManager) refreshTracked(event string) (survivors []domain.RunningInstance, dropped, total int, err error) {
+	loaded, err := loadRegistry(m.registryPath)
+	if err != nil {
+		m.logger.Error(event+"_failed", "step", "load", "err", err)
+		return nil, 0, 0, err
+	}
+	survivors = make([]domain.RunningInstance, 0, len(loaded))
 	tracked := make(map[int]domain.RunningInstance, len(loaded))
-	var dropped int
 	for _, ri := range loaded {
 		binary := ri.BinaryPath
 		if binary == "" {
@@ -44,7 +77,7 @@ func (m *fsManager) Reconcile() error {
 		exeToken := exeFromBinaryPath(binary)
 		if !pidAliveAndNameMatches(ri.PID, filepath.Base(exeToken)) {
 			if !pidAliveAndNameMatches(ri.PID, filepath.Base(m.defaultBinary)) {
-				m.logger.Info("reconcile_dropped",
+				m.logger.Info(event+"_dropped",
 					"pid", ri.PID, "profile_id", ri.ProfileID,
 					"reason", "pid_or_comm_mismatch")
 				dropped++
@@ -56,14 +89,14 @@ func (m *fsManager) Reconcile() error {
 		if exeToken != binary {
 			cmdlineToken := strings.TrimSpace(binary[len(exeToken):])
 			if cmdlineToken != "" && !pidAliveAndCmdlineContains(ri.PID, cmdlineToken) {
-				m.logger.Info("reconcile_dropped",
+				m.logger.Info(event+"_dropped",
 					"pid", ri.PID, "profile_id", ri.ProfileID,
 					"reason", "cmdline_mismatch")
 				dropped++
 				continue
 			}
 		}
-		m.logger.Info("reconcile_kept",
+		m.logger.Info(event+"_kept",
 			"pid", ri.PID, "profile_id", ri.ProfileID, "binary", binary)
 		survivors = append(survivors, ri)
 		tracked[ri.PID] = ri
@@ -73,13 +106,7 @@ func (m *fsManager) Reconcile() error {
 	m.tracked = tracked
 	m.mu.Unlock()
 
-	if err := saveRegistry(m.registryPath, survivors); err != nil {
-		m.logger.Error("reconcile_failed", "step", "save", "err", err)
-		return fmt.Errorf("rewrite registry: %w", err)
-	}
-	m.logger.Info("reconcile_done",
-		"kept", len(survivors), "dropped", dropped, "total", len(loaded))
-	return nil
+	return survivors, dropped, len(loaded), nil
 }
 
 // pidAliveAndNameMatches returns true iff pid is alive AND the basename of

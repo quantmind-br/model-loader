@@ -120,6 +120,59 @@ func TestReconcile_UsesInstanceBinaryPath(t *testing.T) {
 	_ = freshMgr.Kill(inst.PID)
 }
 
+// TestRefreshFromDisk_UpdatesTrackedWithoutWritingRegistry verifies the
+// observer-side refresh: the in-memory tracked set is replaced with the live
+// subset of instances.json, but the file itself is NEVER written back — a
+// TUI-side save could race the proxy process's writes and erase a freshly
+// launched instance (cross-process last-writer-wins).
+func TestRefreshFromDisk_UpdatesTrackedWithoutWritingRegistry(t *testing.T) {
+	mgr, dir := newTestManager(t)
+
+	// Our own PID is alive and /proc/self/comm names this test binary, so an
+	// entry whose BinaryPath matches our comm survives validation. PID 1 is
+	// alive too, but its comm never matches — it must be dropped from the
+	// in-memory set, yet stay in the file (no save).
+	commBytes, err := os.ReadFile("/proc/self/comm")
+	if err != nil {
+		t.Skip("cannot read /proc/self/comm:", err)
+	}
+	comm := strings.TrimSpace(string(commBytes))
+
+	entries := []domain.RunningInstance{
+		{ProfileID: "self", PID: os.Getpid(), Port: 9001, BinaryPath: comm, LogPath: filepath.Join(dir, "logs/self.log"), StartedAt: time.Now(), Background: true},
+		{ProfileID: "ghost", PID: 1, Port: 9002, BinaryPath: "definitely-not-init", LogPath: filepath.Join(dir, "logs/ghost.log"), StartedAt: time.Now(), Background: true},
+	}
+	if err := saveRegistry(mgr.registryPath, entries); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(mgr.registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := mgr.RefreshFromDisk(); err != nil {
+		t.Fatalf("RefreshFromDisk: %v", err)
+	}
+
+	// Assert against m.tracked directly: List() re-merges raw registry
+	// entries for cross-process discovery, which would mask the validated
+	// replacement performed by RefreshFromDisk.
+	mgr.mu.Lock()
+	got := snapshotLocked(mgr.tracked)
+	mgr.mu.Unlock()
+	if len(got) != 1 || got[0].PID != os.Getpid() || got[0].ProfileID != "self" {
+		t.Errorf("tracked after RefreshFromDisk = %+v, want only the live self entry", got)
+	}
+
+	after, err := os.ReadFile(mgr.registryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Errorf("RefreshFromDisk must not write the registry:\nbefore: %s\nafter:  %s", before, after)
+	}
+}
+
 // TestPidAliveAndNameMatches_LongBinaryName verifies that /proc/<pid>/comm
 // truncation (Linux TASK_COMM_LEN=16, so 15 visible chars) does not cause
 // a false-negative when the binary basename is longer than 15 bytes.

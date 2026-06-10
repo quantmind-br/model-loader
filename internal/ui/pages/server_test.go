@@ -48,16 +48,16 @@ func drainCmd(cmd tea.Cmd) []tea.Msg {
 }
 
 type fakeProcMgr struct {
-	insts          []domain.RunningInstance
-	history        []domain.ExitedInstance
-	reconcileCalls int
+	insts        []domain.RunningInstance
+	history      []domain.ExitedInstance
+	refreshCalls int
 }
 
 func (f *fakeProcMgr) Kill(pid int) error                      { return nil }
 func (f *fakeProcMgr) List() []domain.RunningInstance          { return f.insts }
 func (f *fakeProcMgr) TailLogs(pid int) (io.ReadCloser, error) { return nil, nil }
 func (f *fakeProcMgr) History() []domain.ExitedInstance        { return f.history }
-func (f *fakeProcMgr) Reconcile() error                        { f.reconcileCalls++; return nil }
+func (f *fakeProcMgr) RefreshFromDisk() error                  { f.refreshCalls++; return nil }
 
 type fakeMonMgr struct{}
 
@@ -81,21 +81,21 @@ func (f *fakeProxyForPages) Status() httpproxy.Status            { return f.stat
 func (f *fakeProxyForPages) BaseURL() string                     { return "http://127.0.0.1:9999" }
 func (f *fakeProxyForPages) EnsureRunning(context.Context) error { return nil }
 func (f *fakeProxyForPages) Load(_ context.Context, id string) (httpproxy.Status, error) {
+	f.ops = append(f.ops, "load "+id) // record the attempt even when it fails
 	if f.loadErr != nil {
 		return httpproxy.Status{}, f.loadErr
 	}
-	f.ops = append(f.ops, "load "+id)
 	f.status.LoadedProfileID = id
 	return f.status, nil
 }
 func (f *fakeProxyForPages) Unload(_ context.Context, force bool) (httpproxy.Status, error) {
-	if f.unloadErr != nil {
-		return httpproxy.Status{}, f.unloadErr
-	}
 	if force {
 		f.ops = append(f.ops, "unload force")
 	} else {
 		f.ops = append(f.ops, "unload")
+	}
+	if f.unloadErr != nil {
+		return httpproxy.Status{}, f.unloadErr
 	}
 	f.status.LoadedProfileID = ""
 	f.status.LoadedPID = 0
@@ -758,10 +758,11 @@ func TestServerPage_KillOrphanPIDUsesProcessManager(t *testing.T) {
 	}
 }
 
-func TestServerPage_RefreshReconcilesRegistry(t *testing.T) {
+func TestServerPage_RefreshReadsRegistryFromDisk(t *testing.T) {
 	// The TUI process never launches instances — the detached proxy process
-	// does. refreshInstancesCmd must re-read instances.json (Reconcile) so
-	// proxy-launched instances appear.
+	// does. refreshInstancesCmd must re-read instances.json (read-only, via
+	// RefreshFromDisk) so proxy-launched instances appear without the TUI
+	// ever writing the registry back.
 	pm := &fakeProcMgr{insts: []domain.RunningInstance{{PID: 1, Port: 8080, LogPath: "/tmp/x.log"}}}
 	p := NewServerPage(pm, &fakeMonMgr{}, nil)
 
@@ -772,8 +773,8 @@ func TestServerPage_RefreshReconcilesRegistry(t *testing.T) {
 	if _, ok := msgs[0].(monitorInstancesRefreshedMsg); !ok {
 		t.Fatalf("refresh produced %T, want monitorInstancesRefreshedMsg", msgs[0])
 	}
-	if pm.reconcileCalls != 1 {
-		t.Errorf("Reconcile called %d times, want 1", pm.reconcileCalls)
+	if pm.refreshCalls != 1 {
+		t.Errorf("RefreshFromDisk called %d times, want 1", pm.refreshCalls)
 	}
 }
 
@@ -786,6 +787,46 @@ func TestServerPage_RestartResultMsgSetsFlashOnError(t *testing.T) {
 	p, _ = updateAs[*ServerPage](p, restartResultMsg{pid: 42, err: errors.New("kill refused")})
 	if !strings.Contains(p.flash.Message(), "kill refused") {
 		t.Errorf("expected flash to contain error; got %q", p.flash.Message())
+	}
+}
+
+// TestServerPage_RestartLoadFailureFlashesError covers the half-failed
+// restart: Unload succeeds but the subsequent Load fails. The page must
+// surface an error flash and the proxy must have seen exactly
+// [unload, load] — proving the swap was attempted in order and not retried.
+func TestServerPage_RestartLoadFailureFlashesError(t *testing.T) {
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{
+		{PID: 7, Port: 8080, ProfileID: "demo", LogPath: "/tmp/x.log"},
+	}}
+	proxy := &fakeProxyForPages{
+		status:  httpproxy.Status{Running: true, LoadedProfileID: "demo", LoadedPID: 7},
+		loadErr: errors.New("model gone"),
+	}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil).WithProxy(proxy)
+	p.SetSize(120, 30)
+
+	_, cmd := p.Update(monitorRestartConfirmedMsg{pid: 7, profile: domain.Profile{ID: "demo"}})
+	msgs := drainCmd(cmd)
+	var res *restartResultMsg
+	for _, m := range msgs {
+		if v, ok := m.(restartResultMsg); ok {
+			res = &v
+			break
+		}
+	}
+	if res == nil {
+		t.Fatalf("no restartResultMsg from restart cmd; got %v", msgs)
+	}
+	if res.err == nil || !strings.Contains(res.err.Error(), "load") {
+		t.Fatalf("restart err = %v, want a load failure", res.err)
+	}
+	if got := strings.Join(proxy.ops, ", "); got != "unload, load demo" {
+		t.Errorf("proxy ops = %q, want \"unload, load demo\"", got)
+	}
+
+	p, _ = updateAs[*ServerPage](p, *res)
+	if !strings.Contains(p.flash.Message(), "model gone") {
+		t.Errorf("flash = %q, want the load error surfaced", p.flash.Message())
 	}
 }
 

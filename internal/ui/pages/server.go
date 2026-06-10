@@ -22,6 +22,9 @@ type procMgrIface interface {
 	Kill(pid int) error
 	TailLogs(pid int) (io.ReadCloser, error)
 	History() []domain.ExitedInstance
+	// RefreshFromDisk re-reads instances.json without writing it back —
+	// the TUI is an observer; the proxy process owns the registry.
+	RefreshFromDisk() error
 }
 
 // serverProxyController is the slice of *proxysupervisor.Supervisor the

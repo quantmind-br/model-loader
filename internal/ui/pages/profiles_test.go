@@ -56,11 +56,12 @@ type fakeProxy struct {
 	loaded      []string
 	unloads     int
 	ensureCalls int
+	ensureErr   error
 	loadErr     error
 	unloadErr   error
 }
 
-func (f *fakeProxy) EnsureRunning(context.Context) error { f.ensureCalls++; return nil }
+func (f *fakeProxy) EnsureRunning(context.Context) error { f.ensureCalls++; return f.ensureErr }
 func (f *fakeProxy) Load(_ context.Context, id string) (httpproxy.Status, error) {
 	if f.loadErr != nil {
 		return httpproxy.Status{}, f.loadErr
@@ -418,6 +419,85 @@ func TestProfilesPage_UnloadFlow(t *testing.T) {
 	page = updated.(ProfilesPage)
 	if !strings.Contains(page.flash.Message(), "unloaded demo") {
 		t.Errorf("flash = %q, want 'unloaded demo'", page.flash.Message())
+	}
+}
+
+// TestProfilesPage_UnloadErrorFlashes covers the failure leg of the K
+// shortcut: a proxy Unload error must surface as an error flash.
+func TestProfilesPage_UnloadErrorFlashes(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := profilestore.NewFSStore(dir)
+	fp := &fakeProxy{
+		status:    httpproxy.Status{Running: true, LoadedProfileID: "demo", LoadedPID: 4242},
+		unloadErr: errors.New("backend busy"),
+	}
+	page := NewProfilesPage(store, domain.FlagSchema{}).WithProxyController(fp)
+	updated, cmd := page.Update(profilesUnloadConfirmedMsg{profileID: "demo"})
+	page = updated.(ProfilesPage)
+
+	msgs := drainCmd(cmd)
+	var done *profilesUnloadDoneMsg
+	for _, m := range msgs {
+		if v, ok := m.(profilesUnloadDoneMsg); ok {
+			done = &v
+			break
+		}
+	}
+	if done == nil {
+		t.Fatalf("no profilesUnloadDoneMsg from unload cmd; got %v", msgs)
+	}
+	if done.err == nil {
+		t.Fatal("done.err = nil, want the proxy unload error")
+	}
+	updated, _ = page.Update(*done)
+	page = updated.(ProfilesPage)
+	if !strings.Contains(page.flash.Message(), "unload failed") ||
+		!strings.Contains(page.flash.Message(), "backend busy") {
+		t.Errorf("flash = %q, want 'unload failed: ... backend busy'", page.flash.Message())
+	}
+}
+
+// TestLaunch_ProxyEnsureRunningErrorFlashes covers the EnsureRunning failure
+// leg: when the proxy process cannot be started, the launch pipeline must
+// emit a launchErrMsg and the page must surface an error flash without ever
+// attempting a Load.
+func TestLaunch_ProxyEnsureRunningErrorFlashes(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := profilestore.NewFSStore(dir)
+	fp := &fakeProxy{ensureErr: errors.New("proxy port busy")}
+	page := NewProfilesPage(store, domain.FlagSchema{}).
+		WithProxyController(fp).
+		WithBackendResolver(stubResolver{})
+	page, _ = page.startLaunch(domain.Profile{ID: "demo", Name: "Demo"})
+	if !page.launch.inFlight {
+		t.Fatal("launch should be in flight")
+	}
+
+	cmd := page.launchProfileCmd(domain.Profile{ID: "demo", Name: "Demo"})
+	msgs := drainCmd(cmd)
+	var lerr *launchErrMsg
+	for _, m := range msgs {
+		if v, ok := m.(launchErrMsg); ok {
+			lerr = &v
+			break
+		}
+	}
+	if lerr == nil {
+		t.Fatalf("no launchErrMsg from failing EnsureRunning; got %v", msgs)
+	}
+	if !strings.Contains(lerr.err.Error(), "start proxy") {
+		t.Errorf("launch err = %q, want it to mention 'start proxy'", lerr.err)
+	}
+	if len(fp.loaded) != 0 {
+		t.Errorf("proxy loads = %v, want none after EnsureRunning failure", fp.loaded)
+	}
+	updated, _ := page.Update(*lerr)
+	page = updated.(ProfilesPage)
+	if page.launch.inFlight {
+		t.Error("inFlight should be cleared after launchErrMsg")
+	}
+	if !strings.Contains(page.flash.Message(), "proxy port busy") {
+		t.Errorf("flash = %q, want the EnsureRunning error surfaced", page.flash.Message())
 	}
 }
 

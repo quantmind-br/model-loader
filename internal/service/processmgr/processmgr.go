@@ -45,6 +45,11 @@ type Manager interface {
 	// History returns the persisted exit-history entries. The slice is a
 	// defensive copy; callers may mutate it freely.
 	History() []domain.ExitedInstance
+	// RefreshFromDisk re-reads instances.json and replaces the in-memory
+	// tracked set with the live subset, without writing the registry back.
+	// Safe for observer processes (the TUI) to call periodically; only the
+	// owning process may persist drops (Reconcile).
+	RefreshFromDisk() error
 }
 
 // LastUsedSink is a minimal callback to update Profile.Meta.LastUsedAt.

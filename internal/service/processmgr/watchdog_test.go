@@ -32,6 +32,7 @@ func (m *watchdogTestManager) TailLogs(int) (io.ReadCloser, error)              
 func (m *watchdogTestManager) Close() error                                      { return nil }
 func (m *watchdogTestManager) GetExitInfo(int) (ExitInfo, bool)                  { return ExitInfo{}, false }
 func (m *watchdogTestManager) History() []domain.ExitedInstance                  { return nil }
+func (m *watchdogTestManager) RefreshFromDisk() error                            { return nil }
 
 func TestWatchdogPolicies(t *testing.T) {
 	tests := []struct {

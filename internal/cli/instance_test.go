@@ -44,6 +44,7 @@ func (f *fakeManager) GetExitInfo(pid int) (processmgr.ExitInfo, bool) {
 	return processmgr.ExitInfo{}, false
 }
 func (f *fakeManager) History() []domain.ExitedInstance { return f.exited }
+func (f *fakeManager) RefreshFromDisk() error           { return nil }
 
 func TestListInstances_TableAndJSON(t *testing.T) {
 	m := &fakeManager{running: []domain.RunningInstance{
