@@ -99,9 +99,11 @@ func (s *FSStore) Get(id string) (domain.Profile, error) {
 	p.ID = id
 	oldVersion := p.SchemaVersion
 	MigrateProfile(&p)
-	// Persist back when either the id was healed or a migration bumped the
-	// schema version, so the divergence/old version doesn't resurface.
-	if idChanged || p.SchemaVersion != oldVersion {
+	stripped := stripReservedArgs(&p)
+	// Persist back when the id was healed, a migration bumped the schema
+	// version, or a reserved arg was stripped, so the divergence/old
+	// version/stale arg doesn't resurface.
+	if idChanged || p.SchemaVersion != oldVersion || stripped {
 		_ = s.Save(p)
 	}
 	return p, nil
@@ -114,6 +116,7 @@ func (s *FSStore) Save(p domain.Profile) error {
 	if p.ID == "" {
 		return ErrInvalidID
 	}
+	stripReservedArgs(&p)
 	if p.SchemaVersion == 0 {
 		p.SchemaVersion = domain.SchemaVersion
 	}
@@ -219,14 +222,6 @@ func (s *FSStore) Duplicate(srcID, newID string) (domain.Profile, error) {
 	dup.Pinned = false              // the copy starts unpinned (UX-01)
 	dup.Meta = domain.ProfileMeta{} // reset timestamps; Save fills them
 
-	if dup.Args != nil {
-		if port, ok := portAsInt(dup.Args["port"]); ok {
-			used := s.usedPorts()
-			dup.Args = cloneArgs(dup.Args)
-			dup.Args["port"] = float64(nextFreePort(used, port))
-		}
-	}
-
 	if err := s.Save(dup); err != nil {
 		return domain.Profile{}, err
 	}
@@ -280,48 +275,31 @@ func (s *FSStore) Rename(oldID string, p domain.Profile) error {
 	return nil
 }
 
-// usedPorts collects every "port" arg currently persisted in the store.
-// I/O errors degrade gracefully — caller treats the returned set as a
-// best-effort hint, not a guarantee.
-func (s *FSStore) usedPorts() map[int]struct{} {
-	used := make(map[int]struct{})
-	profiles, _, err := s.ListWithDiagnostics()
-	if err != nil {
-		return used
-	}
-	for _, p := range profiles {
-		if port, ok := portAsInt(p.Args["port"]); ok {
-			used[port] = struct{}{}
+// reservedArgs are launch parameters owned by the process manager. They are
+// removed on read and write so stored profiles can never carry them; the
+// manager assigns them at launch time.
+var reservedArgs = []string{"port"}
+
+// stripReservedArgs removes manager-owned keys from p.Args, cloning the map
+// first so the caller's copy is untouched. Reports whether anything changed.
+func stripReservedArgs(p *domain.Profile) bool {
+	hit := false
+	for _, k := range reservedArgs {
+		if _, ok := p.Args[k]; ok {
+			hit = true
+			break
 		}
 	}
-	return used
-}
-
-// nextFreePort returns the smallest port > start not present in used.
-// Falls back to start when the entire upper range is exhausted.
-func nextFreePort(used map[int]struct{}, start int) int {
-	for p := start + 1; p < 65536; p++ {
-		if _, taken := used[p]; !taken {
-			return p
-		}
+	if !hit {
+		return false
 	}
-	return start
-}
-
-func portAsInt(v any) (int, bool) {
-	switch t := v.(type) {
-	case float64:
-		return int(t), true
-	case int:
-		return t, true
+	args := make(map[string]any, len(p.Args))
+	for k, v := range p.Args {
+		args[k] = v
 	}
-	return 0, false
-}
-
-func cloneArgs(in map[string]any) map[string]any {
-	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = v
+	for _, k := range reservedArgs {
+		delete(args, k)
 	}
-	return out
+	p.Args = args
+	return true
 }

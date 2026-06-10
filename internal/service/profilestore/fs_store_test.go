@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -518,36 +519,61 @@ func TestFSStore_DuplicateClearsPin(t *testing.T) {
 	}
 }
 
-func TestFSStore_DuplicateBumpsPortWhenInUse(t *testing.T) {
-	s, _ := newStore(t)
-	if err := s.Save(sampleProfile("a", "A")); err != nil {
+func TestGet_StripsReservedPortArg(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewFSStore(dir)
+	if err != nil {
 		t.Fatal(err)
 	}
-	dup, err := s.Duplicate("a", "a-copy")
+	raw := `{"id":"p1","name":"P1","model":"/m.gguf","args":{"port":8080,"ctx-size":4096}}`
+	if err := os.WriteFile(filepath.Join(dir, "p1.json"), []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := s.Get("p1")
 	if err != nil {
-		t.Fatalf("Duplicate: %v", err)
+		t.Fatal(err)
 	}
-	got, ok := dup.Args["port"].(float64)
-	if !ok {
-		t.Fatalf("dup.Args[port] type = %T, want float64", dup.Args["port"])
+	if _, ok := p.Args["port"]; ok {
+		t.Fatal("port must be stripped on load")
 	}
-	if int(got) != 8081 {
-		t.Errorf("dup port = %d, want 8081 (bumped from 8080)", int(got))
+	if p.Args["ctx-size"] != float64(4096) {
+		t.Fatal("other args must survive")
 	}
-	// Origin profile must remain unchanged.
-	orig, _ := s.Get("a")
-	if origPort, _ := orig.Args["port"].(float64); int(origPort) != 8080 {
-		t.Errorf("orig port mutated to %d", int(origPort))
+	data, _ := os.ReadFile(filepath.Join(dir, "p1.json"))
+	if strings.Contains(string(data), `"port"`) {
+		t.Fatal("port must be removed from the on-disk file")
 	}
 }
 
-func TestNextFreePort_FallsBackWhenExhausted(t *testing.T) {
-	used := make(map[int]struct{})
-	for p := 65000; p < 65536; p++ {
-		used[p] = struct{}{}
+func TestSave_StripsReservedPortArg(t *testing.T) {
+	s, _ := newStore(t)
+	p := domain.Profile{ID: "p2", Name: "P2", Args: map[string]any{"port": float64(9090)}}
+	if err := s.Save(p); err != nil {
+		t.Fatal(err)
 	}
-	if got := nextFreePort(used, 65500); got != 65500 {
-		t.Errorf("nextFreePort exhausted = %d, want fallback 65500", got)
+	got, err := s.Get("p2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got.Args["port"]; ok {
+		t.Fatal("port must be stripped on save")
+	}
+	if p.Args["port"] != float64(9090) {
+		t.Fatal("caller Args mutated by Save")
+	}
+}
+
+func TestDuplicate_NoPortHandling(t *testing.T) {
+	s, _ := newStore(t)
+	if err := s.Save(domain.Profile{ID: "src", Name: "Src", Args: map[string]any{"ctx-size": float64(2048)}}); err != nil {
+		t.Fatal(err)
+	}
+	dup, err := s.Duplicate("src", "dst")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := dup.Args["port"]; ok {
+		t.Fatal("duplicate must not invent a port")
 	}
 }
 
