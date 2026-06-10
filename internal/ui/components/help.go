@@ -12,22 +12,23 @@ const HelpMarkdown = `# model-loader — Keybindings
 - ` + "`Tab`" + ` — next tab     ` + "`Shift+Tab`" + ` — previous tab
 - ` + "`?`" + ` — toggle this help
 - ` + "`q`" + ` / ` + "`Ctrl+C`" + ` — quit (background instances survive)
+- ` + "`↑`" + `/` + "`↓`" + ` (or ` + "`k`" + `/` + "`j`" + `) — move selection in lists     ` + "`g`" + `/` + "`G`" + ` — jump to top/bottom
 
-_Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or destructive (e.g. ` + "`R`" + ` rescan walks the filesystem, ` + "`L`" + ` launches a process)._
+_Convention: lowercase keys are light/cheap actions (navigate, edit, view); uppercase keys are heavy or destructive (e.g. ` + "`R`" + ` rescan walks the filesystem, ` + "`K`" + ` kill stops a process, ` + "`X`" + ` delete removes data). Destructive uppercase keys always ask for confirmation._
 
 ## Profiles tab
 
 - ` + "`enter`" + ` — launch selected profile
-- ` + "`E`" + ` — edit selected profile
+- ` + "`e`" + ` — edit selected profile
 - ` + "`n`" + ` — new profile     ` + "`d`" + ` — duplicate
-- ` + "`x`" + ` — delete
+- ` + "`X`" + ` — delete (confirm)
 - ` + "`b`" + ` — toggle background/foreground (default background)
-- ` + "`k`" + ` — kill the most recent launched instance
-- ` + "`r`" + ` — refresh profile list
+- ` + "`K`" + ` — kill the most recent launched instance (confirm)
+- ` + "`R`" + ` — refresh profile list
 - ` + "`p`" + ` — pin selected profile
 - ` + "`I`" + ` — import profiles from JSON bundle
 - ` + "`u`" + ` — undo last import
-- ` + "`e`" + ` — export all profiles to JSON bundle
+- ` + "`E`" + ` — export all profiles to JSON bundle
 - ` + "`ctrl+t`" + ` — cycle Essentials → Advanced → Environment → Sizing sub-tabs while editing
 - ` + "`/`" + ` — filter
 
@@ -35,9 +36,9 @@ _Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or
 
 - ` + "`v`" + ` — cycle Logs / Slots / Metrics / History sub-views
 - ` + "`Space`" + ` — pause/resume log scroll
-- ` + "`k`" + ` — kill selected instance
-- ` + "`r`" + ` — restart selected instance (Kill + Launch)
-- ` + "`H`" + ` — open history chart for the selected instance
+- ` + "`K`" + ` — kill selected instance (confirm)
+- ` + "`R`" + ` — restart selected instance (Kill + Launch, confirm)
+- ` + "`h`" + ` — open history chart for the selected instance
 - ` + "`1`" + ` / ` + "`2`" + ` / ` + "`3`" + ` / ` + "`4`" + ` — history chart window: 1h / 6h / 24h / 7d (only while chart is open)
 - ` + "`s`" + ` — start HTTP proxy listener
 - ` + "`x`" + ` — stop HTTP proxy listener
@@ -55,7 +56,7 @@ _Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or
 
 - ` + "`n`" + ` — new backend
 - ` + "`enter`" + ` / ` + "`e`" + ` — edit selected backend
-- ` + "`x`" + ` — delete selected backend
+- ` + "`X`" + ` — delete selected backend (confirm)
 - ` + "`D`" + ` — set selected backend as default
 - ` + "`R`" + ` — refresh selected backend schema
 - ` + "`P`" + ` — probe selected backend (latency / version)
@@ -66,9 +67,9 @@ _Convention: lowercase keys are light/cheap actions; uppercase keys are heavy or
 - ` + "`b`" + ` — run a benchmark on a profile
 - ` + "`enter`" + ` — open details for the selected run
 - ` + "`c`" + ` — compare two runs
-- ` + "`e`" + ` — export selected run to JSON
-- ` + "`x`" + ` — delete selected run
-- ` + "`r`" + ` — reload runs from disk
+- ` + "`E`" + ` — export selected run to JSON
+- ` + "`X`" + ` — delete selected run (confirm)
+- ` + "`R`" + ` — reload runs from disk
 - ` + "`h`" + ` — history chart (when runs exist)
 - ` + "`/`" + ` — filter (in profile picker)
 - ` + "`esc`" + ` — back / cancel

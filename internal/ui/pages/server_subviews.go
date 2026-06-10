@@ -143,14 +143,22 @@ func (p *ServerPage) renderSubViewBody() string {
 		}
 		return bottom
 	case SubViewMetrics:
-		if st == nil || st.subErr != "" {
+		if st.subErr != "" {
 			return theme.Subtitle.Render("GPU metrics unavailable — check nvidia-smi or monitoring service")
 		}
 		if len(st.mets.TokensPerSec) == 0 && len(st.mets.RequestsPerSec) == 0 {
 			return "(no metrics yet — first sample arrives after the slots tick)"
 		}
+		// tokens/s is only sampled while the model is actively decoding, but
+		// req/s gets a 0-rate sample every slot tick. Inject an idle baseline
+		// so the tokens/s row renders a flat sparkline instead of blank space
+		// next to a populated req/s row (RENDER-03).
+		tokens := st.mets.TokensPerSec
+		if len(tokens) == 0 {
+			tokens = []float64{0}
+		}
 		var b strings.Builder
-		fmt.Fprintf(&b, "tokens/s: %s\n", theme.OK.Render(components.Sparkline(st.mets.TokensPerSec, 40)))
+		fmt.Fprintf(&b, "tokens/s: %s\n", theme.OK.Render(components.Sparkline(tokens, 40)))
 		fmt.Fprintf(&b, "req/s   : %s\n", theme.Warn.Render(components.Sparkline(st.mets.RequestsPerSec, 40)))
 		if st.gpu.VRAMTotalMB > 0 {
 			fmt.Fprintf(&b, "VRAM    : %d/%d MB  util %.0f%%\n", st.gpu.VRAMUsedMB, st.gpu.VRAMTotalMB, st.gpu.Utilization)

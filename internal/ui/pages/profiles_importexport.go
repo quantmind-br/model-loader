@@ -40,12 +40,37 @@ func (p ProfilesPage) startImport() (tea.Model, tea.Cmd) {
 	fp.AllowedTypes = []string{".json"}
 	fp.FileAllowed = true
 	fp.DirAllowed = false
-	if home, err := os.UserHomeDir(); err == nil {
-		fp.CurrentDirectory = home
-	}
+	// Open where bundles are most likely to be (the export dir is where [E]
+	// writes them), falling back to the profiles dir, then $HOME — instead of
+	// always starting in $HOME where there's rarely a bundle to pick (UX-01).
+	fp.CurrentDirectory = p.importStartDir()
+	// Replace the bubbles default empty-state ("Bummer. No Files Found.") with
+	// a message in the app's voice (UX-01).
+	fp.Styles.EmptyDirectory = fp.Styles.EmptyDirectory.
+		SetString("No .json bundles here — navigate to a folder with an exported bundle, or press esc to cancel.")
 	p.importPicker = fp
 	p.importPickerActive = true
 	return p, p.importPicker.Init()
+}
+
+// importStartDir picks the directory the import file picker opens in:
+// the configured export dir (where [E] writes bundles), then the profiles
+// dir when the store is FS-backed, then the user's home directory.
+func (p ProfilesPage) importStartDir() string {
+	if p.exportDir != "" {
+		if _, err := os.Stat(p.exportDir); err == nil {
+			return p.exportDir
+		}
+	}
+	if fsStore, ok := p.store.(*profilestore.FSStore); ok {
+		if dir := fsStore.Dir(); dir != "" {
+			return dir
+		}
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return home
+	}
+	return "."
 }
 
 func (p ProfilesPage) startImportWithPath(path string) (tea.Model, tea.Cmd) {

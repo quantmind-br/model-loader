@@ -1,6 +1,10 @@
 package cli
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/quantmind-br/model-loader/internal/service/benchmark"
+)
 
 func TestBenchmarkCommand_Registered(t *testing.T) {
 	cmd, _, err := rootCmd.Find([]string{"benchmark"})
@@ -15,8 +19,21 @@ func TestBenchmarkCommand_Registered(t *testing.T) {
 }
 
 func TestParseBenchMode(t *testing.T) {
-	if m, ok := parseBenchMode("judge"); !ok || m == "" {
-		t.Fatalf("judge should parse")
+	// Every registered mode id parses, plus legacy aliases.
+	for _, m := range benchmark.ModesInOrder() {
+		got, ok := parseBenchMode(string(m))
+		if !ok || got != m {
+			t.Fatalf("mode %q should parse to itself, got %q ok=%v", m, got, ok)
+		}
+	}
+	for alias, want := range map[string]benchmark.Mode{
+		"long-context": benchmark.ModeLongContext,
+		"llamabench":   benchmark.ModeLlamaBench,
+		"throughput":   benchmark.ModeLlamaBench,
+	} {
+		if got, ok := parseBenchMode(alias); !ok || got != want {
+			t.Fatalf("alias %q should parse to %q, got %q ok=%v", alias, want, got, ok)
+		}
 	}
 	if _, ok := parseBenchMode("bogus"); ok {
 		t.Fatalf("bogus mode must not parse")

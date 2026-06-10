@@ -1,6 +1,8 @@
-// Playground modal is currently inert — input has no cursor handling and
-// p.response is never populated by a real stream. Re-enable Ctrl+P in
-// root.go once streaming wiring is in place.
+// Playground modal is currently inert and unwired — input has no cursor
+// handling and p.response is never populated by a real stream. The dead
+// Ctrl+P toggle and playground fields were removed from root.go (DEAD-01);
+// to revive this, add streaming wiring here and re-introduce a keybinding
+// (and overlay) in the root model.
 package components
 
 import (

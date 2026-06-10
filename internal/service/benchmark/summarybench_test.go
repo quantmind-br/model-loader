@@ -28,17 +28,6 @@ func TestFactCoverage_PartialMiss(t *testing.T) {
 	}
 }
 
-func TestSummaryDetail_RoundTrip(t *testing.T) {
-	d := summaryDetail(4, 5, 0.85, "self")
-	cov, coh, ok := parseSummaryScores(d)
-	if !ok {
-		t.Fatalf("parse failed on %q", d)
-	}
-	if math.Abs(cov-0.8) > 1e-9 || math.Abs(coh-0.85) > 1e-9 {
-		t.Errorf("round-trip: cov=%v coh=%v", cov, coh)
-	}
-}
-
 func TestBuildSummaryPrompt_IncludesAllDocs(t *testing.T) {
 	p := SummaryProblem{Documents: []string{"AAA.", "BBB.", "CCC."}}
 	got := buildSummaryPrompt(p)
@@ -51,9 +40,9 @@ func TestBuildSummaryPrompt_IncludesAllDocs(t *testing.T) {
 
 func TestSummaryFinalize_MeanScore(t *testing.T) {
 	problems := []ProblemResult{
-		{Score: 0.8, Detail: summaryDetail(4, 5, 0.9, "self")},
-		{Score: 0.4, Detail: summaryDetail(2, 5, 0.5, "self")},
-		{Score: 0.0, Detail: "no scores here"}, // ignored (unparseable)
+		{Score: 0.8, SubScores: map[string]float64{"coverage": 0.8, "coherence": 0.9}},
+		{Score: 0.4, SubScores: map[string]float64{"coverage": 0.4, "coherence": 0.5}},
+		{Score: 0.0, Detail: "no scores here"}, // ignored (nil SubScores)
 	}
 	var agg Aggregate
 	summaryHandler{}.Finalize(&agg, problems)

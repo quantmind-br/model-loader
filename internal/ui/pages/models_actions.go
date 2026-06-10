@@ -45,6 +45,32 @@ func (p ModelsPage) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return p, cmd
 }
 
+// askClearDone arms the Downloads "clear all finished" confirm. The onYes
+// callback emits downloadClearConfirmedMsg so the actual ClearTerminal runs in
+// Update via performDownloadClear (DESTRUCT-02).
+func (p ModelsPage) askClearDone() (tea.Model, tea.Cmd) {
+	p.dlFocus = 0
+	if p.dlManager == nil {
+		return p, nil
+	}
+	p.clearDoneConfirm = components.NewConfirm(
+		"Clear all finished downloads?",
+		nil,
+		func(any) tea.Cmd {
+			return func() tea.Msg { return downloadClearConfirmedMsg{} }
+		},
+		"Clear",
+		"Cancel",
+	)
+	return p, p.clearDoneConfirm.Init()
+}
+
+func (p ModelsPage) updateClearDoneConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	p.clearDoneConfirm, cmd = p.clearDoneConfirm.Update(msg)
+	return p, cmd
+}
+
 // updateActionMenu owns the inline action selector while it is on
 // screen. Up/Down move the cursor, Enter commits the highlighted option,
 // Esc cancels.

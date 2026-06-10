@@ -10,6 +10,11 @@ import (
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
 
+// benchmarkDeleteConfirmedMsg is emitted by deleteConfirm.onYes once the user
+// confirms a run deletion; performDelete runs the actual bstore.Delete in
+// Update so store I/O stays on the page (DESTRUCT-01).
+type benchmarkDeleteConfirmedMsg struct{ id string }
+
 func (p BenchmarkPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -18,6 +23,8 @@ func (p BenchmarkPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case components.FlashClearMsg:
 		p.flash, _ = p.flash.Update(m)
 		return p, nil
+	case benchmarkDeleteConfirmedMsg:
+		return p.performDelete(m.id)
 	case benchRunsLoadedMsg:
 		if m.err == nil {
 			p.runs = m.runs
@@ -34,19 +41,35 @@ func (p BenchmarkPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case benchRunDoneMsg:
 		return p.handleRunDone(m)
 	case spinner.TickMsg:
+		// Only re-arm the tick while a run is in flight; outside bvRunning the
+		// spinner is invisible and ticking would just burn CPU.
+		if p.view != bvRunning {
+			return p, nil
+		}
 		var cmd tea.Cmd
 		p.spinner, cmd = p.spinner.Update(m)
-		if p.view == bvRunning {
-			return p, cmd
-		}
 		return p, cmd
 	case tea.KeyMsg:
 		return p.handleKey(m)
+	}
+	// Forward non-key messages to the confirm so huh's async Cmd→Msg cycles
+	// (focus init, StateCompleted transition) complete (DESTRUCT-01).
+	if p.deleteConfirm.Active() {
+		var cmd tea.Cmd
+		p.deleteConfirm, cmd = p.deleteConfirm.Update(msg)
+		return p, cmd
 	}
 	return p, nil
 }
 
 func (p BenchmarkPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// The confirm modal takes priority over every view so esc/←/→/enter drive
+	// the dialog instead of the run list underneath it.
+	if p.deleteConfirm.Active() {
+		var cmd tea.Cmd
+		p.deleteConfirm, cmd = p.deleteConfirm.Update(msg)
+		return p, cmd
+	}
 	switch p.view {
 	case bvProfilePick:
 		return p.keyProfilePick(msg)
@@ -64,7 +87,7 @@ func (p BenchmarkPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			p.view = bvList
 			return p, nil
 		}
-		if msg.String() == "e" && p.view == bvRunDetail && p.detail != nil {
+		if msg.String() == "E" && p.view == bvRunDetail && p.detail != nil {
 			return p.exportRunValue(*p.detail)
 		}
 		return p, nil
@@ -95,11 +118,11 @@ func (p BenchmarkPage) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.openCompare()
 	case "h":
 		return p.openHistory()
-	case "x":
-		return p.deleteSelected()
-	case "e":
+	case "X":
+		return p.askDeleteSelected()
+	case "E":
 		return p.exportSelected()
-	case "r":
+	case "R":
 		return p, p.loadRunsCmd()
 	}
 	return p, nil
@@ -194,11 +217,28 @@ func (p BenchmarkPage) keyModePick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return p, nil
 }
 
-func (p BenchmarkPage) deleteSelected() (tea.Model, tea.Cmd) {
+// askDeleteSelected arms the delete-run confirm for the highlighted run. The
+// onYes callback emits benchmarkDeleteConfirmedMsg so the actual store delete
+// runs in Update via performDelete (DESTRUCT-01).
+func (p BenchmarkPage) askDeleteSelected() (tea.Model, tea.Cmd) {
 	if p.runCursor >= len(p.runs) {
 		return p, nil
 	}
 	id := p.runs[p.runCursor].ID
+	p.deleteConfirm = components.NewConfirm(
+		"Delete benchmark run "+id+"?",
+		id,
+		func(payload any) tea.Cmd {
+			rid, _ := payload.(string)
+			return func() tea.Msg { return benchmarkDeleteConfirmedMsg{id: rid} }
+		},
+		"Delete",
+		"Cancel",
+	)
+	return p, p.deleteConfirm.Init()
+}
+
+func (p BenchmarkPage) performDelete(id string) (tea.Model, tea.Cmd) {
 	if err := p.bstore.Delete(id); err != nil {
 		p.flash, _ = flashError(p.flash, "delete: "+err.Error())
 		return p, nil

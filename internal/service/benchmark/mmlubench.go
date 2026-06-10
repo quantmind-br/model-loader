@@ -116,6 +116,7 @@ func (r *Runner) runMMLUBench(ctx context.Context, base, model string, p MMLUPro
 	if res.Resolved {
 		res.Score = 1
 	}
+	res.Category = p.Category
 	res.Detail = fmt.Sprintf("category=%s expected %s got %q", p.Category, p.Answer, got)
 	return res, tr
 }
@@ -127,20 +128,23 @@ func (mmluHandler) Category() Category              { return CatKnowledge }
 func (mmluHandler) Count(r *Runner) int             { return len(r.mmluProblems) }
 func (mmluHandler) Prepare(*Runner) (Scorer, error) { return nil, nil }
 
-// Finalize sets MMLUAccuracy over all answered problems. Per-category accuracy
-// is derivable from each ProblemResult.Detail, so no extra aggregate field is
-// needed.
+// Finalize sets MMLUAccuracy over answered problems only (request errors are
+// excluded from the denominator). Per-category accuracy is derivable from each
+// ProblemResult.Category, so no extra aggregate field is needed.
 func (mmluHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
-	if len(problems) == 0 {
-		return
-	}
-	solved := 0
+	answered, solved := 0, 0
 	for _, p := range problems {
+		if p.Err != "" {
+			continue
+		}
+		answered++
 		if p.Resolved {
 			solved++
 		}
 	}
-	agg.MMLUAccuracy = float64(solved) / float64(len(problems))
+	if answered > 0 {
+		agg.MMLUAccuracy = float64(solved) / float64(answered)
+	}
 }
 
 func (mmluHandler) Execute(ctx context.Context, r *Runner, base, model string, _ Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {

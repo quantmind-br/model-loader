@@ -11,23 +11,51 @@ import (
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
-// openCompare collects the most recent run per profile for a side-by-side
-// comparison. p.runs is newest-first, so the first hit per profile wins.
+// benchCompareSection is one mode's slice of the compare view: the most
+// recent complete run of each profile in that mode.
+type benchCompareSection struct {
+	Mode benchmark.Mode
+	Runs []benchmark.Run
+}
+
+// openCompare groups the most recent complete run per (mode, profile) into
+// one section per mode, so only like-for-like numbers sit side by side.
+// Partial runs (Err set) are skipped — a half-finished run would distort the
+// comparison. p.runs is newest-first, so the first hit per key wins.
 func (p BenchmarkPage) openCompare() (tea.Model, tea.Cmd) {
 	if len(p.runs) == 0 {
 		p.flash, _ = flashError(p.flash, "no runs to compare")
 		return p, nil
 	}
 	seen := map[string]bool{}
-	latest := make([]benchmark.Run, 0)
+	byMode := map[benchmark.Mode][]benchmark.Run{}
 	for _, r := range p.runs {
-		if seen[r.ProfileID] {
+		if r.Err != "" {
 			continue
 		}
-		seen[r.ProfileID] = true
-		latest = append(latest, r)
+		key := string(r.Mode) + "|" + r.ProfileID
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		byMode[r.Mode] = append(byMode[r.Mode], r)
 	}
-	p.compareRuns = latest
+	sections := make([]benchCompareSection, 0, len(byMode))
+	for _, m := range benchmark.ModesInOrder() {
+		if runs := byMode[m]; len(runs) > 0 {
+			sections = append(sections, benchCompareSection{Mode: m, Runs: runs})
+			delete(byMode, m)
+		}
+	}
+	// Runs persisted by unknown/legacy modes still deserve a section.
+	for m, runs := range byMode {
+		sections = append(sections, benchCompareSection{Mode: m, Runs: runs})
+	}
+	if len(sections) == 0 {
+		p.flash, _ = flashError(p.flash, "no complete runs to compare")
+		return p, nil
+	}
+	p.compareSections = sections
 	p.view = bvCompare
 	return p, nil
 }
@@ -51,18 +79,50 @@ func (p BenchmarkPage) openHistory() (tea.Model, tea.Cmd) {
 }
 
 func (p BenchmarkPage) viewCompare() string {
-	title := theme.Title.Render("Compare profiles (latest run each)")
-	header := theme.Subtitle.Render(fmt.Sprintf("%-20s  %-16s  %6s  %6s  %8s  %7s  %8s  %s",
-		"profile", "mode", "solve", "score", "tok/s", "TTFT", "vram", "quant"))
-	rows := []string{header}
-	for _, r := range p.compareRuns {
-		a := r.Aggregate
-		rows = append(rows, fmt.Sprintf("%-20s  %-16s  %5.0f%%  %6.2f  %8.1f  %5.0fms  %6dMB  %s",
-			truncate(r.ProfileName, 20), truncate(r.Mode.Title(), 16),
-			a.SolveRate*100, a.AvgScore, a.AvgTokensPerSecond, a.AvgTTFTms, a.PeakVRAMMB,
-			dash(r.Profile.Quantization)))
+	title := theme.Title.Render("Compare profiles (latest complete run per mode)")
+	parts := []string{title}
+	for _, sec := range p.compareSections {
+		parts = append(parts, "", theme.Subtitle.Render(sec.Mode.Title()))
+		parts = append(parts, compareSectionRows(sec)...)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, title, strings.Join(rows, "\n"))
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
+
+// compareSectionRows renders one mode section with columns that fit the mode:
+// speed-only modes drop solve/score; the needle probe shows recall.
+func compareSectionRows(sec benchCompareSection) []string {
+	switch sec.Mode {
+	case benchmark.ModeLlamaBench:
+		rows := []string{theme.Subtitle.Render(fmt.Sprintf("%-20s  %8s  %10s  %7s  %8s  %s",
+			"profile", "tok/s", "pp tok/s", "TTFT", "vram", "quant"))}
+		for _, r := range sec.Runs {
+			a := r.Aggregate
+			rows = append(rows, fmt.Sprintf("%-20s  %8.1f  %10.1f  %5.0fms  %6dMB  %s",
+				truncate(r.ProfileName, 20), a.AvgTokensPerSecond, a.AvgPromptProcessingTPS,
+				a.AvgTTFTms, a.PeakVRAMMB, dash(r.Profile.Quantization)))
+		}
+		return rows
+	case benchmark.ModeLongContext:
+		rows := []string{theme.Subtitle.Render(fmt.Sprintf("%-20s  %6s  %8s  %7s  %8s  %s",
+			"profile", "recall", "tok/s", "TTFT", "vram", "quant"))}
+		for _, r := range sec.Runs {
+			a := r.Aggregate
+			rows = append(rows, fmt.Sprintf("%-20s  %5.0f%%  %8.1f  %5.0fms  %6dMB  %s",
+				truncate(r.ProfileName, 20), a.AvgScore*100, a.AvgTokensPerSecond,
+				a.AvgTTFTms, a.PeakVRAMMB, dash(r.Profile.Quantization)))
+		}
+		return rows
+	default:
+		rows := []string{theme.Subtitle.Render(fmt.Sprintf("%-20s  %6s  %6s  %8s  %7s  %8s  %s",
+			"profile", "solve", "score", "tok/s", "TTFT", "vram", "quant"))}
+		for _, r := range sec.Runs {
+			a := r.Aggregate
+			rows = append(rows, fmt.Sprintf("%-20s  %5.0f%%  %6.2f  %8.1f  %5.0fms  %6dMB  %s",
+				truncate(r.ProfileName, 20), a.SolveRate*100, a.AvgScore, a.AvgTokensPerSecond,
+				a.AvgTTFTms, a.PeakVRAMMB, dash(r.Profile.Quantization)))
+		}
+		return rows
+	}
 }
 
 func (p BenchmarkPage) viewHistory() string {

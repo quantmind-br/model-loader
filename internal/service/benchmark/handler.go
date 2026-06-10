@@ -51,3 +51,30 @@ func CategoryOf(m Mode) (Category, bool) {
 	}
 	return h.Category(), true
 }
+
+// modeOrder is the canonical display order for pickers and grouped views:
+// modes of the same category are contiguous, categories follow
+// Quality → Speed → Robustness → Knowledge. Add new modes here when
+// registering a new handler.
+var modeOrder = []Mode{
+	// Quality
+	ModeJudge, ModeMathBench, ModeCodeGenBench, ModeRagasBench, ModeSummaryBench,
+	// Speed
+	ModeLlamaBench,
+	// Robustness
+	ModeLongContext, ModeInstBench,
+	// Knowledge
+	ModeMMLUBench,
+}
+
+// ModesInOrder returns the registered modes in canonical display order. It is
+// the single source of truth for UI mode lists.
+func ModesInOrder() []Mode {
+	out := make([]Mode, 0, len(modeOrder))
+	for _, m := range modeOrder {
+		if _, ok := handlerFor(m); ok {
+			out = append(out, m)
+		}
+	}
+	return out
+}

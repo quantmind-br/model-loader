@@ -30,15 +30,22 @@ func defaultProfilesKeys() profilesKeyMap {
 		New:       key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new")),
 		Save:      key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "save")),
 		Duplicate: key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "dup")),
-		Delete:    key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "del")),
-		Edit:      key.NewBinding(key.WithKeys("E"), key.WithHelp("E", "edit")),
-		Cancel:    key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
-		Tab:       key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "tab editor")),
-		Launch:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "launch")),
-		BgToggle:  key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "bg/fg")),
-		Kill:      key.NewBinding(key.WithKeys("k"), key.WithHelp("k", "kill")),
-		Refresh:   key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
-		Export:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "export")),
+		// Destructive actions use uppercase + a confirm so they honor the
+		// app-wide "uppercase = heavy/destructive" convention and free the
+		// lowercase vim keys (k/j) for list navigation (KEY-01, CONSIST-02).
+		Delete: key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "del")),
+		// edit is lowercase (light) and shared with the Backends tab; export
+		// moves to uppercase E, resolving the old e/E collision (CONSIST-01).
+		Edit:     key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit")),
+		Cancel:   key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
+		Tab:      key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "tab editor")),
+		Launch:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "launch")),
+		BgToggle: key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "bg/fg")),
+		Kill:     key.NewBinding(key.WithKeys("K"), key.WithHelp("K", "kill")),
+		// refresh re-reads the store (heavier) → uppercase R, matching Models
+		// and Backends rescan/refresh (CONSIST-01).
+		Refresh: key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "refresh")),
+		Export:  key.NewBinding(key.WithKeys("E"), key.WithHelp("E", "export")),
 		Pin:       key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "pin")),
 		Import:    key.NewBinding(key.WithKeys("I"), key.WithHelp("I", "import")),
 		Undo:      key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "undo")),

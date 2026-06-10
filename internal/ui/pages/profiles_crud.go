@@ -118,7 +118,7 @@ func (p ProfilesPage) startNew() (tea.Model, tea.Cmd) {
 
 func (p ProfilesPage) startEditSelected() (tea.Model, tea.Cmd) {
 	if _, isCorrupt := p.list.SelectedItem().(corruptItem); isCorrupt {
-		p, fc := p.withFlashError("selected entry is corrupt — delete it (x) or fix the JSON file")
+		p, fc := p.withFlashError("selected entry is corrupt — delete it (X) or fix the JSON file")
 		return p, fc
 	}
 	sel, ok := p.list.SelectedItem().(item)
@@ -159,7 +159,7 @@ func argsToStrings(args map[string]any) map[string]string {
 
 func (p ProfilesPage) duplicateSelected() (tea.Model, tea.Cmd) {
 	if _, isCorrupt := p.list.SelectedItem().(corruptItem); isCorrupt {
-		p, fc := p.withFlashError("selected entry is corrupt — delete it (x) or fix the JSON file")
+		p, fc := p.withFlashError("selected entry is corrupt — delete it (X) or fix the JSON file")
 		return p, fc
 	}
 	sel, ok := p.list.SelectedItem().(item)

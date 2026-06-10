@@ -36,12 +36,16 @@ type ChatRequest struct {
 // benchmark records (token cost, generation speed, latency).
 type CompletionResult struct {
 	Content             string
+	Reasoning           string // accumulated reasoning_content deltas (thinking models), kept out of Content
 	PromptTokens        int
 	CompletionTokens    int
-	TTFT                time.Duration // time to first content token
+	TTFT                time.Duration // time to first delta of any kind (reasoning or content)
 	Total               time.Duration
 	TokensPerSecond     float64 // completion tokens / generation time (decode speed)
 	PromptProcessingTPS float64 // prompt tokens / TTFT (prefill speed)
+	// TimingsFromServer is true when the speeds above came from the server's own
+	// timings block (llama-server) instead of client-side wall-clock estimates.
+	TimingsFromServer bool
 }
 
 // httpDoer abstracts *http.Client for tests.
@@ -55,7 +59,23 @@ type httpDoer interface {
 // It requests stream_options.include_usage so llama.cpp (and other OpenAI-
 // compatible servers) emit a trailing chunk with a usage block. When usage is
 // absent the token counts fall back to a whitespace estimate.
+//
+// Transient failures (transport errors, 5xx responses, a stream that dies
+// mid-read) are retried once so a single network blip doesn't poison a long
+// run. The timing clock restarts per attempt, so metrics always describe the
+// successful attempt only. Cancellation and 4xx responses never retry.
 func Complete(ctx context.Context, doer httpDoer, base, apiKey string, req ChatRequest) (CompletionResult, error) {
+	res, retryable, err := completeOnce(ctx, doer, base, apiKey, req)
+	if err == nil || !retryable || ctx.Err() != nil {
+		return res, err
+	}
+	res, _, err = completeOnce(ctx, doer, base, apiKey, req)
+	return res, err
+}
+
+// completeOnce performs a single streamed chat completion attempt. The bool
+// reports whether a failure is worth retrying.
+func completeOnce(ctx context.Context, doer httpDoer, base, apiKey string, req ChatRequest) (CompletionResult, bool, error) {
 	if doer == nil {
 		doer = http.DefaultClient
 	}
@@ -78,7 +98,7 @@ func Complete(ctx context.Context, doer httpDoer, base, apiKey string, req ChatR
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return CompletionResult{}, fmt.Errorf("marshal chat request: %w", err)
+		return CompletionResult{}, false, fmt.Errorf("marshal chat request: %w", err)
 	}
 
 	// Tolerate base URLs that already include the OpenAI "/v1" suffix (judge
@@ -91,7 +111,7 @@ func Complete(ctx context.Context, doer httpDoer, base, apiKey string, req ChatR
 	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return CompletionResult{}, fmt.Errorf("create chat request: %w", err)
+		return CompletionResult{}, false, fmt.Errorf("create chat request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "text/event-stream")
@@ -102,19 +122,21 @@ func Complete(ctx context.Context, doer httpDoer, base, apiKey string, req ChatR
 	start := time.Now()
 	resp, err := doer.Do(httpReq)
 	if err != nil {
-		return CompletionResult{}, fmt.Errorf("post chat request: %w", err)
+		return CompletionResult{}, true, fmt.Errorf("post chat request: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return CompletionResult{}, fmt.Errorf("chat request failed: status %d", resp.StatusCode)
+		return CompletionResult{}, resp.StatusCode >= 500, fmt.Errorf("chat request failed: status %d", resp.StatusCode)
 	}
 
 	var (
 		sb               strings.Builder
+		rb               strings.Builder
 		ttft             time.Duration
 		gotFirst         bool
 		promptTokens     int
 		completionTokens int
+		timings          *chunkTimings
 	)
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
@@ -129,33 +151,42 @@ func Complete(ctx context.Context, doer httpDoer, base, apiKey string, req ChatR
 		}
 		chunk, err := parseChunk(data)
 		if err != nil {
-			return CompletionResult{}, err
+			return CompletionResult{}, false, err
 		}
-		if delta := chunk.contentDelta(); delta != "" {
+		content, reasoning := chunk.deltas()
+		if content != "" || reasoning != "" {
+			// TTFT counts the first emitted token of ANY kind: thinking models
+			// stream reasoning_content long before the first visible content token,
+			// and that work is generation too.
 			if !gotFirst {
 				ttft = time.Since(start)
 				gotFirst = true
 			}
-			sb.WriteString(delta)
+			sb.WriteString(content)
+			rb.WriteString(reasoning)
 		}
 		if chunk.Usage != nil {
 			promptTokens = chunk.Usage.PromptTokens
 			completionTokens = chunk.Usage.CompletionTokens
 		}
+		if chunk.Timings != nil {
+			timings = chunk.Timings
+		}
 	}
 	// A cancelled/expired context must surface as an error — not a silently
 	// truncated "successful" answer that scoring would treat as a real reply.
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return CompletionResult{}, ctxErr
+		return CompletionResult{}, false, ctxErr
 	}
 	if err := scanner.Err(); err != nil {
-		return CompletionResult{}, fmt.Errorf("read stream: %w", err)
+		return CompletionResult{}, true, fmt.Errorf("read stream: %w", err)
 	}
 
 	total := time.Since(start)
 	content := sb.String()
+	reasoning := rb.String()
 	if completionTokens == 0 {
-		completionTokens = estimateTokens(content)
+		completionTokens = estimateTokens(content) + estimateTokens(reasoning)
 	}
 	genSeconds := (total - ttft).Seconds()
 	tps := 0.0
@@ -166,34 +197,61 @@ func Complete(ctx context.Context, doer httpDoer, base, apiKey string, req ChatR
 	if ttft.Seconds() > 0 && promptTokens > 0 {
 		ppTps = float64(promptTokens) / ttft.Seconds()
 	}
+	fromServer := false
+	// llama-server reports its own prefill/decode speeds in a trailing timings
+	// block; prefer them over wall-clock estimates when present.
+	if timings != nil {
+		if timings.PredictedPerSecond > 0 {
+			tps = timings.PredictedPerSecond
+			fromServer = true
+		}
+		if timings.PromptPerSecond > 0 {
+			ppTps = timings.PromptPerSecond
+			fromServer = true
+		}
+	}
 	return CompletionResult{
 		Content:             content,
+		Reasoning:           reasoning,
 		PromptTokens:        promptTokens,
 		CompletionTokens:    completionTokens,
 		TTFT:                ttft,
 		Total:               total,
 		TokensPerSecond:     tps,
 		PromptProcessingTPS: ppTps,
-	}, nil
+		TimingsFromServer:   fromServer,
+	}, false, nil
+}
+
+// chunkTimings is llama-server's per-request timings block, appended to the
+// final stream chunk. Other OpenAI-compatible servers simply omit it.
+type chunkTimings struct {
+	PromptPerSecond    float64 `json:"prompt_per_second"`
+	PredictedPerSecond float64 `json:"predicted_per_second"`
 }
 
 type streamChunk struct {
 	Choices []struct {
 		Delta struct {
 			Content string `json:"content"`
+			// ReasoningContent carries thinking-model deltas (llama.cpp
+			// --reasoning-format, vLLM reasoning parsers).
+			ReasoningContent string `json:"reasoning_content"`
 		} `json:"delta"`
 	} `json:"choices"`
 	Usage *struct {
 		PromptTokens     int `json:"prompt_tokens"`
 		CompletionTokens int `json:"completion_tokens"`
 	} `json:"usage"`
+	Timings *chunkTimings `json:"timings"`
 }
 
-func (c streamChunk) contentDelta() string {
+// deltas returns the content and reasoning deltas of the chunk.
+func (c streamChunk) deltas() (content, reasoning string) {
 	if len(c.Choices) == 0 {
-		return ""
+		return "", ""
 	}
-	return c.Choices[0].Delta.Content
+	return c.Choices[0].Delta.Content, c.Choices[0].Delta.ReasoningContent
 }
 
 func parseChunk(payload string) (streamChunk, error) {

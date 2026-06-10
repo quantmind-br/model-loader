@@ -1,6 +1,9 @@
 package benchmark
 
-import "context"
+import (
+	"context"
+	"sync"
+)
 
 func init() {
 	registerHandler(judgeHandler{})
@@ -18,24 +21,69 @@ func (judgeHandler) Count(r *Runner) int                  { return len(r.problem
 func (judgeHandler) Prepare(r *Runner) (Scorer, error)    { return r.newScorer(ModeJudge) }
 func (judgeHandler) Finalize(*Aggregate, []ProblemResult) {}
 
+// judgeScoreConcurrency caps in-flight judge calls so a slow judge endpoint
+// doesn't pile up requests while inference keeps producing answers.
+const judgeScoreConcurrency = 2
+
+// Execute pipelines the judge run: inference stays strictly serial against
+// the server under test (so speed metrics aren't polluted by concurrent
+// load), while scoring — which talks to a separate judge endpoint — runs in
+// background goroutines overlapped with the next problem's inference.
+// Results are written by index, so ordering matches the dataset.
 func (judgeHandler) Execute(ctx context.Context, r *Runner, base, model string, scorer Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
-	var results []ProblemResult
-	var transcripts []ProblemTranscript
+	total := len(r.problems)
+	// Capacity MUST cover every append: scoring goroutines hold &results[idx],
+	// so the backing array can never reallocate mid-run.
+	results := make([]ProblemResult, 0, total)
+	trs := make([]ProblemTranscript, 0, total)
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, judgeScoreConcurrency)
+	// All scoring goroutines must finish before Execute returns: the caller
+	// closes the progress channel right after Run returns, and the result
+	// slices must be fully written.
+	defer wg.Wait()
+
+	done := false
 	for i, p := range r.problems {
 		select {
 		case <-ctx.Done():
-			return results, transcripts, ctx.Err()
+			done = true
 		default:
 		}
-		send(progress, Progress{Index: i + 1, Total: len(r.problems), ProblemID: p.ID, ProblemName: p.Name, Phase: "infer"})
-		pr, tr := r.runProblem(ctx, scorer, base, model, p)
-		results = append(results, pr)
-		if r.cfg.SaveTranscripts {
-			transcripts = append(transcripts, tr)
+		if done {
+			return results, transcripts(r, trs), ctx.Err()
 		}
-		send(progress, Progress{Index: i + 1, Total: len(r.problems), ProblemID: p.ID, ProblemName: p.Name, Phase: "score"})
+		send(progress, Progress{Index: i + 1, Total: total, ProblemID: p.ID, ProblemName: p.Name, Phase: "infer"})
+		comp, pr, tr, scoreIt := r.inferProblem(ctx, base, model, p)
+		results = append(results, pr)
+		trs = append(trs, tr)
+		if !scoreIt {
+			continue
+		}
+		send(progress, Progress{Index: i + 1, Total: total, ProblemID: p.ID, ProblemName: p.Name, Phase: "score"})
+		// Resolve the slot pointers BEFORE spawning: the goroutine must not read
+		// the results/trs slice variables, which the loop keeps reassigning.
+		resPtr, trPtr := &results[len(results)-1], &trs[len(trs)-1]
+		wg.Add(1)
+		go func(p Problem, content string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			// Distinct slots: each goroutine writes only its own problem.
+			r.scoreProblem(ctx, scorer, p, content, resPtr, trPtr)
+		}(p, comp.Content)
 	}
-	return results, transcripts, nil
+	wg.Wait()
+	return results, transcripts(r, trs), nil
+}
+
+// transcripts returns trs when transcript saving is enabled, else nil.
+func transcripts(r *Runner, trs []ProblemTranscript) []ProblemTranscript {
+	if r.cfg.SaveTranscripts {
+		return trs
+	}
+	return nil
 }
 
 // --- long-context needle ---

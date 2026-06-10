@@ -39,6 +39,41 @@ func TestCountForMode_DelegatesToRegistry(t *testing.T) {
 	}
 }
 
+func TestModesInOrder_CoversEveryRegisteredMode(t *testing.T) {
+	got := ModesInOrder()
+	if len(got) != len(handlers) {
+		t.Fatalf("ModesInOrder has %d modes, registry has %d — keep modeOrder in sync with registerHandler calls", len(got), len(handlers))
+	}
+	seen := map[Mode]bool{}
+	for _, m := range got {
+		if seen[m] {
+			t.Fatalf("mode %q duplicated in modeOrder", m)
+		}
+		seen[m] = true
+		if _, ok := handlerFor(m); !ok {
+			t.Fatalf("mode %q in modeOrder but not registered", m)
+		}
+	}
+}
+
+func TestModesInOrder_CategoriesAreContiguous(t *testing.T) {
+	seen := map[Category]bool{}
+	var last Category
+	for _, m := range ModesInOrder() {
+		c, ok := CategoryOf(m)
+		if !ok {
+			t.Fatalf("mode %q has no category", m)
+		}
+		if c != last {
+			if seen[c] {
+				t.Fatalf("category %q is split: %q appears after the group ended", c, m)
+			}
+			seen[c] = true
+			last = c
+		}
+	}
+}
+
 func TestCategoryOf(t *testing.T) {
 	cases := map[Mode]Category{
 		ModeJudge:        CatQuality,

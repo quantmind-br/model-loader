@@ -80,9 +80,10 @@ func (p *ServerPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleKey routes key input. Confirm overlays consume the key and short-
-// circuit the table update so the form keeps focus. The 'k' / 'r' keys
-// also short-circuit so the table's default keymap doesn't interpret
-// them as line-up / refresh and move the selection off the acted-on row.
+// circuit the table update so the form keeps focus. Destructive actions use
+// uppercase (K kill, R restart) so the lowercase vim keys k/j fall through to
+// the table for line navigation (KEY-01, CONSIST-02); history is a read-only
+// view, so it uses lowercase h to match the Benchmark tab (CONSIST-01).
 func (p *ServerPage) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if p.killConfirm.Active() {
 		return p, p.handleConfirmKillKey(m)
@@ -93,15 +94,15 @@ func (p *ServerPage) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case m.Type == tea.KeyRunes && len(m.Runes) == 1 && m.Runes[0] == 'v':
 		p.subView = (p.subView + 1) % 4
-	case m.Type == tea.KeyRunes && len(m.Runes) == 1 && m.Runes[0] == 'k':
+	case m.Type == tea.KeyRunes && len(m.Runes) == 1 && m.Runes[0] == 'K':
 		if pid := p.selectedPID(); pid > 0 {
 			return p, p.askConfirmKill(pid)
 		}
-	case m.Type == tea.KeyRunes && len(m.Runes) == 1 && m.Runes[0] == 'r':
+	case m.Type == tea.KeyRunes && len(m.Runes) == 1 && m.Runes[0] == 'R':
 		if pid := p.selectedPID(); pid > 0 {
 			return p, p.askConfirmRestart(pid)
 		}
-	case m.Type == tea.KeyRunes && len(m.Runes) == 1 && m.Runes[0] == 'H':
+	case m.Type == tea.KeyRunes && len(m.Runes) == 1 && m.Runes[0] == 'h':
 		return p.openHistoryChart()
 	case m.Type == tea.KeyRunes && len(m.Runes) == 1 && (m.Runes[0] == '1' || m.Runes[0] == '2' || m.Runes[0] == '3' || m.Runes[0] == '4'):
 		if p.historyChart != nil {

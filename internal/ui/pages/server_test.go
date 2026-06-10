@@ -341,13 +341,13 @@ func TestServerPage_KOpensConfirmDoesNotKillImmediately(t *testing.T) {
 	p.SetSize(120, 30)
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 
-	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
 
 	if pm.killed != 0 {
 		t.Fatalf("k should not kill immediately; killed=%d", pm.killed)
 	}
 	if !p.killConfirm.Active() {
-		t.Fatal("expected confirm form after k")
+		t.Fatal("expected confirm form after K")
 	}
 	if !p.IsCapturingInput() {
 		t.Fatal("page should capture input while confirm is open")
@@ -371,9 +371,9 @@ func TestServerPage_FinalizeConfirmAffirmativeCallsKill(t *testing.T) {
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 
 	// Open the confirm form via the normal key path.
-	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
 	if !p.killConfirm.Active() {
-		t.Fatal("expected confirm form after k")
+		t.Fatal("expected confirm form after K")
 	}
 	// Simulate the affirmative completion path. In production huh drives
 	// the form to StateCompleted, Confirm.Update emits the onYes msg and
@@ -400,7 +400,7 @@ func TestServerPage_FinalizeConfirmNegativeNoKill(t *testing.T) {
 	p := NewServerPage(pm, mm, nil)
 	p.SetSize(120, 30)
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
-	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
 
 	// Esc clears the confirm without invoking onYes.
 	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyEsc})
@@ -537,10 +537,10 @@ func TestServerPage_ROpensRestartConfirm(t *testing.T) {
 	p := NewServerPage(pm, mm, psk)
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 
-	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
 
 	if !p.restartConfirm.Active() {
-		t.Fatal("expected restart confirm form after r")
+		t.Fatal("expected restart confirm form after R")
 	}
 	if !p.IsCapturingInput() {
 		t.Fatal("page should capture input while restart confirm is open")
@@ -568,7 +568,7 @@ func TestServerPage_RestartConfirmAffirmativeKillsAndLaunches(t *testing.T) {
 	p := NewServerPage(pm, mm, psk)
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 
-	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
 	if !p.restartConfirm.Active() {
 		t.Fatal("expected restart confirm form")
 	}
@@ -621,7 +621,7 @@ func TestServerPage_RestartConfirmNegativeNoAction(t *testing.T) {
 	mm := &fakeMonMgr{}
 	p := NewServerPage(pm, mm, psk)
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
-	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
 
 	// Esc clears the confirm without invoking onYes.
 	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyEsc})
@@ -644,7 +644,7 @@ func TestServerPage_RestartConfirmForegroundPreservesMode(t *testing.T) {
 	mm := &fakeMonMgr{}
 	p := NewServerPage(pm, mm, psk)
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
-	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
 
 	// Foreground instance — confirm should preserve mode through to the
 	// monitorRestartConfirmedMsg's background flag.
@@ -684,7 +684,7 @@ func TestServerPage_RFlashWhenStoreNil(t *testing.T) {
 	p := NewServerPage(pm, mm, nil) // store nil
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 
-	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
 	if p.restartConfirm.Active() {
 		t.Fatal("nil store should not open confirm form")
 	}
@@ -702,7 +702,7 @@ func TestServerPage_RFlashWhenProfileMissing(t *testing.T) {
 	p := NewServerPage(pm, mm, psk)
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 
-	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
 	if p.restartConfirm.Active() {
 		t.Fatal("missing profile should not open confirm form")
 	}
@@ -1107,7 +1107,7 @@ func TestServerPage_HintsListPageKeys(t *testing.T) {
 	p := NewServerPage(pm, mm, nil)
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 	hints := p.Hints()
-	for _, want := range []string{"[v]", "[k]", "[r]", "[Space]"} {
+	for _, want := range []string{"[v]", "[K]", "[R]", "[h]", "[Space]"} {
 		if !strings.Contains(hints, want) {
 			t.Errorf("Hints missing %q; got %q", want, hints)
 		}
@@ -1523,7 +1523,7 @@ func TestServerPage_HHintMentionsMetricsDirKey(t *testing.T) {
 	p.SetSize(120, 30)
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 
-	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'H'}})
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
 
 	msg := p.flash.Message()
 	if !strings.Contains(msg, "logging.metrics_dir") {

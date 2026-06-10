@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -87,22 +86,6 @@ func summaryDetail(coveredFacts, totalFacts int, coherence float64, judgedBy str
 	return fmt.Sprintf("coverage=%d/%d coherence=%.2f (%s)", coveredFacts, totalFacts, coherence, judgedBy)
 }
 
-var summaryScoreRe = regexp.MustCompile(`coverage=(\d+)/(\d+) coherence=([0-9.]+)`)
-
-func parseSummaryScores(detail string) (coverage, coherence float64, ok bool) {
-	m := summaryScoreRe.FindStringSubmatch(detail)
-	if m == nil {
-		return 0, 0, false
-	}
-	num, _ := strconv.ParseFloat(m[1], 64)
-	den, _ := strconv.ParseFloat(m[2], 64)
-	coherence, _ = strconv.ParseFloat(m[3], 64)
-	if den > 0 {
-		coverage = num / den
-	}
-	return coverage, coherence, true
-}
-
 // runSummary asks the model to summarize the bundle, then scores fact coverage (local) and coherence (grader).
 func (r *Runner) runSummary(ctx context.Context, base, model string, g grader, p SummaryProblem) (ProblemResult, ProblemTranscript) {
 	name := "summary " + p.ID
@@ -159,6 +142,8 @@ func (r *Runner) runSummary(ctx context.Context, base, model string, g grader, p
 
 	res.Score = (coverage + coherence) / 2
 	res.Resolved = res.Score >= summaryPassThreshold
+	res.SubScores = map[string]float64{"coverage": coverage, "coherence": coherence}
+	res.JudgedBy = judgedBy
 	res.Detail = summaryDetail(covered, len(p.Facts), coherence, judgedBy)
 	return res, tr
 }
@@ -171,17 +156,17 @@ func (summaryHandler) Count(r *Runner) int             { return len(r.summaryPro
 func (summaryHandler) Prepare(*Runner) (Scorer, error) { return nil, nil }
 
 // Finalize sets SummaryCoherence to the mean grader coherence sub-score across
-// answered problems. (Fact coverage rides in each problem's Detail; the blended
-// per-problem Score feeds the generic SolveRate/AvgScore.)
+// answered problems, reading the structured SubScores set by runSummary. (Fact
+// coverage rides in SubScores too; the blended per-problem Score feeds the
+// generic SolveRate/AvgScore.)
 func (summaryHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
 	var sum float64
 	n := 0
 	for _, pr := range problems {
-		_, coherence, ok := parseSummaryScores(pr.Detail)
-		if !ok {
+		if pr.SubScores == nil {
 			continue
 		}
-		sum += coherence
+		sum += pr.SubScores["coherence"]
 		n++
 	}
 	if n == 0 {

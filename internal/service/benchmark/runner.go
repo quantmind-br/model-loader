@@ -3,6 +3,7 @@ package benchmark
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"path/filepath"
 	"regexp"
@@ -238,6 +239,9 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 	if err != nil {
 		return Run{}, err
 	}
+	// A reused (warm, possibly busy) instance can skew performance numbers;
+	// record it so comparisons can tell warm and fresh runs apart.
+	run.ReusedInstance = !owned
 	if owned {
 		defer func() { _ = r.pm.Kill(pid) }()
 	}
@@ -252,8 +256,12 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 	run.Problems = results
 	run.Transcript = transcripts
 	if err != nil {
+		// Return a fully-formed partial run (Err set, mode aggregates included)
+		// so callers can persist what completed before the failure/cancel.
+		run.Err = err.Error()
 		run.FinishedAt = time.Now()
 		run.Aggregate = aggregate(run.Problems, gpu.peakVRAM(), gpu.avgUtil())
+		h.Finalize(&run.Aggregate, run.Problems)
 		return run, err
 	}
 
@@ -264,7 +272,10 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 	return run, nil
 }
 
-func (r *Runner) runProblem(ctx context.Context, scorer Scorer, base, model string, p Problem) (ProblemResult, ProblemTranscript) {
+// inferProblem runs the model-under-test inference for one judge problem and
+// fills the request metrics. The bool reports whether inference succeeded and
+// scoring should follow.
+func (r *Runner) inferProblem(ctx context.Context, base, model string, p Problem) (CompletionResult, ProblemResult, ProblemTranscript, bool) {
 	res := ProblemResult{ProblemID: p.ID, ProblemName: p.Name}
 	tr := ProblemTranscript{ProblemID: p.ID, ProblemName: p.Name}
 
@@ -279,7 +290,7 @@ func (r *Runner) runProblem(ctx context.Context, scorer Scorer, base, model stri
 	if err != nil {
 		res.Err = err.Error()
 		tr.Error = err.Error()
-		return res, tr
+		return comp, res, tr, false
 	}
 	res.TTFTms = comp.TTFT.Milliseconds()
 	res.TotalMs = comp.Total.Milliseconds()
@@ -290,22 +301,26 @@ func (r *Runner) runProblem(ctx context.Context, scorer Scorer, base, model stri
 	res.CompletionTokens = comp.CompletionTokens
 	tr.ModelResponse = comp.Content
 	_, tr.DiffFound = ExtractDiff(comp.Content)
+	return comp, res, tr, true
+}
 
+// scoreProblem judges a completed inference, mutating res/tr in place. A
+// scoring failure becomes a per-problem error, never a run abort.
+func (r *Runner) scoreProblem(ctx context.Context, scorer Scorer, p Problem, content string, res *ProblemResult, tr *ProblemTranscript) {
 	// Bound scoring too: a stalled judge endpoint must not hang the run. Allow
 	// up to one per-problem timeout per judge sample.
 	scoreCtx, scancel := context.WithTimeout(ctx, time.Duration(max(r.cfg.Judge.Samples, 1))*r.cfg.Timeout)
-	score, err := scorer.Score(scoreCtx, p, comp.Content)
+	score, err := scorer.Score(scoreCtx, p, content)
 	scancel()
 	tr.JudgeRaw = score.Raw
 	if err != nil {
 		res.Err = err.Error()
 		tr.Error = err.Error()
-		return res, tr
+		return
 	}
 	res.Resolved = score.Resolved
 	res.Score = score.Score
 	res.Detail = score.Detail
-	return res, tr
 }
 
 // ensureInstance reuses a live instance for the profile or launches a new one.
@@ -396,17 +411,19 @@ var needleCities = []string{
 	"Ljubljana", "Windhoek", "Paramaribo", "Bishkek", "Vientiane",
 }
 
-// buildNeedles makes three randomized needles at distinct depths. The three
-// values are guaranteed distinct so scoreNeedles can't double-count a collision.
-func buildNeedles() []needle {
+// buildNeedles makes three randomized needles at distinct depths from a seed,
+// so a run's exact needle set can be reproduced later. The three values are
+// guaranteed distinct so scoreNeedles can't double-count a collision.
+func buildNeedles(seed int64) []needle {
+	rng := rand.New(rand.NewSource(seed))
 	labels := []string{"alpha", "beta", "gamma"}
 	out := make([]needle, 3)
 	seen := make(map[string]bool, 3)
 	for i := range out {
 		var value string
 		for {
-			city := needleCities[rand.Intn(len(needleCities))]
-			value = fmt.Sprintf("%s-%04d", city, rand.Intn(9000)+1000)
+			city := needleCities[rng.Intn(len(needleCities))]
+			value = fmt.Sprintf("%s-%04d", city, rng.Intn(9000)+1000)
 			if !seen[value] {
 				break
 			}
@@ -417,14 +434,25 @@ func buildNeedles() []needle {
 	return out
 }
 
-// scoreNeedles returns the fraction of needle values present in the response.
+// needleNormRe strips everything but letters and digits for needle matching.
+var needleNormRe = regexp.MustCompile(`[^a-z0-9]+`)
+
+// normalizeNeedleText lowercases and removes separators so "Reykjavik - 1042",
+// "reykjavik–1042" and "Reykjavik-1042" all compare equal.
+func normalizeNeedleText(s string) string {
+	return needleNormRe.ReplaceAllString(strings.ToLower(s), "")
+}
+
+// scoreNeedles returns the fraction of needle values present in the response,
+// comparing separator-normalized text so formatting variants still count.
 func scoreNeedles(response string, needles []needle) float64 {
 	if len(needles) == 0 {
 		return 0
 	}
+	norm := normalizeNeedleText(response)
 	found := 0
 	for _, n := range needles {
-		if strings.Contains(response, n.value) {
+		if strings.Contains(norm, normalizeNeedleText(n.value)) {
 			found++
 		}
 	}
@@ -506,7 +534,9 @@ func (r *Runner) runLongContext(ctx context.Context, base, model string) (Proble
 	if targetTokens <= 0 {
 		targetTokens = 8000
 	}
-	needles := buildNeedles()
+	seed := time.Now().UnixNano()
+	res.Seed = seed
+	needles := buildNeedles(seed)
 	haystack := buildQualityHaystack(r.arxivDocs, targetTokens, needles)
 	user := "Below is a dump of a Python codebase. Read it carefully.\n\n" + haystack +
 		"\n\nQuestion: three files define a constant named MAGIC_<NAME>_NUMBER. " +
@@ -540,8 +570,8 @@ func (r *Runner) runLongContext(ctx context.Context, base, model string) (Proble
 	frac := scoreNeedles(comp.Content, needles)
 	res.Score = frac
 	res.Resolved = frac == 1.0
-	res.Detail = fmt.Sprintf("recovered %.0f%% of needles (%d/3); prompt≈%d tok; pp %.0f t/s; tg %.0f t/s",
-		frac*100, int(frac*3+0.5), comp.PromptTokens, comp.PromptProcessingTPS, comp.TokensPerSecond)
+	res.Detail = fmt.Sprintf("recovered %.0f%% of needles (%d/3); prompt≈%d tok; pp %.0f t/s; tg %.0f t/s; seed=%d",
+		frac*100, int(frac*3+0.5), comp.PromptTokens, comp.PromptProcessingTPS, comp.TokensPerSecond, seed)
 	return res, tr
 }
 
@@ -577,8 +607,10 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 		warmCancel()
 	}
 
-	var ttftSum, tpsSum, totalSum, ppTpsSum float64
-	var ppSum, tgSum, ok, short int
+	var ttftSum, totalSum, ppTpsSum float64
+	var ppSum, tgSum, short int
+	var tpsSamples []float64
+	var fromServer bool
 	var lastContent string
 	for i := 0; i < r.reps; i++ {
 		select {
@@ -611,15 +643,18 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 			continue
 		}
 		ttftSum += float64(comp.TTFT.Milliseconds())
-		tpsSum += comp.TokensPerSecond
+		tpsSamples = append(tpsSamples, comp.TokensPerSecond)
 		ppTpsSum += comp.PromptProcessingTPS
 		totalSum += float64(comp.Total.Milliseconds())
 		ppSum += comp.PromptTokens
 		tgSum += comp.CompletionTokens
-		ok++
+		if comp.TimingsFromServer {
+			fromServer = true
+		}
 	}
 
 	tr.ModelResponse = lastContent
+	ok := len(tpsSamples)
 	if ok == 0 {
 		// Every sample stopped before tg tokens — the backend doesn't honor
 		// ignore_eos, so this preset can't be measured reliably here.
@@ -627,20 +662,55 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 		return res, tr
 	}
 	n := float64(ok)
+	mean, stddev, minTPS, maxTPS := tpsStats(tpsSamples)
 	res.Resolved = true
 	res.TTFTms = int64(ttftSum / n)
-	res.TokensPerSecond = tpsSum / n
-	res.DecodeTPS = tpsSum / n
+	res.TokensPerSecond = mean
+	res.DecodeTPS = mean
+	res.TPSStdDev = stddev
+	res.TPSMin = minTPS
+	res.TPSMax = maxTPS
 	res.PromptProcessingTPS = ppTpsSum / n
 	res.TotalMs = int64(totalSum / n)
 	res.PromptTokens = ppSum / ok
 	res.CompletionTokens = tgSum / ok
-	res.Detail = fmt.Sprintf("pp≈%d tg=%d; tok/s %.1f; TTFT %dms (n=%d)",
-		res.PromptTokens, ps.GenTokens, res.TokensPerSecond, res.TTFTms, ok)
+	res.Detail = fmt.Sprintf("pp≈%d tg=%d; tok/s %.1f ±%.1f [%.1f–%.1f]; TTFT %dms (n=%d)",
+		res.PromptTokens, ps.GenTokens, mean, stddev, minTPS, maxTPS, res.TTFTms, ok)
+	if fromServer {
+		res.Detail += " (server timings)"
+	}
 	if short > 0 {
 		res.Detail += fmt.Sprintf("; %d short dropped", short)
 	}
 	return res, tr
+}
+
+// tpsStats returns mean, population standard deviation, min and max of the
+// per-rep tok/s samples.
+func tpsStats(samples []float64) (mean, stddev, min, max float64) {
+	n := float64(len(samples))
+	if n == 0 {
+		return 0, 0, 0, 0
+	}
+	min, max = samples[0], samples[0]
+	var sum float64
+	for _, s := range samples {
+		sum += s
+		if s < min {
+			min = s
+		}
+		if s > max {
+			max = s
+		}
+	}
+	mean = sum / n
+	var varSum float64
+	for _, s := range samples {
+		d := s - mean
+		varSum += d * d
+	}
+	stddev = math.Sqrt(varSum / n)
+	return mean, stddev, min, max
 }
 
 // buildFixedPrompt generates ~promptTokens of deterministic filler prose
@@ -736,6 +806,11 @@ func aggregate(results []ProblemResult, peakVRAM uint64, avgUtil float64) Aggreg
 	var scoreSum, tpsSum, ttftSum, ppSum, decSum float64
 	var tpsN, ttftN, ppN, decN int
 	for _, r := range results {
+		if r.Err != "" {
+			// Request/judge failures are infrastructure noise, not model quality:
+			// count them separately and keep them out of the quality rates below.
+			a.Errored++
+		}
 		if r.Resolved {
 			a.Resolved++
 		}
@@ -760,9 +835,9 @@ func aggregate(results []ProblemResult, peakVRAM uint64, avgUtil float64) Aggreg
 			ttftN++
 		}
 	}
-	if a.Total > 0 {
-		a.SolveRate = float64(a.Resolved) / float64(a.Total)
-		a.AvgScore = scoreSum / float64(a.Total)
+	if answered := a.Total - a.Errored; answered > 0 {
+		a.SolveRate = float64(a.Resolved) / float64(answered)
+		a.AvgScore = scoreSum / float64(answered)
 	}
 	if tpsN > 0 {
 		a.AvgTokensPerSecond = tpsSum / float64(tpsN)

@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-func TestBuildNeedles_AreUniquePerCall(t *testing.T) {
-	a := buildNeedles()
-	b := buildNeedles()
+func TestBuildNeedles_VaryAcrossSeeds(t *testing.T) {
+	a := buildNeedles(1)
+	b := buildNeedles(2)
 	if len(a) != 3 {
 		t.Fatalf("want 3 needles, got %d", len(a))
 	}
@@ -18,7 +18,17 @@ func TestBuildNeedles_AreUniquePerCall(t *testing.T) {
 		}
 	}
 	if same {
-		t.Error("needles identical across calls; expected randomization")
+		t.Error("needles identical across different seeds; expected randomization")
+	}
+}
+
+func TestBuildNeedles_DeterministicForSeed(t *testing.T) {
+	a := buildNeedles(42)
+	b := buildNeedles(42)
+	for i := range a {
+		if a[i].value != b[i].value {
+			t.Fatalf("needle %d differs for same seed: %q vs %q", i, a[i].value, b[i].value)
+		}
 	}
 }
 
@@ -40,9 +50,17 @@ func TestScoreNeedles_FractionFound(t *testing.T) {
 	}
 }
 
+func TestScoreNeedles_ToleratesSeparatorVariants(t *testing.T) {
+	needles := []needle{{value: "Reykjavik-1042"}, {value: "Oslo-5678"}, {value: "Lima-9012"}}
+	resp := "Found: Reykjavik - 1042, OSLO–5678 and lima 9012."
+	if got := scoreNeedles(resp, needles); got != 1.0 {
+		t.Errorf("scoreNeedles = %v, want 1.0 (separator/case variants must match)", got)
+	}
+}
+
 func TestBuildNeedles_ValuesAreUnique(t *testing.T) {
 	for trial := 0; trial < 1000; trial++ {
-		ns := buildNeedles()
+		ns := buildNeedles(int64(trial))
 		seen := map[string]bool{}
 		for _, n := range ns {
 			if seen[n.value] {

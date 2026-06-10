@@ -128,6 +128,15 @@ func init() {
 			close(progress)
 			<-drained
 			if err != nil {
+				// Persist whatever completed before the failure/SIGINT so the
+				// partial data shows up (flagged) in the TUI and --list.
+				if len(run.Problems) > 0 {
+					if sErr := store.Save(run); sErr != nil {
+						fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not save partial run: %v\n", sErr)
+					} else {
+						fmt.Fprintf(cmd.ErrOrStderr(), "partial run saved: %s\n", run.ID)
+					}
+				}
 				fmt.Fprintf(cmd.ErrOrStderr(), "run failed: %v\n", err)
 				return &ExitError{Code: 1}
 			}
@@ -153,7 +162,7 @@ func init() {
 	}
 
 	cmd.Flags().StringVar(&profileID, "profile", "", "profile id to benchmark")
-	cmd.Flags().StringVar(&modeStr, "mode", "judge", "scoring mode: judge | longctx | llama-bench")
+	cmd.Flags().StringVar(&modeStr, "mode", "judge", "scoring mode: judge | math-bench | codegen-bench | ragas-bench | summary-bench | llama-bench | longctx | instruction-bench | mmlu-bench")
 	cmd.Flags().BoolVar(&list, "list", false, "list saved runs and exit")
 	cmd.Flags().BoolVar(&compare, "compare", false, "with --profile: that profile's run history; alone: latest run per profile")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emit JSON instead of text")
@@ -171,13 +180,17 @@ func benchExit(code int) error {
 }
 
 func parseBenchMode(s string) (benchmark.Mode, bool) {
+	// Legacy aliases kept for compatibility with older scripts.
 	switch s {
-	case "judge":
-		return benchmark.ModeJudge, true
-	case "longctx", "long-context":
+	case "long-context":
 		return benchmark.ModeLongContext, true
-	case "llama-bench", "llamabench", "throughput":
+	case "llamabench", "throughput":
 		return benchmark.ModeLlamaBench, true
+	}
+	for _, m := range benchmark.ModesInOrder() {
+		if s == string(m) {
+			return m, true
+		}
 	}
 	return "", false
 }
@@ -189,9 +202,13 @@ func printRun(run benchmark.Run) {
 	fmt.Printf("Model:   %s   quant=%s  cache k/v=%s/%s  ctx=%d\n",
 		run.Profile.Model, dashOr(run.Profile.Quantization), dashOr(run.Profile.CacheTypeK), dashOr(run.Profile.CacheTypeV), run.Profile.CtxSize)
 	if run.Err != "" {
-		fmt.Printf("Error:   %s\n", run.Err)
+		fmt.Printf("Error:   %s (partial run)\n", run.Err)
 	}
-	fmt.Printf("Solve:   %.0f%% (%d/%d)   avg score %.2f\n", a.SolveRate*100, a.Resolved, a.Total, a.AvgScore)
+	solve := fmt.Sprintf("Solve:   %.0f%% (%d/%d)   avg score %.2f", a.SolveRate*100, a.Resolved, a.Total, a.AvgScore)
+	if a.Errored > 0 {
+		solve += fmt.Sprintf("   errored %d (excluded from rates)", a.Errored)
+	}
+	fmt.Println(solve)
 	fmt.Printf("Speed:   tok/s %.1f   TTFT %.0fms   total %.1fs\n", a.AvgTokensPerSecond, a.AvgTTFTms, float64(a.TotalMs)/1000)
 	fmt.Printf("Tokens:  in %d / out %d\n", a.TotalPromptTokens, a.TotalCompletionTokens)
 	fmt.Printf("GPU:     peak VRAM %dMB   util %.0f%%\n", a.PeakVRAMMB, a.AvgGPUUtil)
@@ -226,8 +243,12 @@ func benchPrintList(store benchmarkstore.Store, asJSON bool) int {
 	}
 	fmt.Printf("%-19s  %-20s  %-22s  %6s  %8s\n", "when", "profile", "mode", "solve", "tok/s")
 	for _, r := range runs {
+		mode := r.Mode.Title()
+		if r.Err != "" {
+			mode = "! " + mode // partial run
+		}
 		fmt.Printf("%-19s  %-20s  %-22s  %5.0f%%  %8.1f\n",
-			r.StartedAt.Format("2006-01-02 15:04"), clip(r.ProfileName, 20), clip(r.Mode.Title(), 22),
+			r.StartedAt.Format("2006-01-02 15:04"), clip(r.ProfileName, 20), clip(mode, 22),
 			r.Aggregate.SolveRate*100, r.Aggregate.AvgTokensPerSecond)
 	}
 	return 0

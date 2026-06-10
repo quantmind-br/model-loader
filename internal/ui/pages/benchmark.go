@@ -32,24 +32,10 @@ const (
 	bvHistory                      // runs of one profile over time
 )
 
-// benchModes is the selectable scoring-mode order in the mode picker, grouped
-// by Category (Quality, Speed, Robustness, Knowledge) so the picker can render
-// one header per group. Keep modes of the same category contiguous.
-var benchModes = []benchmark.Mode{
-	// Quality
-	benchmark.ModeJudge,
-	benchmark.ModeMathBench,
-	benchmark.ModeCodeGenBench,
-	benchmark.ModeRagasBench,
-	benchmark.ModeSummaryBench,
-	// Speed
-	benchmark.ModeLlamaBench,
-	// Robustness
-	benchmark.ModeLongContext,
-	benchmark.ModeInstBench,
-	// Knowledge
-	benchmark.ModeMMLUBench,
-}
+// benchModes is the selectable scoring-mode order in the mode picker, derived
+// from the benchmark package's canonical registry order (modes of the same
+// category are contiguous so the picker renders one header per group).
+var benchModes = benchmark.ModesInOrder()
 
 // BenchmarkPage is the Benchmark tab: pick a profile, run the embedded
 // SWE-bench-style mini-set, record metrics, and compare runs across profiles
@@ -65,6 +51,11 @@ type BenchmarkPage struct {
 	height  int
 	flash   components.Flash
 	spinner spinner.Model
+
+	// deleteConfirm gates the destructive [X] delete-run action behind a
+	// yes/no modal (default Cancel), matching every other delete in the app
+	// (DESTRUCT-01).
+	deleteConfirm components.Confirm
 
 	runs      []benchmark.Run
 	runCursor int
@@ -85,9 +76,9 @@ type BenchmarkPage struct {
 	runningName string
 
 	// detail / compare / history
-	detail      *benchmark.Run
-	compareRuns []benchmark.Run
-	historyRuns []benchmark.Run
+	detail          *benchmark.Run
+	compareSections []benchCompareSection
+	historyRuns     []benchmark.Run
 }
 
 // NewBenchmarkPage builds the page bound to the profile store, run store, and
@@ -105,7 +96,9 @@ func NewBenchmarkPage(store profilestore.Store, bstore benchmarkstore.Store, run
 }
 
 func (p BenchmarkPage) Init() tea.Cmd {
-	return tea.Batch(p.loadRunsCmd(), p.spinner.Tick)
+	// No spinner tick here: startRun schedules it when entering bvRunning, and
+	// the TickMsg handler stops re-arming once the run view is left.
+	return p.loadRunsCmd()
 }
 
 // Reload refreshes the persisted runs when the tab gains focus.
@@ -114,10 +107,13 @@ func (p BenchmarkPage) Reload() tea.Cmd { return p.loadRunsCmd() }
 // IsCapturingInput claims global keys whenever a modal-like view is active or
 // the user is typing a filter, so [1-5]/[q]/[tab] don't get stolen mid-flow.
 func (p BenchmarkPage) IsCapturingInput() bool {
-	return p.view != bvList || p.filterMode
+	return p.deleteConfirm.Active() || p.view != bvList || p.filterMode
 }
 
 func (p BenchmarkPage) Hints() string {
+	if p.deleteConfirm.Active() {
+		return "[←→] choose  [enter] confirm  [esc] cancel"
+	}
 	switch p.view {
 	case bvProfilePick:
 		if p.filterMode {
@@ -129,13 +125,13 @@ func (p BenchmarkPage) Hints() string {
 	case bvRunning:
 		return "running… [esc] cancel"
 	case bvRunDetail:
-		return "[e] export  [esc] back"
+		return "[E] export  [esc] back"
 	case bvCompare:
 		return "[esc] back"
 	case bvHistory:
 		return "[esc] back"
 	default:
-		hints := "[b] run  [enter] details  [c] compare  [e] export  [x] delete  [r] reload"
+		hints := "[b] run  [enter] details  [c] compare  [E] export  [X] del  [R] reload"
 		if len(p.runs) > 0 {
 			hints += "  [h] history"
 		}
@@ -165,6 +161,16 @@ func (p BenchmarkPage) View() string {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, fv)
 	}
 	return body
+}
+
+// OverlayView renders the delete-run confirm through the shared centered
+// Modal overlay so it composites opaquely over the run list (DESTRUCT-01).
+func (p BenchmarkPage) OverlayView() Overlay {
+	if p.deleteConfirm.Active() {
+		content := components.Modal("Delete benchmark run", p.deleteConfirm.View(), p.width, p.height)
+		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
+	}
+	return Overlay{}
 }
 
 // --- list view -------------------------------------------------------------
@@ -234,12 +240,30 @@ func benchListColumns(width int) benchListCols {
 	return benchListCols{when: whenW, profile: profileW, mode: modeW}
 }
 
+// listQualityCell renders the "solve" column for one run. Speed-only modes
+// have no solve concept, so they show a dash instead of a misleading 100%.
+func listQualityCell(r benchmark.Run) string {
+	switch r.Mode {
+	case benchmark.ModeLlamaBench:
+		return fmt.Sprintf("%7s", "—")
+	case benchmark.ModeLongContext:
+		// Needle recall: AvgScore is the recovered fraction.
+		return fmt.Sprintf("%6.0f%%", r.Aggregate.AvgScore*100)
+	default:
+		return fmt.Sprintf("%6.0f%%", r.Aggregate.SolveRate*100)
+	}
+}
+
 func (p BenchmarkPage) runRow(i int, r benchmark.Run, cols benchListCols) string {
-	row := fmt.Sprintf("%-*s  %-*s  %-*s  %6.0f%%  %8.1f  %6dMB",
+	mode := r.Mode.Title()
+	if r.Err != "" {
+		mode = "! " + mode // partial/failed run marker
+	}
+	row := fmt.Sprintf("%-*s  %-*s  %-*s  %s  %8.1f  %6dMB",
 		cols.when, r.StartedAt.Format("01-02 15:04"),
 		cols.profile, truncate(r.ProfileName, cols.profile),
-		cols.mode, truncate(r.Mode.Title(), cols.mode),
-		r.Aggregate.SolveRate*100,
+		cols.mode, truncate(mode, cols.mode),
+		listQualityCell(r),
 		r.Aggregate.AvgTokensPerSecond,
 		r.Aggregate.PeakVRAMMB,
 	)
@@ -248,6 +272,9 @@ func (p BenchmarkPage) runRow(i int, r benchmark.Run, cols benchListCols) string
 			return "> " + row
 		}
 		return theme.Selected.Render(row)
+	}
+	if r.Err != "" && !theme.NoColor() {
+		return "  " + theme.Error.Render(row)
 	}
 	return "  " + row
 }
@@ -348,18 +375,27 @@ func (p BenchmarkPage) viewRunDetail() string {
 	r := *p.detail
 	title := theme.Title.Render(fmt.Sprintf("%s — %s", r.ProfileName, r.Mode.Title()))
 	a := r.Aggregate
+	instance := "launched fresh"
+	if r.ReusedInstance {
+		instance = "reused (warm — numbers may include other traffic)"
+	}
 	meta := []string{
 		theme.Subtitle.Render(r.StartedAt.Format("2006-01-02 15:04:05")),
 		fmt.Sprintf("model: %s", r.Profile.Model),
 		fmt.Sprintf("quant: %s   cache k/v: %s/%s   ctx: %d",
 			dash(r.Profile.Quantization), dash(r.Profile.CacheTypeK), dash(r.Profile.CacheTypeV), r.Profile.CtxSize),
+		fmt.Sprintf("instance: %s", instance),
 	}
 	summary := fmt.Sprintf(
 		"solve %.0f%% (%d/%d)   avg score %.2f   tok/s %.1f   TTFT %.0fms   tokens in/out %d/%d   peak VRAM %dMB   GPU %.0f%%",
 		a.SolveRate*100, a.Resolved, a.Total, a.AvgScore, a.AvgTokensPerSecond, a.AvgTTFTms,
 		a.TotalPromptTokens, a.TotalCompletionTokens, a.PeakVRAMMB, a.AvgGPUUtil)
+	if a.Errored > 0 {
+		summary += fmt.Sprintf("   errored %d", a.Errored)
+	}
 	if r.Err != "" {
-		summary = theme.Error.Render("run error: " + r.Err)
+		// Keep the partial metrics visible; the error rides alongside them.
+		summary = theme.Error.Render("run incomplete: "+r.Err) + "\n" + summary
 	}
 
 	header := theme.Subtitle.Render(fmt.Sprintf("%-24s  %-8s  %6s  %7s  %7s  %s",
@@ -401,6 +437,11 @@ func modeDetailLines(r benchmark.Run) []string {
 	if a.AvgPromptProcessingTPS > 0 || a.AvgDecodeTPS > 0 {
 		lines = append(lines, fmt.Sprintf("prefill %.1f tok/s   decode %.1f tok/s", a.AvgPromptProcessingTPS, a.AvgDecodeTPS))
 	}
+	if r.Mode == benchmark.ModeLlamaBench {
+		if v := llamaBenchVarianceLine(r.Problems); v != "" {
+			lines = append(lines, v)
+		}
+	}
 	switch r.Mode {
 	case benchmark.ModeMathBench:
 		lines = append(lines, fmt.Sprintf("math accuracy %.0f%%", a.MathAccuracy*100))
@@ -438,18 +479,38 @@ func modeDetailLines(r benchmark.Run) []string {
 	return lines
 }
 
-// mathDifficultyBreakdown tallies solved/total per difficulty band parsed from
-// the math Detail format "… (difficulty N)".
+// llamaBenchVarianceLine summarizes the per-preset tok/s spread when the run
+// recorded it (older runs have no TPSStdDev and render nothing).
+func llamaBenchVarianceLine(problems []benchmark.ProblemResult) string {
+	parts := make([]string, 0, len(problems))
+	for _, pr := range problems {
+		if pr.TPSMax == 0 {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s ±%.1f [%.1f–%.1f]", pr.ProblemName, pr.TPSStdDev, pr.TPSMin, pr.TPSMax))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "tok/s spread: " + strings.Join(parts, "   ")
+}
+
+// mathDifficultyBreakdown tallies solved/total per difficulty band, preferring
+// the structured Difficulty field and falling back to parsing the Detail
+// format "… (difficulty N)" for runs persisted before the field existed.
 func mathDifficultyBreakdown(problems []benchmark.ProblemResult) string {
 	type tally struct{ solved, total int }
 	bands := map[string]*tally{}
 	var order []string
 	for _, pr := range problems {
-		m := mathDifficultyRe.FindStringSubmatch(pr.Detail)
-		if m == nil {
+		var d string
+		if pr.Difficulty > 0 {
+			d = fmt.Sprintf("%d", pr.Difficulty)
+		} else if m := mathDifficultyRe.FindStringSubmatch(pr.Detail); m != nil {
+			d = m[1]
+		} else {
 			continue
 		}
-		d := m[1]
 		t, ok := bands[d]
 		if !ok {
 			t = &tally{}
@@ -470,14 +531,18 @@ func mathDifficultyBreakdown(problems []benchmark.ProblemResult) string {
 	return strings.Join(parts, "   ")
 }
 
-// mmluCategoryBreakdown tallies solved/total per category parsed from the MMLU
-// Detail format "category=<C> expected …".
+// mmluCategoryBreakdown tallies solved/total per category, preferring the
+// structured Category field and falling back to parsing the Detail format
+// "category=<C> expected …" for runs persisted before the field existed.
 func mmluCategoryBreakdown(problems []benchmark.ProblemResult) string {
 	type tally struct{ solved, total int }
 	cats := map[string]*tally{}
 	var order []string
 	for _, pr := range problems {
-		cat := parseMMLUCategory(pr.Detail)
+		cat := pr.Category
+		if cat == "" {
+			cat = parseMMLUCategory(pr.Detail)
+		}
 		if cat == "" {
 			continue
 		}

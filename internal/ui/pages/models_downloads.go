@@ -141,18 +141,10 @@ func (p ModelsPage) handleDownloadsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p.dlFocus = 0
 		return p, nil
 	case "C":
-		p.dlFocus = 0
-		if p.dlManager == nil {
-			return p, nil
-		}
-		removed, err := p.dlManager.ClearTerminal()
-		if err != nil {
-			return p.withFlashError("clear history: " + err.Error())
-		}
-		if removed == 0 {
-			return p.withFlash("no finished downloads to clear")
-		}
-		return p.withFlash(fmt.Sprintf("cleared %d finished download(s)", removed))
+		// Clearing the history is irreversible and 'C' sits one Shift away
+		// from the reversible [c] hide-done toggle, so gate it behind a
+		// confirm (default Cancel) instead of acting immediately (DESTRUCT-02).
+		return p.askClearDone()
 	case "x":
 		if st, ok := p.focusedDownload(list); ok && st.Status == downloadmgr.StatusActive {
 			if p.dlManager != nil {
@@ -181,6 +173,23 @@ func (p ModelsPage) focusedDownload(list []downloadmgr.State) (downloadmgr.State
 		return list[p.dlFocus], true
 	}
 	return downloadmgr.State{}, false
+}
+
+// performDownloadClear runs the actual ClearTerminal after the user confirms
+// the [C] clear-all action (DESTRUCT-02). Invoked from Update on
+// downloadClearConfirmedMsg so manager I/O stays on the page.
+func (p ModelsPage) performDownloadClear() (tea.Model, tea.Cmd) {
+	if p.dlManager == nil {
+		return p, nil
+	}
+	removed, err := p.dlManager.ClearTerminal()
+	if err != nil {
+		return p.withFlashError("clear history: " + err.Error())
+	}
+	if removed == 0 {
+		return p.withFlash("no finished downloads to clear")
+	}
+	return p.withFlash(fmt.Sprintf("cleared %d finished download(s)", removed))
 }
 
 // renderDownloadsView renders the Downloads queue: a progress bar with

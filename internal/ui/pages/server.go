@@ -154,10 +154,11 @@ func (p *ServerPage) View() string {
 }
 
 func (p *ServerPage) OverlayView() Overlay {
-	// Route confirms through the centered Modal box (same path the Backends
-	// tab uses) so the dialog renders as a full-canvas opaque frame instead
-	// of a bare huh form. The bare form left page text bleeding around its
-	// short button row when composited by components.Overlay (RENDER-02/03).
+	// Route confirms through the centered Modal box (the shared overlay path
+	// used by Profiles, Backends, and Benchmark) so the dialog renders as a
+	// full-canvas opaque frame instead of a bare huh form. The bare form left
+	// page text bleeding around its short button row when composited by
+	// components.Overlay (RENDER-01/02/03).
 	if p.killConfirm.Active() {
 		content := components.Modal("Kill instance", p.killConfirm.View(), p.width, p.height)
 		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
@@ -177,7 +178,7 @@ func (p *ServerPage) Hints() string {
 	} else if p.historyChart != nil {
 		hints = "[1] 1h  [2] 6h  [3] 24h  [4] 7d  [esc] close"
 	} else {
-		hints = "[v] cycle view  [Space] pause  [k] kill  [r] restart  [H] history"
+		hints = "[v] cycle view  [Space] pause  [K] kill  [R] restart  [h] history"
 	}
 	if p.proxy != nil {
 		if ph := p.proxy.Hints(); ph != "" {

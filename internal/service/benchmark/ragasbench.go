@@ -5,8 +5,6 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -53,20 +51,6 @@ func buildRagasPrompt(p RagasProblem) string {
 
 func ragasDetail(faith, rel, prec float64, judgedBy string) string {
 	return fmt.Sprintf("faithfulness=%.2f relevancy=%.2f precision=%.2f (%s)", faith, rel, prec, judgedBy)
-}
-
-var ragasScoreRe = regexp.MustCompile(`faithfulness=([0-9.]+) relevancy=([0-9.]+) precision=([0-9.]+)`)
-
-// parseRagasScores extracts the three sub-scores from a ragas Detail string.
-func parseRagasScores(detail string) (faith, rel, prec float64, ok bool) {
-	m := ragasScoreRe.FindStringSubmatch(detail)
-	if m == nil {
-		return 0, 0, 0, false
-	}
-	faith, _ = strconv.ParseFloat(m[1], 64)
-	rel, _ = strconv.ParseFloat(m[2], 64)
-	prec, _ = strconv.ParseFloat(m[3], 64)
-	return faith, rel, prec, true
 }
 
 // runRagas answers one scenario and grades it on three criteria.
@@ -131,6 +115,12 @@ func (r *Runner) runRagas(ctx context.Context, base, model string, g grader, p R
 			break
 		}
 	}
+	res.SubScores = map[string]float64{
+		"faithfulness": faith.Score,
+		"relevancy":    rel.Score,
+		"precision":    prec.Score,
+	}
+	res.JudgedBy = judgedBy
 	res.Detail = ragasDetail(faith.Score, rel.Score, prec.Score, judgedBy)
 	return res, tr
 }
@@ -142,18 +132,18 @@ func (ragasHandler) Category() Category              { return CatQuality }
 func (ragasHandler) Count(r *Runner) int             { return len(r.ragasProblems) }
 func (ragasHandler) Prepare(*Runner) (Scorer, error) { return nil, nil }
 
-// Finalize averages each grader criterion across all answered problems.
+// Finalize averages each grader criterion across all answered problems,
+// reading the structured SubScores set by runRagas.
 func (ragasHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
 	var sf, sr, sp float64
 	n := 0
 	for _, pr := range problems {
-		f, r, p, ok := parseRagasScores(pr.Detail)
-		if !ok {
+		if pr.SubScores == nil {
 			continue
 		}
-		sf += f
-		sr += r
-		sp += p
+		sf += pr.SubScores["faithfulness"]
+		sr += pr.SubScores["relevancy"]
+		sp += pr.SubScores["precision"]
 		n++
 	}
 	if n == 0 {

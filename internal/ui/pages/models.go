@@ -44,6 +44,11 @@ type ModelsPage struct {
 
 	action        *actionMenu
 	deleteConfirm components.Confirm
+	// clearDoneConfirm gates the Downloads section's [C] clear-all action
+	// behind a yes/no modal (default Cancel) so a slipped Shift on the
+	// reversible [c] hide-done toggle can't wipe the download history
+	// (DESTRUCT-02).
+	clearDoneConfirm components.Confirm
 
 	profilePicker           *components.ProfilePicker
 	profilePickerTargetPath string
@@ -171,6 +176,9 @@ func (p ModelsPage) View() string {
 	if p.deleteConfirm.Active() {
 		return p.deleteConfirm.View()
 	}
+	if p.clearDoneConfirm.Active() {
+		return p.clearDoneConfirm.View()
+	}
 	if p.action != nil {
 		return p.renderActionMenu()
 	}
@@ -267,6 +275,9 @@ func (p ModelsPage) Hints() string {
 	}
 	if p.deleteConfirm.Active() {
 		return "[enter] confirm  [esc] cancel"
+	}
+	if p.clearDoneConfirm.Active() {
+		return "[←→] choose  [enter] confirm  [esc] cancel"
 	}
 	if p.action != nil {
 		return "[↑↓] move  [enter] select  [esc] cancel"

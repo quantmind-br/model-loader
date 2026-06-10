@@ -98,11 +98,26 @@ type ProblemResult struct {
 	CompletionTokens    int     `json:"completionTokens"`
 	Detail              string  `json:"detail,omitempty"`
 	Err                 string  `json:"err,omitempty"`
+
+	// Structured per-mode fields. All optional and additive so persisted runs
+	// from older versions decode cleanly; Detail keeps the human-readable text.
+	Kind       string             `json:"kind,omitempty"`       // instruction: "format" | "refusal" | "consistency"
+	Category   string             `json:"category,omitempty"`   // mmlu: STEM / Humanities / Social Sciences / Other
+	Difficulty int                `json:"difficulty,omitempty"` // math: GSM8K reasoning-step band 1..3
+	SubScores  map[string]float64 `json:"subScores,omitempty"`  // ragas/summary/consistency sub-criteria
+	JudgedBy   string             `json:"judgedBy,omitempty"`   // "external" | "self" | "heuristic"
+	SimMethod  string             `json:"simMethod,omitempty"`  // consistency: "embeddings" | "lexical"
+	Seed       int64              `json:"seed,omitempty"`       // longctx: needle randomization seed
+	TPSStdDev  float64            `json:"tpsStdDev,omitempty"`  // llama-bench: tok/s spread across reps
+	TPSMin     float64            `json:"tpsMin,omitempty"`
+	TPSMax     float64            `json:"tpsMax,omitempty"`
+	Sandbox    string             `json:"sandbox,omitempty"` // codegen: "bwrap" | "subprocess"
 }
 
 // Aggregate is the run-level rollup across all problems.
 type Aggregate struct {
 	Total                  int     `json:"total"`
+	Errored                int     `json:"errored,omitempty"` // problems with a request/judge error, excluded from quality rates
 	Resolved               int     `json:"resolved"`
 	SolveRate              float64 `json:"solveRate"` // 0..1
 	AvgScore               float64 `json:"avgScore"`
@@ -152,6 +167,10 @@ type Run struct {
 	Problems    []ProblemResult `json:"problems"`
 	Aggregate   Aggregate       `json:"aggregate"`
 	Err         string          `json:"err,omitempty"`
+	// ReusedInstance is true when the run rode an already-running backend
+	// instance (warm, possibly serving other traffic) instead of launching a
+	// fresh one — performance numbers may be affected.
+	ReusedInstance bool `json:"reusedInstance,omitempty"`
 
 	// Transcript holds raw per-problem I/O for debugging. Excluded from the run
 	// JSON (json:"-"); benchmarkstore writes it to a separate file.

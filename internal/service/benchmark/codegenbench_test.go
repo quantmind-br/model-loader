@@ -2,7 +2,9 @@ package benchmark
 
 import (
 	"context"
+	"errors"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 )
@@ -99,5 +101,56 @@ func TestCodeGenFinalize_RateOverExecuted(t *testing.T) {
 	codeGenHandler{}.Finalize(&agg, results)
 	if agg.CodePassRate < 0.66 || agg.CodePassRate > 0.67 {
 		t.Errorf("CodePassRate = %v, want ~0.667 (over executed only)", agg.CodePassRate)
+	}
+}
+
+func TestBuildBwrapArgs(t *testing.T) {
+	args := buildBwrapArgs("/tmp/work", "/tmp/work/candidate.py")
+	joined := strings.Join(args, " ")
+	for _, want := range []string{"--unshare-net", "--unshare-pid", "--die-with-parent", "--tmpfs /tmp",
+		"--bind /tmp/work /tmp/work", "--chdir /tmp/work", "python3 /tmp/work/candidate.py"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("bwrap args missing %q in %q", want, joined)
+		}
+	}
+}
+
+func TestRunPython_FallbackWhenNoBwrap(t *testing.T) {
+	if _, err := lookPython(); err != nil {
+		t.Skip("python3 not on PATH")
+	}
+	orig := lookBwrap
+	lookBwrap = func() (string, error) { return "", errors.New("not found") }
+	defer func() { lookBwrap = orig }()
+
+	r := runPython(context.Background(), "assert 1 + 1 == 2\n", 5*time.Second)
+	if !r.passed {
+		t.Fatalf("expected pass, stderr: %s", r.stderr)
+	}
+	if r.sandbox != "subprocess" {
+		t.Fatalf("sandbox = %q, want subprocess", r.sandbox)
+	}
+}
+
+func TestRunPython_BwrapIsolatesNetwork(t *testing.T) {
+	if _, err := lookPython(); err != nil {
+		t.Skip("python3 not on PATH")
+	}
+	if _, err := lookBwrap(); err != nil {
+		t.Skip("bwrap not on PATH")
+	}
+	r := runPython(context.Background(), "assert 1 + 1 == 2\n", 5*time.Second)
+	if !r.passed {
+		t.Fatalf("expected pass under bwrap, stderr: %s", r.stderr)
+	}
+	if r.sandbox != "bwrap" {
+		t.Fatalf("sandbox = %q, want bwrap", r.sandbox)
+	}
+	// --unshare-net: any socket connect must fail fast.
+	netProbe := "import socket\ns=socket.socket()\ns.settimeout(2)\n" +
+		"try:\n    s.connect((\"1.1.1.1\", 80))\nexcept OSError:\n    pass\nelse:\n    raise AssertionError(\"network reachable\")\n"
+	r = runPython(context.Background(), netProbe, 8*time.Second)
+	if !r.passed {
+		t.Fatalf("network probe should pass (connect must fail inside bwrap), stderr: %s", r.stderr)
 	}
 }

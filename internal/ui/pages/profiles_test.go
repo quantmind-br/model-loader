@@ -372,8 +372,8 @@ func TestProfilesPage_DeleteCompletesViaAsyncMsgs(t *testing.T) {
 		return strings.Contains(string(out), "Doomed")
 	}, teatest.WithDuration(2*time.Second))
 
-	// Press 'x' to open the delete confirm.
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	// Press 'X' to open the delete confirm.
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
 		return strings.Contains(string(out), "Delete profile doomed?")
 	}, teatest.WithDuration(2*time.Second))
@@ -399,6 +399,43 @@ func TestProfilesPage_DeleteCompletesViaAsyncMsgs(t *testing.T) {
 	}
 }
 
+// TestProfilesPage_VimKNavigatesListNotKill locks in KEY-01: lowercase j/k
+// move the list cursor (vim nav) and no longer trigger a kill; the kill action
+// moved to uppercase K.
+func TestProfilesPage_VimKNavigatesListNotKill(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := profilestore.NewFSStore(dir)
+	page := NewProfilesPage(store, domain.FlagSchema{}).WithProcessManager(&fakeManager{}, nil)
+	updated, _ := page.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	page = updated.(ProfilesPage)
+	updated, _ = page.Update(loadedMsg{profiles: []domain.Profile{
+		{ID: "a", Name: "Alpha"}, {ID: "b", Name: "Beta"}, {ID: "c", Name: "Gamma"},
+	}})
+	page = updated.(ProfilesPage)
+
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	page = updated.(ProfilesPage)
+	if page.list.Index() != 1 {
+		t.Fatalf("after 'j' index = %d, want 1 (down nav)", page.list.Index())
+	}
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	page = updated.(ProfilesPage)
+	if page.list.Index() != 0 {
+		t.Fatalf("after 'k' index = %d, want 0 ('k' must navigate up, not kill)", page.list.Index())
+	}
+	if page.killConfirm.Active() {
+		t.Fatal("'k' must not open the kill confirm")
+	}
+
+	// Uppercase 'K' with a running instance opens the kill confirm.
+	page.running = []domain.RunningInstance{{ProfileID: "a", PID: 4242, Port: 8080}}
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
+	page = updated.(ProfilesPage)
+	if !page.killConfirm.Active() {
+		t.Fatal("'K' should open the kill confirm when an instance is running")
+	}
+}
+
 func TestProfilesPage_HintsIncludeLaunchAndEdit(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := profilestore.NewFSStore(dir)
@@ -407,10 +444,10 @@ func TestProfilesPage_HintsIncludeLaunchAndEdit(t *testing.T) {
 	if !strings.Contains(hints, "[enter] launch") {
 		t.Errorf("list-mode Hints missing [enter] launch; got %q", hints)
 	}
-	if !strings.Contains(hints, "[E] edit") {
-		t.Errorf("list-mode Hints missing [E] edit; got %q", hints)
+	if !strings.Contains(hints, "[e] edit") {
+		t.Errorf("list-mode Hints missing [e] edit; got %q", hints)
 	}
-	// F-10 audit: [e] export moved off the inline footer into the [?] help
+	// F-10 audit: [E] export moved off the inline footer into the [?] help
 	// pane to keep the footer fitting at common widths. The escape hatch
 	// "(more: ?)" tail remains so the user knows additional bindings exist.
 	if !strings.Contains(hints, "(more: ?)") {
@@ -612,7 +649,7 @@ func TestProfilesPage_ExportWithoutDirFlashesNotConfigured(t *testing.T) {
 	updated, _ = page.Update(loadedMsg{profiles: nil})
 	page = updated.(ProfilesPage)
 
-	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'E'}})
 	page = updated.(ProfilesPage)
 
 	// F-03 audit: the "directory not configured" flash now spells out the
@@ -644,7 +681,7 @@ func TestProfilesPage_ExportWritesBundleAndFlashesFilename(t *testing.T) {
 	updated, _ = page.Update(loadedMsg{profiles: []domain.Profile{{ID: "alpha", Name: "Alpha"}}})
 	page = updated.(ProfilesPage)
 
-	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'E'}})
 	page = updated.(ProfilesPage)
 
 	// F-03 audit: the success flash now reports the count and the bundle
@@ -699,7 +736,7 @@ func TestProfilesPage_ExportFailureFlashesError(t *testing.T) {
 	updated, _ = page.Update(loadedMsg{profiles: store.ps})
 	page = updated.(ProfilesPage)
 
-	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'E'}})
 	page = updated.(ProfilesPage)
 
 	if got := page.flash.Message(); !strings.HasPrefix(got, "export failed:") {
@@ -801,9 +838,9 @@ func drainPageCmd(t *testing.T, page *ProfilesPage, cmd tea.Cmd) {
 	}
 }
 
-// F-06 regression: while filter is active, pressing `e` must reach the
+// F-06 regression: while filter is active, pressing `E` must reach the
 // list (typing into the filter buffer), NOT silently fire the export
-// shortcut. Verified by ensuring the flash stays empty after `e`.
+// shortcut. Verified by ensuring the flash stays empty after `E`.
 func TestProfilesPage_ExportGatedWhileFiltering(t *testing.T) {
 	dir := t.TempDir()
 	store, err := profilestore.NewFSStore(dir)
@@ -822,7 +859,7 @@ func TestProfilesPage_ExportGatedWhileFiltering(t *testing.T) {
 		t.Fatal("filter mode did not capture input")
 	}
 
-	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'E'}})
 	page = updated.(ProfilesPage)
 
 	if got := page.flash.Message(); strings.HasPrefix(got, "exported to ") {
@@ -853,7 +890,7 @@ func TestProfilesPage_ExportFlashesOnSuccess(t *testing.T) {
 	updated, _ := page.Update(loadedMsg{profiles: []domain.Profile{{ID: "a", Name: "Alpha", Model: "/m.gguf"}}})
 	page = updated.(ProfilesPage)
 
-	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'E'}})
 	page = updated.(ProfilesPage)
 
 	// F-03 audit: success flash now includes profile count + filename.

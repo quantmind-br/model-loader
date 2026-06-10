@@ -25,21 +25,11 @@ func TestBuildRagasPrompt_IncludesDocsAndQuestion(t *testing.T) {
 	}
 }
 
-func TestRagasDetail_RoundTrip(t *testing.T) {
-	d := ragasDetail(0.8, 0.9, 0.75, "self")
-	f, r, p, ok := parseRagasScores(d)
-	if !ok {
-		t.Fatalf("parseRagasScores failed on %q", d)
-	}
-	if math.Abs(f-0.8) > 1e-9 || math.Abs(r-0.9) > 1e-9 || math.Abs(p-0.75) > 1e-9 {
-		t.Errorf("round-trip mismatch: got f=%v r=%v p=%v", f, r, p)
-	}
-}
-
 func TestRagasFinalize_AveragesCriteria(t *testing.T) {
 	problems := []ProblemResult{
-		{Detail: ragasDetail(1.0, 0.8, 0.6, "self")},
-		{Detail: ragasDetail(0.0, 0.4, 0.4, "self")},
+		{SubScores: map[string]float64{"faithfulness": 1.0, "relevancy": 0.8, "precision": 0.6}},
+		{SubScores: map[string]float64{"faithfulness": 0.0, "relevancy": 0.4, "precision": 0.4}},
+		{Detail: "errored, no sub-scores"}, // ignored (nil SubScores)
 	}
 	var agg Aggregate
 	ragasHandler{}.Finalize(&agg, problems)
@@ -108,9 +98,13 @@ func TestRunRagas_EndToEnd(t *testing.T) {
 	if res.Err != "" {
 		t.Fatalf("runRagas error: %s", res.Err)
 	}
-	_, _, _, ok := parseRagasScores(res.Detail)
-	if !ok {
-		t.Errorf("parseRagasScores failed on Detail=%q", res.Detail)
+	for _, k := range []string{"faithfulness", "relevancy", "precision"} {
+		if v, ok := res.SubScores[k]; !ok || math.Abs(v-0.9) > 1e-9 {
+			t.Errorf("SubScores[%q] = %v (ok=%v), want 0.9", k, v, ok)
+		}
+	}
+	if res.JudgedBy != "self" {
+		t.Errorf("JudgedBy = %q, want self", res.JudgedBy)
 	}
 	if got := callCount.Load(); got != 4 {
 		t.Errorf("stub call count = %d, want 4 (1 answer + 3 grader)", got)

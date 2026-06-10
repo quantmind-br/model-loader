@@ -103,6 +103,8 @@ func (p ModelsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, nil
 	case modelDeleteConfirmedMsg:
 		return p.performDelete(msg.path)
+	case downloadClearConfirmedMsg:
+		return p.performDownloadClear()
 	case tea.KeyMsg:
 		return p.dispatchKey(msg)
 	default:
@@ -135,6 +137,9 @@ func (p ModelsPage) dispatchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if p.deleteConfirm.Active() {
 		return p.updateDeleteConfirm(msg)
 	}
+	if p.clearDoneConfirm.Active() {
+		return p.updateClearDoneConfirm(msg)
+	}
 	if p.action != nil {
 		return p.updateActionMenu(msg)
 	}
@@ -149,6 +154,11 @@ func (p ModelsPage) forwardNonKey(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if p.deleteConfirm.Active() {
 		var cmd tea.Cmd
 		p.deleteConfirm, cmd = p.deleteConfirm.Update(msg)
+		return p, cmd
+	}
+	if p.clearDoneConfirm.Active() {
+		var cmd tea.Cmd
+		p.clearDoneConfirm, cmd = p.clearDoneConfirm.Update(msg)
 		return p, cmd
 	}
 	return p, nil

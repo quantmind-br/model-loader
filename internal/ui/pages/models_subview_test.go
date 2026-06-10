@@ -10,6 +10,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/downloadmgr"
 	"github.com/quantmind-br/model-loader/internal/service/hfhub"
+	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
 
 func TestModelsPage_SubViewNavigationCycles(t *testing.T) {
@@ -139,12 +140,31 @@ func TestModelsPage_ClearDoneKeyDeletesHistoryFromDisk(t *testing.T) {
 	page := NewModelsPage(&fakeScanner{}, nil).WithDownloadManager(mgr)
 	page.subView = mvDownloads
 
+	// [C] now opens a confirm (default Cancel) instead of clearing immediately
+	// so a slipped Shift on the reversible [c] hide-done can't wipe history
+	// (DESTRUCT-02).
 	updated, _ := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'C'}})
 	mp := updated.(ModelsPage)
+	if !mp.clearDoneConfirm.Active() {
+		t.Fatal("expected clear-done confirm to be active after [C]")
+	}
+	if !mp.IsCapturingInput() {
+		t.Fatal("page should capture input while the clear-done confirm is open")
+	}
+	// Nothing is cleared until the user confirms.
+	if _, err := downloadmgr.LoadRecord(downloadmgr.StatePath(dir, id)); err != nil {
+		t.Errorf("record should still exist before confirmation: %v", err)
+	}
+
+	// Affirmative completion: mirror Confirm.Update clearing the form and
+	// inject the msg its onYes callback would emit.
+	mp.clearDoneConfirm = components.Confirm{}
+	updated, _ = mp.Update(downloadClearConfirmedMsg{})
+	mp = updated.(ModelsPage)
 
 	// The finished record is gone from disk — it will NOT come back on restart.
 	if _, err := downloadmgr.LoadRecord(downloadmgr.StatePath(dir, id)); err == nil {
-		t.Error("completed download still on disk after [C] clear done")
+		t.Error("completed download still on disk after confirmed clear")
 	}
 	if !strings.Contains(mp.flash.Message(), "cleared 1") {
 		t.Errorf("flash = %q, want it to confirm 'cleared 1'", mp.flash.Message())

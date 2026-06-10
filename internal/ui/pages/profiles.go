@@ -129,7 +129,7 @@ func (p ProfilesPage) WithBackendCatalog(catalogStore backendcatalog.Store, sche
 	return p
 }
 
-// WithExportDir enables the [e] export shortcut by configuring the
+// WithExportDir enables the [E] export shortcut by configuring the
 // destination directory for profile-bundle JSON files. Empty dir disables
 // the shortcut at runtime (it flashes a "not configured" message instead
 // of writing).
@@ -294,7 +294,7 @@ func (p ProfilesPage) Hints() string {
 	case p.deleteConfirm.Active():
 		return "[←→] choose  [enter] confirm"
 	default:
-		return "[enter] launch  [E] edit  [n] new  [d] dup  [x] del  [b] bg/fg  [k] kill  [/] filter  (more: ?)"
+		return "[enter] launch  [e] edit  [n] new  [d] dup  [X] del  [b] bg/fg  [K] kill  [/] filter  (more: ?)"
 	}
 }
 

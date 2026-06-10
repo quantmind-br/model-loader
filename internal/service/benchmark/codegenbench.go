@@ -44,12 +44,38 @@ type pyResult struct {
 	passed   bool
 	timedOut bool
 	stderr   string
+	sandbox  string // "bwrap" | "subprocess"
 }
 
-// runPython writes the program to a temp file and runs it with `python3` under
-// a hard timeout. The child runs in its own process group which is killed on
-// timeout/cancel so spawned subprocesses can't outlive the run, with a minimal
-// environment. NOTE: this bounds runtime but is not kernel-level isolation.
+// buildBwrapArgs assembles the bubblewrap argv that runs script inside an
+// isolated namespace: no network, fresh PID namespace, read-only system dirs
+// (--ro-bind-try tolerates usr-merged distros where /bin etc. are symlinks),
+// a private /tmp, and only the work dir writable.
+func buildBwrapArgs(workdir, script string) []string {
+	return []string{
+		"--unshare-net", "--unshare-pid", "--die-with-parent", "--new-session",
+		"--ro-bind", "/usr", "/usr",
+		"--ro-bind-try", "/bin", "/bin",
+		"--ro-bind-try", "/lib", "/lib",
+		"--ro-bind-try", "/lib64", "/lib64",
+		"--ro-bind-try", "/etc/alternatives", "/etc/alternatives",
+		"--proc", "/proc",
+		"--dev", "/dev",
+		"--tmpfs", "/tmp",
+		"--bind", workdir, workdir,
+		"--chdir", workdir,
+		"--setenv", "HOME", workdir,
+		"--setenv", "PYTHONDONTWRITEBYTECODE", "1",
+		"python3", script,
+	}
+}
+
+// runPython writes the program to a temp file and executes it under a hard
+// timeout. When bubblewrap is available the program runs inside bwrap with no
+// network and read-only system dirs; otherwise it falls back to a plain
+// subprocess with a minimal environment (runtime bounded, but no kernel-level
+// isolation). Either way the child runs in its own process group which is
+// killed on timeout/cancel so spawned subprocesses can't outlive the run.
 func runPython(ctx context.Context, program string, timeout time.Duration) pyResult {
 	dir, err := os.MkdirTemp("", "codegen-*")
 	if err != nil {
@@ -63,9 +89,17 @@ func runPython(ctx context.Context, program string, timeout time.Duration) pyRes
 
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(runCtx, "python3", file)
+	var cmd *exec.Cmd
+	sandbox := "subprocess"
+	if bwrap, err := lookBwrap(); err == nil {
+		sandbox = "bwrap"
+		cmd = exec.CommandContext(runCtx, bwrap, buildBwrapArgs(dir, file)...)
+		cmd.Env = []string{"PATH=/usr/bin:/bin"}
+	} else {
+		cmd = exec.CommandContext(runCtx, "python3", file)
+		cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "PYTHONDONTWRITEBYTECODE=1"}
+	}
 	cmd.Dir = dir
-	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "PYTHONDONTWRITEBYTECODE=1"}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 2 * time.Second
@@ -74,12 +108,12 @@ func runPython(ctx context.Context, program string, timeout time.Duration) pyRes
 	cmd.Stderr = &stderr
 	err = cmd.Run()
 	if runCtx.Err() == context.DeadlineExceeded {
-		return pyResult{timedOut: true, stderr: "timeout after " + timeout.String()}
+		return pyResult{timedOut: true, stderr: "timeout after " + timeout.String(), sandbox: sandbox}
 	}
 	if err != nil {
-		return pyResult{stderr: truncStderr(stderr.String())}
+		return pyResult{stderr: truncStderr(stderr.String()), sandbox: sandbox}
 	}
-	return pyResult{passed: true, stderr: truncStderr(stderr.String())}
+	return pyResult{passed: true, stderr: truncStderr(stderr.String()), sandbox: sandbox}
 }
 
 func truncStderr(s string) string {
@@ -137,6 +171,7 @@ func (r *Runner) runCodeGenBench(ctx context.Context, base, model string, p Code
 	program := code + "\n\n" + p.Test + "\n\ncheck(" + p.EntryPoint + ")\n"
 	result := runPython(ctx, program, codeGenTimeout)
 	res.Resolved = result.passed
+	res.Sandbox = result.sandbox
 	if result.passed {
 		res.Score = 1
 	}
@@ -147,6 +182,9 @@ func (r *Runner) runCodeGenBench(ctx context.Context, base, model string, p Code
 		res.Detail = "timed out"
 	default:
 		res.Detail = "failed: " + firstLine(result.stderr)
+	}
+	if result.sandbox != "" {
+		res.Detail += " [" + result.sandbox + "]"
 	}
 	tr.Error = result.stderr
 	return res, tr
@@ -210,6 +248,10 @@ func (codeGenHandler) Execute(ctx context.Context, r *Runner, base, model string
 
 // lookPython is a seam resolving python3 on PATH (overridable in tests).
 var lookPython = func() (string, error) { return exec.LookPath("python3") }
+
+// lookBwrap is a seam resolving bubblewrap on PATH (overridable in tests).
+// When absent, runPython falls back to an un-namespaced subprocess.
+var lookBwrap = func() (string, error) { return exec.LookPath("bwrap") }
 
 func init() {
 	registerHandler(codeGenHandler{})

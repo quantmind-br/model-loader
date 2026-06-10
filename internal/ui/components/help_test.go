@@ -11,10 +11,10 @@ func TestHelpMarkdownCoversAllHints(t *testing.T) {
 		name  string
 		hints string
 	}{
-		{"Profiles", "[enter] launch  [E] edit  [n] new  [d] duplicate  [x] delete  [b] bg/fg  [k] kill  [r] refresh  [e] export  [p] pin  [I] import  [u] undo  [/] filter"},
+		{"Profiles", "[enter] launch  [e] edit  [n] new  [d] duplicate  [X] delete  [b] bg/fg  [K] kill  [R] refresh  [E] export  [p] pin  [I] import  [u] undo  [/] filter"},
 		{"Models", "[/] filter  [R] rescan  [s] search HF  [enter] actions  [i] info  [→/g] sizing"},
-		{"Server", "[v] cycle views  [Space] pause  [k] kill  [r] restart  [H] history  [s] start proxy  [x] stop proxy"},
-		{"Backends", "[enter/e] edit  [n] new  [x] del  [D] default  [R] refresh  [P] probe  [/] filter"},
+		{"Server", "[v] cycle views  [Space] pause  [K] kill  [R] restart  [h] history  [s] start proxy  [x] stop proxy"},
+		{"Backends", "[enter/e] edit  [n] new  [X] del  [D] default  [R] refresh  [P] probe  [/] filter"},
 	}
 	re := regexp.MustCompile(`\[([^\]]+)\]`)
 	for _, pg := range pages {

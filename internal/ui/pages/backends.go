@@ -56,7 +56,7 @@ func defaultBackendsKeys() backendsKeyMap {
 	return backendsKeyMap{
 		New:     key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new")),
 		Edit:    key.NewBinding(key.WithKeys("enter", "e"), key.WithHelp("enter/e", "edit")),
-		Delete:  key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "del")),
+		Delete:  key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "del")),
 		Default: key.NewBinding(key.WithKeys("D"), key.WithHelp("D", "default")),
 		Refresh: key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "refresh schema")),
 		Probe:   key.NewBinding(key.WithKeys("P"), key.WithHelp("P", "probe")),
@@ -342,12 +342,6 @@ func (p BackendsPage) View() string {
 	if p.form != nil {
 		return components.Modal("Backend", p.form.View(), p.width, p.height)
 	}
-	if p.refreshConfirm.Active() {
-		return components.Modal("Refresh Schema", p.refreshConfirm.View(), p.width, p.height)
-	}
-	if p.deleteConfirm.Active() {
-		return components.Modal("Delete Backend", p.deleteConfirm.View(), p.width, p.height)
-	}
 
 	leftWidth, rightWidth := theme.SplitTwoPanes(p.width)
 	leftContent := p.list.View()
@@ -377,6 +371,23 @@ func (p BackendsPage) View() string {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, v)
 	}
 	return body
+}
+
+// OverlayView routes the delete/refresh confirms through the shared centered
+// Modal overlay (the same path Profiles/Server/Benchmark use) instead of
+// returning the Modal straight from View(). Returning it from View() let
+// theme.ClampBody re-wrap the already-bordered box, which overflowed 80
+// columns and doubled the line spacing (RENDER-01).
+func (p BackendsPage) OverlayView() Overlay {
+	if p.refreshConfirm.Active() {
+		content := components.Modal("Refresh schema", p.refreshConfirm.View(), p.width, p.height)
+		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
+	}
+	if p.deleteConfirm.Active() {
+		content := components.Modal("Delete backend", p.deleteConfirm.View(), p.width, p.height)
+		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
+	}
+	return Overlay{}
 }
 
 func (p BackendsPage) detailView() string {
@@ -448,7 +459,7 @@ func (p BackendsPage) Hints() string {
 	case p.deleteConfirm.Active():
 		return "[←→] choose  [enter] confirm  [esc] cancel"
 	default:
-		hints := "[e] edit  [n] new  [x] del  [D] default  [R] refresh"
+		hints := "[e] edit  [n] new  [X] del  [D] default  [R] refresh"
 		if p.prober != nil {
 			hints += "  [P] probe"
 		}

@@ -156,13 +156,11 @@ type RootModel struct {
 	status          components.StatusBar
 	width           int
 	height          int
-	bootBlocker     *bootBlocker
-	helpOpen        bool
-	helpViewport    viewport.Model
-	helpReady       bool
-	playgroundOpen  bool
-	playgroundModal tea.Model
-	pm              processmgr.Manager
+	bootBlocker  *bootBlocker
+	helpOpen     bool
+	helpViewport viewport.Model
+	helpReady    bool
+	pm           processmgr.Manager
 }
 
 // NewRoot constructs a RootModel with placeholder pages.
@@ -211,7 +209,8 @@ func (m RootModel) WithBenchmarkPage(p tea.Model) RootModel {
 	return m
 }
 
-// WithProcessManager injects the process manager for the playground modal.
+// WithProcessManager injects the process manager so recomputeHints can total
+// the per-instance restart count shown in the status bar.
 func (m RootModel) WithProcessManager(pm processmgr.Manager) RootModel {
 	m.pm = pm
 	return m
@@ -322,21 +321,13 @@ func (m RootModel) handleNavigateToSizing(msg pages.NavigateToSizingMsg) (tea.Mo
 	return m, cmd
 }
 
-// handleKey dispatches a key event. ctrl+c and ctrl+p are unconditional
-// global shortcuts — every other binding (?, q, 1-4, tab, shift+tab) is gated
-// by IsCapturingInput so printable keys reach an active editor/picker
-// instead of triggering quit/tab-switch/help.
+// handleKey dispatches a key event. ctrl+c is the only unconditional global
+// shortcut — every other binding (?, q, 1-5, tab, shift+tab) is gated by
+// IsCapturingInput so printable keys reach an active editor/picker instead of
+// triggering quit/tab-switch/help.
 func (m RootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.helpOpen {
 		return m.handleHelpKey(msg)
-	}
-	if m.playgroundOpen && m.playgroundModal != nil {
-		updated, cmd := m.playgroundModal.Update(msg)
-		m.playgroundModal = updated
-		if msg.String() == "esc" || msg.String() == "ctrl+p" {
-			m.playgroundOpen = false
-		}
-		return m, cmd
 	}
 	for _, sc := range rootShortcuts {
 		for _, k := range sc.Keys {
@@ -506,7 +497,10 @@ func (m RootModel) View() string {
 			return components.Modal("Keybindings", body, m.width, m.height)
 		}
 		m = m.ensureHelpViewport()
-		title := "Keybindings (↑/↓/PgUp/PgDn/k/j/g/G to scroll · ? to toggle · esc to close)"
+		// Keep the title pure ASCII: arrow/middot glyphs are East-Asian
+		// ambiguous-width and some terminals render them 2 cells wide, which
+		// overran the computed box and left the right border ragged (RENDER-02).
+		title := "Keybindings  (up/down/PgUp/PgDn/k/j/g/G scroll  |  ? toggle  |  esc close)"
 		if m.width < 80 {
 			title = "Keybindings"
 		}
@@ -527,10 +521,6 @@ func (m RootModel) View() string {
 		if overlay.Active {
 			frame = components.Overlay(frame, overlay.Content, m.width, m.height)
 		}
-	}
-	if m.playgroundOpen && m.playgroundModal != nil {
-		overlay := m.playgroundModal.View()
-		frame = components.Overlay(frame, overlay, m.width, m.height)
 	}
 	return frame
 }

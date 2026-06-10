@@ -41,6 +41,7 @@ func (p ModelsPage) IsCapturingInput() bool {
 		func() bool { return p.action != nil },
 		func() bool { return p.pathChooser != nil },
 		func() bool { return p.deleteConfirm.Active() },
+		func() bool { return p.clearDoneConfirm.Active() },
 		func() bool { return p.filterMode },
 		func() bool { return p.profilePicker != nil },
 		func() bool { return p.hfSearch != nil && p.hfSearch.IsActive() },
@@ -282,6 +283,11 @@ func (p ModelsPage) infoPanelSizing() (tea.Model, tea.Cmd) {
 }
 
 type modelDeleteConfirmedMsg struct{ path string }
+
+// downloadClearConfirmedMsg is emitted by clearDoneConfirm.onYes once the user
+// confirms clearing all finished downloads; performDownloadClear runs the
+// actual ClearTerminal in Update (DESTRUCT-02).
+type downloadClearConfirmedMsg struct{}
 
 // UseInNewProfileMsg requests creating a new profile pre-filled with Path.
 // Root catches this message, switches to the Profiles tab, and forwards

@@ -131,7 +131,7 @@ func TestBackendsPage_HintsVaryByMode(t *testing.T) {
 		t.Fatalf("web edit hints = %q", got)
 	}
 	p.webEditing = false
-	model, _ = p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	model, _ = p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
 	p = model.(BackendsPage)
 	if got := p.Hints(); got != "[←→] choose  [enter] confirm  [esc] cancel" {
 		t.Fatalf("confirm hints = %q", got)
@@ -152,7 +152,7 @@ func TestBackendsPage_IsCapturingInputDuringWebEditAndConfirm(t *testing.T) {
 		t.Fatal("web edit mode should capture input")
 	}
 	p.webEditing = false
-	model, _ = p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	model, _ = p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
 	p = model.(BackendsPage)
 	if !p.IsCapturingInput() {
 		t.Fatal("confirm mode should capture input")

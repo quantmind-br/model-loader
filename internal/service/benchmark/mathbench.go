@@ -113,6 +113,7 @@ func (r *Runner) runMathBench(ctx context.Context, base, model string, p MathPro
 	if res.Resolved {
 		res.Score = 1
 	}
+	res.Difficulty = p.Difficulty
 	res.Detail = fmt.Sprintf("expected %s, got %q (difficulty %d)", p.Answer, got, p.Difficulty)
 	return res, tr
 }
@@ -132,17 +133,22 @@ func (mathHandler) Category() Category              { return CatQuality }
 func (mathHandler) Count(r *Runner) int             { return len(r.mathProblems) }
 func (mathHandler) Prepare(*Runner) (Scorer, error) { return nil, nil }
 
+// Finalize sets MathAccuracy over answered problems only (request errors are
+// excluded from the denominator, mirroring the generic quality rollup).
 func (mathHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
-	if len(problems) == 0 {
-		return
-	}
-	solved := 0
+	answered, solved := 0, 0
 	for _, p := range problems {
+		if p.Err != "" {
+			continue
+		}
+		answered++
 		if p.Resolved {
 			solved++
 		}
 	}
-	agg.MathAccuracy = float64(solved) / float64(len(problems))
+	if answered > 0 {
+		agg.MathAccuracy = float64(solved) / float64(answered)
+	}
 }
 
 func (mathHandler) Execute(ctx context.Context, r *Runner, base, model string, _ Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {

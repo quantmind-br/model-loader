@@ -3,11 +3,14 @@ package benchmark
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // sseJudgeServer streams a fixed verdict string as one SSE content delta, then
@@ -86,5 +89,140 @@ func TestMedian(t *testing.T) {
 		if got := median(c.in); got != c.want {
 			t.Errorf("median(%v) = %v, want %v", c.in, got, c.want)
 		}
+	}
+}
+
+// fakeScorer adapts a func to the Scorer interface for pipeline tests.
+type fakeScorer struct {
+	fn func(ctx context.Context, p Problem, response string) (ProblemScore, error)
+}
+
+func (f fakeScorer) Score(ctx context.Context, p Problem, response string) (ProblemScore, error) {
+	return f.fn(ctx, p, response)
+}
+
+// sseModelServer streams one fixed content chunk per request and reports each
+// request through onRequest (called with the 1-based request count).
+func sseModelServer(onRequest func(n int)) *httptest.Server {
+	var calls atomic.Int32
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := int(calls.Add(1))
+		if onRequest != nil {
+			onRequest(n)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"candidate answer\"}}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+}
+
+func TestJudgeExecute_OverlapsScoringWithNextInference(t *testing.T) {
+	secondInferStarted := make(chan struct{})
+	srv := sseModelServer(func(n int) {
+		if n == 2 {
+			close(secondInferStarted)
+		}
+	})
+	defer srv.Close()
+
+	overlapped := make(chan bool, 1)
+	scorer := fakeScorer{fn: func(ctx context.Context, p Problem, response string) (ProblemScore, error) {
+		if p.ID == "p1" {
+			// Block the FIRST score until the SECOND inference has started; in a
+			// serial pipeline this deadlocks, so the timeout below detects it.
+			select {
+			case <-secondInferStarted:
+				overlapped <- true
+			case <-time.After(5 * time.Second):
+				overlapped <- false
+			}
+			return ProblemScore{Resolved: true, Score: 0.9, Detail: "judged p1"}, nil
+		}
+		return ProblemScore{Resolved: false, Score: 0.5, Detail: "judged " + p.ID}, nil
+	}}
+
+	r := &Runner{
+		cfg:      Config{MaxTokens: 64, Timeout: 5 * time.Second, SaveTranscripts: true, Judge: JudgeEndpoint{Samples: 1}},
+		problems: []Problem{{ID: "p1", Name: "p1"}, {ID: "p2", Name: "p2"}, {ID: "p3", Name: "p3"}},
+	}
+	results, trs, err := judgeHandler{}.Execute(context.Background(), r, srv.URL, "m", scorer, nil)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !<-overlapped {
+		t.Fatal("second inference did not start while first score was pending (no pipeline overlap)")
+	}
+	if len(results) != 3 || len(trs) != 3 {
+		t.Fatalf("results/transcripts = %d/%d, want 3/3", len(results), len(trs))
+	}
+	for i, want := range []string{"p1", "p2", "p3"} {
+		if results[i].ProblemID != want {
+			t.Errorf("results[%d] = %q, want %q (dataset order must be preserved)", i, results[i].ProblemID, want)
+		}
+	}
+	if !results[0].Resolved || results[0].Score != 0.9 {
+		t.Errorf("results[0] = %+v, want the blocked score to land in slot 0", results[0])
+	}
+	if results[1].Detail != "judged p2" || results[2].Detail != "judged p3" {
+		t.Errorf("later scores misplaced: %q / %q", results[1].Detail, results[2].Detail)
+	}
+}
+
+func TestJudgeExecute_ScoringErrorIsPerProblem(t *testing.T) {
+	srv := sseModelServer(nil)
+	defer srv.Close()
+
+	scorer := fakeScorer{fn: func(ctx context.Context, p Problem, response string) (ProblemScore, error) {
+		if p.ID == "p1" {
+			return ProblemScore{}, errors.New("judge endpoint down")
+		}
+		return ProblemScore{Resolved: true, Score: 1}, nil
+	}}
+	r := &Runner{
+		cfg:      Config{MaxTokens: 64, Timeout: 5 * time.Second, Judge: JudgeEndpoint{Samples: 1}},
+		problems: []Problem{{ID: "p1", Name: "p1"}, {ID: "p2", Name: "p2"}},
+	}
+	results, _, err := judgeHandler{}.Execute(context.Background(), r, srv.URL, "m", scorer, nil)
+	if err != nil {
+		t.Fatalf("Execute should not abort on a scoring error: %v", err)
+	}
+	if results[0].Err == "" {
+		t.Error("p1 should carry the judge error")
+	}
+	if !results[1].Resolved {
+		t.Error("p2 should still be scored")
+	}
+}
+
+func TestJudgeExecute_CancelDoesNotHang(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	srv := sseModelServer(func(n int) {
+		if n == 2 {
+			cancel() // cancel mid-run while p1 is still scoring
+		}
+	})
+	defer srv.Close()
+
+	scorer := fakeScorer{fn: func(sctx context.Context, p Problem, response string) (ProblemScore, error) {
+		<-sctx.Done() // a cancelled run must unblock pending judges
+		return ProblemScore{}, sctx.Err()
+	}}
+	r := &Runner{
+		cfg:      Config{MaxTokens: 64, Timeout: 5 * time.Second, Judge: JudgeEndpoint{Samples: 1}},
+		problems: []Problem{{ID: "p1", Name: "p1"}, {ID: "p2", Name: "p2"}, {ID: "p3", Name: "p3"}},
+	}
+	done := make(chan struct{})
+	var results []ProblemResult
+	go func() {
+		results, _, _ = judgeHandler{}.Execute(ctx, r, srv.URL, "m", scorer, nil)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Execute hung after cancellation")
+	}
+	if len(results) == 0 {
+		t.Fatal("expected partial results from the cancelled run")
 	}
 }
