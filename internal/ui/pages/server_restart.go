@@ -2,12 +2,16 @@ package pages
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
+	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
 
@@ -37,6 +41,13 @@ type unloadResultMsg struct {
 	err error
 }
 
+// killResultMsg carries the outcome of an async orphan kill (a pid not owned
+// by the proxy, dispatched through pm.Kill off the UI thread).
+type killResultMsg struct {
+	pid int
+	err error
+}
+
 func (p *ServerPage) handleRestartResult(m restartResultMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	if m.err != nil {
@@ -53,27 +64,50 @@ func (p *ServerPage) handleUnloadResult(m unloadResultMsg) (tea.Model, tea.Cmd) 
 	return p, tea.Batch(p.refreshInstancesCmd(), p.forwardToConfirms(m), cmd)
 }
 
+func (p *ServerPage) handleKillResult(m killResultMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	if m.err != nil {
+		p.flash, cmd = p.flash.SetError(fmt.Sprintf("kill: pid %d: %v", m.pid, m.err))
+	}
+	return p, tea.Batch(p.refreshInstancesCmd(), p.forwardToConfirms(m), cmd)
+}
+
 func (p *ServerPage) handleKillConfirmed(m monitorKillConfirmedMsg) (tea.Model, tea.Cmd) {
 	p.dropInstanceRow(m.pid) // optimistic removal; refresh below reconciles (UX-02)
-	if p.proxyCtl != nil {
-		if st := p.proxyCtl.Status(); st.LoadedPID != 0 && st.LoadedPID == m.pid {
+	if p.proxyCtl == nil {
+		// No proxy wired: pure orphan process management.
+		_ = p.pm.Kill(m.pid)
+		return p, tea.Batch(p.refreshInstancesCmd(), p.forwardToConfirms(m))
+	}
+	// The ownership decision needs proxy Status() (up to ~1s of I/O), so the
+	// whole dispatch runs inside a tea.Cmd off the UI thread.
+	pc := p.proxyCtl
+	pm := p.pm
+	pid := m.pid
+	killCmd := func() tea.Msg {
+		st := pc.Status()
+		if st.LoadedPID != 0 && st.LoadedPID == pid {
 			// The selected instance is the proxy's loaded backend — kill it
 			// through /_admin/unload (force) so the proxy state stays
 			// consistent instead of observing a vanished child.
-			pc := p.proxyCtl
-			pid := m.pid
-			unloadCmd := func() tea.Msg {
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel()
-				_, err := pc.Unload(ctx, true)
-				return unloadResultMsg{pid: pid, err: err}
-			}
-			return p, tea.Batch(unloadCmd, p.forwardToConfirms(m))
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			_, err := pc.Unload(ctx, true)
+			return unloadResultMsg{pid: pid, err: err}
 		}
+		// Orphan process management: instances not owned by the proxy. A
+		// degraded proxy (status probe failing) hides its loaded pid, so it
+		// must be guarded against before killing directly (parity with the
+		// CLI's refuseKillOnDegradedProxy).
+		if err := refuseKillOnDegradedProxyStatus(pc, st, pid); err != nil {
+			return killResultMsg{pid: pid, err: err}
+		}
+		if err := pm.Kill(pid); err != nil && !errors.Is(err, processmgr.ErrUnknownPID) {
+			return killResultMsg{pid: pid, err: err}
+		}
+		return killResultMsg{pid: pid}
 	}
-	// Orphan process management: instances not owned by the proxy.
-	_ = p.pm.Kill(m.pid)
-	return p, tea.Batch(p.refreshInstancesCmd(), p.forwardToConfirms(m))
+	return p, tea.Batch(killCmd, p.forwardToConfirms(m))
 }
 
 func (p *ServerPage) handleRestartConfirmed(m monitorRestartConfirmedMsg) (tea.Model, tea.Cmd) {
@@ -82,7 +116,7 @@ func (p *ServerPage) handleRestartConfirmed(m monitorRestartConfirmedMsg) (tea.M
 		p.flash, cmd = p.flash.SetError("restart: HTTP proxy not available")
 		return p, tea.Batch(cmd, p.forwardToConfirms(m))
 	}
-	return p, tea.Batch(restartCmd(p.proxyCtl, m.pid, m.profile.ID), p.forwardToConfirms(m))
+	return p, tea.Batch(restartCmd(p.proxyCtl, p.pm, m.pid, m.profile.ID), p.forwardToConfirms(m))
 }
 
 // askConfirmKill builds and arms the kill-confirmation overlay. The Confirm's
@@ -166,19 +200,55 @@ func (p *ServerPage) handleConfirmRestartKey(msg tea.KeyMsg) tea.Cmd {
 	return cmd
 }
 
-// restartCmd performs Unload then Load through the proxy off the UI thread
-// and delivers the result wrapped in a restartResultMsg. Load blocks until
-// the new backend is healthy. pid is only used to label the result.
-func restartCmd(pc serverProxyController, pid int, profileID string) tea.Cmd {
+// restartCmd restarts the instance off the UI thread and delivers the result
+// wrapped in a restartResultMsg. Ownership is checked at execution time
+// (parity with the CLI's restartInstance): a proxy-owned pid is swapped via
+// Unload+Load; an orphan pid is pm.Kill'ed first (freeing its VRAM) and then
+// loaded via the proxy — never Unload, which would kill whatever OTHER model
+// the proxy currently serves. Load blocks until the new backend is healthy.
+func restartCmd(pc serverProxyController, pm procMgrIface, pid int, profileID string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		if _, err := pc.Unload(ctx, false); err != nil {
-			return restartResultMsg{pid: pid, err: fmt.Errorf("unload: %w", err)}
+		st := pc.Status()
+		if st.LoadedPID != 0 && st.LoadedPID == pid {
+			if _, err := pc.Unload(ctx, false); err != nil {
+				return restartResultMsg{pid: pid, err: fmt.Errorf("unload: %w", err)}
+			}
+		} else {
+			if err := refuseKillOnDegradedProxyStatus(pc, st, pid); err != nil {
+				return restartResultMsg{pid: pid, err: err}
+			}
+			// Kill the orphan OS process before loading so VRAM is freed first.
+			if err := pm.Kill(pid); err != nil && !errors.Is(err, processmgr.ErrUnknownPID) {
+				return restartResultMsg{pid: pid, err: fmt.Errorf("kill orphan: %w", err)}
+			}
 		}
 		if _, err := pc.Load(ctx, profileID); err != nil {
 			return restartResultMsg{pid: pid, err: fmt.Errorf("load: %w", err)}
 		}
 		return restartResultMsg{pid: pid}
 	}
+}
+
+// refuseKillOnDegradedProxyStatus guards the orphan-kill paths: never kill a
+// pid directly while the proxy might be routing to it. A running proxy whose
+// /_status probe failed reports empty loaded fields exactly like a healthy
+// proxy with nothing loaded, so we key off the explicit probe-failure marker
+// set by proxysupervisor.Status. The probe has a short timeout and can fail
+// transiently, so we re-fetch once before refusing. Mirrors the CLI's
+// refuseKillOnDegradedProxy (internal/cli/instance_lifecycle.go).
+func refuseKillOnDegradedProxyStatus(pc serverProxyController, st httpproxy.Status, pid int) error {
+	if !st.Running || !strings.HasPrefix(st.LastError, "status_probe_failed") {
+		return nil
+	}
+	st = pc.Status()
+	if st.Running && strings.HasPrefix(st.LastError, "status_probe_failed") {
+		return fmt.Errorf("proxy status unavailable — retry or stop the proxy first (refusing to kill pid %d directly)", pid)
+	}
+	if st.LoadedPID == pid {
+		// The refreshed status reveals the pid is the proxy-loaded backend.
+		return fmt.Errorf("pid %d is loaded behind the proxy — retry so it goes through the proxy", pid)
+	}
+	return nil
 }

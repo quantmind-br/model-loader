@@ -57,6 +57,8 @@ func (p *ServerPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.handleRestartResult(m)
 	case unloadResultMsg:
 		return p.handleUnloadResult(m)
+	case killResultMsg:
+		return p.handleKillResult(m)
 	case ServerSelectPIDMsg:
 		return p.handleSelectPID(m)
 	case monitorPeriodicTickMsg:

@@ -70,14 +70,22 @@ func (fakeMonMgr) Subscribe(pid, port int, logPath string) (<-chan monitor.Monit
 // Unload/Load calls so restart tests can assert swap semantics.
 type fakeProxyForPages struct {
 	status    httpproxy.Status
+	statusSeq []httpproxy.Status // when non-empty, Status() pops from here first
 	ops       []string
 	loadErr   error
 	unloadErr error
 }
 
-func (f *fakeProxyForPages) Start(context.Context) error         { return nil }
-func (f *fakeProxyForPages) Stop(context.Context) error          { return nil }
-func (f *fakeProxyForPages) Status() httpproxy.Status            { return f.status }
+func (f *fakeProxyForPages) Start(context.Context) error { return nil }
+func (f *fakeProxyForPages) Stop(context.Context) error  { return nil }
+func (f *fakeProxyForPages) Status() httpproxy.Status {
+	if len(f.statusSeq) > 0 {
+		st := f.statusSeq[0]
+		f.statusSeq = f.statusSeq[1:]
+		return st
+	}
+	return f.status
+}
 func (f *fakeProxyForPages) BaseURL() string                     { return "http://127.0.0.1:9999" }
 func (f *fakeProxyForPages) EnsureRunning(context.Context) error { return nil }
 func (f *fakeProxyForPages) Load(_ context.Context, id string) (httpproxy.Status, error) {
@@ -740,7 +748,8 @@ func TestServerPage_KillLoadedPIDUnloadsViaProxy(t *testing.T) {
 
 func TestServerPage_KillOrphanPIDUsesProcessManager(t *testing.T) {
 	// A pid the proxy does NOT own (orphan from a previous run) still goes
-	// through pm.Kill.
+	// through pm.Kill. The decision (Status probe + Kill) runs inside the
+	// async cmd, so we drain it before asserting.
 	pm := &killTrackingMgr{fakeProcMgr: fakeProcMgr{
 		insts: []domain.RunningInstance{{ProfileID: "old", PID: 9, Port: 8081, LogPath: "/tmp/y.log"}},
 	}}
@@ -749,12 +758,188 @@ func TestServerPage_KillOrphanPIDUsesProcessManager(t *testing.T) {
 	p.SetSize(120, 30)
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 
-	p, _ = updateAs[*ServerPage](p, monitorKillConfirmedMsg{pid: 9})
+	p, cmd := updateAs[*ServerPage](p, monitorKillConfirmedMsg{pid: 9})
+	msgs := drainCmd(cmd)
+	var kr *killResultMsg
+	for _, m := range msgs {
+		if v, ok := m.(killResultMsg); ok {
+			kr = &v
+			break
+		}
+	}
+	if kr == nil {
+		t.Fatalf("no killResultMsg in cmd batch; got %v", msgs)
+	}
+	if kr.err != nil {
+		t.Fatalf("killResultMsg.err = %v", kr.err)
+	}
 	if pm.killed != 9 {
 		t.Errorf("orphan pid should be pm.Kill'ed; killed=%d", pm.killed)
 	}
 	if len(proxy.ops) != 0 {
 		t.Errorf("orphan kill must not touch the proxy; ops=%v", proxy.ops)
+	}
+}
+
+// TestServerPage_KillDegradedProxyRefuses mirrors the CLI's
+// refuseKillOnDegradedProxy: while the proxy is Running but its /_status
+// probe fails (LastError "status_probe_failed…", LoadedPID 0), the loaded
+// backend is indistinguishable from an orphan. Killing it directly could
+// shoot the proxy's backend behind its back, so the kill must be refused
+// with an error flash and no pm.Kill.
+func TestServerPage_KillDegradedProxyRefuses(t *testing.T) {
+	degraded := httpproxy.Status{Running: true, LastError: "status_probe_failed: context deadline exceeded"}
+	pm := &killTrackingMgr{fakeProcMgr: fakeProcMgr{
+		insts: []domain.RunningInstance{{ProfileID: "old", PID: 9, Port: 8081, LogPath: "/tmp/y.log"}},
+	}}
+	proxy := &fakeProxyForPages{}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil).WithProxy(proxy)
+	// Degraded twice: the guard re-fetches Status once before refusing.
+	// (Set after WithProxy — NewProxyPanel consumes one Status() call.)
+	proxy.statusSeq = []httpproxy.Status{degraded, degraded}
+	p.SetSize(120, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	p, cmd := updateAs[*ServerPage](p, monitorKillConfirmedMsg{pid: 9})
+	msgs := drainCmd(cmd)
+	var kr *killResultMsg
+	for _, m := range msgs {
+		if v, ok := m.(killResultMsg); ok {
+			kr = &v
+			break
+		}
+	}
+	if kr == nil {
+		t.Fatalf("no killResultMsg in cmd batch; got %v", msgs)
+	}
+	if kr.err == nil {
+		t.Fatal("degraded proxy: kill must be refused with an error")
+	}
+	if pm.killed != 0 {
+		t.Errorf("degraded proxy: pm.Kill must not be called; killed=%d", pm.killed)
+	}
+	if len(proxy.ops) != 0 {
+		t.Errorf("degraded proxy: no proxy ops expected; ops=%v", proxy.ops)
+	}
+	p, _ = updateAs[*ServerPage](p, *kr)
+	if !strings.Contains(p.flash.Message(), "proxy status unavailable") {
+		t.Errorf("flash = %q, want degraded-proxy refusal surfaced", p.flash.Message())
+	}
+}
+
+// TestServerPage_KillDegradedThenHealthyOrphanProceeds: the probe failure
+// was transient — the guard's single re-fetch shows a healthy proxy whose
+// loaded pid differs from the target, so the orphan kill proceeds.
+func TestServerPage_KillDegradedThenHealthyOrphanProceeds(t *testing.T) {
+	degraded := httpproxy.Status{Running: true, LastError: "status_probe_failed: context deadline exceeded"}
+	healthy := httpproxy.Status{Running: true, LoadedProfileID: "qwen", LoadedPID: 7}
+	pm := &killTrackingMgr{fakeProcMgr: fakeProcMgr{
+		insts: []domain.RunningInstance{{ProfileID: "old", PID: 9, Port: 8081, LogPath: "/tmp/y.log"}},
+	}}
+	proxy := &fakeProxyForPages{}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil).WithProxy(proxy)
+	// Set after WithProxy — NewProxyPanel consumes one Status() call.
+	proxy.statusSeq = []httpproxy.Status{degraded, healthy}
+	p.SetSize(120, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	_, cmd := updateAs[*ServerPage](p, monitorKillConfirmedMsg{pid: 9})
+	msgs := drainCmd(cmd)
+	var kr *killResultMsg
+	for _, m := range msgs {
+		if v, ok := m.(killResultMsg); ok {
+			kr = &v
+			break
+		}
+	}
+	if kr == nil {
+		t.Fatalf("no killResultMsg in cmd batch; got %v", msgs)
+	}
+	if kr.err != nil {
+		t.Fatalf("recovered orphan kill should proceed; err = %v", kr.err)
+	}
+	if pm.killed != 9 {
+		t.Errorf("recovered orphan should be pm.Kill'ed; killed=%d", pm.killed)
+	}
+	if len(proxy.ops) != 0 {
+		t.Errorf("orphan kill must not touch the proxy; ops=%v", proxy.ops)
+	}
+}
+
+// TestServerPage_RestartOrphanKillsThenLoads_NoUnload: restarting an
+// instance the proxy does NOT own must pm.Kill the orphan first (free its
+// VRAM) and then Load via the proxy — never Unload, which would kill
+// whatever OTHER model the proxy currently serves.
+func TestServerPage_RestartOrphanKillsThenLoads_NoUnload(t *testing.T) {
+	prof := domain.Profile{ID: "old", Name: "Old", Model: "/tmp/x.gguf"}
+	pm := &killTrackingMgr{fakeProcMgr: fakeProcMgr{
+		insts: []domain.RunningInstance{{ProfileID: "old", PID: 9, Port: 8081, LogPath: "/tmp/y.log"}},
+	}}
+	// The proxy serves a different model (pid 7) — it must survive.
+	proxy := &fakeProxyForPages{status: httpproxy.Status{Running: true, LoadedProfileID: "qwen", LoadedPID: 7}}
+	p := NewServerPage(pm, &fakeMonMgr{}, &fakeProfileStore{p: prof}).WithProxy(proxy)
+	p.SetSize(120, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	_, cmd := updateAs[*ServerPage](p, monitorRestartConfirmedMsg{pid: 9, profile: prof})
+	msgs := drainCmd(cmd)
+	var rr *restartResultMsg
+	for _, m := range msgs {
+		if v, ok := m.(restartResultMsg); ok {
+			rr = &v
+			break
+		}
+	}
+	if rr == nil {
+		t.Fatalf("no restartResultMsg in cmd batch; got %v", msgs)
+	}
+	if rr.err != nil {
+		t.Fatalf("restartResultMsg.err = %v", rr.err)
+	}
+	if pm.killed != 9 {
+		t.Errorf("orphan restart must pm.Kill the old pid; killed=%d", pm.killed)
+	}
+	if len(proxy.ops) != 1 || proxy.ops[0] != "load old" {
+		t.Errorf("proxy ops = %v, want [load old] (no unload)", proxy.ops)
+	}
+}
+
+// TestServerPage_RestartOrphanDegradedProxyRefuses: the degraded-proxy
+// guard applies to the orphan restart branch too — a pid that looks like
+// an orphan only because the status probe failed must not be killed.
+func TestServerPage_RestartOrphanDegradedProxyRefuses(t *testing.T) {
+	degraded := httpproxy.Status{Running: true, LastError: "status_probe_failed: context deadline exceeded"}
+	prof := domain.Profile{ID: "old", Name: "Old", Model: "/tmp/x.gguf"}
+	pm := &killTrackingMgr{fakeProcMgr: fakeProcMgr{
+		insts: []domain.RunningInstance{{ProfileID: "old", PID: 9, Port: 8081, LogPath: "/tmp/y.log"}},
+	}}
+	proxy := &fakeProxyForPages{}
+	p := NewServerPage(pm, &fakeMonMgr{}, &fakeProfileStore{p: prof}).WithProxy(proxy)
+	// Set after WithProxy — NewProxyPanel consumes one Status() call.
+	proxy.statusSeq = []httpproxy.Status{degraded, degraded}
+	p.SetSize(120, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	_, cmd := updateAs[*ServerPage](p, monitorRestartConfirmedMsg{pid: 9, profile: prof})
+	msgs := drainCmd(cmd)
+	var rr *restartResultMsg
+	for _, m := range msgs {
+		if v, ok := m.(restartResultMsg); ok {
+			rr = &v
+			break
+		}
+	}
+	if rr == nil {
+		t.Fatalf("no restartResultMsg in cmd batch; got %v", msgs)
+	}
+	if rr.err == nil {
+		t.Fatal("degraded proxy: orphan restart must be refused")
+	}
+	if pm.killed != 0 {
+		t.Errorf("degraded proxy: pm.Kill must not be called; killed=%d", pm.killed)
+	}
+	if len(proxy.ops) != 0 {
+		t.Errorf("degraded proxy: no proxy ops expected; ops=%v", proxy.ops)
 	}
 }
 
