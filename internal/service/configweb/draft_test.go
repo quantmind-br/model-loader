@@ -27,6 +27,20 @@ func TestDraft_ToProfile_TypesArgsViaSchema(t *testing.T) {
 	}
 }
 
+func TestCoerceArgs_DropsReservedPort(t *testing.T) {
+	schema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"port":     {Long: "port", Type: domain.FlagTypeInt},
+		"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt},
+	}}
+	out := coerceArgs(map[string]string{"port": "8080", "ctx-size": "4096"}, schema)
+	if _, ok := out["port"]; ok {
+		t.Fatalf("reserved flag port must be dropped on submit: %#v", out)
+	}
+	if out["ctx-size"] != 4096 {
+		t.Fatalf("ctx-size must survive reserved-flag filtering: %#v", out)
+	}
+}
+
 func TestDraft_ToProfile_CopiesEnv(t *testing.T) {
 	d := Draft{
 		ID:   "test",

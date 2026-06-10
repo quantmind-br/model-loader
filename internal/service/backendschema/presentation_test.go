@@ -20,9 +20,13 @@ func TestBuildPresentation_HighlightsEssentialsFirst(t *testing.T) {
 	if len(pres.Groups) == 0 || !pres.Groups[0].Highlighted {
 		t.Fatalf("first group must be highlighted essentials: %+v", pres)
 	}
-	// ctx-size and port are llama essentials; temp is not.
-	if !containsStr(pres.Groups[0].Flags, "ctx-size") || !containsStr(pres.Groups[0].Flags, "port") {
+	// ctx-size is a llama essential; temp is not. port is manager-owned and
+	// must never be seeded into essentials.
+	if !containsStr(pres.Groups[0].Flags, "ctx-size") {
 		t.Fatalf("essentials missing: %+v", pres.Groups[0])
+	}
+	if containsStr(pres.Groups[0].Flags, "port") {
+		t.Fatalf("reserved flag port must not be seeded into essentials: %+v", pres.Groups[0])
 	}
 	// temp must appear in some non-highlighted group.
 	if !flagInAnyGroup(pres, "temp") {
@@ -32,14 +36,13 @@ func TestBuildPresentation_HighlightsEssentialsFirst(t *testing.T) {
 
 func TestEssentialSeed_MatchesCuratedBackends(t *testing.T) {
 	// Guards against the seed drifting from the curated essentials UX.
-	wantDFlashHasPort := false
-	for _, f := range essentialSeed[domain.BackendKindDFlash] {
-		if f == "port" {
-			wantDFlashHasPort = true
+	// port is manager-owned (auto-allocated) and must not appear in any seed.
+	for kind, flags := range essentialSeed {
+		for _, f := range flags {
+			if f == "port" {
+				t.Fatalf("seed for %s must not include reserved flag port", kind)
+			}
 		}
-	}
-	if !wantDFlashHasPort {
-		t.Fatal("dflash seed must include port")
 	}
 	for _, f := range essentialSeed[domain.BackendKindBuunLlamaCpp] {
 		if f == "batch-size" || f == "ubatch-size" {

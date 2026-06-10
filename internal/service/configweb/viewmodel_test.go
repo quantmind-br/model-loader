@@ -29,19 +29,63 @@ func TestBuildViewModel_NilPresentationUsesCuratedGroups(t *testing.T) {
 	if !first.Highlighted {
 		t.Fatalf("first group must be highlighted essentials, got %+v", first)
 	}
-	// ctx-size and port are llama essentials — must appear in first group.
+	// ctx-size is a llama essential — must appear in first group. port is
+	// reserved (manager-owned) and must never render.
 	hasCtxSize := false
-	hasPort := false
 	for _, f := range first.Fields {
 		if f.Flag == "ctx-size" {
 			hasCtxSize = true
 		}
 		if f.Flag == "port" {
-			hasPort = true
+			t.Fatalf("reserved flag port must not render: %+v", first.Fields)
 		}
 	}
-	if !hasCtxSize || !hasPort {
+	if !hasCtxSize {
 		t.Fatalf("essentials missing from first group: %+v", first.Fields)
+	}
+}
+
+func TestBuildViewModel_HidesReservedPortFlag(t *testing.T) {
+	// Schema and presentation both mention "port" (legacy persisted schemas
+	// on user machines do); the rendered form must omit it everywhere.
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer,
+		Flags: map[string]domain.FlagSpec{
+			"port":     {Long: "port", Type: domain.FlagTypeInt, Group: "common"},
+			"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt, Group: "common"},
+		},
+		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{
+			{Name: "Essentials", Highlighted: true, Flags: []string{"port", "ctx-size"}},
+		}},
+	}
+	vm := BuildViewModel(Draft{Args: map[string]string{}}, schema, nil)
+
+	hasCtxSize := false
+	for _, g := range vm.Groups {
+		for _, f := range g.Fields {
+			if f.Flag == "port" {
+				t.Fatalf("reserved flag port rendered in group %q: %+v", g.Name, g.Fields)
+			}
+			if f.Flag == "ctx-size" {
+				hasCtxSize = true
+			}
+		}
+	}
+	if !hasCtxSize {
+		t.Fatalf("ctx-size must survive reserved-flag filtering: %+v", vm.Groups)
+	}
+
+	hasCtxSizeAll := false
+	for _, f := range vm.AllFlags {
+		if f.Flag == "port" {
+			t.Fatalf("reserved flag port leaked into AllFlags: %+v", vm.AllFlags)
+		}
+		if f.Flag == "ctx-size" {
+			hasCtxSizeAll = true
+		}
+	}
+	if !hasCtxSizeAll {
+		t.Fatalf("ctx-size must survive in AllFlags: %+v", vm.AllFlags)
 	}
 }
 

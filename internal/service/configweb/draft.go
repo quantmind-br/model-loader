@@ -61,6 +61,11 @@ func (d Draft) ApplyTo(existing domain.Profile, schema domain.FlagSchema) domain
 func coerceArgs(in map[string]string, schema domain.FlagSchema) map[string]any {
 	out := map[string]any{}
 	for k, v := range in {
+		if reservedFlags[k] {
+			// Manager-owned launch parameter (e.g. port): never persisted to a
+			// profile, even if a forged POST submits it.
+			continue
+		}
 		spec, ok := schema.Lookup(domain.CanonicalFlag(k))
 		if !ok {
 			out[k] = v

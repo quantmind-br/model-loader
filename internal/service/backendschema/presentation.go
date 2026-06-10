@@ -11,13 +11,15 @@ import (
 // essentialSeed lists, per backend kind, the flag long-names that should land
 // in the highlighted "Essentials" group when synthesizing a default
 // Presentation. Copied from the retired profile_editor essentials registry.
+// "port" is intentionally absent: the process manager owns port allocation
+// (see docs/superpowers/specs/2026-06-10-auto-port-proxy-only-design.md).
 var essentialSeed = map[domain.BackendKind][]string{
-	domain.BackendKindLlamaServer:  {"n-gpu-layers", "ctx-size", "batch-size", "ubatch-size", "port", "flash-attn", "cache-type-k", "cache-type-v"},
-	domain.BackendKindBuunLlamaCpp: {"n-gpu-layers", "ctx-size", "port", "cache-type-k", "cache-type-v", "spec-type", "spec-draft-model", "spec-dflash-default", "dflash-max-slots"},
-	domain.BackendKindBeeLlamaCpp:  {"n-gpu-layers", "ctx-size", "port", "flash-attn", "cache-type-k", "cache-type-v", "cache-ram", "kv-unified", "spec-type", "spec-draft-hf", "spec-draft-model", "spec-draft-ngl", "spec-dflash-cross-ctx", "spec-dflash-max-slots"},
-	domain.BackendKindVLLM:         {"tensor-parallel-size", "gpu-memory-utilization", "max-model-len", "dtype", "quantization", "port", "served-model-name"},
-	domain.BackendKindSGLang:       {"tp-size", "dp-size", "mem-fraction-static", "dtype", "quantization", "context-length", "port", "served-model-name"},
-	domain.BackendKindDFlash:       {"draft", "max-ctx", "budget", "verify-mode", "cache-type-k", "cache-type-v", "fa-window", "port"},
+	domain.BackendKindLlamaServer:  {"n-gpu-layers", "ctx-size", "batch-size", "ubatch-size", "flash-attn", "cache-type-k", "cache-type-v"},
+	domain.BackendKindBuunLlamaCpp: {"n-gpu-layers", "ctx-size", "cache-type-k", "cache-type-v", "spec-type", "spec-draft-model", "spec-dflash-default", "dflash-max-slots"},
+	domain.BackendKindBeeLlamaCpp:  {"n-gpu-layers", "ctx-size", "flash-attn", "cache-type-k", "cache-type-v", "cache-ram", "kv-unified", "spec-type", "spec-draft-hf", "spec-draft-model", "spec-draft-ngl", "spec-dflash-cross-ctx", "spec-dflash-max-slots"},
+	domain.BackendKindVLLM:         {"tensor-parallel-size", "gpu-memory-utilization", "max-model-len", "dtype", "quantization", "served-model-name"},
+	domain.BackendKindSGLang:       {"tp-size", "dp-size", "mem-fraction-static", "dtype", "quantization", "context-length", "served-model-name"},
+	domain.BackendKindDFlash:       {"draft", "max-ctx", "budget", "verify-mode", "cache-type-k", "cache-type-v", "fa-window"},
 }
 
 // BuildPresentation synthesizes a default Presentation from a schema:

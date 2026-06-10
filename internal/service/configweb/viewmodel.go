@@ -9,6 +9,10 @@ import (
 	"github.com/quantmind-br/model-loader/internal/service/backendschema"
 )
 
+// reservedFlags are launch parameters owned by the process manager; they are
+// hidden from the editor and dropped on submit so profiles can never set them.
+var reservedFlags = map[string]bool{"port": true}
+
 // ViewModel is the template data for the editor page.
 type ViewModel struct {
 	Draft     Draft
@@ -61,6 +65,9 @@ func BuildViewModel(d Draft, schema domain.BackendValidationSchema, backends []d
 	for _, g := range pres.Groups {
 		gvm := GroupVM{Name: g.Name, Highlighted: g.Highlighted}
 		for _, long := range g.Flags {
+			if reservedFlags[long] {
+				continue
+			}
 			spec, ok := schema.Flags[long]
 			if !ok {
 				continue
@@ -74,6 +81,9 @@ func BuildViewModel(d Draft, schema domain.BackendValidationSchema, backends []d
 	vm.Rules = schema.Rules
 	longs := make([]string, 0, len(schema.Flags))
 	for long := range schema.Flags {
+		if reservedFlags[long] {
+			continue
+		}
 		longs = append(longs, long)
 	}
 	sort.Strings(longs)
