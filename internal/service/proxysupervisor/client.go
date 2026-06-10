@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -20,11 +21,15 @@ func (s *Supervisor) BaseURL() string {
 
 // EnsureRunning starts the proxy when it is not already alive. Unlike Start,
 // an already-running proxy is a success, not an error.
+//
+// The TOCTOU window between Status and Start is closed by treating
+// ErrAlreadyRunning from Start as success: a concurrent caller that raced
+// through Start first wins, and the proxy is running as intended.
 func (s *Supervisor) EnsureRunning(ctx context.Context) error {
-	if s.Status().Running {
-		return nil
+	if err := s.Start(ctx); err != nil && !errors.Is(err, ErrAlreadyRunning) {
+		return err
 	}
-	return s.Start(ctx)
+	return nil
 }
 
 // Load asks the proxy to swap in profileID via POST /_admin/load. It blocks
@@ -51,7 +56,9 @@ func (s *Supervisor) adminPost(ctx context.Context, url string, body io.Reader) 
 	if err != nil {
 		return httpproxy.Status{}, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	// No client timeout: /_admin/load legitimately blocks for the whole model
 	// load. Cancellation is the caller's ctx.
 	resp, err := http.DefaultTransport.RoundTrip(req)

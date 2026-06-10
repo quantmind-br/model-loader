@@ -19,6 +19,11 @@ import (
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 )
 
+// ErrAlreadyRunning is returned by Start when the proxy is already live.
+// Callers that treat an already-running proxy as success (e.g. EnsureRunning)
+// should test with errors.Is rather than string-matching.
+var ErrAlreadyRunning = errors.New("proxy already running")
+
 // Config holds wiring for New.
 type Config struct {
 	StatePath string
@@ -75,7 +80,7 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	defer s.mu.Unlock()
 
 	if s.state != nil && s.isAliveLocked() {
-		return fmt.Errorf("proxy already running on pid %d", s.state.PID)
+		return fmt.Errorf("%w on pid %d", ErrAlreadyRunning, s.state.PID)
 	}
 
 	exe, err := s.resolveExe()

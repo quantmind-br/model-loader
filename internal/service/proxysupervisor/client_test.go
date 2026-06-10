@@ -122,6 +122,23 @@ func TestBaseURL(t *testing.T) {
 	}
 }
 
+func TestLoad_Malformed200Body(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("not-json"))
+	}))
+	defer ts.Close()
+
+	s := testSupervisor(t, ts)
+	_, err := s.Load(context.Background(), "p1")
+	if err == nil {
+		t.Fatal("Load: expected error for malformed 200 body, got nil")
+	}
+	if !strings.Contains(err.Error(), "decode proxy status") {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), "decode proxy status")
+	}
+}
+
 // EnsureRunning's not-running path is intentionally untested here: with
 // Status().Running == false it falls through to Start, which spawns a real
 // detached OS process via the binary's "serve" subcommand — not something a
