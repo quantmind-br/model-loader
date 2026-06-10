@@ -1,51 +1,69 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"os/signal"
+	"path/filepath"
+	"strconv"
+	"syscall"
+	"time"
 
 	"github.com/quantmind-br/model-loader/internal/app"
 	"github.com/quantmind-br/model-loader/internal/config"
-	"github.com/quantmind-br/model-loader/internal/log"
+	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
+	"github.com/quantmind-br/model-loader/internal/service/proxysupervisor"
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	var foreground bool
-	startCmd := &cobra.Command{
-		Use:   "start <profile>",
-		Short: "Launch an instance from a profile",
-		Args:  cobra.ExactArgs(1),
-		RunE: instanceLifecycleRunE(func(out io.Writer, svc *app.Services, args []string) error {
-			return startInstance(out, svc.Mgr, svc.Store, args[0], foreground)
-		}),
-	}
-	startCmd.Flags().BoolVar(&foreground, "foreground", false, "run in the foreground (default: background)")
-	instanceCmd.AddCommand(startCmd)
+// proxyLoadTimeout bounds a single /_admin/load: the proxy answers only after
+// the backend is healthy, and big models can take minutes to load.
+const proxyLoadTimeout = 5 * time.Minute
 
+// proxyClient is the subset of *proxysupervisor.Supervisor the lifecycle
+// commands depend on; tests substitute a fake.
+type proxyClient interface {
+	EnsureRunning(ctx context.Context) error
+	Load(ctx context.Context, profileID string) (httpproxy.Status, error)
+	Unload(ctx context.Context, force bool) (httpproxy.Status, error)
+	Status() httpproxy.Status
+	BaseURL() string
+}
+
+func init() {
+	instanceCmd.AddCommand(&cobra.Command{
+		Use:   "start <profile>",
+		Short: "Load a profile's backend through the HTTP proxy",
+		Args:  cobra.ExactArgs(1),
+		RunE: instanceLifecycleRunE(func(ctx context.Context, out io.Writer, svc *app.Services, proxy proxyClient, args []string) error {
+			return startInstance(ctx, out, proxy, svc.Store, args[0])
+		}),
+	})
 	instanceCmd.AddCommand(&cobra.Command{
 		Use:   "stop <pid|id>",
 		Short: "Stop a running instance",
 		Args:  cobra.ExactArgs(1),
-		RunE: instanceLifecycleRunE(func(out io.Writer, svc *app.Services, args []string) error {
-			return stopInstance(out, svc.Mgr, args[0])
+		RunE: instanceLifecycleRunE(func(ctx context.Context, out io.Writer, svc *app.Services, proxy proxyClient, args []string) error {
+			return stopInstance(ctx, out, proxy, svc.Mgr, args[0])
 		}),
 	})
 	instanceCmd.AddCommand(&cobra.Command{
 		Use:   "restart <pid|id>",
-		Short: "Restart a running instance",
+		Short: "Restart a running instance through the HTTP proxy",
 		Args:  cobra.ExactArgs(1),
-		RunE: instanceLifecycleRunE(func(out io.Writer, svc *app.Services, args []string) error {
-			return restartInstance(out, svc.Mgr, svc.Store, args[0])
+		RunE: instanceLifecycleRunE(func(ctx context.Context, out io.Writer, svc *app.Services, proxy proxyClient, args []string) error {
+			return restartInstance(ctx, out, proxy, svc.Mgr, svc.Store, args[0])
 		}),
 	})
 }
 
 // instanceLifecycleRunE acquires the single-instance flock before bootstrap and
-// fails fast if the TUI/serve holds it, then runs fn. Mirrors benchmark.go.
-func instanceLifecycleRunE(fn func(out io.Writer, svc *app.Services, args []string) error) func(*cobra.Command, []string) error {
+// fails fast if the TUI/serve holds it, then constructs the proxy supervisor
+// (the only client channel to backends) and runs fn. Mirrors benchmark.go.
+func instanceLifecycleRunE(fn func(ctx context.Context, out io.Writer, svc *app.Services, proxy proxyClient, args []string) error) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -68,7 +86,22 @@ func instanceLifecycleRunE(fn func(out io.Writer, svc *app.Services, args []stri
 			return &ExitError{Code: 1}
 		}
 		defer svc.Close()
-		if err := fn(cmd.OutOrStdout(), svc, args); err != nil {
+
+		supervisor := proxysupervisor.New(proxysupervisor.Config{
+			StatePath: filepath.Join(svc.Cfg.Paths.StateDir, "proxy-state.json"),
+			LogDir:    svc.Cfg.Paths.LogDir,
+			Host:      svc.Cfg.Serve.Host,
+			Port:      svc.Cfg.Serve.Port,
+			Logger:    svc.Logger,
+		})
+		if err := supervisor.Reconcile(); err != nil {
+			svc.Logger.Error("proxy_reconcile_failed", "err", err)
+		}
+
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+
+		if err := fn(ctx, cmd.OutOrStdout(), svc, supervisor, args); err != nil {
 			fmt.Fprintln(cmd.ErrOrStderr(), err)
 			return &ExitError{Code: 1}
 		}
@@ -76,33 +109,64 @@ func instanceLifecycleRunE(fn func(out io.Writer, svc *app.Services, args []stri
 	}
 }
 
-func launchMode(foreground bool) processmgr.LaunchMode {
-	if foreground {
-		return processmgr.LaunchForeground
-	}
-	return processmgr.LaunchBackground
-}
-
-func startInstance(out io.Writer, mgr processmgr.Manager, store profilestore.Store, ref string, foreground bool) error {
+func startInstance(ctx context.Context, out io.Writer, proxy proxyClient, store profilestore.Store, ref string) error {
 	prof, err := resolveProfileRef(store, ref)
 	if err != nil {
 		return err
 	}
-	ri, err := mgr.Launch(prof, launchMode(foreground), log.NewAttemptID())
+	if err := proxy.EnsureRunning(ctx); err != nil {
+		return fmt.Errorf("start http proxy: %w", err)
+	}
+	loadCtx, cancel := context.WithTimeout(ctx, proxyLoadTimeout)
+	defer cancel()
+	st, err := proxy.Load(loadCtx, prof.ID)
 	if err != nil {
-		return fmt.Errorf("launch: %w", err)
+		return fmt.Errorf("load profile %s: %w", prof.ID, err)
 	}
 	if jsonOut {
-		return emitJSON(out, ri)
+		return emitJSON(out, st)
 	}
-	fmt.Fprintf(out, "started %s — pid %d port %d\n", prof.ID, ri.PID, ri.Port)
+	fmt.Fprintf(out, "loaded %s — pid %d — serving at %s\n", st.LoadedProfileID, st.LoadedPID, proxy.BaseURL())
 	return nil
 }
 
-func stopInstance(out io.Writer, mgr processmgr.Manager, ref string) error {
+// proxyOwnsRef reports whether ref names the backend currently loaded behind
+// the proxy, by pid or by exact profile id.
+func proxyOwnsRef(st httpproxy.Status, ref string) bool {
+	if st.LoadedPID == 0 {
+		return false
+	}
+	if pid, err := strconv.Atoi(ref); err == nil && pid == st.LoadedPID {
+		return true
+	}
+	return st.LoadedProfileID != "" && ref == st.LoadedProfileID
+}
+
+func stopInstance(ctx context.Context, out io.Writer, proxy proxyClient, mgr processmgr.Manager, ref string) error {
+	st := proxy.Status()
+	if proxyOwnsRef(st, ref) {
+		unloaded, err := proxy.Unload(ctx, false)
+		if err != nil {
+			return fmt.Errorf("unload: %w", err)
+		}
+		if jsonOut {
+			return emitJSON(out, unloaded)
+		}
+		fmt.Fprintf(out, "unloaded %s (pid %d)\n", st.LoadedProfileID, st.LoadedPID)
+		return nil
+	}
+	// Orphan path: a process not owned by the proxy is killed directly.
 	ri, err := resolveInstance(mgr, ref)
 	if err != nil {
 		return err
+	}
+	if st.LoadedPID != 0 && ri.PID == st.LoadedPID {
+		// A profile-prefix ref resolved to the proxy-loaded backend.
+		if _, err := proxy.Unload(ctx, false); err != nil {
+			return fmt.Errorf("unload: %w", err)
+		}
+		fmt.Fprintf(out, "unloaded %s (pid %d)\n", st.LoadedProfileID, st.LoadedPID)
+		return nil
 	}
 	if err := mgr.Kill(ri.PID); err != nil {
 		return fmt.Errorf("kill: %w", err)
@@ -111,26 +175,36 @@ func stopInstance(out io.Writer, mgr processmgr.Manager, ref string) error {
 	return nil
 }
 
-func restartInstance(out io.Writer, mgr processmgr.Manager, store profilestore.Store, ref string) error {
-	ri, err := resolveInstance(mgr, ref)
+func restartInstance(ctx context.Context, out io.Writer, proxy proxyClient, mgr processmgr.Manager, store profilestore.Store, ref string) error {
+	st := proxy.Status()
+	var profileID string
+	if proxyOwnsRef(st, ref) {
+		profileID = st.LoadedProfileID
+	} else {
+		ri, err := resolveInstance(mgr, ref)
+		if err != nil {
+			return err
+		}
+		profileID = ri.ProfileID
+	}
+	if _, err := store.Get(profileID); err != nil {
+		return fmt.Errorf("load profile %s: %w", profileID, err)
+	}
+	if err := proxy.EnsureRunning(ctx); err != nil {
+		return fmt.Errorf("start http proxy: %w", err)
+	}
+	if _, err := proxy.Unload(ctx, false); err != nil {
+		return fmt.Errorf("unload: %w", err)
+	}
+	loadCtx, cancel := context.WithTimeout(ctx, proxyLoadTimeout)
+	defer cancel()
+	newSt, err := proxy.Load(loadCtx, profileID)
 	if err != nil {
-		return err
+		return fmt.Errorf("load profile %s: %w", profileID, err)
 	}
-	prof, err := store.Get(ri.ProfileID)
-	if err != nil {
-		return fmt.Errorf("load profile %s: %w", ri.ProfileID, err)
+	if jsonOut {
+		return emitJSON(out, newSt)
 	}
-	if err := mgr.Kill(ri.PID); err != nil {
-		return fmt.Errorf("kill: %w", err)
-	}
-	mode := processmgr.LaunchBackground
-	if !ri.Background {
-		mode = processmgr.LaunchForeground
-	}
-	newRI, err := mgr.Launch(prof, mode, log.NewAttemptID())
-	if err != nil {
-		return fmt.Errorf("relaunch: %w", err)
-	}
-	fmt.Fprintf(out, "restarted %s — old pid %d, new pid %d\n", prof.ID, ri.PID, newRI.PID)
+	fmt.Fprintf(out, "restarted %s — pid %d — serving at %s\n", newSt.LoadedProfileID, newSt.LoadedPID, proxy.BaseURL())
 	return nil
 }
