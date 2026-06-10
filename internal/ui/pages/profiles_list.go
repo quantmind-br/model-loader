@@ -22,7 +22,7 @@ import (
 // profilesKeyMap groups the master-list / launcher key bindings used by
 // ProfilesPage. Defined here so profiles.go stays focused on dispatch.
 type profilesKeyMap struct {
-	New, Save, Duplicate, Delete, Edit, Cancel, Tab, Launch, BgToggle, Kill, Refresh, Export, Pin, Import, Undo key.Binding
+	New, Save, Duplicate, Delete, Edit, Cancel, Tab, Launch, Kill, Refresh, Export, Pin, Import, Undo key.Binding
 }
 
 func defaultProfilesKeys() profilesKeyMap {
@@ -36,19 +36,18 @@ func defaultProfilesKeys() profilesKeyMap {
 		Delete: key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "del")),
 		// edit is lowercase (light) and shared with the Backends tab; export
 		// moves to uppercase E, resolving the old e/E collision (CONSIST-01).
-		Edit:     key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit")),
-		Cancel:   key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
-		Tab:      key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "tab editor")),
-		Launch:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "launch")),
-		BgToggle: key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "bg/fg")),
-		Kill:     key.NewBinding(key.WithKeys("K"), key.WithHelp("K", "kill")),
+		Edit:   key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit")),
+		Cancel: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
+		Tab:    key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "tab editor")),
+		Launch: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "launch")),
+		Kill:   key.NewBinding(key.WithKeys("K"), key.WithHelp("K", "unload")),
 		// refresh re-reads the store (heavier) → uppercase R, matching Models
 		// and Backends rescan/refresh (CONSIST-01).
 		Refresh: key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "refresh")),
 		Export:  key.NewBinding(key.WithKeys("E"), key.WithHelp("E", "export")),
-		Pin:       key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "pin")),
-		Import:    key.NewBinding(key.WithKeys("I"), key.WithHelp("I", "import")),
-		Undo:      key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "undo")),
+		Pin:     key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "pin")),
+		Import:  key.NewBinding(key.WithKeys("I"), key.WithHelp("I", "import")),
+		Undo:    key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "undo")),
 	}
 }
 

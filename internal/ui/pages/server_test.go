@@ -16,7 +16,6 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
-	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
@@ -49,18 +48,16 @@ func drainCmd(cmd tea.Cmd) []tea.Msg {
 }
 
 type fakeProcMgr struct {
-	insts   []domain.RunningInstance
-	history []domain.ExitedInstance
+	insts          []domain.RunningInstance
+	history        []domain.ExitedInstance
+	reconcileCalls int
 }
 
-func (f *fakeProcMgr) Launch(p domain.Profile, m processmgr.LaunchMode, _ string) (domain.RunningInstance, error) {
-	return domain.RunningInstance{}, nil
-}
-func (f *fakeProcMgr) Kill(pid int) error                                         { return nil }
-func (f *fakeProcMgr) List() []domain.RunningInstance                             { return f.insts }
-func (f *fakeProcMgr) WaitHealthy(pid, port int, t time.Duration, _ string) error { return nil }
-func (f *fakeProcMgr) TailLogs(pid int) (io.ReadCloser, error)                    { return nil, nil }
-func (f *fakeProcMgr) History() []domain.ExitedInstance                            { return f.history }
+func (f *fakeProcMgr) Kill(pid int) error                      { return nil }
+func (f *fakeProcMgr) List() []domain.RunningInstance          { return f.insts }
+func (f *fakeProcMgr) TailLogs(pid int) (io.ReadCloser, error) { return nil, nil }
+func (f *fakeProcMgr) History() []domain.ExitedInstance        { return f.history }
+func (f *fakeProcMgr) Reconcile() error                        { f.reconcileCalls++; return nil }
 
 type fakeMonMgr struct{}
 
@@ -69,13 +66,41 @@ func (fakeMonMgr) Subscribe(pid, port int, logPath string) (<-chan monitor.Monit
 	return ch, func() error { close(ch); return nil }, nil
 }
 
+// fakeProxyForPages implements serverProxyController, recording the order of
+// Unload/Load calls so restart tests can assert swap semantics.
 type fakeProxyForPages struct {
-	status httpproxy.Status
+	status    httpproxy.Status
+	ops       []string
+	loadErr   error
+	unloadErr error
 }
 
-func (f *fakeProxyForPages) Start(context.Context) error { return nil }
-func (f *fakeProxyForPages) Stop(context.Context) error  { return nil }
-func (f *fakeProxyForPages) Status() httpproxy.Status    { return f.status }
+func (f *fakeProxyForPages) Start(context.Context) error         { return nil }
+func (f *fakeProxyForPages) Stop(context.Context) error          { return nil }
+func (f *fakeProxyForPages) Status() httpproxy.Status            { return f.status }
+func (f *fakeProxyForPages) BaseURL() string                     { return "http://127.0.0.1:9999" }
+func (f *fakeProxyForPages) EnsureRunning(context.Context) error { return nil }
+func (f *fakeProxyForPages) Load(_ context.Context, id string) (httpproxy.Status, error) {
+	if f.loadErr != nil {
+		return httpproxy.Status{}, f.loadErr
+	}
+	f.ops = append(f.ops, "load "+id)
+	f.status.LoadedProfileID = id
+	return f.status, nil
+}
+func (f *fakeProxyForPages) Unload(_ context.Context, force bool) (httpproxy.Status, error) {
+	if f.unloadErr != nil {
+		return httpproxy.Status{}, f.unloadErr
+	}
+	if force {
+		f.ops = append(f.ops, "unload force")
+	} else {
+		f.ops = append(f.ops, "unload")
+	}
+	f.status.LoadedProfileID = ""
+	f.status.LoadedPID = 0
+	return f.status, nil
+}
 
 func TestServerPage_RendersInstanceRows(t *testing.T) {
 	pm := &fakeProcMgr{insts: []domain.RunningInstance{
@@ -528,13 +553,11 @@ func TestServerPage_HandlesWindowSize(t *testing.T) {
 func TestServerPage_ROpensRestartConfirm(t *testing.T) {
 	prof := domain.Profile{ID: "qwen", Name: "Qwen", Model: "/tmp/x.gguf", Args: map[string]any{"port": 8080.0}}
 	psk := &fakeProfileStore{p: prof}
-	pm := &restartTrackingMgr{
-		insts:   []domain.RunningInstance{{ProfileID: "qwen", PID: 100, Port: 8080, LogPath: "/tmp/a.log", Background: true}},
-		newPID:  200,
-		newPort: 8080,
-	}
+	pm := &killTrackingMgr{fakeProcMgr: fakeProcMgr{
+		insts: []domain.RunningInstance{{ProfileID: "qwen", PID: 100, Port: 8080, LogPath: "/tmp/a.log", Background: true}},
+	}}
 	mm := &fakeMonMgr{}
-	p := NewServerPage(pm, mm, psk)
+	p := NewServerPage(pm, mm, psk).WithProxy(&fakeProxyForPages{})
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 
 	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
@@ -551,21 +574,20 @@ func TestServerPage_ROpensRestartConfirm(t *testing.T) {
 	if p.restartConfirm.Active() {
 		t.Fatal("esc should clear restart confirm form")
 	}
-	if pm.killedPID != 0 {
-		t.Fatalf("esc should not kill; killed=%d", pm.killedPID)
+	if pm.killed != 0 {
+		t.Fatalf("esc should not kill; killed=%d", pm.killed)
 	}
 }
 
-func TestServerPage_RestartConfirmAffirmativeKillsAndLaunches(t *testing.T) {
+func TestServerPage_RestartConfirmAffirmative_UnloadsThenLoads(t *testing.T) {
 	prof := domain.Profile{ID: "qwen", Name: "Qwen", Model: "/tmp/x.gguf", Args: map[string]any{"port": 8080.0}}
 	psk := &fakeProfileStore{p: prof}
-	pm := &restartTrackingMgr{
-		insts:   []domain.RunningInstance{{ProfileID: "qwen", PID: 100, Port: 8080, LogPath: "/tmp/a.log", Background: true}},
-		newPID:  200,
-		newPort: 8080,
-	}
+	pm := &killTrackingMgr{fakeProcMgr: fakeProcMgr{
+		insts: []domain.RunningInstance{{ProfileID: "qwen", PID: 100, Port: 8080, LogPath: "/tmp/a.log", Background: true}},
+	}}
+	proxy := &fakeProxyForPages{status: httpproxy.Status{Running: true, LoadedProfileID: "qwen", LoadedPID: 100}}
 	mm := &fakeMonMgr{}
-	p := NewServerPage(pm, mm, psk)
+	p := NewServerPage(pm, mm, psk).WithProxy(proxy)
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 
 	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
@@ -576,9 +598,8 @@ func TestServerPage_RestartConfirmAffirmativeKillsAndLaunches(t *testing.T) {
 	// Affirmative completion: emit the msg restartConfirm.onYes would build.
 	p.restartConfirm = components.Confirm{}
 	_, cmd := updateAs[*ServerPage](p, monitorRestartConfirmedMsg{
-		pid:        100,
-		profile:    prof,
-		background: true,
+		pid:     100,
+		profile: prof,
 	})
 	if cmd == nil {
 		t.Fatal("affirmative completion should return a Cmd")
@@ -599,27 +620,25 @@ func TestServerPage_RestartConfirmAffirmativeKillsAndLaunches(t *testing.T) {
 		t.Fatalf("restartResultMsg.err = %v", rr.err)
 	}
 
-	if pm.killedPID != 100 {
-		t.Errorf("killedPID = %d, want 100", pm.killedPID)
+	// The restart must drive the proxy: unload first, then load — never the
+	// process manager directly.
+	if len(proxy.ops) != 2 || proxy.ops[0] != "unload" || proxy.ops[1] != "load qwen" {
+		t.Errorf("proxy ops = %v, want [unload, load qwen]", proxy.ops)
 	}
-	if pm.launchedID != "qwen" {
-		t.Errorf("launchedID = %q, want qwen", pm.launchedID)
-	}
-	if pm.launchMode != processmgr.LaunchBackground {
-		t.Errorf("launchMode = %v, want LaunchBackground", pm.launchMode)
+	if pm.killed != 0 {
+		t.Errorf("restart must not call pm.Kill; killed=%d", pm.killed)
 	}
 }
 
 func TestServerPage_RestartConfirmNegativeNoAction(t *testing.T) {
 	prof := domain.Profile{ID: "qwen", Name: "Qwen", Model: "/tmp/x.gguf", Args: map[string]any{"port": 8080.0}}
 	psk := &fakeProfileStore{p: prof}
-	pm := &restartTrackingMgr{
-		insts:   []domain.RunningInstance{{ProfileID: "qwen", PID: 100, Port: 8080, LogPath: "/tmp/a.log", Background: true}},
-		newPID:  200,
-		newPort: 8080,
-	}
+	pm := &killTrackingMgr{fakeProcMgr: fakeProcMgr{
+		insts: []domain.RunningInstance{{ProfileID: "qwen", PID: 100, Port: 8080, LogPath: "/tmp/a.log", Background: true}},
+	}}
+	proxy := &fakeProxyForPages{}
 	mm := &fakeMonMgr{}
-	p := NewServerPage(pm, mm, psk)
+	p := NewServerPage(pm, mm, psk).WithProxy(proxy)
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
 
@@ -628,56 +647,27 @@ func TestServerPage_RestartConfirmNegativeNoAction(t *testing.T) {
 	if p.restartConfirm.Active() {
 		t.Error("esc should clear restartConfirm")
 	}
-	if pm.killedPID != 0 {
-		t.Errorf("negative finalize should not kill; killed=%d", pm.killedPID)
+	if len(proxy.ops) != 0 {
+		t.Errorf("negative finalize should not touch the proxy; ops=%v", proxy.ops)
 	}
 }
 
-func TestServerPage_RestartConfirmForegroundPreservesMode(t *testing.T) {
-	prof := domain.Profile{ID: "qwen", Name: "Qwen", Model: "/tmp/x.gguf", Args: map[string]any{"port": 8080.0}}
-	psk := &fakeProfileStore{p: prof}
-	pm := &restartTrackingMgr{
-		insts:   []domain.RunningInstance{{ProfileID: "qwen", PID: 100, Port: 8080, LogPath: "/tmp/a.log"}}, // Background: false
-		newPID:  200,
-		newPort: 8080,
+func TestServerPage_RestartFlashWhenProxyMissing(t *testing.T) {
+	prof := domain.Profile{ID: "qwen", Name: "Qwen", Model: "/tmp/x.gguf"}
+	pm := &fakeProcMgr{
+		insts: []domain.RunningInstance{{ProfileID: "qwen", PID: 100, Port: 8080, LogPath: "/tmp/a.log"}},
 	}
-	mm := &fakeMonMgr{}
-	p := NewServerPage(pm, mm, psk)
+	p := NewServerPage(pm, &fakeMonMgr{}, &fakeProfileStore{p: prof}) // no proxy wired
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
-	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
 
-	// Foreground instance — confirm should preserve mode through to the
-	// monitorRestartConfirmedMsg's background flag.
-	p.restartConfirm = components.Confirm{}
-	_, cmd := updateAs[*ServerPage](p, monitorRestartConfirmedMsg{
-		pid:        100,
-		profile:    prof,
-		background: false,
-	})
-	if cmd == nil {
-		t.Fatal("affirmative completion should return a Cmd")
-	}
-	got := drainCmd(cmd)
-	var rr *restartResultMsg
-	for _, m := range got {
-		if v, ok := m.(restartResultMsg); ok {
-			rr = &v
-			break
-		}
-	}
-	if rr == nil {
-		t.Fatalf("no restartResultMsg in cmd batch; got %v", got)
-	}
-	if rr.err != nil {
-		t.Fatalf("restartResultMsg.err = %v", rr.err)
-	}
-	if pm.launchMode != processmgr.LaunchForeground {
-		t.Errorf("launchMode = %v, want LaunchForeground", pm.launchMode)
+	p, _ = updateAs[*ServerPage](p, monitorRestartConfirmedMsg{pid: 100, profile: prof})
+	if !strings.Contains(p.flash.Message(), "proxy not available") {
+		t.Errorf("expected flash about missing proxy; got %q", p.flash.Message())
 	}
 }
 
 func TestServerPage_RFlashWhenStoreNil(t *testing.T) {
-	pm := &restartTrackingMgr{
+	pm := &fakeProcMgr{
 		insts: []domain.RunningInstance{{ProfileID: "qwen", PID: 100, Port: 8080, LogPath: "/tmp/a.log", Background: true}},
 	}
 	mm := &fakeMonMgr{}
@@ -695,7 +685,7 @@ func TestServerPage_RFlashWhenStoreNil(t *testing.T) {
 
 func TestServerPage_RFlashWhenProfileMissing(t *testing.T) {
 	psk := &fakeProfileStore{err: errors.New("profile vanished")}
-	pm := &restartTrackingMgr{
+	pm := &fakeProcMgr{
 		insts: []domain.RunningInstance{{ProfileID: "qwen", PID: 100, Port: 8080, LogPath: "/tmp/a.log", Background: true}},
 	}
 	mm := &fakeMonMgr{}
@@ -708,6 +698,82 @@ func TestServerPage_RFlashWhenProfileMissing(t *testing.T) {
 	}
 	if !strings.Contains(p.flash.Message(), "not found") {
 		t.Errorf("expected flash about missing profile; got %q", p.flash.Message())
+	}
+}
+
+func TestServerPage_KillLoadedPIDUnloadsViaProxy(t *testing.T) {
+	// Killing the instance the proxy currently serves must go through
+	// /_admin/unload (force) so the proxy state stays consistent.
+	pm := &killTrackingMgr{fakeProcMgr: fakeProcMgr{
+		insts: []domain.RunningInstance{{ProfileID: "qwen", PID: 7, Port: 8080, LogPath: "/tmp/x.log"}},
+	}}
+	proxy := &fakeProxyForPages{status: httpproxy.Status{Running: true, LoadedProfileID: "qwen", LoadedPID: 7}}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil).WithProxy(proxy)
+	p.SetSize(120, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	p, cmd := updateAs[*ServerPage](p, monitorKillConfirmedMsg{pid: 7})
+	if len(p.tbl.Rows()) != 0 {
+		t.Fatalf("killed row should be dropped immediately; rows=%d", len(p.tbl.Rows()))
+	}
+	got := drainCmd(cmd)
+	var ur *unloadResultMsg
+	for _, m := range got {
+		if v, ok := m.(unloadResultMsg); ok {
+			ur = &v
+			break
+		}
+	}
+	if ur == nil {
+		t.Fatalf("no unloadResultMsg in cmd batch; got %v", got)
+	}
+	if ur.err != nil {
+		t.Fatalf("unloadResultMsg.err = %v", ur.err)
+	}
+	if len(proxy.ops) != 1 || proxy.ops[0] != "unload force" {
+		t.Errorf("proxy ops = %v, want [unload force]", proxy.ops)
+	}
+	if pm.killed != 0 {
+		t.Errorf("proxy-owned pid must not be pm.Kill'ed; killed=%d", pm.killed)
+	}
+}
+
+func TestServerPage_KillOrphanPIDUsesProcessManager(t *testing.T) {
+	// A pid the proxy does NOT own (orphan from a previous run) still goes
+	// through pm.Kill.
+	pm := &killTrackingMgr{fakeProcMgr: fakeProcMgr{
+		insts: []domain.RunningInstance{{ProfileID: "old", PID: 9, Port: 8081, LogPath: "/tmp/y.log"}},
+	}}
+	proxy := &fakeProxyForPages{status: httpproxy.Status{Running: true, LoadedProfileID: "qwen", LoadedPID: 7}}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil).WithProxy(proxy)
+	p.SetSize(120, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	p, _ = updateAs[*ServerPage](p, monitorKillConfirmedMsg{pid: 9})
+	if pm.killed != 9 {
+		t.Errorf("orphan pid should be pm.Kill'ed; killed=%d", pm.killed)
+	}
+	if len(proxy.ops) != 0 {
+		t.Errorf("orphan kill must not touch the proxy; ops=%v", proxy.ops)
+	}
+}
+
+func TestServerPage_RefreshReconcilesRegistry(t *testing.T) {
+	// The TUI process never launches instances — the detached proxy process
+	// does. refreshInstancesCmd must re-read instances.json (Reconcile) so
+	// proxy-launched instances appear.
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{{PID: 1, Port: 8080, LogPath: "/tmp/x.log"}}}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil)
+
+	msgs := drainCmd(p.refreshInstancesCmd())
+	if len(msgs) != 1 {
+		t.Fatalf("refreshInstancesCmd produced %d msgs, want 1", len(msgs))
+	}
+	if _, ok := msgs[0].(monitorInstancesRefreshedMsg); !ok {
+		t.Fatalf("refresh produced %T, want monitorInstancesRefreshedMsg", msgs[0])
+	}
+	if pm.reconcileCalls != 1 {
+		t.Errorf("Reconcile called %d times, want 1", pm.reconcileCalls)
 	}
 }
 
@@ -752,27 +818,6 @@ func (f *fakeProfileStore) Get(id string) (domain.Profile, error) {
 	}
 	return f.p, nil
 }
-
-type restartTrackingMgr struct {
-	insts      []domain.RunningInstance
-	killedPID  int
-	launchedID string
-	launchMode processmgr.LaunchMode
-	newPID     int
-	newPort    int
-}
-
-func (r *restartTrackingMgr) List() []domain.RunningInstance { return r.insts }
-func (r *restartTrackingMgr) Kill(pid int) error             { r.killedPID = pid; return nil }
-func (r *restartTrackingMgr) TailLogs(_ int) (io.ReadCloser, error) {
-	return nil, processmgr.ErrUnknownPID
-}
-func (r *restartTrackingMgr) Launch(p domain.Profile, mode processmgr.LaunchMode, _ string) (domain.RunningInstance, error) {
-	r.launchedID = p.ID
-	r.launchMode = mode
-	return domain.RunningInstance{ProfileID: p.ID, PID: r.newPID, Port: r.newPort, Background: true}, nil
-}
-func (r *restartTrackingMgr) History() []domain.ExitedInstance { return nil }
 
 func TestServerPage_CrashedRowShowsMarker(t *testing.T) {
 	exit := time.Now().UTC()

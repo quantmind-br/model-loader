@@ -1,11 +1,10 @@
 package pages
 
 import (
-	"time"
-
 	"github.com/charmbracelet/bubbles/spinner"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
@@ -22,8 +21,7 @@ type modelPickerOverlay struct {
 
 type launchTracker struct {
 	status   string
-	statusAt time.Time
-	waitPID  int
+	inFlight bool
 	spinner  spinner.Model
 }
 
@@ -34,13 +32,10 @@ type loadedMsg struct {
 	err      error
 }
 
-// launchedMsg is emitted after a successful Launch + WaitHealthy.
-type launchedMsg struct {
-	inst      domain.RunningInstance
-	attemptID string
-}
+// proxyLoadedMsg reports a successful /_admin/load (backend already healthy).
+type proxyLoadedMsg struct{ status httpproxy.Status }
 
-// launchErrMsg is emitted when validation or Launch itself fails.
+// launchErrMsg is emitted when validation or the proxy load fails.
 // firstIssue carries the first validation issue (when the failure was a
 // validation error) so the flash can surface a human-readable hint —
 // otherwise the user sees only "validation failed: N errors" with no
@@ -50,12 +45,16 @@ type launchErrMsg struct {
 	firstIssue string
 }
 
-type healthyMsg struct{ pid int }
+// profilesUnloadConfirmedMsg is emitted by killConfirm.onYes when the user
+// confirms unloading the currently loaded model. The page handles it in
+// Update so the async proxy call is dispatched from the UI thread.
+type profilesUnloadConfirmedMsg struct{ profileID string }
 
-// profilesKillConfirmedMsg is emitted by killConfirm.onYes when the user
-// confirms a kill. The page handles it in Update so manager I/O and status
-// mutation stay on the UI thread.
-type profilesKillConfirmedMsg struct{ pid int }
+// profilesUnloadDoneMsg carries the outcome of the async /_admin/unload.
+type profilesUnloadDoneMsg struct {
+	profileID string
+	err       error
+}
 
 // profileDeleteConfirmedMsg is emitted by deleteConfirm.onYes when the user
 // confirms a profile deletion. The page handles it in Update so the actual

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -81,6 +82,15 @@ func runTUI(cliLevel string) int {
 	if err := supervisor.Reconcile(); err != nil {
 		svc.Logger.Error("proxy_reconcile_failed", "err", err)
 	}
+	// The proxy is the only client-facing channel to backends — make sure it
+	// is up before the user loads anything.
+	if !supervisor.Status().Running {
+		startCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		if err := supervisor.Start(startCtx); err != nil {
+			svc.Logger.Error("proxy_autostart_failed", "err", err)
+		}
+		cancel()
+	}
 
 	profilesPage := pages.NewProfilesPage(svc.Store, svc.DefaultSchema).
 		WithModelScanner(scanner, svc.Cfg.Models.SearchPaths).
@@ -91,14 +101,14 @@ func runTUI(cliLevel string) int {
 		WithHFClient(hfClient).
 		WithDownloadManager(dlManager)
 	profilesPage = profilesPage.
-		WithProcessManager(svc.Mgr, svc.Val).
+		WithProxyController(supervisor).
+		WithValidator(svc.Val).
 		WithBackendResolver(svc.Resolver).
 		WithLogger(svc.Logger)
 
 	mon := monitor.New(monitor.Config{NvidiaSMIPath: "nvidia-smi"})
 	serverPage := pages.NewServerPage(svc.Mgr, mon, svc.Store).
 		WithMetricsDir(filepath.Join(svc.Cfg.Paths.StateDir, "metrics")).
-		SetBackendResolver(svc.Resolver).
 		WithProxy(supervisor)
 	prober := backendcatalog.NewProber(svc.CatalogStore, backendcatalog.ProbeConfig{Timeout: 10 * time.Second})
 	backendsPage := pages.NewBackendsPage(svc.SchemaManager).WithStores(svc.CatalogStore, svc.SchemaStore).WithProber(prober)

@@ -18,12 +18,11 @@ _Convention: lowercase keys are light/cheap actions (navigate, edit, view); uppe
 
 ## Profiles tab
 
-- ` + "`enter`" + ` — launch selected profile
+- ` + "`enter`" + ` — load selected profile through the HTTP proxy (swaps out the current model)
 - ` + "`e`" + ` — edit selected profile
 - ` + "`n`" + ` — new profile     ` + "`d`" + ` — duplicate
 - ` + "`X`" + ` — delete (confirm)
-- ` + "`b`" + ` — toggle background/foreground (default background)
-- ` + "`K`" + ` — kill the most recent launched instance (confirm)
+- ` + "`K`" + ` — unload the currently loaded model (confirm)
 - ` + "`R`" + ` — refresh profile list
 - ` + "`p`" + ` — pin selected profile
 - ` + "`I`" + ` — import profiles from JSON bundle
@@ -36,8 +35,8 @@ _Convention: lowercase keys are light/cheap actions (navigate, edit, view); uppe
 
 - ` + "`v`" + ` — cycle Logs / Slots / Metrics / History sub-views
 - ` + "`Space`" + ` — pause/resume log scroll
-- ` + "`K`" + ` — kill selected instance (confirm)
-- ` + "`R`" + ` — restart selected instance (Kill + Launch, confirm)
+- ` + "`K`" + ` — kill selected instance (unloads via the proxy when it owns it, confirm)
+- ` + "`R`" + ` — restart selected instance (unload + load via the proxy, confirm)
 - ` + "`h`" + ` — open history chart for the selected instance
 - ` + "`1`" + ` / ` + "`2`" + ` / ` + "`3`" + ` / ` + "`4`" + ` — history chart window: 1h / 6h / 24h / 7d (only while chart is open)
 - ` + "`s`" + ` — start HTTP proxy listener

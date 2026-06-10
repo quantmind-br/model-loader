@@ -7,7 +7,17 @@ import (
 )
 
 func (p *ServerPage) refreshInstancesCmd() tea.Cmd {
-	return func() tea.Msg { return monitorInstancesRefreshedMsg{insts: p.pm.List()} }
+	pm := p.pm
+	return func() tea.Msg {
+		// Instances are launched by the detached proxy process, so this TUI's
+		// in-memory tracking goes stale. Re-read instances.json via Reconcile
+		// (when the manager supports it) so externally launched instances
+		// appear. Safe: this process never launches instances itself.
+		if r, ok := pm.(interface{ Reconcile() error }); ok {
+			_ = r.Reconcile()
+		}
+		return monitorInstancesRefreshedMsg{insts: pm.List()}
+	}
 }
 
 // Reload implements the ui.Reloader contract so RootModel re-polls the
@@ -46,6 +56,8 @@ func (p *ServerPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.handleInstancesRefreshed(m)
 	case restartResultMsg:
 		return p.handleRestartResult(m)
+	case unloadResultMsg:
+		return p.handleUnloadResult(m)
 	case ServerSelectPIDMsg:
 		return p.handleSelectPID(m)
 	case monitorPeriodicTickMsg:

@@ -1,32 +1,38 @@
 package pages
 
 import (
+	"context"
 	"io"
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
-	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
-	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // procMgrIface is the slice of processmgr.Manager that ServerPage needs.
+// The TUI process never launches instances itself anymore — the detached
+// proxy process does — so this surface is observe + orphan cleanup only.
 type procMgrIface interface {
 	List() []domain.RunningInstance
 	Kill(pid int) error
-	Launch(domain.Profile, processmgr.LaunchMode, string) (domain.RunningInstance, error)
 	TailLogs(pid int) (io.ReadCloser, error)
 	History() []domain.ExitedInstance
 }
 
-// backendResolverIface is the subset of backendcatalog.Resolver that
-// ServerPage needs to resolve backend kind on restart.
-type backendResolverIface interface {
-	Resolve(profile domain.Profile) (backendcatalog.ResolvedBackend, error)
+// serverProxyController is the slice of *proxysupervisor.Supervisor the
+// Server page drives: the proxy panel lifecycle (Start/Stop/Status) plus
+// the backend swap endpoints used by restart and kill-loaded.
+type serverProxyController interface {
+	components.HTTPProxyController // Start, Stop, Status
+	Load(ctx context.Context, profileID string) (httpproxy.Status, error)
+	Unload(ctx context.Context, force bool) (httpproxy.Status, error)
+	BaseURL() string
+	EnsureRunning(context.Context) error
 }
 
 // profileStoreIface is the subset of profilestore.Store used by ServerPage
@@ -38,9 +44,8 @@ type profileStoreIface interface {
 type ServerPage struct {
 	pm                 procMgrIface
 	mm                 monitor.Manager
-	ps                 profileStoreIface    // injected for `r` real restart (slice 6 / Task 4)
-	resolver           backendResolverIface // injected to resolve backend kind on restart
-	pendingSelectPID   int                  // set by ServerSelectPIDMsg, consumed after the next refresh
+	ps                 profileStoreIface // injected for `r` real restart (slice 6 / Task 4)
+	pendingSelectPID   int               // set by ServerSelectPIDMsg, consumed after the next refresh
 	tbl                table.Model
 	subs               map[int]*subState
 	chans              map[int]<-chan monitor.MonitorEvent
@@ -57,12 +62,7 @@ type ServerPage struct {
 	historyChart *components.HistoryChart
 	metricsDir   string
 	proxy        *components.ProxyPanel
-}
-
-// SetBackendResolver injects the backend resolver used on restart.
-func (p *ServerPage) SetBackendResolver(r backendResolverIface) *ServerPage {
-	p.resolver = r
-	return p
+	proxyCtl     serverProxyController
 }
 
 const (
@@ -105,7 +105,8 @@ func (p *ServerPage) WithMetricsDir(dir string) *ServerPage {
 	return p
 }
 
-func (p *ServerPage) WithProxy(srv components.HTTPProxyController) *ServerPage {
+func (p *ServerPage) WithProxy(srv serverProxyController) *ServerPage {
+	p.proxyCtl = srv
 	p.proxy = components.NewProxyPanel(srv)
 	return p
 }

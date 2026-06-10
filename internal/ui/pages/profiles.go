@@ -16,7 +16,6 @@ import (
 	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/configweb"
-	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/service/validator"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
@@ -51,14 +50,12 @@ type ProfilesPage struct {
 	exportDir string
 
 	// --- launcher fields ---
-	manager   processmgr.Manager
+	proxy     ProxyController
 	validator validator.Validator
 	resolver  backendcatalog.Resolver
 	logger    *slog.Logger
 
-	running []domain.RunningInstance
-	bgMode  bool
-	launch  launchTracker
+	launch launchTracker
 
 	killConfirm components.Confirm
 
@@ -83,7 +80,6 @@ func NewProfilesPage(store profilestore.Store, schema domain.FlagSchema) Profile
 		list:     l,
 		listKeys: defaultProfilesKeys(),
 		flash:    components.NewFlash("profiles"),
-		bgMode:   true,
 		launch: launchTracker{
 			spinner: sp,
 		},
@@ -91,10 +87,8 @@ func NewProfilesPage(store profilestore.Store, schema domain.FlagSchema) Profile
 	}
 }
 
-// WithProcessManager injects the process manager and validator for launching
-// profiles directly from this page.
-func (p ProfilesPage) WithProcessManager(mgr processmgr.Manager, val validator.Validator) ProfilesPage {
-	p.manager = mgr
+// WithValidator injects the schema validator used as a launch pre-flight.
+func (p ProfilesPage) WithValidator(val validator.Validator) ProfilesPage {
 	p.validator = val
 	return p
 }
@@ -172,11 +166,6 @@ func (p ProfilesPage) View() string {
 	divider := strings.Repeat(divLine+"\n", divH-1) + divLine
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
 
-	running := p.renderRunningList()
-	if running != "" {
-		body = lipgloss.JoinVertical(lipgloss.Left, body, "", running)
-	}
-
 	if v := p.flash.View(); v != "" {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, v)
 	}
@@ -194,7 +183,7 @@ func (p ProfilesPage) OverlayView() Overlay {
 	// short button row let the master list bleed in around it (RENDER-03).
 	switch {
 	case p.killConfirm.Active():
-		content := components.Modal("Kill instance", p.killConfirm.View(), p.width, p.height)
+		content := components.Modal("Unload model", p.killConfirm.View(), p.width, p.height)
 		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
 	case p.deleteConfirm.Active():
 		content := components.Modal("Delete profile", p.deleteConfirm.View(), p.width, p.height)
@@ -294,40 +283,14 @@ func (p ProfilesPage) Hints() string {
 	case p.deleteConfirm.Active():
 		return "[←→] choose  [enter] confirm"
 	default:
-		return "[enter] launch  [e] edit  [n] new  [d] dup  [X] del  [b] bg/fg  [K] kill  [/] filter  (more: ?)"
+		return "[enter] launch  [e] edit  [n] new  [d] dup  [X] del  [K] unload  [/] filter  (more: ?)"
 	}
-}
-
-func (p ProfilesPage) renderRunningList() string {
-	// F-04 audit: the launch-mode toggle had no visible state. The header
-	// now always shows the current bg/fg mode so the user can see what
-	// [enter] will do before pressing it.
-	modeTag := "background"
-	if !p.bgMode {
-		modeTag = "foreground"
-	}
-	modeIndicator := theme.Subtitle.Render("Launch mode: " + modeTag + "  ([b] toggles)")
-	if len(p.running) == 0 {
-		return lipgloss.JoinVertical(lipgloss.Left,
-			modeIndicator,
-			"Running: "+components.EmptyState("(none)", "Press [enter] to launch selected profile"),
-		)
-	}
-	lines := []string{modeIndicator, theme.Subtitle.Render("Running")}
-	for _, ri := range p.running {
-		tag := "fg"
-		if ri.Background {
-			tag = "bg"
-		}
-		lines = append(lines, fmt.Sprintf("  %s pid=%d port=%d %s", ri.ProfileID, ri.PID, ri.Port, tag))
-	}
-	return strings.Join(lines, "\n")
 }
 
 func (p ProfilesPage) renderLaunchStatus() string {
 	if p.launch.status != "" {
 		statusLine := p.launch.status
-		if p.launch.waitPID != 0 {
+		if p.launch.inFlight {
 			statusLine = p.launch.spinner.View() + " " + statusLine
 		}
 		return theme.Subtitle.Render(statusLine)

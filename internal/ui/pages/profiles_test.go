@@ -3,7 +3,6 @@ package pages
 import (
 	"context"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +14,8 @@ import (
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
-	"github.com/quantmind-br/model-loader/internal/service/processmgr"
+	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
+	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
@@ -49,35 +49,46 @@ func (w viewWrapper) View() string {
 
 func (w viewWrapper) inner() tea.Model { return w.page }
 
-type fakeManager struct {
-	launched  []domain.Profile
-	mode      processmgr.LaunchMode
-	nextErr   error
-	exitInfos map[int]processmgr.ExitInfo
+// fakeProxy implements ProxyController for launcher tests, recording the
+// profile IDs loaded and the number of unloads.
+type fakeProxy struct {
+	status      httpproxy.Status
+	loaded      []string
+	unloads     int
+	ensureCalls int
+	loadErr     error
+	unloadErr   error
 }
 
-func (f *fakeManager) Launch(p domain.Profile, mode processmgr.LaunchMode, _ string) (domain.RunningInstance, error) {
-	if f.nextErr != nil {
-		err := f.nextErr
-		f.nextErr = nil
-		return domain.RunningInstance{}, err
+func (f *fakeProxy) EnsureRunning(context.Context) error { f.ensureCalls++; return nil }
+func (f *fakeProxy) Load(_ context.Context, id string) (httpproxy.Status, error) {
+	if f.loadErr != nil {
+		return httpproxy.Status{}, f.loadErr
 	}
-	f.launched = append(f.launched, p)
-	f.mode = mode
-	return domain.RunningInstance{ProfileID: p.ID, PID: 4242, Port: 8080, Background: mode == processmgr.LaunchBackground}, nil
+	f.loaded = append(f.loaded, id)
+	f.status = httpproxy.Status{Running: true, LoadedProfileID: id, LoadedPID: 4242}
+	return f.status, nil
 }
-func (f *fakeManager) Kill(pid int) error                                    { return nil }
-func (f *fakeManager) List() []domain.RunningInstance                        { return nil }
-func (f *fakeManager) WaitHealthy(_, _ int, _ time.Duration, _ string) error { return nil }
-func (f *fakeManager) TailLogs(_ int) (io.ReadCloser, error)                 { return nil, processmgr.ErrUnknownPID }
-func (f *fakeManager) Close() error                                          { return nil }
-func (f *fakeManager) History() []domain.ExitedInstance                      { return nil }
-func (f *fakeManager) GetExitInfo(pid int) (processmgr.ExitInfo, bool) {
-	if f.exitInfos == nil {
-		return processmgr.ExitInfo{}, false
+func (f *fakeProxy) Unload(context.Context, bool) (httpproxy.Status, error) {
+	f.unloads++
+	if f.unloadErr != nil {
+		return httpproxy.Status{}, f.unloadErr
 	}
-	ei, ok := f.exitInfos[pid]
-	return ei, ok
+	f.status = httpproxy.Status{Running: true}
+	return f.status, nil
+}
+func (f *fakeProxy) Status() httpproxy.Status { return f.status }
+func (f *fakeProxy) BaseURL() string          { return "http://127.0.0.1:9999" }
+
+// stubResolver satisfies backendcatalog.Resolver with zero-value results so
+// the launch pre-flight passes without a real catalog on disk.
+type stubResolver struct{}
+
+func (stubResolver) Resolve(domain.Profile) (backendcatalog.ResolvedBackend, error) {
+	return backendcatalog.ResolvedBackend{}, nil
+}
+func (stubResolver) ResolveSchema(domain.Profile) (domain.BackendValidationSchema, domain.Backend, error) {
+	return domain.BackendValidationSchema{}, domain.Backend{}, nil
 }
 
 func TestProfilesPage_LoadsExistingProfile(t *testing.T) {
@@ -256,7 +267,10 @@ func TestProfilesPage_UseInNewProfilePrefillsDraft(t *testing.T) {
 	}
 }
 
-func TestProfilesPage_EnterLaunchesSelected(t *testing.T) {
+// TestLaunch_GoesThroughProxy locks in the proxy-only lifecycle: pressing
+// [enter] must EnsureRunning + Load through the HTTP proxy (which already
+// waits for backend health) and never spawn a process from this TUI.
+func TestLaunch_GoesThroughProxy(t *testing.T) {
 	dir := t.TempDir()
 	store, err := profilestore.NewFSStore(dir)
 	if err != nil {
@@ -270,19 +284,161 @@ func TestProfilesPage_EnterLaunchesSelected(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	fp := &fakeProxy{}
 	page := NewProfilesPage(store, domain.FlagSchema{}).
-		WithProcessManager(&fakeManager{}, nil)
+		WithProxyController(fp).
+		WithBackendResolver(stubResolver{})
 	updated, _ := page.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	page = updated.(ProfilesPage)
 	updated, _ = page.Update(loadedMsg{profiles: []domain.Profile{{ID: "demo", Name: "Demo"}}})
 	page = updated.(ProfilesPage)
 
 	updated, cmd := page.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	_ = updated
+	page = updated.(ProfilesPage)
 	if cmd == nil {
 		t.Fatal("expected launch cmd, got nil")
 	}
-	// With a fake manager wired, pressing [enter] should produce a launch cmd.
+	if !page.launch.inFlight {
+		t.Fatal("launch should be marked in flight while the proxy loads")
+	}
+
+	// Run the launch pipeline and pick out the success msg.
+	msgs := drainCmd(cmd)
+	var loaded *proxyLoadedMsg
+	for _, m := range msgs {
+		if v, ok := m.(proxyLoadedMsg); ok {
+			loaded = &v
+			break
+		}
+	}
+	if loaded == nil {
+		t.Fatalf("no proxyLoadedMsg from launch cmd; got %v", msgs)
+	}
+	if fp.ensureCalls != 1 {
+		t.Errorf("EnsureRunning calls = %d, want 1", fp.ensureCalls)
+	}
+	if len(fp.loaded) != 1 || fp.loaded[0] != "demo" {
+		t.Errorf("proxy loads = %v, want [demo]", fp.loaded)
+	}
+
+	// Routing the success msg clears in-flight, flashes, and switches tabs.
+	updated, cmd = page.Update(*loaded)
+	page = updated.(ProfilesPage)
+	if page.launch.inFlight {
+		t.Error("inFlight should be cleared after proxyLoadedMsg")
+	}
+	if !strings.Contains(page.flash.Message(), "loaded demo") {
+		t.Errorf("flash = %q, want it to mention 'loaded demo'", page.flash.Message())
+	}
+	var switched bool
+	for _, m := range drainCmd(cmd) {
+		if _, ok := m.(SwitchToServerMsg); ok {
+			switched = true
+		}
+	}
+	if !switched {
+		t.Error("expected SwitchToServerMsg after successful load")
+	}
+}
+
+// TestLaunch_ProxyLoadErrorFlashes covers the failure leg: a proxy load
+// error must clear the in-flight state and surface an error flash.
+func TestLaunch_ProxyLoadErrorFlashes(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := profilestore.NewFSStore(dir)
+	fp := &fakeProxy{loadErr: errors.New("model file vanished")}
+	page := NewProfilesPage(store, domain.FlagSchema{}).
+		WithProxyController(fp).
+		WithBackendResolver(stubResolver{})
+	page, _ = page.startLaunch(domain.Profile{ID: "demo", Name: "Demo"})
+	if !page.launch.inFlight {
+		t.Fatal("launch should be in flight")
+	}
+
+	cmd := page.launchProfileCmd(domain.Profile{ID: "demo", Name: "Demo"})
+	msgs := drainCmd(cmd)
+	var lerr *launchErrMsg
+	for _, m := range msgs {
+		if v, ok := m.(launchErrMsg); ok {
+			lerr = &v
+			break
+		}
+	}
+	if lerr == nil {
+		t.Fatalf("no launchErrMsg from failing load; got %v", msgs)
+	}
+	updated, _ := page.Update(*lerr)
+	page = updated.(ProfilesPage)
+	if page.launch.inFlight {
+		t.Error("inFlight should be cleared after launchErrMsg")
+	}
+	if !strings.Contains(page.flash.Message(), "model file vanished") {
+		t.Errorf("flash = %q, want the proxy error surfaced", page.flash.Message())
+	}
+}
+
+// TestProfilesPage_UnloadFlow drives the K shortcut end to end: confirm
+// opens against the proxy's loaded profile, affirmative dispatches an async
+// Unload, and the done msg flashes the result.
+func TestProfilesPage_UnloadFlow(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := profilestore.NewFSStore(dir)
+	fp := &fakeProxy{status: httpproxy.Status{Running: true, LoadedProfileID: "demo", LoadedPID: 4242}}
+	page := NewProfilesPage(store, domain.FlagSchema{}).WithProxyController(fp)
+	updated, _ := page.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	page = updated.(ProfilesPage)
+	updated, _ = page.Update(loadedMsg{profiles: []domain.Profile{{ID: "demo", Name: "Demo"}}})
+	page = updated.(ProfilesPage)
+
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
+	page = updated.(ProfilesPage)
+	if !page.killConfirm.Active() {
+		t.Fatal("'K' should open the unload confirm when a model is loaded")
+	}
+
+	// Affirmative completion: emit the msg killConfirm.onYes would build.
+	page.killConfirm = components.Confirm{}
+	updated, cmd := page.Update(profilesUnloadConfirmedMsg{profileID: "demo"})
+	page = updated.(ProfilesPage)
+	msgs := drainCmd(cmd)
+	var done *profilesUnloadDoneMsg
+	for _, m := range msgs {
+		if v, ok := m.(profilesUnloadDoneMsg); ok {
+			done = &v
+			break
+		}
+	}
+	if done == nil {
+		t.Fatalf("no profilesUnloadDoneMsg from unload cmd; got %v", msgs)
+	}
+	if fp.unloads != 1 {
+		t.Errorf("proxy unloads = %d, want 1", fp.unloads)
+	}
+	updated, _ = page.Update(*done)
+	page = updated.(ProfilesPage)
+	if !strings.Contains(page.flash.Message(), "unloaded demo") {
+		t.Errorf("flash = %q, want 'unloaded demo'", page.flash.Message())
+	}
+}
+
+// TestProfilesPage_UnloadWithNothingLoadedFlashes asserts K is a friendly
+// no-op when the proxy has no loaded model.
+func TestProfilesPage_UnloadWithNothingLoadedFlashes(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := profilestore.NewFSStore(dir)
+	fp := &fakeProxy{status: httpproxy.Status{Running: true}}
+	page := NewProfilesPage(store, domain.FlagSchema{}).WithProxyController(fp)
+	updated, _ := page.Update(loadedMsg{profiles: []domain.Profile{{ID: "demo", Name: "Demo"}}})
+	page = updated.(ProfilesPage)
+
+	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
+	page = updated.(ProfilesPage)
+	if page.killConfirm.Active() {
+		t.Fatal("'K' must not open a confirm when nothing is loaded")
+	}
+	if !strings.Contains(page.flash.Message(), "no model loaded") {
+		t.Errorf("flash = %q, want 'no model loaded'", page.flash.Message())
+	}
 }
 
 func TestProfilesPage_FlashAutoClear(t *testing.T) {
@@ -405,7 +561,8 @@ func TestProfilesPage_DeleteCompletesViaAsyncMsgs(t *testing.T) {
 func TestProfilesPage_VimKNavigatesListNotKill(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := profilestore.NewFSStore(dir)
-	page := NewProfilesPage(store, domain.FlagSchema{}).WithProcessManager(&fakeManager{}, nil)
+	fp := &fakeProxy{}
+	page := NewProfilesPage(store, domain.FlagSchema{}).WithProxyController(fp)
 	updated, _ := page.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	page = updated.(ProfilesPage)
 	updated, _ = page.Update(loadedMsg{profiles: []domain.Profile{
@@ -424,15 +581,15 @@ func TestProfilesPage_VimKNavigatesListNotKill(t *testing.T) {
 		t.Fatalf("after 'k' index = %d, want 0 ('k' must navigate up, not kill)", page.list.Index())
 	}
 	if page.killConfirm.Active() {
-		t.Fatal("'k' must not open the kill confirm")
+		t.Fatal("'k' must not open the unload confirm")
 	}
 
-	// Uppercase 'K' with a running instance opens the kill confirm.
-	page.running = []domain.RunningInstance{{ProfileID: "a", PID: 4242, Port: 8080}}
+	// Uppercase 'K' with a loaded model opens the unload confirm.
+	fp.status = httpproxy.Status{Running: true, LoadedProfileID: "a", LoadedPID: 4242}
 	updated, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
 	page = updated.(ProfilesPage)
 	if !page.killConfirm.Active() {
-		t.Fatal("'K' should open the kill confirm when an instance is running")
+		t.Fatal("'K' should open the unload confirm when a model is loaded")
 	}
 }
 

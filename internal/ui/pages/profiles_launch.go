@@ -1,9 +1,9 @@
 package pages
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -11,13 +11,36 @@ import (
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/log"
+	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
 
-// launchSelected starts the currently selected profile directly.
+// proxyLoadTimeout bounds EnsureRunning + Load. Model load can take minutes
+// on large GGUFs, so the deadline is generous.
+const proxyLoadTimeout = 5 * time.Minute
+
+// ProxyController is the subset of *proxysupervisor.Supervisor the pages use
+// to drive the backend lifecycle. All profile communication flows through the
+// proxy; pages never talk to instance ports directly.
+type ProxyController interface {
+	EnsureRunning(context.Context) error
+	Load(ctx context.Context, profileID string) (httpproxy.Status, error)
+	Unload(ctx context.Context, force bool) (httpproxy.Status, error)
+	Status() httpproxy.Status
+	BaseURL() string
+}
+
+// WithProxyController wires the supervised HTTP proxy. Launch/stop actions
+// are disabled when absent.
+func (p ProfilesPage) WithProxyController(pc ProxyController) ProfilesPage {
+	p.proxy = pc
+	return p
+}
+
+// launchSelected loads the currently selected profile through the proxy.
 func (p ProfilesPage) launchSelected() (tea.Model, tea.Cmd) {
-	if p.launch.waitPID != 0 {
+	if p.launch.inFlight {
 		return p, nil
 	}
 	if _, isCorrupt := p.list.SelectedItem().(corruptItem); isCorrupt {
@@ -25,77 +48,33 @@ func (p ProfilesPage) launchSelected() (tea.Model, tea.Cmd) {
 		return p, fc
 	}
 	sel, ok := p.list.SelectedItem().(item)
-	if !ok || p.manager == nil {
+	if !ok || p.proxy == nil {
 		return p, nil
 	}
-	return p, p.launchProfileCmd(sel.p)
+	return p.startLaunch(sel.p)
 }
 
-func (p ProfilesPage) handleLaunched(msg launchedMsg) (tea.Model, tea.Cmd) {
-	p.running = append(p.running, msg.inst)
-	p.launch.waitPID = msg.inst.PID
-	mode := "foreground"
-	if msg.inst.Background {
-		mode = "background"
-	}
-	p.launch.status = fmt.Sprintf("launched %s pid=%d port=%d (%s) — waiting for /health…",
-		msg.inst.ProfileID, msg.inst.PID, msg.inst.Port, mode)
-	p.launch.statusAt = time.Time{}
-	// F-02 audit: also emit a flash so the user gets a high-contrast
-	// success message rather than a single grey "waiting for /health…"
-	// line that's easy to miss while they're scanning the screen for
-	// a confirmation.
-	p, startedFlash := p.withFlash(fmt.Sprintf("launched pid=%d port=%d (%s) — waiting for /health…",
-		msg.inst.PID, msg.inst.Port, mode))
-	mgr := p.manager
-	port := msg.inst.Port
-	pid := msg.inst.PID
-	attemptID := msg.attemptID
-	waitCmd := func() tea.Msg {
-		if err := mgr.WaitHealthy(pid, port, 30*time.Second, attemptID); err != nil {
-			return launchErrMsg{err: fmt.Errorf("pid %d not healthy: %w", pid, err)}
-		}
-		return healthyMsg{pid: pid}
-	}
-	return p, tea.Batch(p.launch.spinner.Tick, waitCmd, startedFlash)
+// startLaunch arms the in-flight tracker and dispatches the proxy load.
+func (p ProfilesPage) startLaunch(selected domain.Profile) (ProfilesPage, tea.Cmd) {
+	p.launch.inFlight = true
+	p.launch.status = fmt.Sprintf("loading %s via proxy…", selected.Name)
+	return p, tea.Batch(p.launch.spinner.Tick, p.launchProfileCmd(selected))
 }
 
-func (p ProfilesPage) handleHealthy(msg healthyMsg) (tea.Model, tea.Cmd) {
-	p.launch.waitPID = 0
-	// Look up the instance so we can include the port in the confirmation
-	// flash — a bare "healthy pid=N" gives the user nothing to act on
-	// (F-02 audit).
-	port := 0
-	for _, ri := range p.running {
-		if ri.PID == msg.pid {
-			port = ri.Port
-			break
-		}
-	}
-	var text string
-	if port > 0 {
-		text = fmt.Sprintf("healthy pid=%d port=%d — switched to Server tab", msg.pid, port)
-	} else {
-		text = fmt.Sprintf("healthy pid=%d — switched to Server tab", msg.pid)
-	}
+func (p ProfilesPage) handleProxyLoaded(msg proxyLoadedMsg) (tea.Model, tea.Cmd) {
+	p.launch.inFlight = false
 	p.launch.status = ""
-	p, fc := p.withFlash(text)
-	pid := msg.pid
-	return p, tea.Batch(fc, func() tea.Msg { return SwitchToServerMsg{PID: pid} })
+	p, fc := p.withFlash(fmt.Sprintf("loaded %s (pid=%d) — serving at %s",
+		msg.status.LoadedProfileID, msg.status.LoadedPID, p.proxy.BaseURL()))
+	return p, tea.Batch(fc, func() tea.Msg { return SwitchToServerMsg{PID: msg.status.LoadedPID} })
 }
 
 func (p ProfilesPage) handleLaunchErr(msg launchErrMsg) (tea.Model, tea.Cmd) {
-	pid := p.launch.waitPID
-	p.launch.waitPID = 0
+	p.launch.inFlight = false
 	p.launch.status = ""
 	base := friendlyLaunchError(msg.err)
 	if msg.firstIssue != "" {
-		base += " \u2014 " + msg.firstIssue
-	}
-	if pid != 0 && p.manager != nil {
-		if exit, ok := p.manager.GetExitInfo(pid); ok {
-			base = enrichWithExit(base, exit)
-		}
+		base += " — " + msg.firstIssue
 	}
 	// F-01 audit: failures must use the high-contrast error styling and
 	// the longer FlashLifetimeError so the user actually notices that
@@ -105,7 +84,7 @@ func (p ProfilesPage) handleLaunchErr(msg launchErrMsg) (tea.Model, tea.Cmd) {
 }
 
 func (p ProfilesPage) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
-	if p.launch.waitPID == 0 {
+	if !p.launch.inFlight {
 		return p, nil
 	}
 	updated, cmd := p.launch.spinner.Update(msg)
@@ -114,69 +93,77 @@ func (p ProfilesPage) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd
 }
 
 func (p ProfilesPage) handleLaunchProfile(msg LaunchProfileMsg) (tea.Model, tea.Cmd) {
-	if p.manager == nil {
-		p, fc := p.withFlashError("launch failed: process manager unavailable")
+	if p.proxy == nil {
+		p, fc := p.withFlashError("launch failed: HTTP proxy unavailable")
 		return p, fc
+	}
+	if p.launch.inFlight {
+		return p, nil
 	}
 	selected, err := p.store.Get(msg.ID)
 	if err != nil {
 		p, fc := p.withFlashError("launch failed: " + err.Error())
 		return p, fc
 	}
-	return p, p.launchProfileCmd(selected)
+	return p.startLaunch(selected)
 }
 
-func (p ProfilesPage) handleKillConfirmed(msg profilesKillConfirmedMsg) (tea.Model, tea.Cmd) {
-	var fc tea.Cmd
-	p, fc = p.performKill(msg.pid)
-	return p, fc
-}
-
-func (p ProfilesPage) askKillMostRecent() (tea.Model, tea.Cmd) {
-	if len(p.running) == 0 || p.manager == nil {
+// askUnloadCurrent opens a confirm for unloading the model currently served
+// by the proxy ('K' shortcut).
+func (p ProfilesPage) askUnloadCurrent() (tea.Model, tea.Cmd) {
+	if p.proxy == nil {
 		return p, nil
 	}
-	pid := p.running[len(p.running)-1].PID
+	st := p.proxy.Status()
+	if st.LoadedProfileID == "" {
+		p, fc := p.withFlash("no model loaded")
+		return p, fc
+	}
 	p.killConfirm = components.NewConfirm(
-		fmt.Sprintf("Kill pid=%d?", pid),
-		pid,
+		fmt.Sprintf("Unload %s?", st.LoadedProfileID),
+		st.LoadedProfileID,
 		func(payload any) tea.Cmd {
-			id, _ := payload.(int)
-			return func() tea.Msg { return profilesKillConfirmedMsg{pid: id} }
+			id, _ := payload.(string)
+			return func() tea.Msg { return profilesUnloadConfirmedMsg{profileID: id} }
 		},
-		"Kill",
+		"Unload",
 		"Cancel",
 	)
 	return p, p.killConfirm.Init()
 }
 
-func (p ProfilesPage) performKill(pid int) (ProfilesPage, tea.Cmd) {
-	if err := p.manager.Kill(pid); err != nil {
-		return p.withFlashError("error: " + err.Error())
+func (p ProfilesPage) handleUnloadConfirmed(msg profilesUnloadConfirmedMsg) (tea.Model, tea.Cmd) {
+	proxy := p.proxy
+	profileID := msg.profileID
+	return p, func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_, err := proxy.Unload(ctx, false)
+		return profilesUnloadDoneMsg{profileID: profileID, err: err}
 	}
-	out := p.running[:0]
-	for _, ri := range p.running {
-		if ri.PID != pid {
-			out = append(out, ri)
-		}
-	}
-	p.running = out
-	return p.withFlash(fmt.Sprintf("killed pid=%d", pid))
 }
 
+func (p ProfilesPage) handleUnloadDone(msg profilesUnloadDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		p, fc := p.withFlashError("unload failed: " + msg.err.Error())
+		return p, fc
+	}
+	p, fc := p.withFlash("unloaded " + msg.profileID)
+	return p, fc
+}
+
+// launchProfileCmd validates the profile locally (resolve + schema validate)
+// and then drives the proxy: EnsureRunning + /_admin/load. Load blocks until
+// the backend is healthy, so no separate health wait is needed.
 func (p ProfilesPage) launchProfileCmd(selected domain.Profile) tea.Cmd {
 	val := p.validator
-	mgr := p.manager
 	res := p.resolver
+	proxy := p.proxy
 	lg := p.logger
 	attemptID := log.NewAttemptID()
-	mode := processmgr.LaunchBackground
-	if !p.bgMode {
-		mode = processmgr.LaunchForeground
-	}
 	return func() tea.Msg {
 		evt := lg.With("attempt_id", attemptID, "profile_id", selected.ID)
-		evt.Info("launch_pipeline_start", "mode", modeString(mode))
+		evt.Info("launch_pipeline_start")
 		if res == nil {
 			return launchErrMsg{err: fmt.Errorf("no backend resolver configured")}
 		}
@@ -199,14 +186,18 @@ func (p ProfilesPage) launchProfileCmd(selected domain.Profile) tea.Cmd {
 				}
 			}
 		}
-		selected.Launch.ResolvedExecutable = rb.ExecutablePath
-		selected.Launch.ResolvedBackendKind = rb.Backend.Kind
-		inst, err := mgr.Launch(selected, mode, attemptID)
-		if err != nil {
-			evt.Error("launch_pipeline_failed", "step", "spawn", "err", err)
-			return launchErrMsg{err: err}
+		ctx, cancel := context.WithTimeout(context.Background(), proxyLoadTimeout)
+		defer cancel()
+		if err := proxy.EnsureRunning(ctx); err != nil {
+			evt.Error("launch_pipeline_failed", "step", "proxy_start", "err", err)
+			return launchErrMsg{err: fmt.Errorf("start proxy: %w", err)}
 		}
-		return launchedMsg{inst: inst, attemptID: attemptID}
+		status, err := proxy.Load(ctx, selected.ID)
+		if err != nil {
+			evt.Error("launch_pipeline_failed", "step", "proxy_load", "err", err)
+			return launchErrMsg{err: fmt.Errorf("load profile: %w", err)}
+		}
+		return proxyLoadedMsg{status: status}
 	}
 }
 
@@ -214,44 +205,9 @@ func friendlyLaunchError(err error) string {
 	switch {
 	case errors.Is(err, processmgr.ErrModelNotFound):
 		return "error: model file not found — fix the profile's Model path"
-	case errors.Is(err, processmgr.ErrForegroundBusy):
-		return "error: a foreground instance is already running — toggle [b] to background mode"
 	case errors.Is(err, processmgr.ErrHealthCheckTimeout):
 		return "error: server did not become healthy within timeout — check logs"
 	default:
 		return "error: " + err.Error()
 	}
-}
-
-func enrichWithExit(base string, exit processmgr.ExitInfo) string {
-	parts := []string{base}
-	switch {
-	case exit.ExitSignal != "":
-		parts = append(parts, "(signal: "+exit.ExitSignal+")")
-	case exit.ExitCode != nil:
-		parts = append(parts, fmt.Sprintf("(exit %d)", *exit.ExitCode))
-	}
-	if last := lastNonEmpty(exit.StderrTail); last != "" {
-		parts = append(parts, "— last: "+truncRunes(last, 80))
-	}
-	if len(parts) == 1 {
-		return base
-	}
-	return strings.Join(parts, " ")
-}
-
-func lastNonEmpty(s []string) string {
-	for i := len(s) - 1; i >= 0; i-- {
-		if strings.TrimSpace(s[i]) != "" {
-			return s[i]
-		}
-	}
-	return ""
-}
-
-func modeString(mode processmgr.LaunchMode) string {
-	if mode == processmgr.LaunchForeground {
-		return "foreground"
-	}
-	return "background"
 }

@@ -31,24 +31,3 @@ func truncate(s string, max int) string {
 	}
 	return theme.TruncateRuneWidth(s, max, "…")
 }
-
-// truncRunes clips s to max RUNES (not bytes), appending "…" when the input
-// is longer. Rune-safe alternative to truncate() above, which slices by
-// byte index and would corrupt multi-byte UTF-8 mid-rune. Used by
-// launcher.go's enrichWithExit for stderr-tail lines (llama-server may emit
-// non-ASCII in localized CUDA error messages).
-//
-// Edge cases: max <= 0 returns ""; max == 1 returns "…" for any non-empty s.
-func truncRunes(s string, max int) string {
-	if max <= 0 {
-		return ""
-	}
-	rs := []rune(s)
-	if len(rs) <= max {
-		return s
-	}
-	if max == 1 {
-		return "…"
-	}
-	return string(rs[:max-1]) + "…"
-}
