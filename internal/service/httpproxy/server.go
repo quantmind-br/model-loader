@@ -22,7 +22,10 @@ import (
 )
 
 const (
-	defaultHealthCheckTimeout  = 120 * time.Second
+	// defaultHealthCheckTimeout bounds the wait for backend /health after a
+	// swap. Large GGUF models can take 2-3+ minutes to load, so this must
+	// stay at least as generous as the benchmark runner's old private bound.
+	defaultHealthCheckTimeout  = 180 * time.Second
 	defaultMaxBodyBuffer       = int64(8 << 20) // 8 MiB
 	defaultShutdownGracePeriod = 10 * time.Second
 )
@@ -75,14 +78,14 @@ func (st *Status) UnmarshalJSON(data []byte) error {
 	var aux struct {
 		*Alias
 		// Old PascalCase keys emitted by proxy binaries predating snake_case tags.
-		LoadedProfileIDOld string        `json:"LoadedProfileID"`
-		LoadedPIDOld       int           `json:"LoadedPID"`
-		LoadedPortOld      int           `json:"LoadedPort"`
-		LastSwapAtOld      time.Time     `json:"LastSwapAt"`
-		LastSwapDurOld     time.Duration `json:"LastSwapDur"`
-		LastErrorOld       string        `json:"LastError"`
-		LastErrorAtOld     time.Time     `json:"LastErrorAt"`
-		InflightRequestsOld int          `json:"InflightRequests"`
+		LoadedProfileIDOld  string        `json:"LoadedProfileID"`
+		LoadedPIDOld        int           `json:"LoadedPID"`
+		LoadedPortOld       int           `json:"LoadedPort"`
+		LastSwapAtOld       time.Time     `json:"LastSwapAt"`
+		LastSwapDurOld      time.Duration `json:"LastSwapDur"`
+		LastErrorOld        string        `json:"LastError"`
+		LastErrorAtOld      time.Time     `json:"LastErrorAt"`
+		InflightRequestsOld int           `json:"InflightRequests"`
 	}
 	aux.Alias = (*Alias)(st)
 	if err := json.Unmarshal(data, &aux); err != nil {
@@ -133,24 +136,24 @@ type Server struct {
 	deps   Deps
 	logger *slog.Logger
 
-	startMu sync.Mutex      // serializes Start/Stop
-	httpSrv *http.Server    // non-nil while Running
-	listenerAddr string     // captured at Start time
-	serveErrCh   chan error // closed/errored when http.Serve returns
+	startMu      sync.Mutex   // serializes Start/Stop
+	httpSrv      *http.Server // non-nil while Running
+	listenerAddr string       // captured at Start time
+	serveErrCh   chan error   // closed/errored when http.Serve returns
 
 	stateMu sync.RWMutex
 	current *loadedBackend
 
 	swapMu sync.Mutex // serializes load/unload across concurrent requests
 
-	inflight atomic.Int64
+	inflight   atomic.Int64
 	inflightWG sync.WaitGroup
 
-	statusMu     sync.Mutex
-	lastSwapAt   time.Time
-	lastSwapDur  time.Duration
-	lastError    string
-	lastErrorAt  time.Time
+	statusMu    sync.Mutex
+	lastSwapAt  time.Time
+	lastSwapDur time.Duration
+	lastError   string
+	lastErrorAt time.Time
 }
 
 // New constructs a Server with sane defaults. Logger nil → no-op.

@@ -41,7 +41,7 @@ func init() {
 			srv := httpproxy.New(httpproxy.Config{
 				Host:                svc.Cfg.Serve.Host,
 				Port:                svc.Cfg.Serve.Port,
-				HealthCheckTimeout:  120 * time.Second,
+				HealthCheckTimeout:  180 * time.Second,
 				MaxBodyBuffer:       8 << 20,
 				ShutdownGracePeriod: 10 * time.Second,
 			}, httpproxy.Deps{

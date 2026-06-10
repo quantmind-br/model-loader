@@ -2,6 +2,8 @@ package benchmark
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
@@ -9,16 +11,22 @@ import (
 )
 
 // fakeProxyCtl is an in-memory ProxyController: Load records the requested
-// profile IDs and flips the status to "loaded".
+// profile IDs and flips the status to "loaded". ensureErr/loadErr force the
+// corresponding call to fail for error-path tests.
 type fakeProxyCtl struct {
-	base   string
-	loaded []string
-	st     httpproxy.Status
+	base      string
+	loaded    []string
+	st        httpproxy.Status
+	ensureErr error
+	loadErr   error
 }
 
-func (f *fakeProxyCtl) EnsureRunning(context.Context) error { return nil }
+func (f *fakeProxyCtl) EnsureRunning(context.Context) error { return f.ensureErr }
 
 func (f *fakeProxyCtl) Load(_ context.Context, id string) (httpproxy.Status, error) {
+	if f.loadErr != nil {
+		return httpproxy.Status{}, f.loadErr
+	}
 	f.loaded = append(f.loaded, id)
 	f.st = httpproxy.Status{Running: true, LoadedProfileID: id, LoadedPID: 7, LoadedLogPath: "/tmp/b.log"}
 	return f.st, nil
@@ -65,5 +73,42 @@ func TestEnsureLoaded_NilProxy(t *testing.T) {
 	r := &Runner{}
 	if _, _, _, _, err := r.ensureLoaded(context.Background(), domain.Profile{ID: "p1"}); err == nil {
 		t.Fatal("ensureLoaded with nil proxy: want error, got nil")
+	}
+}
+
+func TestEnsureLoaded_EnsureRunningError(t *testing.T) {
+	sentinel := errors.New("proxy down")
+	fp := &fakeProxyCtl{base: "http://127.0.0.1:9999", ensureErr: sentinel}
+	r := &Runner{proxy: fp}
+
+	_, _, _, _, err := r.ensureLoaded(context.Background(), domain.Profile{ID: "p1"})
+	if err == nil {
+		t.Fatal("ensureLoaded with EnsureRunning error: want error, got nil")
+	}
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err = %v, want wrapped sentinel %v", err, sentinel)
+	}
+	if !strings.HasPrefix(err.Error(), "start proxy:") {
+		t.Errorf("err = %q, want %q prefix", err.Error(), "start proxy:")
+	}
+	if len(fp.loaded) != 0 {
+		t.Errorf("proxy loads = %v, want none after EnsureRunning failure", fp.loaded)
+	}
+}
+
+func TestEnsureLoaded_LoadError(t *testing.T) {
+	sentinel := errors.New("backend never became healthy")
+	fp := &fakeProxyCtl{base: "http://127.0.0.1:9999", loadErr: sentinel}
+	r := &Runner{proxy: fp}
+
+	_, _, _, _, err := r.ensureLoaded(context.Background(), domain.Profile{ID: "p1"})
+	if err == nil {
+		t.Fatal("ensureLoaded with Load error: want error, got nil")
+	}
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err = %v, want wrapped sentinel %v", err, sentinel)
+	}
+	if !strings.HasPrefix(err.Error(), "load profile via proxy:") {
+		t.Errorf("err = %q, want %q prefix", err.Error(), "load profile via proxy:")
 	}
 }

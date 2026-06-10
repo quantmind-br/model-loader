@@ -85,10 +85,13 @@ type ProfileSnapshot struct {
 
 // ProblemResult is the outcome for a single problem in a run.
 type ProblemResult struct {
-	ProblemID           string  `json:"problemId"`
-	ProblemName         string  `json:"problemName"`
-	Resolved            bool    `json:"resolved"`
-	Score               float64 `json:"score"` // 0..1
+	ProblemID   string  `json:"problemId"`
+	ProblemName string  `json:"problemName"`
+	Resolved    bool    `json:"resolved"`
+	Score       float64 `json:"score"` // 0..1
+	// Timing metrics (TTFTms, TotalMs, *TPS) traverse the loopback reverse
+	// proxy (sub-ms overhead); runs persisted before the proxy migration are
+	// not strictly comparable.
 	TTFTms              int64   `json:"ttftMs"`
 	TotalMs             int64   `json:"totalMs"`
 	TokensPerSecond     float64 `json:"tokensPerSecond"`
