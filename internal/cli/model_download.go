@@ -33,7 +33,7 @@ func init() {
 			}
 			defer mgr.Close()
 			return exitOnErr(cmd.ErrOrStderr(), startDownload(
-				cmd.OutOrStdout(), mgr, buildHFClient(),
+				cmd.OutOrStdout(), cmd.ErrOrStderr(), mgr, buildHFClient(),
 				firstPath(cfg.Models.SearchPaths), args[0], args[1], snapshot, wait,
 			))
 		},
@@ -43,10 +43,31 @@ func init() {
 	modelCmd.AddCommand(dlCmd)
 }
 
+// printDownloadProgress emits a plain progress line for a non-terminal event.
+// Known totals print once per 10% decile crossed (the first 0% line is
+// intentional — it signals the download is alive); unknown totals print once
+// per 256 MiB.
+func printDownloadProgress(errw io.Writer, filename string, st downloadmgr.State, lastDecile *int, lastChunk *int64) {
+	if st.Total > 0 {
+		decile := int(st.Bytes * 10 / st.Total)
+		if decile > *lastDecile {
+			*lastDecile = decile
+			fmt.Fprintf(errw, "downloading %s: %s / %s (%d%%)\n",
+				filename, humanBytes(st.Bytes), humanBytes(st.Total), st.Bytes*100/st.Total)
+		}
+	} else {
+		chunk := st.Bytes / (256 << 20)
+		if chunk > *lastChunk {
+			*lastChunk = chunk
+			fmt.Fprintf(errw, "downloading %s: %s\n", filename, humanBytes(st.Bytes))
+		}
+	}
+}
+
 // startDownload resolves the destination, enqueues a download, and either
 // returns immediately (printing the id) or blocks until the download reaches a
 // terminal state when wait is true.
-func startDownload(out io.Writer, mgr downloadManager, hub hubClient, searchPath, repoID, filename string, snapshot, wait bool) error {
+func startDownload(out io.Writer, errw io.Writer, mgr downloadManager, hub hubClient, searchPath, repoID, filename string, snapshot, wait bool) error {
 	if searchPath == "" {
 		return fmt.Errorf("no model search path configured (set models.search_paths)")
 	}
@@ -82,8 +103,14 @@ func startDownload(out io.Writer, mgr downloadManager, hub hubClient, searchPath
 		return nil
 	}
 
+	lastDecile := -1
+	lastChunk := int64(-1)
 	for ev := range sub {
-		if ev.ID != id || !ev.State.Status.IsTerminal() {
+		if ev.ID != id {
+			continue
+		}
+		if !ev.State.Status.IsTerminal() {
+			printDownloadProgress(errw, filename, ev.State, &lastDecile, &lastChunk)
 			continue
 		}
 		if ev.State.Status == downloadmgr.StatusCompleted {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,7 +65,7 @@ func TestStartDownload_SingleFile(t *testing.T) {
 	root := tempSearchPath(t)
 	mgr := &fakeDLManager{}
 	var out bytes.Buffer
-	err := startDownload(&out, mgr, &fakeHub{}, root, "org/model", "model.gguf", false, false)
+	err := startDownload(&out, io.Discard, mgr, &fakeHub{}, root, "org/model", "model.gguf", false, false)
 	if err != nil {
 		t.Fatalf("startDownload: %v", err)
 	}
@@ -87,7 +88,7 @@ func TestStartDownload_Snapshot(t *testing.T) {
 	root := tempSearchPath(t)
 	mgr := &fakeDLManager{}
 	var out bytes.Buffer
-	if err := startDownload(&out, mgr, &fakeHub{}, root, "org/model", "file.bin", true, false); err != nil {
+	if err := startDownload(&out, io.Discard, mgr, &fakeHub{}, root, "org/model", "file.bin", true, false); err != nil {
 		t.Fatalf("startDownload: %v", err)
 	}
 	want := filepath.Join(root, "org", "model", "file.bin")
@@ -98,7 +99,7 @@ func TestStartDownload_Snapshot(t *testing.T) {
 
 func TestStartDownload_NoSearchPath(t *testing.T) {
 	var out bytes.Buffer
-	if err := startDownload(&out, &fakeDLManager{}, &fakeHub{}, "", "org/m", "f.gguf", false, false); err == nil {
+	if err := startDownload(&out, io.Discard, &fakeDLManager{}, &fakeHub{}, "", "org/m", "f.gguf", false, false); err == nil {
 		t.Fatal("expected error when search path is empty")
 	}
 }
@@ -113,7 +114,7 @@ func TestStartDownload_AlreadyExists(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := startDownload(&out, &fakeDLManager{}, &fakeHub{}, root, "org/m", "f.gguf", false, false); err == nil {
+	if err := startDownload(&out, io.Discard, &fakeDLManager{}, &fakeHub{}, root, "org/m", "f.gguf", false, false); err == nil {
 		t.Fatal("expected error when destination already exists")
 	}
 }
@@ -123,7 +124,7 @@ func TestStartDownload_WaitCompletes(t *testing.T) {
 	mgr := &fakeDLManager{nextID: "dl-7", events: make(chan downloadmgr.Event, 4)}
 	mgr.events <- downloadmgr.Event{ID: "dl-7", State: downloadmgr.State{Status: downloadmgr.StatusCompleted}}
 	var out bytes.Buffer
-	if err := startDownload(&out, mgr, &fakeHub{}, root, "org/m", "f.gguf", false, true); err != nil {
+	if err := startDownload(&out, io.Discard, mgr, &fakeHub{}, root, "org/m", "f.gguf", false, true); err != nil {
 		t.Fatalf("startDownload wait: %v", err)
 	}
 	if !strings.Contains(out.String(), "completed") {
@@ -136,7 +137,7 @@ func TestStartDownload_WaitFails(t *testing.T) {
 	mgr := &fakeDLManager{nextID: "dl-8", events: make(chan downloadmgr.Event, 4)}
 	mgr.events <- downloadmgr.Event{ID: "dl-8", State: downloadmgr.State{Status: downloadmgr.StatusFailed, Err: errors.New("404 Not Found")}}
 	var out bytes.Buffer
-	err := startDownload(&out, mgr, &fakeHub{}, root, "org/m", "f.gguf", false, true)
+	err := startDownload(&out, io.Discard, mgr, &fakeHub{}, root, "org/m", "f.gguf", false, true)
 	if err == nil || !strings.Contains(err.Error(), "404") {
 		t.Fatalf("expected failure error including reason, got: %v", err)
 	}
@@ -291,5 +292,63 @@ func TestModelDownload_ArgValidation(t *testing.T) {
 	t.Cleanup(func() { rootCmd.SetArgs(nil) })
 	if code := Execute(); code == 0 {
 		t.Fatal("expected non-zero exit for missing filename arg")
+	}
+}
+
+func TestStartDownload_WaitPrintsThrottledProgress(t *testing.T) {
+	root := tempSearchPath(t)
+	mgr := &fakeDLManager{nextID: "dl-p", events: make(chan downloadmgr.Event, 8)}
+	// Deciles 0 (0/1000), 1 (40/1000 → 40%), wait... 5 (500/1000 → 50%)
+	// Events: Bytes 0,40,120,500 then Completed
+	// Decile: 0,   0, 1,   5 → lines at 0, 1 (40%), 5 (50%) = 3 lines
+	mgr.events <- downloadmgr.Event{ID: "dl-p", State: downloadmgr.State{Status: downloadmgr.StatusActive, Bytes: 0, Total: 1000}}
+	mgr.events <- downloadmgr.Event{ID: "dl-p", State: downloadmgr.State{Status: downloadmgr.StatusActive, Bytes: 40, Total: 1000}}
+	mgr.events <- downloadmgr.Event{ID: "dl-p", State: downloadmgr.State{Status: downloadmgr.StatusActive, Bytes: 120, Total: 1000}}
+	mgr.events <- downloadmgr.Event{ID: "dl-p", State: downloadmgr.State{Status: downloadmgr.StatusActive, Bytes: 500, Total: 1000}}
+	mgr.events <- downloadmgr.Event{ID: "dl-p", State: downloadmgr.State{Status: downloadmgr.StatusCompleted, Bytes: 1000, Total: 1000}}
+	close(mgr.events)
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	if err := startDownload(&out, &errOut, mgr, &fakeHub{}, root, "org/m", "f.gguf", false, true); err != nil {
+		t.Fatalf("startDownload: %v", err)
+	}
+	count := strings.Count(errOut.String(), "downloading")
+	if count != 3 {
+		t.Fatalf("expected 3 progress lines (deciles 0,1,5), got %d:\n%s", count, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "(50%)") {
+		t.Fatalf("expected a line with (50%%), got:\n%s", errOut.String())
+	}
+	if strings.Contains(out.String(), "waiting for backend health") {
+		t.Fatalf("progress must not appear on stdout, got: %q", out.String())
+	}
+	if !strings.Contains(out.String(), "completed") {
+		t.Fatalf("expected completed on stdout, got: %q", out.String())
+	}
+}
+
+func TestStartDownload_WaitUnknownTotalProgress(t *testing.T) {
+	root := tempSearchPath(t)
+	mgr := &fakeDLManager{nextID: "dl-q", events: make(chan downloadmgr.Event, 8)}
+	// Total=0 (unknown): chunks of 256 MiB
+	// Bytes: 0 → chunk 0, 300<<20 → chunk 1, then Completed
+	// lastChunk starts at -1, so chunk=0 > -1: line 1; chunk=1 > 0: line 2 = 2 lines
+	mgr.events <- downloadmgr.Event{ID: "dl-q", State: downloadmgr.State{Status: downloadmgr.StatusActive, Bytes: 0, Total: 0}}
+	mgr.events <- downloadmgr.Event{ID: "dl-q", State: downloadmgr.State{Status: downloadmgr.StatusActive, Bytes: int64(300 << 20), Total: 0}}
+	mgr.events <- downloadmgr.Event{ID: "dl-q", State: downloadmgr.State{Status: downloadmgr.StatusCompleted, Bytes: int64(300 << 20), Total: 0}}
+	close(mgr.events)
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	if err := startDownload(&out, &errOut, mgr, &fakeHub{}, root, "org/m", "f.gguf", false, true); err != nil {
+		t.Fatalf("startDownload: %v", err)
+	}
+	count := strings.Count(errOut.String(), "downloading")
+	if count != 2 {
+		t.Fatalf("expected 2 progress lines (chunks 0,1), got %d:\n%s", count, errOut.String())
+	}
+	if strings.Contains(errOut.String(), "/") || strings.Contains(errOut.String(), "%") {
+		t.Fatalf("unknown-total lines must not contain '/' or '%%', got:\n%s", errOut.String())
 	}
 }
