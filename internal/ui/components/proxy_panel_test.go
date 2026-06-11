@@ -272,8 +272,8 @@ func TestProxyPanel_FlashClearMsg(t *testing.T) {
 	if p.flash.Message() == "" {
 		t.Fatal("flash should be set")
 	}
-	at := p.flash.At()
-	p.Update(FlashClearMsg{Tag: "proxy", At: at})
+	items := p.flash.Items()
+	p.Update(FlashClearMsg{Tag: "proxy", Seq: items[len(items)-1].Seq})
 	if p.flash.Message() != "" {
 		t.Errorf("flash should be cleared after FlashClearMsg; got %q", p.flash.Message())
 	}

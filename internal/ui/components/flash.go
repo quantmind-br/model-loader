@@ -21,18 +21,23 @@ const (
 
 // FlashClearMsg is the tea.Msg emitted by the Cmd that Set returns, once
 // the item's lifetime has elapsed. Tag identifies the owning page so
-// unrelated Flash instances ignore it; At is the timestamp the item carried
-// at scheduling so the clear pops exactly that item and nothing newer.
+// unrelated Flash instances ignore it; Seq is the queue sequence number the
+// item carried at scheduling so the clear pops exactly that item and
+// nothing else (timestamps can collide when two messages land in the same
+// Update cycle on a coarse clock). At is kept for display/debugging.
 type FlashClearMsg struct {
 	Tag string
+	Seq uint64
 	At  time.Time
 }
 
 // FlashItem is one queued status message with its severity and timestamp.
+// Seq is the queue-unique identity its clear tick matches on.
 type FlashItem struct {
 	Message string
 	Level   StatusLevel
 	At      time.Time
+	Seq     uint64
 }
 
 // Flash is a value-type auto-clearing status message queue bound to a page
@@ -42,6 +47,7 @@ type FlashItem struct {
 // Update, mirroring the Confirm/Modal idiom in this package.
 type Flash struct {
 	tag   string
+	seq   uint64 // last sequence number handed out; 0 = none yet
 	items []FlashItem
 }
 
@@ -57,7 +63,8 @@ func NewFlash(tag string) Flash {
 // oldest item beyond maxFlashItems, and returns a tea.Cmd that delivers
 // FlashClearMsg for exactly this item after life elapses.
 func (f Flash) push(msg string, level StatusLevel, life time.Duration) (Flash, tea.Cmd) {
-	item := FlashItem{Message: msg, Level: level, At: time.Now()}
+	f.seq++
+	item := FlashItem{Message: msg, Level: level, At: time.Now(), Seq: f.seq}
 	items := make([]FlashItem, 0, len(f.items)+1)
 	items = append(items, f.items...)
 	items = append(items, item)
@@ -66,9 +73,9 @@ func (f Flash) push(msg string, level StatusLevel, life time.Duration) (Flash, t
 	}
 	f.items = items
 	tag := f.tag
-	at := item.At
+	seq, at := item.Seq, item.At
 	return f, tea.Tick(life, func(time.Time) tea.Msg {
-		return FlashClearMsg{Tag: tag, At: at}
+		return FlashClearMsg{Tag: tag, Seq: seq, At: at}
 	})
 }
 
@@ -77,7 +84,7 @@ func (f Flash) push(msg string, level StatusLevel, life time.Duration) (Flash, t
 // into their Update return so bubbletea drives the timer.
 //
 // Setting a new message before a previous tick fires is safe: each tick
-// carries the At of the item it was scheduled for, so it pops only that
+// carries the Seq of the item it was scheduled for, so it pops only that
 // item (or nothing, if the item was already evicted by overflow).
 func (f Flash) Set(message string) (Flash, tea.Cmd) {
 	return f.push(message, StatusInfo, FlashLifetime)
@@ -98,7 +105,7 @@ func (f Flash) SetError(message string) (Flash, tea.Cmd) {
 //
 // Wrong-tag messages are silently dropped so multi-page apps using one
 // Flash instance per page can all receive the global tick without
-// trampling each other. A tick whose At matches no queued item (the item
+// trampling each other. A tick whose Seq matches no queued item (the item
 // was evicted by overflow) is a no-op.
 func (f Flash) Update(msg tea.Msg) (Flash, bool) {
 	cm, ok := msg.(FlashClearMsg)
@@ -109,7 +116,7 @@ func (f Flash) Update(msg tea.Msg) (Flash, bool) {
 		return f, false
 	}
 	for i, it := range f.items {
-		if it.At.Equal(cm.At) {
+		if it.Seq == cm.Seq {
 			// Copy-on-write removal: stale copies keep the old slice.
 			items := make([]FlashItem, 0, len(f.items)-1)
 			items = append(items, f.items[:i]...)
@@ -136,7 +143,7 @@ func (f Flash) View() string {
 	}
 	lines := make([]string, 0, len(f.items))
 	for _, it := range f.items {
-		var style = theme.Subtitle
+		style := theme.Subtitle
 		switch it.Level {
 		case StatusError:
 			style = theme.Error

@@ -1026,8 +1026,8 @@ func TestServerPage_FlashAutoClear(t *testing.T) {
 		t.Fatal("flash should be set after error")
 	}
 
-	at := p.flash.At()
-	p, _ = updateAs[*ServerPage](p, components.FlashClearMsg{Tag: "monitor", At: at})
+	items := p.flash.Items()
+	p, _ = updateAs[*ServerPage](p, components.FlashClearMsg{Tag: "monitor", Seq: items[len(items)-1].Seq})
 	if p.flash.Message() != "" {
 		t.Errorf("flash should be cleared after FlashClearMsg; got %q", p.flash.Message())
 	}

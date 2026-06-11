@@ -531,15 +531,16 @@ func TestProfilesPage_FlashAutoClear(t *testing.T) {
 		t.Fatalf("flash = %q, want hello", page.flash.Message())
 	}
 
-	// Stale clear (mismatching at) should be ignored.
-	updated, _ := page.Update(components.FlashClearMsg{Tag: "profiles", At: time.Time{}})
+	// A clear whose Seq matches no queued item should be ignored.
+	updated, _ := page.Update(components.FlashClearMsg{Tag: "profiles", Seq: 999})
 	page = updated.(ProfilesPage)
 	if page.flash.Message() != "hello" {
 		t.Errorf("stale FlashClearMsg erased current flash; flash=%q", page.flash.Message())
 	}
 
 	// Matching clear erases.
-	updated, _ = page.Update(components.FlashClearMsg{Tag: "profiles", At: page.flash.At()})
+	items := page.flash.Items()
+	updated, _ = page.Update(components.FlashClearMsg{Tag: "profiles", Seq: items[len(items)-1].Seq})
 	page = updated.(ProfilesPage)
 	if page.flash.Message() != "" {
 		t.Errorf("matching FlashClearMsg should clear; flash=%q", page.flash.Message())
@@ -553,7 +554,8 @@ func TestProfilesPage_FlashRenamedClearTagIgnored(t *testing.T) {
 	page, _ = page.withFlash("hello")
 
 	// FlashClearMsg from another page must be ignored.
-	updated, _ := page.Update(components.FlashClearMsg{Tag: "models", At: page.flash.At()})
+	pItems := page.flash.Items()
+	updated, _ := page.Update(components.FlashClearMsg{Tag: "models", Seq: pItems[len(pItems)-1].Seq})
 	page = updated.(ProfilesPage)
 	if page.flash.Message() != "hello" {
 		t.Errorf("cross-tag FlashClearMsg erased flash; flash=%q", page.flash.Message())

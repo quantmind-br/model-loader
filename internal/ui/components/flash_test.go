@@ -72,7 +72,7 @@ func TestFlash_SetCmdEmitsFlashClearMsg(t *testing.T) {
 func TestFlash_UpdateMatchingClears(t *testing.T) {
 	f := NewFlash("profiles")
 	f, _ = f.Set("hello")
-	cleared, handled := f.Update(FlashClearMsg{Tag: "profiles", At: f.At()})
+	cleared, handled := f.Update(FlashClearMsg{Tag: "profiles", Seq: lastSeq(f)})
 	if !handled {
 		t.Error("Update reported handled=false for matching clear")
 	}
@@ -87,9 +87,8 @@ func TestFlash_UpdateMatchingClears(t *testing.T) {
 func TestFlash_UpdateStaleIsIgnored(t *testing.T) {
 	f := NewFlash("profiles")
 	f, _ = f.Set("hello")
-	staleAt := f.At().Add(-time.Second)
-
-	updated, handled := f.Update(FlashClearMsg{Tag: "profiles", At: staleAt})
+	// A Seq that matches no queued item (e.g. an evicted item's tick).
+	updated, handled := f.Update(FlashClearMsg{Tag: "profiles", Seq: lastSeq(f) + 1})
 	if handled {
 		t.Error("Update reported handled=true for stale clear")
 	}
@@ -102,7 +101,7 @@ func TestFlash_UpdateWrongTagIsIgnored(t *testing.T) {
 	f := NewFlash("profiles")
 	f, _ = f.Set("hello")
 
-	updated, handled := f.Update(FlashClearMsg{Tag: "models", At: f.At()})
+	updated, handled := f.Update(FlashClearMsg{Tag: "models", Seq: lastSeq(f)})
 	if handled {
 		t.Error("Update reported handled=true for wrong tag")
 	}
@@ -193,10 +192,10 @@ func TestFlash_OverflowDropsOldest(t *testing.T) {
 func TestFlash_PerItemClearPopsOnlyItsItem(t *testing.T) {
 	f := NewFlash("profiles")
 	f, _ = f.Set("A")
-	atA := f.At()
+	seqA := lastSeq(f)
 	f, _ = f.Set("B")
 
-	cleared, handled := f.Update(FlashClearMsg{Tag: "profiles", At: atA})
+	cleared, handled := f.Update(FlashClearMsg{Tag: "profiles", Seq: seqA})
 	if !handled {
 		t.Error("Update reported handled=false for A's clear")
 	}
@@ -206,7 +205,7 @@ func TestFlash_PerItemClearPopsOnlyItsItem(t *testing.T) {
 	}
 
 	// A second delivery of the same tick (A already popped) is a no-op.
-	again, handled := cleared.Update(FlashClearMsg{Tag: "profiles", At: atA})
+	again, handled := cleared.Update(FlashClearMsg{Tag: "profiles", Seq: seqA})
 	if handled {
 		t.Error("Update reported handled=true for an already-popped item")
 	}
@@ -249,4 +248,14 @@ func TestFlash_ItemsReturnsIsolatedCopy(t *testing.T) {
 	if NewFlash("empty").Items() != nil {
 		t.Error("Items on empty Flash should be nil")
 	}
+}
+
+// lastSeq returns the Seq of the most recently pushed item, mirroring what
+// the item's own clear tick will carry.
+func lastSeq(f Flash) uint64 {
+	items := f.Items()
+	if len(items) == 0 {
+		return 0
+	}
+	return items[len(items)-1].Seq
 }
