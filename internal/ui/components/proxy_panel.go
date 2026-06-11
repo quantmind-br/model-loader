@@ -156,9 +156,16 @@ func (p *ProxyPanel) View() string {
 	var lines []string
 
 	var statusStr string
-	if p.status.Running {
+	switch {
+	case theme.NoColor() && p.status.Running:
+		// Without color the ●/○ glyphs are indistinguishable at a glance;
+		// fall back to plain ASCII markers.
+		statusStr = "[+] RUNNING"
+	case theme.NoColor():
+		statusStr = "[-] STOPPED"
+	case p.status.Running:
 		statusStr = theme.OK.Render("● RUNNING")
-	} else {
+	default:
 		statusStr = theme.Error.Render("○ STOPPED")
 	}
 	addr := p.status.Addr

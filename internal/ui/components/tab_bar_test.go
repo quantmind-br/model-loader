@@ -3,6 +3,8 @@ package components
 import (
 	"strings"
 	"testing"
+
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 func TestTabBar_AllFit(t *testing.T) {
@@ -141,5 +143,37 @@ func TestTabBar_EachLabelOnce(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// Under NO_COLOR the active tab is bracketed and the scroll indicators
+// default to ASCII "<"/">" since color alone can't carry the distinction.
+func TestTabBar_ASCIIFallbacksUnderNoColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	theme.RebuildStyles()
+	defer func() {
+		t.Setenv("NO_COLOR", "")
+		theme.RebuildStyles()
+	}()
+
+	out := TabBar(TabBarOptions{
+		Labels:         []string{"Tab1", "Tab2", "Tab3"},
+		ActiveIndex:    1,
+		AvailableWidth: 80,
+	})
+	if !strings.Contains(out, "[Tab2]") {
+		t.Errorf("NO_COLOR active tab not bracketed: %q", out)
+	}
+
+	overflow := TabBar(TabBarOptions{
+		Labels:         []string{"FirstTab", "SecondTab", "ThirdTab", "FourthTab", "FifthTab"},
+		ActiveIndex:    2,
+		AvailableWidth: 25,
+	})
+	if !strings.Contains(overflow, "<") || !strings.Contains(overflow, ">") {
+		t.Errorf("NO_COLOR overflow missing ASCII indicators: %q", overflow)
+	}
+	if strings.Contains(overflow, "‹") || strings.Contains(overflow, "›") {
+		t.Errorf("NO_COLOR overflow still uses Unicode indicators: %q", overflow)
 	}
 }

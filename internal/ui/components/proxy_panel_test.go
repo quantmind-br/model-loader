@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 type fakeHTTPProxy struct {
@@ -338,5 +339,26 @@ func TestProxyPanel_WidthInvariant(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Under NO_COLOR the colored ●/○ status glyphs are indistinguishable;
+// the panel must fall back to plain ASCII "[+] RUNNING" / "[-] STOPPED".
+func TestProxyPanel_StatusMarkersUnderNoColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	theme.RebuildStyles()
+	defer func() {
+		t.Setenv("NO_COLOR", "")
+		theme.RebuildStyles()
+	}()
+
+	running := NewProxyPanel(&fakeHTTPProxy{status: httpproxy.Status{Running: true, Addr: "127.0.0.1:4321"}})
+	if out := running.View(); !strings.Contains(out, "[+] RUNNING") {
+		t.Errorf("NO_COLOR running view missing '[+] RUNNING'; got:\n%s", out)
+	}
+
+	stopped := NewProxyPanel(&fakeHTTPProxy{status: httpproxy.Status{Running: false}})
+	if out := stopped.View(); !strings.Contains(out, "[-] STOPPED") {
+		t.Errorf("NO_COLOR stopped view missing '[-] STOPPED'; got:\n%s", out)
 	}
 }

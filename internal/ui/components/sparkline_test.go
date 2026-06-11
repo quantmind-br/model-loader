@@ -1,6 +1,10 @@
 package components
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
+)
 
 func TestSparkline_EmptyReturnsBlanks(t *testing.T) {
 	got := Sparkline(nil, 5)
@@ -22,5 +26,23 @@ func TestSparkline_FlatLineUsesLowestBar(t *testing.T) {
 	got := Sparkline([]float64{1, 1, 1, 1, 1}, 5)
 	if got != "▁▁▁▁▁" {
 		t.Fatalf("flat sparkline = %q", got)
+	}
+}
+
+// Under NO_COLOR the Unicode block ramp degrades to the ASCII ramp.
+func TestSparkline_ASCIIRampUnderNoColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	theme.RebuildStyles()
+	defer func() {
+		t.Setenv("NO_COLOR", "")
+		theme.RebuildStyles()
+	}()
+
+	got := Sparkline([]float64{0, 0, 1, 1, 2, 2, 3, 3, 4, 4}, 5)
+	if got != "_.-+#" {
+		t.Fatalf("NO_COLOR sparkline = %q, want %q", got, "_.-+#")
+	}
+	if flat := Sparkline([]float64{1, 1, 1}, 3); flat != "___" {
+		t.Fatalf("NO_COLOR flat sparkline = %q, want %q", flat, "___")
 	}
 }

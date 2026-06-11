@@ -1,10 +1,20 @@
 package components
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
+)
 
 var sparkBars = []rune{'▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
 
-// Sparkline renders values into width columns using 8 ASCII bars.
+// asciiBars is the NO_COLOR fallback ramp: terminals that ask for color
+// suppression are often the ones without good Unicode block support, so we
+// degrade to a pure-ASCII 8-step ramp.
+var asciiBars = []rune{'_', '.', ':', '-', '=', '+', '*', '#'}
+
+// Sparkline renders values into width columns using an 8-step Unicode
+// block ramp (▁..█), falling back to an ASCII ramp (_..#) under NO_COLOR.
 // Empty input returns width spaces. Flat line uses the lowest bar.
 func Sparkline(values []float64, width int) string {
 	if width <= 0 {
@@ -12,6 +22,10 @@ func Sparkline(values []float64, width int) string {
 	}
 	if len(values) == 0 {
 		return strings.Repeat(" ", width)
+	}
+	bars := sparkBars
+	if theme.NoColor() {
+		bars = asciiBars
 	}
 	buckets := make([]float64, width)
 	bucketCount := make([]int, width)
@@ -44,15 +58,15 @@ func Sparkline(values []float64, width int) string {
 		if rng == 0 {
 			idx = 0
 		} else {
-			idx = int((v - min) / rng * float64(len(sparkBars)-1))
+			idx = int((v - min) / rng * float64(len(bars)-1))
 			if idx < 0 {
 				idx = 0
 			}
-			if idx >= len(sparkBars) {
-				idx = len(sparkBars) - 1
+			if idx >= len(bars) {
+				idx = len(bars) - 1
 			}
 		}
-		b.WriteRune(sparkBars[idx])
+		b.WriteRune(bars[idx])
 	}
 	return b.String()
 }

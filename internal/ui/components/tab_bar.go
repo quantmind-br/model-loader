@@ -45,11 +45,17 @@ func TabBar(opts TabBarOptions) string {
 // applyTabBarDefaults fills missing TabBarOptions fields with package
 // defaults (separator, colors, padding) and returns the result.
 func applyTabBarDefaults(opts TabBarOptions) TabBarOptions {
+	// Under NO_COLOR prefer plain ASCII arrows: the ‹/› glyphs are easy to
+	// miss (and may render poorly) on the terminals that disable color.
+	left, right := "‹", "›"
+	if theme.NoColor() {
+		left, right = "<", ">"
+	}
 	if opts.LeftIndicator == "" {
-		opts.LeftIndicator = "‹"
+		opts.LeftIndicator = left
 	}
 	if opts.RightIndicator == "" {
-		opts.RightIndicator = "›"
+		opts.RightIndicator = right
 	}
 	return opts
 }
@@ -61,6 +67,12 @@ func renderTabLabels(opts TabBarOptions) []string {
 	labels := make([]string, len(opts.Labels))
 	for i, label := range opts.Labels {
 		if i == opts.ActiveIndex {
+			if theme.NoColor() {
+				// Color can't mark the active tab; brackets do. Wrapped
+				// before styling so downstream width math (lipgloss.Width
+				// over rendered labels) stays correct.
+				label = "[" + label + "]"
+			}
 			labels[i] = theme.TabActive.Render(label)
 		} else {
 			labels[i] = theme.TabInactive.Render(label)
