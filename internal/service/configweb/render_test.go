@@ -54,6 +54,38 @@ func TestConfigureRendersDescriptionAndTags(t *testing.T) {
 	}
 }
 
+func TestIndexRendersIssuesLiveRegion(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	s := &Session{deps: Deps{
+		Schemas:      stubSchemaStore{schema: schema},
+		Catalog:      stubCatalog{id: "llama", ref: "llama.json"},
+		InitialDraft: Draft{ID: "p", Name: "P", BackendID: "llama"},
+	}}
+	rec := httptest.NewRecorder()
+	s.handleIndex(rec, httptest.NewRequest("GET", "/", nil))
+	body := rec.Body.String()
+	for _, want := range []string{`id="issues"`, `role="status"`, `aria-live="polite"`, `aria-atomic="true"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("index page missing %s on the issues live region", want)
+		}
+	}
+}
+
+func TestBackendPageRendersIssuesLiveRegion(t *testing.T) {
+	s := &Session{deps: Deps{InitialBackendDraft: BackendDraft{IsNew: true}}}
+	rec := httptest.NewRecorder()
+	s.handleBackendIndex(rec, httptest.NewRequest("GET", "/backend/", nil))
+	body := rec.Body.String()
+	for _, want := range []string{`id="issues"`, `role="status"`, `aria-live="polite"`, `aria-atomic="true"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("backend page missing %s on the issues live region", want)
+		}
+	}
+}
+
 func TestIndexRendersGroupedFields(t *testing.T) {
 	schema := domain.BackendValidationSchema{
 		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",

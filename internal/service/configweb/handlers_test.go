@@ -1,6 +1,7 @@
 package configweb
 
 import (
+	"errors"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -22,6 +23,15 @@ func (s stubSchemaStore) Load(ref string) (domain.BackendValidationSchema, error
 }
 func (s stubSchemaStore) Save(ref string, sch domain.BackendValidationSchema) error { return nil }
 func (s stubSchemaStore) Delete(ref string) error                                   { return nil }
+
+// failingSchemaStore always fails to load — simulates a corrupt/missing schema.
+type failingSchemaStore struct{}
+
+func (failingSchemaStore) Load(ref string) (domain.BackendValidationSchema, error) {
+	return domain.BackendValidationSchema{}, errors.New("schema load boom")
+}
+func (failingSchemaStore) Save(ref string, sch domain.BackendValidationSchema) error { return nil }
+func (failingSchemaStore) Delete(ref string) error                                   { return nil }
 
 type stubCatalog struct {
 	id  string
@@ -359,10 +369,92 @@ func TestSaveHandler_BlocksOnValidationError(t *testing.T) {
 	if _, err := ps.Get("blocked-profile"); err == nil {
 		t.Fatal("profile should not have been persisted when validation fails")
 	}
-	// Must render the #issues partial.
+	// Must render the issues partial (inner content for the live region).
 	body := rec.Body.String()
-	if !strings.Contains(body, `id="issues"`) {
-		t.Fatalf("expected issues partial in body, got: %s", body)
+	if !strings.Contains(body, `class="issue error"`) {
+		t.Fatalf("expected issue error in body, got: %s", body)
+	}
+}
+
+func TestValidateHandler_SchemaLoadFailureRendersIssue(t *testing.T) {
+	// htmx ignores non-2xx swap bodies, so a schema-load failure must come back
+	// as a 200 issue partial — never http.Error — or #issues silently goes stale.
+	s := &Session{deps: Deps{Schemas: failingSchemaStore{}, Catalog: stubCatalog{id: "llama", ref: "llama.json"}}}
+	form := url.Values{"backendId": {"llama"}}
+	req := httptest.NewRequest("POST", "/validate", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleValidate(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("expected 200 so htmx swaps the issue into #issues, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `class="issue error"`) || !strings.Contains(body, "schema load boom") {
+		t.Fatalf("expected issue div with the load error, got: %s", body)
+	}
+}
+
+func TestSaveHandler_SchemaLoadFailureRendersIssue(t *testing.T) {
+	s := &Session{
+		deps: Deps{Profiles: newMemProfileStore(), Schemas: failingSchemaStore{}, Catalog: stubCatalog{id: "llama", ref: "llama.json"}},
+		done: make(chan Result, 1),
+	}
+	form := url.Values{
+		"isNew": {"true"}, "id": {"p"}, "name": {"P"},
+		"backendId": {"llama"}, "model": {"/m.gguf"},
+	}
+	req := httptest.NewRequest("POST", "/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleSave(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("expected 200 so htmx swaps the issue into #issues, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("HX-Redirect"); got != "" {
+		t.Fatalf("expected no HX-Redirect on failed save, got %q", got)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `class="issue error"`) || !strings.Contains(body, "schema load boom") {
+		t.Fatalf("expected issue div with the load error, got: %s", body)
+	}
+}
+
+func TestValidateHandler_PartialOmitsIssuesContainer(t *testing.T) {
+	// The /validate partial must be inner content only: the persistent #issues
+	// div in the page carries aria-live, and replacing it (oob outerHTML swap)
+	// would kill screen-reader announcements.
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	s := &Session{deps: Deps{Schemas: stubSchemaStore{schema: schema}, Catalog: stubCatalog{id: "llama", ref: "llama.json"}}}
+	form := url.Values{"backendId": {"llama"}, "model": {"/m.gguf"}, "name": {"P"}, "id": {"p"}}
+	req := httptest.NewRequest("POST", "/validate", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleValidate(rec, req)
+	body := rec.Body.String()
+	if strings.Contains(body, `id="issues"`) {
+		t.Fatalf("validate partial must not contain the #issues container: %s", body)
+	}
+	if strings.Contains(body, "hx-swap-oob") {
+		t.Fatalf("validate partial must not use an oob swap: %s", body)
+	}
+}
+
+func TestBackendValidateHandler_PartialOmitsIssuesContainer(t *testing.T) {
+	s := &Session{deps: Deps{}}
+	form := url.Values{"name": {""}, "executable": {""}}
+	req := httptest.NewRequest("POST", "/backend/validate", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleBackendValidate(rec, req)
+	body := rec.Body.String()
+	if strings.Contains(body, `id="issues"`) || strings.Contains(body, "hx-swap-oob") {
+		t.Fatalf("backend validate partial must be inner content only: %s", body)
+	}
+	if !strings.Contains(body, `class="issue error"`) {
+		t.Fatalf("expected validation issues for empty backend form: %s", body)
 	}
 }
 

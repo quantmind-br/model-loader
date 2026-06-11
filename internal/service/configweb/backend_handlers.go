@@ -72,8 +72,7 @@ func (s *Session) handleBackendSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if berr != nil {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(`<div class="issue error">` + html.EscapeString(berr.Error()) + `</div>`))
+		renderIssueError(w, berr.Error())
 		return
 	}
 	w.Header().Set("HX-Redirect", "/backend/closed")
@@ -105,15 +104,15 @@ func (s *Session) handleBackendValidate(w http.ResponseWriter, r *http.Request) 
 	if d.Kind == "" {
 		issues = append(issues, "Kind is required")
 	}
+	// Inner content only: the page's persistent #issues element carries the
+	// aria-live attributes and must never be replaced wholesale.
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	var b strings.Builder
-	b.WriteString(`<div id="issues" hx-swap-oob="true">`)
 	if len(issues) == 0 {
 		b.WriteString(`<span class="ok">✓ valid</span>`)
 	}
 	for _, e := range issues {
 		b.WriteString(`<div class="issue error">` + html.EscapeString(e) + `</div>`)
 	}
-	b.WriteString(`</div>`)
 	_, _ = w.Write([]byte(b.String()))
 }

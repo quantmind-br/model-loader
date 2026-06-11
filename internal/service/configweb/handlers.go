@@ -73,7 +73,7 @@ func (s *Session) handleValidate(w http.ResponseWriter, r *http.Request) {
 	d := draftFromForm(r)
 	schema, err := s.loadSchema(d.BackendID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		renderIssueError(w, err.Error())
 		return
 	}
 	fs := schema.ToFlagSchema()
@@ -82,11 +82,13 @@ func (s *Session) handleValidate(w http.ResponseWriter, r *http.Request) {
 	renderIssues(w, rep)
 }
 
-// renderIssues writes an HTMX partial listing errors and warnings.
+// renderIssues writes an HTMX partial listing errors and warnings. It emits
+// inner content only — the persistent #issues element in the page carries the
+// aria-live attributes, and replacing it (e.g. via an oob outerHTML swap)
+// would silence screen-reader announcements.
 func renderIssues(w http.ResponseWriter, rep validator.Report) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	var b strings.Builder
-	b.WriteString(`<div id="issues" hx-swap-oob="true">`)
 	if len(rep.Errors) == 0 && len(rep.Warnings) == 0 {
 		b.WriteString(`<span class="ok">✓ valid</span>`)
 	}
@@ -96,8 +98,15 @@ func renderIssues(w http.ResponseWriter, rep validator.Report) {
 	for _, wn := range rep.Warnings {
 		b.WriteString(`<div class="issue warn" data-field="` + htmlEscape(wn.Field) + `">` + htmlEscape(wn.Field) + `: ` + htmlEscape(wn.Message) + `</div>`)
 	}
-	b.WriteString(`</div>`)
 	_, _ = w.Write([]byte(b.String()))
+}
+
+// renderIssueError writes a single blocking issue into the #issues status
+// region (200, not http.Error) so failures surface in the UI instead of a
+// silently-ignored 4xx response.
+func renderIssueError(w http.ResponseWriter, msg string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(`<div class="issue error">` + htmlEscape(msg) + `</div>`))
 }
 
 func htmlEscape(s string) string {
@@ -140,7 +149,7 @@ func (s *Session) handleSave(w http.ResponseWriter, r *http.Request) {
 	}
 	schema, err := s.loadSchema(d.BackendID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		renderIssueError(w, err.Error())
 		return
 	}
 	fs := schema.ToFlagSchema()
@@ -177,8 +186,7 @@ func (s *Session) handleSave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if perr != nil {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(`<div id="issues" hx-swap-oob="true"><div class="issue error">` + htmlEscape(perr.Error()) + `</div></div>`))
+		renderIssueError(w, perr.Error())
 		return
 	}
 	w.Header().Set("HX-Redirect", "/closed")

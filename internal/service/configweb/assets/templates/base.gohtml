@@ -32,7 +32,7 @@
     <div x-show="mode==='customize'">{{block "customize" .}}{{end}}</div>
   </section>
 </main>
-<footer class="statusbar"><div id="issues"><span class="ok">✓ valid</span></div></footer>
+<footer class="statusbar"><div id="issues" role="status" aria-live="polite" aria-atomic="true"><span class="ok">✓ valid</span></div></footer>
 <div class="toast-root" x-data="toastHost()" x-init="init()">
   <template x-for="t in items" :key="t.id">
     <div class="toast" :class="t.type" x-text="t.msg"></div>
@@ -73,11 +73,21 @@ function decorateIssues() {
 document.addEventListener('htmx:afterSwap', function (e) {
   if (e.target && e.target.id === 'issues') {
     decorateIssues();
-    if (e.detail && e.detail.requestConfig && e.detail.requestConfig.path === '/save'
-        && document.querySelectorAll('#issues .issue.error').length > 0) {
-      window.dispatchEvent(new CustomEvent('toast', {detail:{msg:'Fix errors before saving',type:'error'}}));
+    if (e.detail && e.detail.requestConfig && e.detail.requestConfig.path === '/save') {
+      var n = document.querySelectorAll('#issues .issue.error').length;
+      if (n > 0) {
+        var msg = n === 1 ? '1 error — fix it before saving' : n + ' errors — fix them before saving';
+        window.dispatchEvent(new CustomEvent('toast', {detail:{msg:msg,type:'error'}}));
+      }
     }
   }
+});
+
+// Surface non-2xx responses (htmx ignores their bodies for swaps) as a toast
+// so failures from remaining http.Error paths are never silent.
+document.addEventListener('htmx:responseError', function (e) {
+  var msg = (e.detail && e.detail.xhr && e.detail.xhr.responseText) || 'Request failed';
+  window.dispatchEvent(new CustomEvent('toast', {detail:{msg:msg,type:'error'}}));
 });
 
 function toastHost(){return{

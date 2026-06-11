@@ -60,7 +60,7 @@
     </form>
   </section>
 </main>
-<footer class="statusbar"><div id="issues"><span class="ok">✓ valid</span></div></footer>
+<footer class="statusbar"><div id="issues" role="status" aria-live="polite" aria-atomic="true"><span class="ok">✓ valid</span></div></footer>
 <div class="toast-root" x-data="toastHost()" x-init="init()">
   <template x-for="t in items" :key="t.id">
     <div class="toast" :class="t.type" x-text="t.msg"></div>
@@ -72,6 +72,12 @@ function toastHost(){return{
   init(){var self=this;window.addEventListener('toast',function(e){self.push(e.detail.msg,e.detail.type||'info');});},
   push(msg,type){var id=Date.now()+Math.random();this.items.push({id:id,msg:msg,type:type});var self=this;setTimeout(function(){self.items=self.items.filter(function(x){return x.id!==id});},2600);}
 }}
+// Surface non-2xx responses (htmx ignores their bodies for swaps) as a toast
+// so failures from remaining http.Error paths are never silent.
+document.addEventListener('htmx:responseError', function (e) {
+  var msg = (e.detail && e.detail.xhr && e.detail.xhr.responseText) || 'Request failed';
+  window.dispatchEvent(new CustomEvent('toast', {detail:{msg:msg,type:'error'}}));
+});
 </script>
 </body>
 </html>{{end}}
