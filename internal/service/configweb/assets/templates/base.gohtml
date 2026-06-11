@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="htmx-config" content='{"timeout":10000}'>
 <title>{{.Draft.Name}} · model-loader</title>
 <link rel="stylesheet" href="/static/app.css">
 <script src="/static/htmx.min.js"></script>
@@ -12,7 +13,7 @@
   @input.capture="dirty=true"
   @keydown.window.prevent.ctrl.s="if(mode==='configure') document.querySelector('header .actions .primary').click()"
   @keydown.window.prevent.meta.s="if(mode==='configure') document.querySelector('header .actions .primary').click()"
-  @keydown.window.escape="if(!dirty || confirm('Discard unsaved changes?')) htmx.ajax('POST','/cancel',{})"
+  @keydown.window.escape="htmx.ajax('POST','/cancel',{})"
   @keydown.window.slash="if(mode==='configure' && document.activeElement.tagName!=='INPUT' && document.activeElement.tagName!=='SELECT' && document.activeElement.tagName!=='TEXTAREA'){$event.preventDefault(); if($refs.search) $refs.search.focus();}">
 <header class="topbar">
   <div class="title">{{.Draft.Name}} <span class="muted">· {{.Draft.BackendID}}</span></div>
@@ -31,8 +32,8 @@
       @keydown.left.prevent="mode='configure'; $nextTick(()=>document.getElementById('mode-tab-configure').focus())">Customize</button>
   </nav>
   <div class="actions">
-    <button class="ghost" hx-post="/cancel">Cancel</button>
-    <button type="button" class="primary" hx-post="/save" hx-include="#profile-form" hx-target="#issues">Save</button>
+    <button class="ghost" hx-post="/cancel" hx-disabled-elt="this">Cancel</button>
+    <button type="button" class="primary" hx-post="/save" hx-include="#profile-form" hx-target="#issues" hx-disabled-elt="this" hx-indicator="this"><span class="spinner htmx-indicator" aria-hidden="true"></span>Save</button>
   </div>
 </header>
 <main class="layout" :class="{'no-sidebar': mode!=='configure' || search.trim()!==''}">
@@ -98,6 +99,36 @@ document.addEventListener('htmx:afterSwap', function (e) {
 document.addEventListener('htmx:responseError', function (e) {
   var msg = (e.detail && e.detail.xhr && e.detail.xhr.responseText) || 'Request failed';
   window.dispatchEvent(new CustomEvent('toast', {detail:{msg:msg,type:'error'}}));
+});
+
+// Requests aborted by the global htmx timeout (htmx-config meta) never reach
+// responseError — surface them explicitly.
+document.body.addEventListener('htmx:timeout', function () {
+  window.dispatchEvent(new CustomEvent('toast', {detail:{msg:'Request timed out — try again',type:'error'}}));
+});
+
+// A successful save/cancel navigates away via HX-Redirect; that departure is
+// intentional and must not trip the unsaved-changes prompt.
+var leavingIntentionally = false;
+document.body.addEventListener('htmx:beforeOnLoad', function (e) {
+  if (e.detail.xhr.getResponseHeader('HX-Redirect')) leavingIntentionally = true;
+});
+window.addEventListener('beforeunload', function (e) {
+  if (leavingIntentionally) return;
+  var data = window.Alpine ? Alpine.$data(document.body) : null;
+  if (data && data.dirty) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// Single source of truth for "discard unsaved edits?": htmx fires htmx:confirm
+// for every request (Cancel button and the Escape-key htmx.ajax alike), so the
+// dirty prompt lives here instead of being duplicated per trigger.
+document.body.addEventListener('htmx:confirm', function (e) {
+  if (e.detail.path !== '/cancel') return;
+  var data = window.Alpine ? Alpine.$data(document.body) : null;
+  if (data && data.dirty) {
+    e.preventDefault();
+    if (confirm('Discard unsaved changes?')) e.detail.issueRequest();
+  }
 });
 
 function toastHost(){return{

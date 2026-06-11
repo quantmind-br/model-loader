@@ -3,17 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="htmx-config" content='{"timeout":10000}'>
 <title>{{if .Draft.Name}}{{.Draft.Name}}{{else}}New Backend{{end}} · model-loader</title>
 <link rel="stylesheet" href="/static/app.css">
 <script src="/static/htmx.min.js"></script>
 <script defer src="/static/alpine.min.js"></script>
 </head>
-<body>
+<body x-data="{dirty:false}" @input.capture="dirty=true">
 <header class="topbar">
   <div class="title">{{if .Draft.Name}}{{.Draft.Name}}{{else}}New Backend{{end}} <span class="muted">· backend</span></div>
   <div class="actions">
-    <button class="ghost" hx-post="/backend/cancel">Cancel</button>
-    <button class="primary" form="backend-form" hx-post="/backend/save" hx-target="#issues">Save</button>
+    <button class="ghost" hx-post="/backend/cancel" hx-disabled-elt="this">Cancel</button>
+    <button class="primary" form="backend-form" hx-post="/backend/save" hx-target="#issues" hx-disabled-elt="this" hx-indicator="this"><span class="spinner htmx-indicator" aria-hidden="true"></span>Save</button>
   </div>
 </header>
 <main class="layout no-sidebar">
@@ -77,6 +78,29 @@ function toastHost(){return{
 document.addEventListener('htmx:responseError', function (e) {
   var msg = (e.detail && e.detail.xhr && e.detail.xhr.responseText) || 'Request failed';
   window.dispatchEvent(new CustomEvent('toast', {detail:{msg:msg,type:'error'}}));
+});
+document.body.addEventListener('htmx:timeout', function () {
+  window.dispatchEvent(new CustomEvent('toast', {detail:{msg:'Request timed out — try again',type:'error'}}));
+});
+// A successful save/cancel navigates away via HX-Redirect; that departure is
+// intentional and must not trip the unsaved-changes prompt.
+var leavingIntentionally = false;
+document.body.addEventListener('htmx:beforeOnLoad', function (e) {
+  if (e.detail.xhr.getResponseHeader('HX-Redirect')) leavingIntentionally = true;
+});
+window.addEventListener('beforeunload', function (e) {
+  if (leavingIntentionally) return;
+  var data = window.Alpine ? Alpine.$data(document.body) : null;
+  if (data && data.dirty) { e.preventDefault(); e.returnValue = ''; }
+});
+// Confirm discarding unsaved edits when cancelling.
+document.body.addEventListener('htmx:confirm', function (e) {
+  if (e.detail.path !== '/backend/cancel') return;
+  var data = window.Alpine ? Alpine.$data(document.body) : null;
+  if (data && data.dirty) {
+    e.preventDefault();
+    if (confirm('Discard unsaved changes?')) e.detail.issueRequest();
+  }
 });
 </script>
 </body>

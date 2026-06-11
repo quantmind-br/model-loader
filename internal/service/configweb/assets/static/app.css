@@ -869,6 +869,27 @@ button.secondary:hover{
   box-shadow:0 0 0 3px var(--err-dim);
 }
 
+/* ── Busy indicators ── */
+.spinner{
+  display:inline-block;
+  width:14px;
+  height:14px;
+  border:2px solid currentColor;
+  border-right-color:transparent;
+  border-radius:50%;
+  animation:spin .6s linear infinite;
+  vertical-align:-2px;
+  margin-right:var(--sp-2);
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.htmx-indicator{display:none}
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator{display:inline-block}
+button[disabled]{opacity:.6;cursor:not-allowed}
+@media (prefers-reduced-motion:reduce){
+  .spinner{animation-duration:1.5s}
+}
+
 /* ── Backend switch confirmation banner ── */
 .switch-confirm{
   margin-bottom:var(--sp-6);

@@ -202,6 +202,72 @@ func TestBackendPageRendersIssuesLiveRegion(t *testing.T) {
 	}
 }
 
+// extractTag returns the full opening tag surrounding the first occurrence of
+// marker (an attribute unique to that tag).
+func extractTag(t *testing.T, body, marker string) string {
+	t.Helper()
+	i := strings.Index(body, marker)
+	if i < 0 {
+		t.Fatalf("marker %s not found in body", marker)
+	}
+	start := strings.LastIndex(body[:i], "<")
+	end := strings.Index(body[i:], ">")
+	if start < 0 || end < 0 {
+		t.Fatalf("malformed tag around %s", marker)
+	}
+	return body[start : i+end+1]
+}
+
+func TestIndexSaveButtonShowsBusyState(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	s := &Session{deps: Deps{
+		Schemas:      stubSchemaStore{schema: schema},
+		Catalog:      stubCatalog{id: "llama", ref: "llama.json"},
+		InitialDraft: Draft{ID: "p", Name: "P", BackendID: "llama"},
+	}}
+	rec := httptest.NewRecorder()
+	s.handleIndex(rec, httptest.NewRequest("GET", "/", nil))
+	body := rec.Body.String()
+
+	btn := extractTag(t, body, `hx-post="/save"`)
+	if !strings.Contains(btn, `hx-disabled-elt="this"`) {
+		t.Fatalf("save button must disable itself while in flight: %s", btn)
+	}
+	if !strings.Contains(btn, `hx-indicator="this"`) {
+		t.Fatalf("save button must carry its own busy indicator: %s", btn)
+	}
+	if !strings.Contains(body, `class="spinner htmx-indicator"`) {
+		t.Fatalf("save button spinner missing")
+	}
+	if !strings.Contains(body, `<meta name="htmx-config" content='{"timeout":10000}'>`) {
+		t.Fatalf("htmx-config timeout meta missing")
+	}
+}
+
+func TestBackendSaveButtonShowsBusyState(t *testing.T) {
+	s := &Session{deps: Deps{InitialBackendDraft: BackendDraft{IsNew: true}}}
+	rec := httptest.NewRecorder()
+	s.handleBackendIndex(rec, httptest.NewRequest("GET", "/backend/", nil))
+	body := rec.Body.String()
+
+	btn := extractTag(t, body, `hx-post="/backend/save"`)
+	if !strings.Contains(btn, `hx-disabled-elt="this"`) {
+		t.Fatalf("backend save button must disable itself while in flight: %s", btn)
+	}
+	if !strings.Contains(btn, `hx-indicator="this"`) {
+		t.Fatalf("backend save button must carry its own busy indicator: %s", btn)
+	}
+	if !strings.Contains(body, `class="spinner htmx-indicator"`) {
+		t.Fatalf("backend save button spinner missing")
+	}
+	if !strings.Contains(body, `<meta name="htmx-config" content='{"timeout":10000}'>`) {
+		t.Fatalf("htmx-config timeout meta missing on backend page")
+	}
+}
+
 func TestIndexRendersGroupedFields(t *testing.T) {
 	schema := domain.BackendValidationSchema{
 		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
