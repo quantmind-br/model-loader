@@ -19,7 +19,20 @@ func init() {
 	dlCmd := &cobra.Command{
 		Use:   "download <repo-id> <filename>",
 		Short: "Download a file from a HuggingFace repository",
-		Args:  cobra.ExactArgs(2),
+		Long: `Download a single file from a HuggingFace repository.
+
+The file is placed under the first configured model search path. With --wait the
+command blocks until the download finishes and prints the result; without it the
+download runs in the background and the command prints the download id immediately.
+
+With --json the output is a single object:
+  id      string — download id
+  status  string — "started" (no --wait) or "completed"
+  dest    string — absolute destination path`,
+		Example: `  model-loader model download org/my-model model.gguf
+  model-loader model download org/my-model model.gguf --wait
+  model-loader model download org/my-model model.gguf --wait --json`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load()
 			if err != nil {
@@ -142,7 +155,17 @@ func init() {
 	downloadsCmd := &cobra.Command{
 		Use:   "downloads",
 		Short: "List and manage downloads",
-		Args:  cobra.NoArgs,
+		Long: `List active, queued, and recently completed downloads.
+
+With --json the output is a JSON array of download objects ([] when empty).
+Each element includes:
+  id        string — download id
+  repo      string — HuggingFace repo id
+  filename  string — filename within the repo
+  status    string — queued | active | completed | failed | cancelled | abandoned
+  bytes     int    — bytes downloaded so far
+  total     int    — total file size in bytes (0 if unknown)`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runWithManager(cmd, func(out io.Writer, mgr downloadManager) error {
 				return listDownloads(out, mgr, jsonOut)

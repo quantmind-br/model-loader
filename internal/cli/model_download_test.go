@@ -298,9 +298,8 @@ func TestModelDownload_ArgValidation(t *testing.T) {
 func TestStartDownload_WaitPrintsThrottledProgress(t *testing.T) {
 	root := tempSearchPath(t)
 	mgr := &fakeDLManager{nextID: "dl-p", events: make(chan downloadmgr.Event, 8)}
-	// Deciles 0 (0/1000), 1 (40/1000 → 40%), wait... 5 (500/1000 → 50%)
 	// Events: Bytes 0,40,120,500 then Completed
-	// Decile: 0,   0, 1,   5 → lines at 0, 1 (40%), 5 (50%) = 3 lines
+	// Deciles: 0, 0, 1, 5 → lines at 0%, 12%, 50% = 3 lines (40 is decile 0, suppressed)
 	mgr.events <- downloadmgr.Event{ID: "dl-p", State: downloadmgr.State{Status: downloadmgr.StatusActive, Bytes: 0, Total: 1000}}
 	mgr.events <- downloadmgr.Event{ID: "dl-p", State: downloadmgr.State{Status: downloadmgr.StatusActive, Bytes: 40, Total: 1000}}
 	mgr.events <- downloadmgr.Event{ID: "dl-p", State: downloadmgr.State{Status: downloadmgr.StatusActive, Bytes: 120, Total: 1000}}
@@ -320,7 +319,7 @@ func TestStartDownload_WaitPrintsThrottledProgress(t *testing.T) {
 	if !strings.Contains(errOut.String(), "(50%)") {
 		t.Fatalf("expected a line with (50%%), got:\n%s", errOut.String())
 	}
-	if strings.Contains(out.String(), "waiting for backend health") {
+	if strings.Contains(out.String(), "downloading") {
 		t.Fatalf("progress must not appear on stdout, got: %q", out.String())
 	}
 	if !strings.Contains(out.String(), "completed") {

@@ -33,7 +33,7 @@ func init() {
 		},
 	}
 	addCmd.Flags().StringVar(&addExecutable, "executable", "", "backend executable / launch command (required)")
-	addCmd.Flags().StringVar(&addKind, "kind", "", "backend kind (e.g. llama-server, vllm, sglang)")
+	addCmd.Flags().StringVar(&addKind, "kind", "", "backend kind (e.g. llama-server, vllm, sglang) (required)")
 	_ = addCmd.MarkFlagRequired("executable")
 	_ = addCmd.MarkFlagRequired("kind")
 	backendCmd.AddCommand(addCmd)

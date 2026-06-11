@@ -24,6 +24,14 @@ func init() {
 	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "List running instances",
+		Long: `List running llama-server instances managed by model-loader.
+
+With --json the output is a JSON array of running-instance objects ([] when
+empty). Each element includes:
+  pid        int     — OS process id
+  profileId  string  — profile that launched the instance
+  port       int     — port the backend listens on
+  startedAt  string  — RFC3339 start time`,
 		RunE: instanceReadRunE(func(out io.Writer, mgr processmgr.Manager, _ string, _ []string) error {
 			if watch {
 				return watchInstances(out, mgr, interval)

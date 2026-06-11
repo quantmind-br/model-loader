@@ -39,7 +39,22 @@ func init() {
 	instanceCmd.AddCommand(&cobra.Command{
 		Use:   "start <profile>",
 		Short: "Load a profile's backend through the HTTP proxy",
-		Args:  cobra.ExactArgs(1),
+		Long: `Load a profile's backend through the HTTP proxy.
+
+The command starts the HTTP proxy if it is not already running, then loads the
+named profile via the proxy's /_admin/load endpoint. The proxy waits for the
+backend to pass its health check before returning (up to 5 minutes for large
+models).
+
+With --json the proxy status object is printed on stdout. Key fields:
+  running           bool    — whether the proxy is up
+  loaded_profile_id string  — the profile currently served
+  loaded_pid        int     — OS pid of the backend process
+  loaded_port       int     — port the backend listens on
+  addr              string  — proxy listen address`,
+		Example: `  model-loader instance start my-profile
+  model-loader instance start my-profile --json`,
+		Args: cobra.ExactArgs(1),
 		RunE: instanceLifecycleRunE(func(ctx context.Context, out io.Writer, errw io.Writer, svc *app.Services, proxy proxyClient, args []string) error {
 			return startInstance(ctx, out, errw, proxy, svc.Store, args[0])
 		}),
@@ -48,7 +63,7 @@ func init() {
 		Use:   "stop <pid|id>",
 		Short: "Stop a running instance",
 		Args:  cobra.ExactArgs(1),
-		RunE: instanceLifecycleRunE(func(ctx context.Context, out io.Writer, errw io.Writer, svc *app.Services, proxy proxyClient, args []string) error {
+		RunE: instanceLifecycleRunE(func(ctx context.Context, out io.Writer, _ io.Writer, svc *app.Services, proxy proxyClient, args []string) error {
 			return stopInstance(ctx, out, proxy, svc.Mgr, args[0])
 		}),
 	})

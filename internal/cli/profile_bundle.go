@@ -65,7 +65,18 @@ func init() {
 	profileCmd.AddCommand(&cobra.Command{
 		Use:   "validate <id|name>",
 		Short: "Validate a profile against its backend schema",
-		Args:  cobra.ExactArgs(1),
+		Long: `Validate a profile against its backend's flag schema.
+
+Exit codes:
+  0  Profile is valid (warnings may still be printed to stderr).
+  1  Profile not found or lookup error.
+  2  Profile has blocking validation errors.
+
+With --json the result is printed as a JSON object instead of human-readable
+lines. Warnings are always printed to stderr regardless of --json.`,
+		Example: `  model-loader profile validate my-profile
+  model-loader profile validate my-profile --json`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc, err := app.Bootstrap(logLevel)
 			if err != nil {

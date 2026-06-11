@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -55,8 +56,10 @@ func init() {
 				fmt.Fprintf(cmd.ErrOrStderr(), "start: %v\n", err)
 				return &ExitError{Code: 1}
 			}
+			displayHost := curlHost(svc.Cfg.Serve.Host)
 			fmt.Fprintf(cmd.OutOrStdout(), "Listening on %s:%d (logs: %s)\n",
 				svc.Cfg.Serve.Host, svc.Cfg.Serve.Port, svc.Cfg.Paths.LogDir)
+			fmt.Fprintf(cmd.OutOrStdout(), "Try: curl http://%s:%d/v1/models\n", displayHost, svc.Cfg.Serve.Port)
 			svc.Logger.Info("serve_listening",
 				"host", svc.Cfg.Serve.Host, "port", svc.Cfg.Serve.Port)
 
@@ -76,4 +79,18 @@ func init() {
 	cmd.Flags().StringVar(&host, "host", "", "override bind host")
 	cmd.Flags().IntVar(&port, "port", 0, "override bind port")
 	rootCmd.AddCommand(cmd)
+}
+
+// curlHost returns the host suitable for a curl example. Wildcard bind
+// addresses (0.0.0.0, ::, or empty) are shown as 127.0.0.1 since the
+// listener is reachable from localhost; literal IPv6 hosts are bracketed.
+func curlHost(host string) string {
+	switch host {
+	case "0.0.0.0", "::", "":
+		return "127.0.0.1"
+	}
+	if strings.Contains(host, ":") {
+		return "[" + host + "]"
+	}
+	return host
 }
