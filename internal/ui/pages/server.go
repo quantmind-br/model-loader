@@ -174,6 +174,14 @@ func (p *ServerPage) OverlayView() Overlay {
 	return Overlay{}
 }
 
+// StatusMessage implements ui.StatusMessageProvider: the page's primary
+// flash (restart/kill/unload feedback) also lands in the always-visible
+// status bar, level included. The proxy panel keeps its own in-panel flash;
+// the page-level flash is the one surfaced here.
+func (p *ServerPage) StatusMessage() (string, components.StatusLevel) {
+	return p.flash.Current()
+}
+
 // Hints implements ui.HintProvider for the Server tab.
 func (p *ServerPage) Hints() string {
 	var hints string

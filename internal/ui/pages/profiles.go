@@ -245,30 +245,10 @@ func (p ProfilesPage) detailView() string {
 // text — launch errors, export confirmations, kill confirmations — also
 // lands in the always-visible status bar. Without this the flash gets
 // clipped below the viewport at 80x24 (TUI_AUDIT bonus: F-01 visibility).
+// The level comes straight from the flash queue (SetError → StatusError)
+// instead of the old fragile message-prefix sniffing.
 func (p ProfilesPage) StatusMessage() (string, components.StatusLevel) {
-	msg := p.flash.Message()
-	if msg == "" {
-		return "", components.StatusInfo
-	}
-	level := components.StatusInfo
-	low := strings.ToLower(msg)
-	switch {
-	case strings.HasPrefix(low, "error"):
-		level = components.StatusError
-	case strings.HasPrefix(low, "launch failed"):
-		level = components.StatusError
-	case strings.HasPrefix(low, "export failed"):
-		level = components.StatusError
-	case strings.HasPrefix(low, "pin failed"):
-		level = components.StatusError
-	case strings.HasPrefix(low, "delete failed"):
-		level = components.StatusError
-	case strings.HasPrefix(low, "duplicate failed"):
-		level = components.StatusError
-	case strings.HasPrefix(low, "web editor"):
-		level = components.StatusError
-	}
-	return msg, level
+	return p.flash.Current()
 }
 
 // Hints implements ui.HintProvider — returns page-local key reminders for

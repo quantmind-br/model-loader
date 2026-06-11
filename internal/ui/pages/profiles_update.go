@@ -32,8 +32,14 @@ func (p ProfilesPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.performDelete(m.id)
 	case importDoneMsg:
 		return p.handleImportDone(m)
+	case importFailedMsg:
+		p, fc := p.withFlashError("import failed: " + m.err.Error())
+		return p, fc
 	case undoDoneMsg:
 		return p.handleUndoDone(m)
+	case undoFailedMsg:
+		p, fc := p.withFlashError("undo failed: " + m.err.Error())
+		return p, fc
 	case NavigateToSizingMsg:
 		return p.handleNavigateToSizing(m)
 	case proxyLoadedMsg:

@@ -65,4 +65,13 @@ type importDoneMsg struct {
 	Result profilestore.ImportResult
 }
 
+// importFailedMsg surfaces an ImportBundle error so the user sees an error
+// flash instead of a silent no-op (the cmd previously returned an empty
+// FlashClearMsg on failure).
+type importFailedMsg struct{ err error }
+
 type undoDoneMsg struct{}
+
+// undoFailedMsg surfaces a failed restore-previous save (same silent-failure
+// fix as importFailedMsg).
+type undoFailedMsg struct{ err error }

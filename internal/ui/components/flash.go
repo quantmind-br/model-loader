@@ -1,6 +1,7 @@
 package components
 
 import (
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -12,24 +13,36 @@ const (
 	FlashLifetime      = 6 * time.Second
 	FlashLifetimeError = 15 * time.Second
 	FlashDimAfter      = 5 * time.Second
+
+	// maxFlashItems caps the visible stack: a burst of messages keeps only
+	// the newest three so the flash area never crowds out page content.
+	maxFlashItems = 3
 )
 
 // FlashClearMsg is the tea.Msg emitted by the Cmd that Set returns, once
-// FlashLifetime has elapsed. Tag identifies the owning page so unrelated
-// Flash instances ignore it; At is the timestamp the flash carried at
-// scheduling so a newer flash on the same page can detect a stale clear.
+// the item's lifetime has elapsed. Tag identifies the owning page so
+// unrelated Flash instances ignore it; At is the timestamp the item carried
+// at scheduling so the clear pops exactly that item and nothing newer.
 type FlashClearMsg struct {
 	Tag string
 	At  time.Time
 }
 
-// Flash is a value-type auto-clearing status message bound to a page tag.
-// Embed by value; mutation flows through the returned new Flash from Set
-// and Update, mirroring the Confirm/Modal idiom in this package.
+// FlashItem is one queued status message with its severity and timestamp.
+type FlashItem struct {
+	Message string
+	Level   StatusLevel
+	At      time.Time
+}
+
+// Flash is a value-type auto-clearing status message queue bound to a page
+// tag. Up to maxFlashItems messages stack (oldest first); each clears
+// independently when its own lifetime tick arrives. Embed by value;
+// mutation flows through the returned new Flash from Set/SetError and
+// Update, mirroring the Confirm/Modal idiom in this package.
 type Flash struct {
-	tag     string
-	message string
-	at      time.Time
+	tag   string
+	items []FlashItem
 }
 
 // NewFlash builds a Flash bound to a page-identifying tag. The tag flows
@@ -39,44 +52,54 @@ func NewFlash(tag string) Flash {
 	return Flash{tag: tag}
 }
 
-// Set replaces the visible message, stamps "now", and returns a tea.Cmd
+// push appends a new item (copy-on-write: a stale Flash copy held elsewhere
+// must never observe the append — bubbletea value-model hazard), evicts the
+// oldest item beyond maxFlashItems, and returns a tea.Cmd that delivers
+// FlashClearMsg for exactly this item after life elapses.
+func (f Flash) push(msg string, level StatusLevel, life time.Duration) (Flash, tea.Cmd) {
+	item := FlashItem{Message: msg, Level: level, At: time.Now()}
+	items := make([]FlashItem, 0, len(f.items)+1)
+	items = append(items, f.items...)
+	items = append(items, item)
+	if len(items) > maxFlashItems {
+		items = items[len(items)-maxFlashItems:]
+	}
+	f.items = items
+	tag := f.tag
+	at := item.At
+	return f, tea.Tick(life, func(time.Time) tea.Msg {
+		return FlashClearMsg{Tag: tag, At: at}
+	})
+}
+
+// Set queues an info-level message, stamps "now", and returns a tea.Cmd
 // that delivers FlashClearMsg after FlashLifetime. Callers wire the cmd
 // into their Update return so bubbletea drives the timer.
 //
-// Setting a new message before the previous tick fires is safe: the older
-// tick will arrive with the previous At, and Update will discard it as
-// stale (preventing the new flash from being erased prematurely).
+// Setting a new message before a previous tick fires is safe: each tick
+// carries the At of the item it was scheduled for, so it pops only that
+// item (or nothing, if the item was already evicted by overflow).
 func (f Flash) Set(message string) (Flash, tea.Cmd) {
-	f.message = message
-	f.at = time.Now()
-	tag := f.tag
-	at := f.at
-	return f, tea.Tick(FlashLifetime, func(time.Time) tea.Msg {
-		return FlashClearMsg{Tag: tag, At: at}
-	})
+	return f.push(message, StatusInfo, FlashLifetime)
 }
 
+// SetError queues an error-level message with the longer error lifetime.
 func (f Flash) SetError(message string) (Flash, tea.Cmd) {
-	f.message = message
-	f.at = time.Now()
-	tag := f.tag
-	at := f.at
-	return f, tea.Tick(FlashLifetimeError, func(time.Time) tea.Msg {
-		return FlashClearMsg{Tag: tag, At: at}
-	})
+	return f.push(message, StatusError, FlashLifetimeError)
 }
 
-// Update handles incoming FlashClearMsg with stale-tick protection. The
-// returned bool is true iff this flash was cleared. Callers typically
-// ignore the bool — they just thread the returned Flash back in:
+// Update handles incoming FlashClearMsg. The returned bool is true iff an
+// item was popped. Callers typically ignore the bool — they just thread
+// the returned Flash back in:
 //
 //	case components.FlashClearMsg:
 //	    p.flash, _ = p.flash.Update(msg)
 //	    return p, nil
 //
-// Wrong-tag messages and stale (mismatched At) messages are silently
-// dropped so multi-page apps using one Flash instance per page can all
-// receive the global tick without trampling each other.
+// Wrong-tag messages are silently dropped so multi-page apps using one
+// Flash instance per page can all receive the global tick without
+// trampling each other. A tick whose At matches no queued item (the item
+// was evicted by overflow) is a no-op.
 func (f Flash) Update(msg tea.Msg) (Flash, bool) {
 	cm, ok := msg.(FlashClearMsg)
 	if !ok {
@@ -85,36 +108,99 @@ func (f Flash) Update(msg tea.Msg) (Flash, bool) {
 	if cm.Tag != f.tag {
 		return f, false
 	}
-	if !cm.At.Equal(f.at) {
-		return f, false
+	for i, it := range f.items {
+		if it.At.Equal(cm.At) {
+			// Copy-on-write removal: stale copies keep the old slice.
+			items := make([]FlashItem, 0, len(f.items)-1)
+			items = append(items, f.items[:i]...)
+			items = append(items, f.items[i+1:]...)
+			if len(items) == 0 {
+				items = nil
+			}
+			f.items = items
+			return f, true
+		}
 	}
-	f.message = ""
-	f.at = time.Time{}
-	return f, true
+	return f, false
 }
 
-// View renders the current message styled with theme.Subtitle, switching
-// to Faint once the message age exceeds FlashDimAfter so flashes visibly
-// age before they auto-clear. Empty string when no flash is active so
-// callers can use the result directly in lipgloss.JoinVertical without
+// View renders the queued items oldest-first (most recent last), one line
+// each. Error items use theme.Error, warnings theme.Warn, the rest
+// theme.Subtitle; items older than FlashDimAfter render Faint so flashes
+// visibly age before they auto-clear. Empty string when no flash is active
+// so callers can use the result directly in lipgloss.JoinVertical without
 // special-casing the empty state.
 func (f Flash) View() string {
-	if f.message == "" {
+	if len(f.items) == 0 {
 		return ""
 	}
-	style := theme.Subtitle
-	if !f.at.IsZero() && time.Since(f.at) >= FlashDimAfter {
-		style = style.Faint(true)
+	lines := make([]string, 0, len(f.items))
+	for _, it := range f.items {
+		var style = theme.Subtitle
+		switch it.Level {
+		case StatusError:
+			style = theme.Error
+		case StatusWarn:
+			style = theme.Warn
+		}
+		if !it.At.IsZero() && time.Since(it.At) >= FlashDimAfter {
+			style = style.Faint(true)
+		}
+		lines = append(lines, style.Render(it.Message))
 	}
-	return style.Render(f.message)
+	return strings.Join(lines, "\n")
 }
 
-// Message returns the raw flash text (without styling). Used by tests and
-// pages that need to compose the flash into a custom render pipeline
-// (e.g. LauncherPage prefixing with a spinner).
-func (f Flash) Message() string { return f.message }
+// Message returns the most recent item's raw text (without styling).
+// Empty string when no flash is active. Used by tests and pages that need
+// to compose the flash into a custom render pipeline.
+func (f Flash) Message() string {
+	if len(f.items) == 0 {
+		return ""
+	}
+	return f.items[len(f.items)-1].Message
+}
 
-// At returns the time the current message was Set. Zero value when no
+// At returns the time the most recent item was Set. Zero value when no
 // flash is active. Exposed for tests and dim-style detection by callers
 // that render the message themselves rather than via View().
-func (f Flash) At() time.Time { return f.at }
+func (f Flash) At() time.Time {
+	if len(f.items) == 0 {
+		return time.Time{}
+	}
+	return f.items[len(f.items)-1].At
+}
+
+// Items returns a copy of the queued items, oldest first. Mutating the
+// returned slice never affects the Flash.
+func (f Flash) Items() []FlashItem {
+	if len(f.items) == 0 {
+		return nil
+	}
+	out := make([]FlashItem, len(f.items))
+	copy(out, f.items)
+	return out
+}
+
+// Current returns the message and level of the highest-severity queued
+// item — the newest wins severity ties — so status bars surface an error
+// even when an info message arrived after it. ("", StatusInfo) when empty.
+func (f Flash) Current() (string, StatusLevel) {
+	if len(f.items) == 0 {
+		return "", StatusInfo
+	}
+	best := f.items[0]
+	for _, it := range f.items[1:] {
+		if it.Level >= best.Level {
+			best = it
+		}
+	}
+	return best.Message, best.Level
+}
+
+// Level returns the level Current would report: the highest severity among
+// queued items, StatusInfo when empty.
+func (f Flash) Level() StatusLevel {
+	_, lvl := f.Current()
+	return lvl
+}

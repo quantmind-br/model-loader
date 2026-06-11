@@ -490,6 +490,12 @@ func (p BackendsPage) withFlashError(msg string) (BackendsPage, tea.Cmd) {
 	return p, cmd
 }
 
+// StatusMessage implements ui.StatusMessageProvider: the page's flash also
+// lands in the always-visible status bar, level included.
+func (p BackendsPage) StatusMessage() (string, components.StatusLevel) {
+	return p.flash.Current()
+}
+
 func (p BackendsPage) startAdd() (tea.Model, tea.Cmd) {
 	if p.manager == nil {
 		p, fc := p.withFlashError("backend manager not available")

@@ -110,6 +110,12 @@ func (p BenchmarkPage) IsCapturingInput() bool {
 	return p.deleteConfirm.Active() || p.view != bvList || p.filterMode
 }
 
+// StatusMessage implements ui.StatusMessageProvider: the page's flash also
+// lands in the always-visible status bar, level included.
+func (p BenchmarkPage) StatusMessage() (string, components.StatusLevel) {
+	return p.flash.Current()
+}
+
 func (p BenchmarkPage) Hints() string {
 	if p.deleteConfirm.Active() {
 		return "[←→] choose  [enter] confirm  [esc] cancel"

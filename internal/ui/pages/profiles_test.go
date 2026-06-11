@@ -979,6 +979,34 @@ func TestProfilesPage_ExportFailureFlashesError(t *testing.T) {
 	if got := page.flash.Message(); !strings.HasPrefix(got, "export failed:") {
 		t.Errorf("flash = %q, want prefix 'export failed:'", got)
 	}
+	// The status bar level comes from the flash queue (SetError), not from
+	// sniffing message prefixes — any failed action must report StatusError.
+	if msg, level := page.StatusMessage(); level != components.StatusError || msg == "" {
+		t.Errorf("StatusMessage = (%q, %v), want non-empty message at StatusError", msg, level)
+	}
+}
+
+// The silent-failure fix: a failing ImportBundle must surface an error
+// flash at StatusError instead of returning a no-op FlashClearMsg.
+func TestProfilesPage_ImportFailureFlashesError(t *testing.T) {
+	store := newFakeStoreWithDiagnostics(nil, nil)
+	page := NewProfilesPage(store, domain.FlagSchema{})
+
+	cmd := page.importBundleCmd(filepath.Join(t.TempDir(), "missing-bundle.json"), profilestore.ConflictModeMerge)
+	msg := cmd()
+	failed, ok := msg.(importFailedMsg)
+	if !ok {
+		t.Fatalf("importBundleCmd produced %T, want importFailedMsg", msg)
+	}
+
+	updated, _ := page.Update(failed)
+	page = updated.(ProfilesPage)
+	if got := page.flash.Message(); !strings.HasPrefix(got, "import failed:") {
+		t.Errorf("flash = %q, want prefix 'import failed:'", got)
+	}
+	if _, level := page.StatusMessage(); level != components.StatusError {
+		t.Errorf("StatusMessage level = %v, want StatusError", level)
+	}
 }
 
 // F-04 regression: when the user presses `/` the list enters Filtering

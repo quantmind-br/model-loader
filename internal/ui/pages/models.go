@@ -100,6 +100,12 @@ func (p ModelsPage) withFlashError(msg string) (ModelsPage, tea.Cmd) {
 	return p, cmd
 }
 
+// StatusMessage implements ui.StatusMessageProvider: the page's flash also
+// lands in the always-visible status bar, level included.
+func (p ModelsPage) StatusMessage() (string, components.StatusLevel) {
+	return p.flash.Current()
+}
+
 // NewModelsPage builds a page wired to a Scanner and configured search paths.
 func NewModelsPage(scanner modelscanner.Scanner, paths []string) ModelsPage {
 	cols := []table.Column{

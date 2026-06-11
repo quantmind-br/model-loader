@@ -90,7 +90,7 @@ func (p ProfilesPage) importBundleCmd(path string, mode profilestore.ConflictMod
 	return func() tea.Msg {
 		res, err := profilestore.ImportBundle(p.store, path, mode)
 		if err != nil {
-			return components.FlashClearMsg{}
+			return importFailedMsg{err: err}
 		}
 		return importDoneMsg{Result: res}
 	}
@@ -141,7 +141,7 @@ func (p ProfilesPage) startUndo() (tea.Model, tea.Cmd) {
 func (p ProfilesPage) restorePreviousCmd(prev domain.Profile) tea.Cmd {
 	return func() tea.Msg {
 		if err := p.store.Save(prev); err != nil {
-			return components.FlashClearMsg{}
+			return undoFailedMsg{err: err}
 		}
 		return undoDoneMsg{}
 	}
