@@ -54,6 +54,65 @@ func TestConfigureRendersDescriptionAndTags(t *testing.T) {
 	}
 }
 
+func TestConfigureRendersAccessibleLabelsAndTabs(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{
+			"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt, Required: true, HelpText: "context window size"},
+		},
+		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{
+			{Name: "Essentials", Highlighted: true, Flags: []string{"ctx-size"}},
+		}},
+	}
+	s := &Session{deps: Deps{
+		Schemas:      stubSchemaStore{schema: schema},
+		Catalog:      stubCatalog{id: "llama", ref: "llama.json"},
+		InitialDraft: Draft{ID: "p", Name: "P", BackendID: "llama"},
+	}}
+	rec := httptest.NewRecorder()
+	s.handleIndex(rec, httptest.NewRequest("GET", "/", nil))
+	body := rec.Body.String()
+	for _, want := range []string{
+		// Top-field label/input wiring.
+		`<label for="profile-model">`, `id="profile-model"`,
+		// Schema-driven arg field wiring + help description.
+		`<label for="arg-ctx-size">`, `id="arg-ctx-size"`,
+		`aria-describedby="arg-ctx-size-help"`, `id="arg-ctx-size-help"`,
+		// Required semantics.
+		`aria-required="true"`,
+		// Tablist structure (sidebar groups + mode switcher).
+		`role="tablist"`, `role="tab"`, `role="tabpanel"`,
+		`aria-orientation="vertical"`,
+		`id="group-tab-essentials"`, `id="group-panel-essentials"`,
+		`aria-controls="group-panel-essentials"`,
+		`aria-labelledby="group-tab-essentials"`,
+		`aria-label="Editor mode"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("configure page missing %s", want)
+		}
+	}
+}
+
+func TestBackendPageRendersAccessibleLabels(t *testing.T) {
+	s := &Session{deps: Deps{InitialBackendDraft: BackendDraft{IsNew: true}}}
+	rec := httptest.NewRecorder()
+	s.handleBackendIndex(rec, httptest.NewRequest("GET", "/backend/", nil))
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<label for="backend-name">`, `id="backend-name"`,
+		`<label for="backend-kind">`, `id="backend-kind"`,
+		`<label for="backend-executable">`, `id="backend-executable"`,
+		`<label for="backend-description">`, `id="backend-description"`,
+		`<label for="backend-tags">`, `id="backend-tags"`,
+		`aria-required="true"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("backend page missing %s", want)
+		}
+	}
+}
+
 func TestIndexRendersIssuesLiveRegion(t *testing.T) {
 	schema := domain.BackendValidationSchema{
 		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",

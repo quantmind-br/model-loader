@@ -1,17 +1,25 @@
 {{define "sidebar"}}
-<div class="sidebar-title">Groups</div>
-{{range .Groups}}
-<button
+<div class="sidebar-title" id="sidebar-groups-title">Groups</div>
+<div role="tablist" aria-orientation="vertical" id="sidebar-groups" aria-labelledby="sidebar-groups-title">{{block "sidebar-tabs" .}}{{end}}</div>
+{{end}}
+
+{{define "sidebar-tabs"}}{{range .Groups}}<button
+  type="button"
+  id="group-tab-{{slug .Name}}"
+  role="tab"
+  aria-controls="group-panel-{{slug .Name}}"
   class="tab-btn{{if .Highlighted}} hl{{end}}"
   @click="activeGroup='{{.Name}}'"
+  @keydown.down.prevent="$event.target.nextElementSibling?.focus()"
+  @keydown.up.prevent="$event.target.previousElementSibling?.focus()"
   :class="{active: activeGroup==='{{.Name}}'}"
+  :aria-selected="activeGroup==='{{.Name}}'"
+  :tabindex="activeGroup==='{{.Name}}' ? 0 : -1"
 >
   {{if .Highlighted}}<span class="star"></span>{{end}}
   {{.Name}}
   <span class="count">{{len .Fields}}</span>
-</button>
-{{end}}
-{{end}}
+</button>{{end}}{{end}}
 
 {{define "configure"}}
 <form id="profile-form" hx-post="/validate" hx-trigger="input changed delay:300ms" hx-target="#issues">
@@ -21,8 +29,8 @@
   <div class="top-fields">
     {{if .Draft.IsNew}}
     <div class="field">
-      <label>Backend</label>
-      <select name="backendId" hx-post="/switch-backend" hx-target="#profile-form" hx-swap="outerHTML">
+      <label for="profile-backend">Backend</label>
+      <select id="profile-backend" name="backendId" hx-post="/switch-backend" hx-target="#profile-form" hx-swap="outerHTML">
         {{range .Backends}}
         <option value="{{.ID}}"{{if eq .ID $.Draft.BackendID}} selected{{end}}>{{.Name}}</option>
         {{end}}
@@ -32,30 +40,30 @@
     <input type="hidden" name="backendId" value="{{.Draft.BackendID}}">
     {{end}}
     <div class="field" data-field="id">
-      <label>ID {{if not .Draft.ID}}<span class="req">*</span>{{end}}</label>
-      <input name="id" value="{{.Draft.ID}}" placeholder="profile identifier (slug)">
+      <label for="profile-id">ID {{if not .Draft.ID}}<span class="req">*</span>{{end}}</label>
+      <input id="profile-id" name="id" value="{{.Draft.ID}}" placeholder="profile identifier (slug)"{{if not .Draft.ID}} required aria-required="true"{{end}}>
       <small class="field-error"></small>
     </div>
     <div class="field" data-field="name">
-      <label>Name {{if not .Draft.Name}}<span class="req">*</span>{{end}}</label>
-      <input name="name" value="{{.Draft.Name}}" placeholder="profile name">
+      <label for="profile-name">Name {{if not .Draft.Name}}<span class="req">*</span>{{end}}</label>
+      <input id="profile-name" name="name" value="{{.Draft.Name}}" placeholder="profile name"{{if not .Draft.Name}} required aria-required="true"{{end}}>
       <small class="field-error"></small>
     </div>
     <div class="field" data-field="model">
-      <label>Model <span class="req">*</span></label>
-      <input name="model" value="{{.Draft.Model}}" placeholder="model path or repo">
+      <label for="profile-model">Model <span class="req">*</span></label>
+      <input id="profile-model" name="model" value="{{.Draft.Model}}" placeholder="model path or repo" required aria-required="true">
       <small class="field-error"></small>
     </div>
     <div class="field" data-field="tags">
-      <label>Tags</label>
-      <input name="tags" value="{{joinCSV .Draft.Tags}}" placeholder="comma-separated tags">
+      <label for="profile-tags">Tags</label>
+      <input id="profile-tags" name="tags" value="{{joinCSV .Draft.Tags}}" placeholder="comma-separated tags">
       <small class="field-error"></small>
     </div>
   </div>
 
   <div class="field full-width" data-field="description">
-    <label>Description</label>
-    <textarea name="description" rows="2" placeholder="optional notes about this profile">{{.Draft.Description}}</textarea>
+    <label for="profile-description">Description</label>
+    <textarea id="profile-description" name="description" rows="2" placeholder="optional notes about this profile">{{.Draft.Description}}</textarea>
     <small class="field-error"></small>
   </div>
 
@@ -67,9 +75,11 @@
     <div class="env-list">
       <template x-for="(ev, index) in envVars" :key="index">
         <div class="env-row">
-          <input :name="'envKey_' + index" x-model="ev.Key" placeholder="KEY" class="env-key">
-          <input :name="'envValue_' + index" x-model="ev.Value" placeholder="VALUE" class="env-value">
-          <button type="button" @click="envVars.splice(index, 1)" class="ghost">×</button>
+          <label class="sr-only" :for="'env-key-' + index">Environment variable key</label>
+          <input :id="'env-key-' + index" :name="'envKey_' + index" x-model="ev.Key" placeholder="KEY" class="env-key">
+          <label class="sr-only" :for="'env-value-' + index">Environment variable value</label>
+          <input :id="'env-value-' + index" :name="'envValue_' + index" x-model="ev.Value" placeholder="VALUE" class="env-value">
+          <button type="button" @click="envVars.splice(index, 1)" class="ghost" :aria-label="'Remove environment variable ' + (ev.Key || (index+1))">×</button>
         </div>
       </template>
     </div>
@@ -77,12 +87,12 @@
   </div>
 
   <div class="search-box">
-    <input type="text" x-ref="search" x-model="search" placeholder="Search parameter…  ( / )" class="search-input">
-    <button type="button" x-show="search.length > 0" @click="search=''" class="clear-btn">×</button>
+    <input type="text" id="param-search" aria-label="Search parameters" x-ref="search" x-model="search" placeholder="Search parameter…  ( / )" class="search-input">
+    <button type="button" x-show="search.length > 0" @click="search=''" class="clear-btn" aria-label="Clear search">×</button>
   </div>
 
   {{range .Groups}}
-  <div x-show="search.trim()==='' ? activeGroup==='{{.Name}}' : true" x-cloak>
+  <div x-show="search.trim()==='' ? activeGroup==='{{.Name}}' : true" x-cloak role="tabpanel" id="group-panel-{{slug .Name}}" aria-labelledby="group-tab-{{slug .Name}}" tabindex="0">
     <div class="group-header" x-show="search.trim()!==''">
       <h2>{{.Name}}</h2>
       <span class="badge">{{len .Fields}} options</span>
@@ -90,26 +100,26 @@
     <div class="fields-grid">
       {{range .Fields}}
       <div class="field{{if eq .Widget "text"}} full-width{{end}}" data-field="{{.Flag}}" x-show="search.trim()==='' || fuzzyMatch(search, '{{.Flag}} {{.Label}} {{.Help}}')">
-        <label>{{.Label}}{{if .Required}} <span class="req">required</span>{{end}}</label>
+        <label for="arg-{{.Flag}}">{{.Label}}{{if .Required}} <span class="req">required</span>{{end}}</label>
         {{if eq .Widget "select"}}
           {{$val := .Value}}
-          <select name="arg.{{.Flag}}">
+          <select id="arg-{{.Flag}}" name="arg.{{.Flag}}"{{if .Required}} required aria-required="true"{{end}}{{if .Help}} aria-describedby="arg-{{.Flag}}-help"{{end}}>
             <option value=""{{if eq $val ""}} selected{{end}}>(default)</option>
             {{range .Options}}<option value="{{.}}"{{if eq . $val}} selected{{end}}>{{.}}</option>{{end}}
           </select>
         {{else if eq .Widget "toggle"}}
           {{$val := .Value}}
-          <select name="arg.{{.Flag}}">
+          <select id="arg-{{.Flag}}" name="arg.{{.Flag}}"{{if .Required}} required aria-required="true"{{end}}{{if .Help}} aria-describedby="arg-{{.Flag}}-help"{{end}}>
             <option value=""{{if eq $val ""}} selected{{end}}>(default)</option>
             <option value="on"{{if eq $val "on"}} selected{{end}}>on</option>
             <option value="off"{{if eq $val "off"}} selected{{end}}>off</option>
           </select>
         {{else if eq .Widget "number"}}
-          <input type="number" name="arg.{{.Flag}}" value="{{.Value}}" placeholder="{{if .Default}}{{.Default}} (default){{else}}not configured{{end}}"{{if .Min}} min="{{.Min}}"{{end}}{{if .Max}} max="{{.Max}}"{{end}}>
+          <input type="number" id="arg-{{.Flag}}" name="arg.{{.Flag}}" value="{{.Value}}" placeholder="{{if .Default}}{{.Default}} (default){{else}}not configured{{end}}"{{if .Min}} min="{{.Min}}"{{end}}{{if .Max}} max="{{.Max}}"{{end}}{{if .Required}} required aria-required="true"{{end}}{{if .Help}} aria-describedby="arg-{{.Flag}}-help"{{end}}>
         {{else}}
-          <input name="arg.{{.Flag}}" value="{{.Value}}" placeholder="{{if .Default}}{{.Default}} (default){{else}}not configured{{end}}">
+          <input id="arg-{{.Flag}}" name="arg.{{.Flag}}" value="{{.Value}}" placeholder="{{if .Default}}{{.Default}} (default){{else}}not configured{{end}}"{{if .Required}} required aria-required="true"{{end}}{{if .Help}} aria-describedby="arg-{{.Flag}}-help"{{end}}>
         {{end}}
-        {{if .Help}}<small class="muted">{{.Help}}</small>{{end}}
+        {{if .Help}}<small class="muted" id="arg-{{.Flag}}-help">{{.Help}}</small>{{end}}
         <small class="field-error"></small>
       </div>
       {{end}}

@@ -18,6 +18,19 @@ var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
 	"joinCSV": func(v []string) string {
 		return strings.Join(v, ", ")
 	},
+	// slug derives a stable HTML id fragment from a display name (group names):
+	// lowercase, keep a-z0-9, map everything else to '-', trim leading/trailing '-'.
+	"slug": func(s string) string {
+		var b strings.Builder
+		for _, r := range strings.ToLower(s) {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+				b.WriteRune(r)
+			} else {
+				b.WriteByte('-')
+			}
+		}
+		return strings.Trim(b.String(), "-")
+	},
 }).ParseFS(assets.FS,
 	"templates/base.gohtml",
 	"templates/configure.gohtml",

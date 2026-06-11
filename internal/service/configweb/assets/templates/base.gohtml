@@ -16,9 +16,19 @@
   @keydown.window.slash="if(mode==='configure' && document.activeElement.tagName!=='INPUT' && document.activeElement.tagName!=='SELECT' && document.activeElement.tagName!=='TEXTAREA'){$event.preventDefault(); if($refs.search) $refs.search.focus();}">
 <header class="topbar">
   <div class="title">{{.Draft.Name}} <span class="muted">· {{.Draft.BackendID}}</span></div>
-  <nav class="modes">
-    <button :class="{active: mode==='configure'}" @click="mode='configure'">Configure</button>
-    <button :class="{active: mode==='customize'}" @click="mode='customize'">Customize</button>
+  <nav class="modes" role="tablist" aria-label="Editor mode">
+    <button type="button" id="mode-tab-configure" role="tab" aria-controls="mode-panel-configure"
+      :class="{active: mode==='configure'}" :aria-selected="mode==='configure'"
+      :tabindex="mode==='configure' ? 0 : -1"
+      @click="mode='configure'"
+      @keydown.right.prevent="mode='customize'; $nextTick(()=>document.getElementById('mode-tab-customize').focus())"
+      @keydown.left.prevent="mode='customize'; $nextTick(()=>document.getElementById('mode-tab-customize').focus())">Configure</button>
+    <button type="button" id="mode-tab-customize" role="tab" aria-controls="mode-panel-customize"
+      :class="{active: mode==='customize'}" :aria-selected="mode==='customize'"
+      :tabindex="mode==='customize' ? 0 : -1"
+      @click="mode='customize'"
+      @keydown.right.prevent="mode='configure'; $nextTick(()=>document.getElementById('mode-tab-configure').focus())"
+      @keydown.left.prevent="mode='configure'; $nextTick(()=>document.getElementById('mode-tab-configure').focus())">Customize</button>
   </nav>
   <div class="actions">
     <button class="ghost" hx-post="/cancel">Cancel</button>
@@ -28,8 +38,8 @@
 <main class="layout" :class="{'no-sidebar': mode!=='configure' || search.trim()!==''}">
   <aside class="sidebar" x-show="mode==='configure' && search.trim()===''">{{block "sidebar" .}}{{end}}</aside>
   <section class="content">
-    <div x-show="mode==='configure'">{{block "configure" .}}{{end}}</div>
-    <div x-show="mode==='customize'">{{block "customize" .}}{{end}}</div>
+    <div x-show="mode==='configure'" role="tabpanel" id="mode-panel-configure" aria-labelledby="mode-tab-configure">{{block "configure" .}}{{end}}</div>
+    <div x-show="mode==='customize'" role="tabpanel" id="mode-panel-customize" aria-labelledby="mode-tab-customize">{{block "customize" .}}{{end}}</div>
   </section>
 </main>
 <footer class="statusbar"><div id="issues" role="status" aria-live="polite" aria-atomic="true"><span class="ok">✓ valid</span></div></footer>

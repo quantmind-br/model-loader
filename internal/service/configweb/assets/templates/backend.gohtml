@@ -25,13 +25,13 @@
 
       <div class="backend-fields">
         <div class="field">
-          <label>Name <span class="req">*</span></label>
-          <input name="name" value="{{.Draft.Name}}" placeholder="backend name" required>
+          <label for="backend-name">Name <span class="req">*</span></label>
+          <input id="backend-name" name="name" value="{{.Draft.Name}}" placeholder="backend name" required aria-required="true">
         </div>
         {{if .IsNew}}
         <div class="field">
-          <label>Kind <span class="req">*</span></label>
-          <select name="kind" required>
+          <label for="backend-kind">Kind <span class="req">*</span></label>
+          <select id="backend-kind" name="kind" required aria-required="true">
             {{range .Kinds}}
             <option value="{{.}}"{{if eq . $.Draft.Kind}} selected{{end}}>{{.}}</option>
             {{end}}
@@ -40,21 +40,21 @@
         {{else}}
         <input type="hidden" name="kind" value="{{.Draft.Kind}}">
         <div class="field">
-          <label>Kind</label>
-          <input value="{{.Draft.Kind}}" disabled readonly>
+          <label for="backend-kind">Kind</label>
+          <input id="backend-kind" value="{{.Draft.Kind}}" disabled readonly>
         </div>
         {{end}}
         <div class="field">
-          <label>Executable <span class="req">*</span></label>
-          <input name="executable" value="{{.Draft.Executable}}" placeholder="path to executable" required>
+          <label for="backend-executable">Executable <span class="req">*</span></label>
+          <input id="backend-executable" name="executable" value="{{.Draft.Executable}}" placeholder="path to executable" required aria-required="true">
         </div>
         <div class="field">
-          <label>Description</label>
-          <input name="description" value="{{.Draft.Description}}" placeholder="short description">
+          <label for="backend-description">Description</label>
+          <input id="backend-description" name="description" value="{{.Draft.Description}}" placeholder="short description">
         </div>
         <div class="field">
-          <label>Tags</label>
-          <input name="tags" value="{{range $i, $t := .Draft.Tags}}{{if $i}}, {{end}}{{$t}}{{end}}" placeholder="comma-separated tags">
+          <label for="backend-tags">Tags</label>
+          <input id="backend-tags" name="tags" value="{{range $i, $t := .Draft.Tags}}{{if $i}}, {{end}}{{$t}}{{end}}" placeholder="comma-separated tags">
         </div>
       </div>
     </form>
