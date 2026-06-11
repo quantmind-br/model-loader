@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/benchmark"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
@@ -253,5 +254,81 @@ func TestRunRow_FlagsPartialRuns(t *testing.T) {
 	row := page.runRow(0, page.runs[0], benchListCols{when: 11, profile: 10, mode: 20})
 	if !strings.Contains(row, "! ") {
 		t.Errorf("partial run row should carry the '!' marker: %q", row)
+	}
+}
+
+// UIUX-022: g/G (and home/end) jump to the top/bottom of the run list.
+func TestBenchmarkPage_RunListJumpKeys(t *testing.T) {
+	page := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
+	page.runs = []benchmark.Run{{ID: "r1"}, {ID: "r2"}, {ID: "r3"}}
+
+	m, _ := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+	page = m.(BenchmarkPage)
+	if page.runCursor != 2 {
+		t.Fatalf("runCursor after G = %d, want 2", page.runCursor)
+	}
+
+	m, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	page = m.(BenchmarkPage)
+	if page.runCursor != 0 {
+		t.Fatalf("runCursor after g = %d, want 0", page.runCursor)
+	}
+
+	// G on an empty list must not underflow the cursor.
+	empty := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
+	m, _ = empty.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+	empty = m.(BenchmarkPage)
+	if empty.runCursor != 0 {
+		t.Fatalf("runCursor after G on empty list = %d, want 0", empty.runCursor)
+	}
+}
+
+// UIUX-022: g/G jump in the profile picker, bounded by the filtered list;
+// while filter mode is active they are text, not navigation.
+func TestBenchmarkPage_ProfilePickerJumpKeys(t *testing.T) {
+	page := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
+	page.view = bvProfilePick
+	page.profiles = []domain.Profile{
+		{ID: "a", Name: "Alpha"},
+		{ID: "b", Name: "Beta"},
+		{ID: "g1", Name: "Gamma"},
+	}
+
+	m, _ := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+	page = m.(BenchmarkPage)
+	if page.profCursor != 2 {
+		t.Fatalf("profCursor after G = %d, want 2", page.profCursor)
+	}
+
+	m, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	page = m.(BenchmarkPage)
+	if page.profCursor != 0 {
+		t.Fatalf("profCursor after g = %d, want 0", page.profCursor)
+	}
+
+	// G bounded by the filtered list, not the full profile slice.
+	page.filter = "alpha"
+	m, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+	page = m.(BenchmarkPage)
+	if page.profCursor != 0 {
+		t.Fatalf("profCursor after G with filter %q = %d, want 0 (1 match)", page.filter, page.profCursor)
+	}
+
+	// In filter mode g/G append to the filter text instead of jumping.
+	page.filter = ""
+	page.filterMode = true
+	page.profCursor = 0
+	m, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	page = m.(BenchmarkPage)
+	if page.filter != "g" {
+		t.Fatalf("filter after typing g in filter mode = %q, want \"g\"", page.filter)
+	}
+	m, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+	page = m.(BenchmarkPage)
+	if page.filter != "gG" {
+		t.Fatalf("filter after typing G in filter mode = %q, want \"gG\"", page.filter)
+	}
+	if page.profCursor != 0 {
+		t.Fatalf("profCursor moved while typing in filter mode: %d", page.profCursor)
 	}
 }

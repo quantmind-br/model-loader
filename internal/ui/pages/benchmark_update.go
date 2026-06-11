@@ -106,6 +106,12 @@ func (p BenchmarkPage) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if p.runCursor < len(p.runs)-1 {
 			p.runCursor++
 		}
+	case "g", "home":
+		p.runCursor = 0
+	case "G", "end":
+		if len(p.runs) > 0 {
+			p.runCursor = len(p.runs) - 1
+		}
 	case "b":
 		return p.openProfilePick()
 	case "enter":
@@ -186,6 +192,14 @@ func (p BenchmarkPage) keyProfilePick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		if p.profCursor < len(p.filteredProfiles())-1 {
 			p.profCursor++
+		}
+	// g/G only reach here outside filter mode: while filtering, the printable
+	// branch above appends them to the filter text instead.
+	case "g", "home":
+		p.profCursor = 0
+	case "G", "end":
+		if n := len(p.filteredProfiles()); n > 0 {
+			p.profCursor = n - 1
 		}
 	case "enter":
 		filtered := p.filteredProfiles()
