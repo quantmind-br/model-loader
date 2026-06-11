@@ -109,6 +109,12 @@ type backendsLoadedMsg struct {
 type backendDeleteConfirmedMsg struct{ id string }
 type backendRefreshConfirmedMsg struct{ id string }
 
+// backendsReloadMsg is dispatched by Reload() when the root activates this
+// tab. Reload has a value receiver and cannot mutate state, so the stale
+// probe-result clearing happens in Update when this message arrives
+// (mirrors the modelsReloadMsg pattern).
+type backendsReloadMsg struct{}
+
 type backendProberIface interface {
 	Probe(context.Context) (<-chan backendcatalog.ProbeEvent, error)
 }
@@ -157,7 +163,12 @@ func (p BackendsPage) Init() tea.Cmd {
 	return tea.Batch(p.loadCmd(), p.spinnerModel.Tick)
 }
 
-func (p BackendsPage) Reload() tea.Cmd { return p.loadCmd() }
+// Reload refreshes the backend list on tab focus. It emits backendsReloadMsg
+// so Update can drop stale probe results (probes reflect a point in time;
+// a revisited tab should not present old health data as current).
+func (p BackendsPage) Reload() tea.Cmd {
+	return func() tea.Msg { return backendsReloadMsg{} }
+}
 
 func (p BackendsPage) loadCmd() tea.Cmd {
 	return func() tea.Msg {
@@ -188,6 +199,9 @@ func (p BackendsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, nil
 	case backendsLoadedMsg:
 		return p.handleLoaded(m)
+	case backendsReloadMsg:
+		p.probeResults = make(map[string]backendProbeResult)
+		return p, p.loadCmd()
 	case backendDeleteConfirmedMsg:
 		return p.performDelete(m.id)
 	case backendRefreshConfirmedMsg:

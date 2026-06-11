@@ -294,8 +294,19 @@ func TestBackendsPage_Reload(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("Reload returned nil cmd")
 	}
-	if _, ok := cmd().(backendsLoadedMsg); !ok {
-		t.Fatal("Reload cmd did not return backendsLoadedMsg")
+	// Reload goes through backendsReloadMsg (so Update can clear stale probe
+	// results) and only then chains into loadCmd.
+	msg := cmd()
+	if _, ok := msg.(backendsReloadMsg); !ok {
+		t.Fatalf("Reload cmd produced %T, want backendsReloadMsg", msg)
+	}
+	model, loadCmd := p.Update(msg)
+	p = model.(BackendsPage)
+	if loadCmd == nil {
+		t.Fatal("handling backendsReloadMsg returned nil cmd")
+	}
+	if _, ok := loadCmd().(backendsLoadedMsg); !ok {
+		t.Fatal("reload did not chain into backendsLoadedMsg")
 	}
 }
 
@@ -567,5 +578,45 @@ func TestBackendsPage_FilterNarrowsList(t *testing.T) {
 	}
 	if bi, ok := visible[0].(backendItem); !ok || bi.backend.Name != "Alpha" {
 		t.Fatalf("VisibleItems[0]=%+v; want Alpha", visible[0])
+	}
+}
+
+// UIUX-025: probe results reflect a point in time. When the tab is reloaded
+// (root activates it again), stale probe lines must be cleared so old health
+// data is not presented as current.
+func TestBackendsPage_ReloadClearsStaleProbeResults(t *testing.T) {
+	p, mgr, _ := newBackendsPageHarness(t)
+	b := addBackendForPage(t, mgr, "Probe Backend", "/bin/echo")
+	p = loadBackendsPage(t, p)
+
+	p.probeResults = map[string]backendProbeResult{
+		b.ID: {status: backendcatalog.ProbeStatusOK, detail: "v1.0.0"},
+	}
+	if !strings.Contains(p.detailView(), "Probe:") {
+		t.Fatalf("detail view missing probe line before reload:\n%s", p.detailView())
+	}
+
+	cmd := p.Reload()
+	if cmd == nil {
+		t.Fatal("Reload returned nil cmd")
+	}
+	msg := cmd()
+	if _, ok := msg.(backendsReloadMsg); !ok {
+		t.Fatalf("Reload cmd produced %T, want backendsReloadMsg", msg)
+	}
+
+	model, loadCmd := p.Update(msg)
+	p = model.(BackendsPage)
+	if len(p.probeResults) != 0 {
+		t.Fatalf("probeResults = %d entries after reload, want 0", len(p.probeResults))
+	}
+	if strings.Contains(p.detailView(), "Probe:") {
+		t.Fatalf("detail view still shows probe line after reload:\n%s", p.detailView())
+	}
+	if loadCmd == nil {
+		t.Fatal("handling backendsReloadMsg returned nil cmd; expected loadCmd")
+	}
+	if _, ok := loadCmd().(backendsLoadedMsg); !ok {
+		t.Fatal("reload did not chain into loadCmd")
 	}
 }
