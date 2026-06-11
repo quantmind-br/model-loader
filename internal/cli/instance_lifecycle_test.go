@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
@@ -56,7 +57,7 @@ func TestStartInstance_LoadsResolvedProfileViaProxy(t *testing.T) {
 	seed(t, store, "alpha", "Alpha")
 	p := &fakeProxy{}
 	var out strings.Builder
-	if err := startInstance(context.Background(), &out, p, store, "alpha"); err != nil {
+	if err := startInstance(context.Background(), &out, io.Discard, p, store, "alpha"); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 	if p.ensured != 1 {
@@ -75,7 +76,7 @@ func TestStartInstance_LoadFailure(t *testing.T) {
 	seed(t, store, "alpha", "Alpha")
 	p := &fakeProxy{loadErr: errors.New("boom")}
 	var out strings.Builder
-	if err := startInstance(context.Background(), &out, p, store, "alpha"); err == nil {
+	if err := startInstance(context.Background(), &out, io.Discard, p, store, "alpha"); err == nil {
 		t.Fatalf("expected error from failed load")
 	}
 }
@@ -219,7 +220,7 @@ func TestRestartInstance_RefusesKillWhenProxyStatusDegraded(t *testing.T) {
 	p := &fakeProxy{status: degraded}
 	m := &fakeManager{running: []domain.RunningInstance{{ProfileID: "alpha", PID: 100}}}
 	var out strings.Builder
-	err := restartInstance(context.Background(), &out, p, m, store, "100")
+	err := restartInstance(context.Background(), &out, io.Discard, p, m, store, "100")
 	if err == nil || !strings.Contains(err.Error(), "refusing to kill pid 100") {
 		t.Fatalf("expected refusal on degraded proxy status, got: %v", err)
 	}
@@ -234,7 +235,7 @@ func TestRestartInstance_UnloadsThenLoads(t *testing.T) {
 	p := &fakeProxy{status: httpproxy.Status{Running: true, LoadedProfileID: "alpha", LoadedPID: 100}}
 	m := &fakeManager{}
 	var out strings.Builder
-	if err := restartInstance(context.Background(), &out, p, m, store, "100"); err != nil {
+	if err := restartInstance(context.Background(), &out, io.Discard, p, m, store, "100"); err != nil {
 		t.Fatalf("restart: %v", err)
 	}
 	want := []string{"unload", "load:alpha"}
@@ -252,7 +253,7 @@ func TestRestartInstance_ResolvesOrphanViaManager(t *testing.T) {
 	p := &fakeProxy{} // proxy has nothing loaded
 	m := &fakeManager{running: []domain.RunningInstance{{ProfileID: "alpha", PID: 100}}}
 	var out strings.Builder
-	if err := restartInstance(context.Background(), &out, p, m, store, "100"); err != nil {
+	if err := restartInstance(context.Background(), &out, io.Discard, p, m, store, "100"); err != nil {
 		t.Fatalf("restart: %v", err)
 	}
 	// Orphan must be killed before load so VRAM is freed first.
@@ -263,5 +264,43 @@ func TestRestartInstance_ResolvesOrphanViaManager(t *testing.T) {
 	want := []string{"load:alpha"}
 	if len(p.calls) != len(want) || p.calls[0] != want[0] {
 		t.Fatalf("expected proxy calls %v for orphan restart, got: %+v", want, p.calls)
+	}
+}
+
+func TestStartInstance_PrintsProgressToStderr(t *testing.T) {
+	store := newTempStore(t)
+	seed(t, store, "my-profile", "My Profile")
+	p := &fakeProxy{}
+	var out strings.Builder
+	var errw strings.Builder
+	if err := startInstance(context.Background(), &out, &errw, p, store, "my-profile"); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if !strings.Contains(errw.String(), "up to 5m0s") {
+		t.Fatalf("expected 'up to 5m0s' in stderr, got: %q", errw.String())
+	}
+	if !strings.Contains(errw.String(), "my-profile") {
+		t.Fatalf("expected profile name in stderr, got: %q", errw.String())
+	}
+	if strings.Contains(out.String(), "waiting for backend health") {
+		t.Fatalf("progress must not appear on stdout, got: %q", out.String())
+	}
+}
+
+func TestRestartInstance_PrintsUnloadAndLoadProgress(t *testing.T) {
+	store := newTempStore(t)
+	seed(t, store, "alpha", "Alpha")
+	p := &fakeProxy{status: httpproxy.Status{Running: true, LoadedProfileID: "alpha", LoadedPID: 100}}
+	m := &fakeManager{}
+	var out strings.Builder
+	var errw strings.Builder
+	if err := restartInstance(context.Background(), &out, &errw, p, m, store, "100"); err != nil {
+		t.Fatalf("restart: %v", err)
+	}
+	if !strings.Contains(errw.String(), "unloading") || !strings.Contains(errw.String(), "100") {
+		t.Fatalf("expected unload progress with pid in stderr, got: %q", errw.String())
+	}
+	if !strings.Contains(errw.String(), "loading") || !strings.Contains(errw.String(), "up to 5m0s") {
+		t.Fatalf("expected load progress with timeout in stderr, got: %q", errw.String())
 	}
 }

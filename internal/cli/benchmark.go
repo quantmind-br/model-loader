@@ -135,7 +135,7 @@ func init() {
 				for p := range progress {
 					switch p.Phase {
 					case "launch":
-						fmt.Fprintln(cmd.ErrOrStderr(), "loading profile via proxy / waiting for backend health…")
+						fmt.Fprintln(cmd.ErrOrStderr(), "loading profile via proxy — waiting for backend health (large models can take minutes)…")
 					case "infer", "score":
 						fmt.Fprintf(cmd.ErrOrStderr(), "[%d/%d] %s (%s)\n", p.Index, p.Total, p.ProblemName, p.Phase)
 					}

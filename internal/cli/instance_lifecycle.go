@@ -40,15 +40,15 @@ func init() {
 		Use:   "start <profile>",
 		Short: "Load a profile's backend through the HTTP proxy",
 		Args:  cobra.ExactArgs(1),
-		RunE: instanceLifecycleRunE(func(ctx context.Context, out io.Writer, svc *app.Services, proxy proxyClient, args []string) error {
-			return startInstance(ctx, out, proxy, svc.Store, args[0])
+		RunE: instanceLifecycleRunE(func(ctx context.Context, out io.Writer, errw io.Writer, svc *app.Services, proxy proxyClient, args []string) error {
+			return startInstance(ctx, out, errw, proxy, svc.Store, args[0])
 		}),
 	})
 	instanceCmd.AddCommand(&cobra.Command{
 		Use:   "stop <pid|id>",
 		Short: "Stop a running instance",
 		Args:  cobra.ExactArgs(1),
-		RunE: instanceLifecycleRunE(func(ctx context.Context, out io.Writer, svc *app.Services, proxy proxyClient, args []string) error {
+		RunE: instanceLifecycleRunE(func(ctx context.Context, out io.Writer, errw io.Writer, svc *app.Services, proxy proxyClient, args []string) error {
 			return stopInstance(ctx, out, proxy, svc.Mgr, args[0])
 		}),
 	})
@@ -56,8 +56,8 @@ func init() {
 		Use:   "restart <pid|id>",
 		Short: "Restart a running instance through the HTTP proxy",
 		Args:  cobra.ExactArgs(1),
-		RunE: instanceLifecycleRunE(func(ctx context.Context, out io.Writer, svc *app.Services, proxy proxyClient, args []string) error {
-			return restartInstance(ctx, out, proxy, svc.Mgr, svc.Store, args[0])
+		RunE: instanceLifecycleRunE(func(ctx context.Context, out io.Writer, errw io.Writer, svc *app.Services, proxy proxyClient, args []string) error {
+			return restartInstance(ctx, out, errw, proxy, svc.Mgr, svc.Store, args[0])
 		}),
 	})
 }
@@ -65,7 +65,7 @@ func init() {
 // instanceLifecycleRunE acquires the single-instance flock before bootstrap and
 // fails fast if the TUI/serve holds it, then constructs the proxy supervisor
 // (the only client channel to backends) and runs fn. Mirrors benchmark.go.
-func instanceLifecycleRunE(fn func(ctx context.Context, out io.Writer, svc *app.Services, proxy proxyClient, args []string) error) func(*cobra.Command, []string) error {
+func instanceLifecycleRunE(fn func(ctx context.Context, out io.Writer, errw io.Writer, svc *app.Services, proxy proxyClient, args []string) error) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -103,7 +103,7 @@ func instanceLifecycleRunE(fn func(ctx context.Context, out io.Writer, svc *app.
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
 
-		if err := fn(ctx, cmd.OutOrStdout(), svc, supervisor, args); err != nil {
+		if err := fn(ctx, cmd.OutOrStdout(), cmd.ErrOrStderr(), svc, supervisor, args); err != nil {
 			fmt.Fprintln(cmd.ErrOrStderr(), err)
 			return &ExitError{Code: 1}
 		}
@@ -111,7 +111,7 @@ func instanceLifecycleRunE(fn func(ctx context.Context, out io.Writer, svc *app.
 	}
 }
 
-func startInstance(ctx context.Context, out io.Writer, proxy proxyClient, store profilestore.Store, ref string) error {
+func startInstance(ctx context.Context, out io.Writer, errw io.Writer, proxy proxyClient, store profilestore.Store, ref string) error {
 	prof, err := resolveProfileRef(store, ref)
 	if err != nil {
 		return err
@@ -119,6 +119,7 @@ func startInstance(ctx context.Context, out io.Writer, proxy proxyClient, store 
 	if err := proxy.EnsureRunning(ctx); err != nil {
 		return fmt.Errorf("start http proxy: %w", err)
 	}
+	fmt.Fprintf(errw, "loading %s via proxy — waiting for backend health (up to %s)…\n", prof.ID, proxyLoadTimeout)
 	loadCtx, cancel := context.WithTimeout(ctx, proxyLoadTimeout)
 	defer cancel()
 	st, err := proxy.Load(loadCtx, prof.ID)
@@ -210,7 +211,7 @@ func refuseKillOnDegradedProxy(proxy proxyClient, st httpproxy.Status, pid int) 
 	return nil
 }
 
-func restartInstance(ctx context.Context, out io.Writer, proxy proxyClient, mgr processmgr.Manager, store profilestore.Store, ref string) error {
+func restartInstance(ctx context.Context, out io.Writer, errw io.Writer, proxy proxyClient, mgr processmgr.Manager, store profilestore.Store, ref string) error {
 	st := proxy.Status()
 	var profileID string
 	proxyOwned := proxyOwnsRef(st, ref)
@@ -239,10 +240,12 @@ func restartInstance(ctx context.Context, out io.Writer, proxy proxyClient, mgr 
 	// For proxy-owned instances, Unload terminates the backend through the proxy.
 	// For orphans, we already killed the process above; no Unload needed.
 	if proxyOwned {
+		fmt.Fprintf(errw, "unloading %s (pid %d)…\n", st.LoadedProfileID, st.LoadedPID)
 		if _, err := proxy.Unload(ctx, false); err != nil {
 			return fmt.Errorf("unload: %w", err)
 		}
 	}
+	fmt.Fprintf(errw, "loading %s via proxy — waiting for backend health (up to %s)…\n", profileID, proxyLoadTimeout)
 	loadCtx, cancel := context.WithTimeout(ctx, proxyLoadTimeout)
 	defer cancel()
 	newSt, err := proxy.Load(loadCtx, profileID)
