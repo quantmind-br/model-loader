@@ -200,7 +200,14 @@ func (p BackendsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case backendsLoadedMsg:
 		return p.handleLoaded(m)
 	case backendsReloadMsg:
+		// Drop stale probe state wholesale: bumping the epoch makes any
+		// in-flight probe's late events no-ops (same guard startProbe uses),
+		// so a probe started before the tab switch can't repopulate the
+		// freshly cleared results with a partial set.
 		p.probeResults = make(map[string]backendProbeResult)
+		p.probeEpoch++
+		p.probeCh = nil
+		p.pendingProbe = false
 		return p, p.loadCmd()
 	case backendDeleteConfirmedMsg:
 		return p.performDelete(m.id)

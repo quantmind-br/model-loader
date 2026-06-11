@@ -314,24 +314,14 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 // tab message into a ServerSelectPIDMsg so the page refreshes + selects
 // the requested row.
 func (m RootModel) handleSwitchToServer(msg pages.SwitchToServerMsg) (tea.Model, tea.Cmd) {
-	m.active = TabServer
-	m.badges[TabServer] = false
-	updated, cmd := m.pages[TabServer].Update(pages.ServerSelectPIDMsg{PID: msg.PID})
-	m.pages[TabServer] = updated
-	m.recomputeHints()
-	return m, cmd
+	return m.activateAndForward(TabServer, pages.ServerSelectPIDMsg{PID: msg.PID})
 }
 
 // handleNavigateToSizing switches to the Profiles tab and forwards the
 // NavigateToSizingMsg so the profiles page can select the matching profile
 // and open its editor on the sizing sub-tab.
 func (m RootModel) handleNavigateToSizing(msg pages.NavigateToSizingMsg) (tea.Model, tea.Cmd) {
-	m.active = TabProfiles
-	m.badges[TabProfiles] = false
-	updated, cmd := m.pages[TabProfiles].Update(msg)
-	m.pages[TabProfiles] = updated
-	m.recomputeHints()
-	return m, cmd
+	return m.activateAndForward(TabProfiles, msg)
 }
 
 // handleKey dispatches a key event. ctrl+c is the only unconditional global
@@ -455,11 +445,19 @@ func helpScrollKey(msg tea.KeyMsg) bool {
 	return false
 }
 
+// setActive is the single place a tab switch happens: it moves focus and
+// clears the tab's attention badge. Every path that assigns m.active must
+// go through it so badges can't outlive a visit.
+func (m RootModel) setActive(t Tab) RootModel {
+	m.active = t
+	m.badges[t] = false
+	return m
+}
+
 // activateAndForward switches to t before forwarding the message — used by
 // cross-tab navigations that need both the tab change and the page update.
 func (m RootModel) activateAndForward(t Tab, msg tea.Msg) (tea.Model, tea.Cmd) {
-	m.active = t
-	m.badges[t] = false
+	m = m.setActive(t)
 	updated, cmd := m.pages[t].Update(msg)
 	m.pages[t] = updated
 	m.recomputeHints()
@@ -543,8 +541,7 @@ func (m RootModel) View() string {
 // it implements the Reloader contract. This keeps Profiles in sync with
 // external file changes without requiring a TUI restart.
 func (m RootModel) activate(t Tab) (tea.Model, tea.Cmd) {
-	m.active = t
-	m.badges[t] = false
+	m = m.setActive(t)
 	m.recomputeHints()
 	if r, ok := m.pages[t].(Reloader); ok {
 		return m, r.Reload()
@@ -619,7 +616,10 @@ func attentionTab(page string) (Tab, bool) {
 }
 
 // attentionGlyph is the badge rendered next to a tab label with a pending
-// background event; ASCII fallback under NO_COLOR.
+// background event; ASCII fallback under NO_COLOR. ● is East-Asian
+// ambiguous-width (RENDER-02): on CJK-wide terminals it may render 2 cells
+// and cost the strip a column — accepted, matching the ‹› indicators this
+// component already uses in color mode.
 func attentionGlyph() string {
 	if theme.NoColor() {
 		return "*"
