@@ -1841,3 +1841,38 @@ func TestServerPage_RenderTableShowsPausedMarker(t *testing.T) {
 		t.Errorf("paused table header missing PAUSED marker; got:\n%s", out)
 	}
 }
+
+// UIUX-021: a newly-crashed instance raises exactly one TabAttentionMsg; the
+// 2s refresh re-reporting the same crash stays silent, and crashSeen entries
+// are reaped once the PID leaves the instance list.
+func TestServerPage_CrashEmitsTabAttentionOnce(t *testing.T) {
+	pm := &fakeProcMgr{}
+	p := NewServerPage(pm, fakeMonMgr{}, nil)
+	insts := []domain.RunningInstance{{PID: 42, Port: 8080, ProfileID: "p1", Crashed: true}}
+
+	countAttention := func(msgs []tea.Msg) int {
+		n := 0
+		for _, m := range msgs {
+			if a, ok := m.(TabAttentionMsg); ok {
+				if a.Page != AttentionServer {
+					t.Fatalf("attention page = %q, want %q", a.Page, AttentionServer)
+				}
+				n++
+			}
+		}
+		return n
+	}
+
+	if got := countAttention(drainCmd(p.applyInstances(insts))); got != 1 {
+		t.Fatalf("first apply: attention msgs = %d, want 1", got)
+	}
+	if got := countAttention(drainCmd(p.applyInstances(insts))); got != 0 {
+		t.Fatalf("second apply (same crash): attention msgs = %d, want 0", got)
+	}
+
+	// PID gone: crashSeen entry must be reaped so the map cannot grow forever.
+	_ = p.applyInstances(nil)
+	if len(p.crashSeen) != 0 {
+		t.Fatalf("crashSeen = %v after PID left the list, want empty", p.crashSeen)
+	}
+}

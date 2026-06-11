@@ -177,3 +177,59 @@ func TestTabBar_ASCIIFallbacksUnderNoColor(t *testing.T) {
 		t.Errorf("NO_COLOR overflow still uses Unicode indicators: %q", overflow)
 	}
 }
+
+// UIUX-021: a non-empty badge is appended after its tab label; empty badge
+// entries leave their labels untouched.
+func TestTabBar_BadgeAppendedAfterLabel(t *testing.T) {
+	out := TabBar(TabBarOptions{
+		Labels:         []string{"Tab1", "Tab2", "Tab3"},
+		ActiveIndex:    0,
+		AvailableWidth: 80,
+		Badges:         []string{"", "●", ""},
+	})
+	if !strings.Contains(out, "Tab2 ●") {
+		t.Errorf("badge not appended after Tab2: %q", out)
+	}
+	if strings.Contains(out, "Tab1 ●") || strings.Contains(out, "Tab3 ●") {
+		t.Errorf("badge leaked onto unbadged tabs: %q", out)
+	}
+	if strings.Count(out, "●") != 1 {
+		t.Errorf("badge glyph count = %d, want 1: %q", strings.Count(out, "●"), out)
+	}
+}
+
+func TestTabBar_NoBadgesRendersPlainLabels(t *testing.T) {
+	out := TabBar(TabBarOptions{
+		Labels:         []string{"Tab1", "Tab2"},
+		ActiveIndex:    0,
+		AvailableWidth: 80,
+		Badges:         []string{"", ""},
+	})
+	if strings.Contains(out, "●") {
+		t.Errorf("unexpected badge glyph with empty badges: %q", out)
+	}
+	if !strings.Contains(out, "Tab1") || !strings.Contains(out, "Tab2") {
+		t.Errorf("labels missing: %q", out)
+	}
+}
+
+// Under NO_COLOR the badge is folded into the label before the active-tab
+// bracket wrap, so it lands inside the brackets.
+func TestTabBar_BadgeInsideActiveBracketsUnderNoColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	theme.RebuildStyles()
+	defer func() {
+		t.Setenv("NO_COLOR", "")
+		theme.RebuildStyles()
+	}()
+
+	out := TabBar(TabBarOptions{
+		Labels:         []string{"Tab1", "Tab2"},
+		ActiveIndex:    1,
+		AvailableWidth: 80,
+		Badges:         []string{"", "*"},
+	})
+	if !strings.Contains(out, "[Tab2 *]") {
+		t.Errorf("NO_COLOR active badge not inside brackets: %q", out)
+	}
+}

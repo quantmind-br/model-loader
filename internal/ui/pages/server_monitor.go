@@ -149,8 +149,36 @@ func (p *ServerPage) applyInstances(insts []domain.RunningInstance) tea.Cmd {
 	p.tbl.SetRows(p.renderRows(insts))
 	p.clampCursor(len(insts))
 	cmds := p.ensureSubscriptions(insts)
+	if c := p.noteCrashes(insts); c != nil {
+		cmds = append(cmds, c)
+	}
 	p.reapDeadSubscriptions(insts)
 	return tea.Batch(cmds...)
+}
+
+// noteCrashes raises one TabAttentionMsg per newly-crashed PID so root can
+// badge the Server tab while the user is elsewhere. crashSeen dedupes the
+// 2s refresh re-reporting the same crash; entries for PIDs no longer in the
+// instance list are reaped (alongside the dead-subscription reap pattern).
+func (p *ServerPage) noteCrashes(insts []domain.RunningInstance) tea.Cmd {
+	fresh := false
+	byPID := make(map[int]struct{}, len(insts))
+	for _, ri := range insts {
+		byPID[ri.PID] = struct{}{}
+		if ri.Crashed && !p.crashSeen[ri.PID] {
+			p.crashSeen[ri.PID] = true
+			fresh = true
+		}
+	}
+	for pid := range p.crashSeen {
+		if _, ok := byPID[pid]; !ok {
+			delete(p.crashSeen, pid)
+		}
+	}
+	if !fresh {
+		return nil
+	}
+	return func() tea.Msg { return TabAttentionMsg{Page: AttentionServer} }
 }
 
 // renderRows formats one table row per instance. Crashed instances are

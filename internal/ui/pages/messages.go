@@ -22,6 +22,16 @@ type ServerSelectPIDMsg struct {
 	PID int
 }
 
+// Tab attention page names root maps to tabs.
+const (
+	AttentionModels = "models"
+	AttentionServer = "server"
+)
+
+// TabAttentionMsg signals a background event (download finished/failed,
+// instance crash) so root can badge the owning tab until it's visited.
+type TabAttentionMsg struct{ Page string }
+
 // truncate clips s to the target visual width, replacing the tail with "…"
 // when the input is wider. Uses theme.RuneWidth so CJK and emoji are counted
 // by display cells, not bytes or runes.

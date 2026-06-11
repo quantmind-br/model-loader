@@ -151,11 +151,15 @@ type bootBlocker struct {
 
 // RootModel is the top-level tea.Model.
 type RootModel struct {
-	pages           [tabCount]tea.Model
-	active          Tab
-	status          components.StatusBar
-	width           int
-	height          int
+	pages  [tabCount]tea.Model
+	active Tab
+	// badges marks tabs with a pending background event (download finished/
+	// failed, instance crash). Set by TabAttentionMsg, cleared when the tab
+	// is visited.
+	badges       [tabCount]bool
+	status       components.StatusBar
+	width        int
+	height       int
 	bootBlocker  *bootBlocker
 	helpOpen     bool
 	helpViewport viewport.Model
@@ -246,6 +250,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleBootBlocker(msg)
 	}
 	switch msg := msg.(type) {
+	case pages.TabAttentionMsg:
+		// Comes from a page cmd; root consumes it (no broadcast). Badging the
+		// active tab would be noise — the user is already looking at it.
+		if t, ok := attentionTab(msg.Page); ok && t != m.active {
+			m.badges[t] = true
+		}
+		return m, nil
 	case pages.UseInNewProfileMsg:
 		return m.activateAndForward(TabProfiles, msg)
 	case pages.SwitchToServerMsg:
@@ -304,6 +315,7 @@ func (m RootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 // the requested row.
 func (m RootModel) handleSwitchToServer(msg pages.SwitchToServerMsg) (tea.Model, tea.Cmd) {
 	m.active = TabServer
+	m.badges[TabServer] = false
 	updated, cmd := m.pages[TabServer].Update(pages.ServerSelectPIDMsg{PID: msg.PID})
 	m.pages[TabServer] = updated
 	m.recomputeHints()
@@ -315,6 +327,7 @@ func (m RootModel) handleSwitchToServer(msg pages.SwitchToServerMsg) (tea.Model,
 // and open its editor on the sizing sub-tab.
 func (m RootModel) handleNavigateToSizing(msg pages.NavigateToSizingMsg) (tea.Model, tea.Cmd) {
 	m.active = TabProfiles
+	m.badges[TabProfiles] = false
 	updated, cmd := m.pages[TabProfiles].Update(msg)
 	m.pages[TabProfiles] = updated
 	m.recomputeHints()
@@ -446,6 +459,7 @@ func helpScrollKey(msg tea.KeyMsg) bool {
 // cross-tab navigations that need both the tab change and the page update.
 func (m RootModel) activateAndForward(t Tab, msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.active = t
+	m.badges[t] = false
 	updated, cmd := m.pages[t].Update(msg)
 	m.pages[t] = updated
 	m.recomputeHints()
@@ -530,6 +544,7 @@ func (m RootModel) View() string {
 // external file changes without requiring a TUI restart.
 func (m RootModel) activate(t Tab) (tea.Model, tea.Cmd) {
 	m.active = t
+	m.badges[t] = false
 	m.recomputeHints()
 	if r, ok := m.pages[t].(Reloader); ok {
 		return m, r.Reload()
@@ -591,14 +606,41 @@ func (m RootModel) activePageCapturesInput() bool {
 	return false
 }
 
+// attentionTab maps a TabAttentionMsg page name to its Tab.
+func attentionTab(page string) (Tab, bool) {
+	switch page {
+	case pages.AttentionModels:
+		return TabModels, true
+	case pages.AttentionServer:
+		return TabServer, true
+	default:
+		return 0, false
+	}
+}
+
+// attentionGlyph is the badge rendered next to a tab label with a pending
+// background event; ASCII fallback under NO_COLOR.
+func attentionGlyph() string {
+	if theme.NoColor() {
+		return "*"
+	}
+	return "●"
+}
+
 func (m RootModel) renderTabs() string {
 	labels := make([]string, tabCount)
+	badges := make([]string, tabCount)
+	glyph := attentionGlyph()
 	for i := Tab(0); i < tabCount; i++ {
 		labels[i] = fmt.Sprintf("%d %s", int(i)+1, i.Title())
+		if m.badges[i] {
+			badges[i] = glyph
+		}
 	}
 	return components.TabBar(components.TabBarOptions{
 		Labels:         labels,
 		ActiveIndex:    int(m.active),
 		AvailableWidth: m.width,
+		Badges:         badges,
 	})
 }

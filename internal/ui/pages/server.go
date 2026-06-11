@@ -52,6 +52,7 @@ type ServerPage struct {
 	tbl                table.Model
 	subs               map[int]*subState
 	chans              map[int]<-chan monitor.MonitorEvent
+	crashSeen          map[int]bool // PIDs whose crash already raised a tab attention badge
 	subView            SubViewKind
 	history            []domain.ExitedInstance
 	paused             bool
@@ -88,13 +89,14 @@ func NewServerPage(pm procMgrIface, mm monitor.Manager, ps profileStoreIface) *S
 	}
 	t := table.New(table.WithColumns(cols), table.WithFocused(true), table.WithHeight(8))
 	return &ServerPage{
-		pm:    pm,
-		mm:    mm,
-		ps:    ps,
-		tbl:   t,
-		subs:  map[int]*subState{},
-		chans: map[int]<-chan monitor.MonitorEvent{},
-		flash: components.NewFlash("monitor"),
+		pm:        pm,
+		mm:        mm,
+		ps:        ps,
+		tbl:       t,
+		subs:      map[int]*subState{},
+		chans:     map[int]<-chan monitor.MonitorEvent{},
+		crashSeen: map[int]bool{},
+		flash:     components.NewFlash("monitor"),
 	}
 }
 

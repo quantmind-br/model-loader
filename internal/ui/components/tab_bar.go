@@ -15,6 +15,10 @@ type TabBarOptions struct {
 	AvailableWidth int
 	LeftIndicator  string // default "‹"
 	RightIndicator string // default "›"
+	// Badges holds an optional attention glyph per tab ("" = none). A badge
+	// is folded into the label before styling so all downstream width and
+	// truncation math stays untouched.
+	Badges []string
 }
 
 // TabBar renders a horizontally-scrollable tab strip. The active tab is always
@@ -66,6 +70,11 @@ func applyTabBarDefaults(opts TabBarOptions) TabBarOptions {
 func renderTabLabels(opts TabBarOptions) []string {
 	labels := make([]string, len(opts.Labels))
 	for i, label := range opts.Labels {
+		// Fold the badge in before any styling/bracketing so the active tab's
+		// NO_COLOR brackets enclose it and width math sees the final text.
+		if i < len(opts.Badges) && opts.Badges[i] != "" {
+			label += " " + opts.Badges[i]
+		}
 		if i == opts.ActiveIndex {
 			if theme.NoColor() {
 				// Color can't mark the active tab; brackets do. Wrapped

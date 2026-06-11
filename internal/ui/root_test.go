@@ -745,3 +745,63 @@ func TestRoot_NumberFiveSwitchesToBenchmark(t *testing.T) {
 		t.Fatalf("active = %v, want TabBenchmark", rm.active)
 	}
 }
+
+// UIUX-021: a TabAttentionMsg for a background tab badges it in the tab
+// strip; visiting the tab clears the badge.
+func TestRoot_TabAttentionBadgesInactiveTabUntilVisited(t *testing.T) {
+	r := NewRoot(TabProfiles).
+		WithProfilesPage(pages.Placeholder{TabName: "P"}).
+		WithServerPage(pages.Placeholder{TabName: "S"}).
+		WithModelsPage(pages.Placeholder{TabName: "M"})
+	r.width = 120
+
+	updated, cmd := r.Update(pages.TabAttentionMsg{Page: pages.AttentionModels})
+	rm := updated.(RootModel)
+	if cmd != nil {
+		t.Errorf("TabAttentionMsg produced cmd; root should consume it")
+	}
+	if !rm.badges[TabModels] {
+		t.Fatal("Models badge not set after TabAttentionMsg")
+	}
+	if !strings.Contains(rm.View(), "3 Models ●") {
+		t.Errorf("tab strip missing badge next to Models; view:\n%s", rm.View())
+	}
+
+	// Visiting the Models tab (key "3") clears the badge.
+	updated, _ = rm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	rm = updated.(RootModel)
+	if rm.active != TabModels {
+		t.Fatalf("active = %v, want TabModels", rm.active)
+	}
+	if rm.badges[TabModels] {
+		t.Error("Models badge still set after visiting the tab")
+	}
+	if strings.Contains(rm.View(), "●") {
+		t.Errorf("badge glyph still rendered after visit; view:\n%s", rm.View())
+	}
+}
+
+// Attention for the tab the user is already looking at is noise — no badge.
+func TestRoot_TabAttentionIgnoredForActiveTab(t *testing.T) {
+	r := NewRoot(TabServer).
+		WithServerPage(pages.Placeholder{TabName: "S"})
+	updated, _ := r.Update(pages.TabAttentionMsg{Page: pages.AttentionServer})
+	rm := updated.(RootModel)
+	if rm.badges[TabServer] {
+		t.Error("badge set for the active tab")
+	}
+}
+
+// Cross-tab navigation paths (not just digit keys) must also clear badges.
+func TestRoot_SwitchToServerMsgClearsServerBadge(t *testing.T) {
+	r := NewRoot(TabProfiles).
+		WithProfilesPage(pages.Placeholder{TabName: "P"}).
+		WithServerPage(pages.Placeholder{TabName: "S"})
+	r.badges[TabServer] = true
+
+	updated, _ := r.Update(pages.SwitchToServerMsg{PID: 1})
+	rm := updated.(RootModel)
+	if rm.badges[TabServer] {
+		t.Error("Server badge still set after SwitchToServerMsg navigation")
+	}
+}

@@ -292,3 +292,43 @@ func TestRenderBar(t *testing.T) {
 		t.Errorf("renderBar(0.5,10) filled = %d, want 5", full)
 	}
 }
+
+// UIUX-021: terminal download events (completed/failed) raise a tab
+// attention badge for the Models tab; non-terminal events stay silent.
+func TestModelsPage_DownloadTerminalEventsRaiseTabAttention(t *testing.T) {
+	hasAttention := func(msgs []tea.Msg) bool {
+		for _, m := range msgs {
+			if a, ok := m.(TabAttentionMsg); ok {
+				if a.Page != AttentionModels {
+					t.Fatalf("attention page = %q, want %q", a.Page, AttentionModels)
+				}
+				return true
+			}
+		}
+		return false
+	}
+
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	_, cmd := page.handleDownloadEvent(downloadmgr.Event{State: downloadmgr.State{
+		Status: downloadmgr.StatusCompleted, Spec: downloadmgr.Spec{Filename: "a.gguf"},
+	}})
+	if !hasAttention(drainCmd(cmd)) {
+		t.Error("completed download did not raise TabAttentionMsg")
+	}
+
+	page = NewModelsPage(&fakeScanner{}, []string{"/m"})
+	_, cmd = page.handleDownloadEvent(downloadmgr.Event{State: downloadmgr.State{
+		Status: downloadmgr.StatusFailed, Spec: downloadmgr.Spec{Filename: "b.gguf"},
+	}})
+	if !hasAttention(drainCmd(cmd)) {
+		t.Error("failed download did not raise TabAttentionMsg")
+	}
+
+	page = NewModelsPage(&fakeScanner{}, []string{"/m"})
+	_, cmd = page.handleDownloadEvent(downloadmgr.Event{State: downloadmgr.State{
+		Status: downloadmgr.StatusActive, Spec: downloadmgr.Spec{Filename: "c.gguf"},
+	}})
+	if hasAttention(drainCmd(cmd)) {
+		t.Error("active (non-terminal) download raised TabAttentionMsg")
+	}
+}

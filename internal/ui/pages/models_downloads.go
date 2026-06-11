@@ -358,17 +358,21 @@ func (p ModelsPage) handleDownloadEvent(ev downloadmgr.Event) (tea.Model, tea.Cm
 	if p.dlManager != nil {
 		p.updateRates(p.dlManager.Snapshot())
 	}
+	// Terminal download states also raise a tab attention badge so the user
+	// notices the background completion/failure from any other tab.
+	attention := func() tea.Msg { return TabAttentionMsg{Page: AttentionModels} }
 	switch ev.State.Status {
 	case downloadmgr.StatusCompleted:
 		p, fc := p.withFlash("downloaded: " + ev.State.Spec.Filename)
 		next, scanCmd := p.beginRescan(false)
-		return next, tea.Batch(fc, scanCmd)
+		return next, tea.Batch(fc, scanCmd, attention)
 	case downloadmgr.StatusFailed:
 		msg := "download failed"
 		if ev.State.Err != nil {
 			msg += ": " + ev.State.Err.Error()
 		}
-		return p.withFlashError(msg)
+		next, fc := p.withFlashError(msg)
+		return next, tea.Batch(fc, attention)
 	default:
 		return p, nil
 	}
