@@ -489,6 +489,162 @@ func TestSaveHandler_AllowsMissingModelFile(t *testing.T) {
 	}
 }
 
+// --- backend-switch test doubles ---
+
+// multiBackendCatalog serves a catalog with several backends, each with its
+// own schema ref.
+type multiBackendCatalog struct{ backends []domain.Backend }
+
+func (c multiBackendCatalog) Load() (domain.BackendCatalog, error) {
+	return domain.BackendCatalog{
+		SchemaVersion:    1,
+		DefaultBackendID: c.backends[0].ID,
+		Backends:         c.backends,
+	}, nil
+}
+func (c multiBackendCatalog) Save(domain.BackendCatalog) error { return nil }
+
+// refSchemaStore returns a different schema per store ref.
+type refSchemaStore struct {
+	schemas map[string]domain.BackendValidationSchema
+}
+
+func (s refSchemaStore) Load(ref string) (domain.BackendValidationSchema, error) {
+	if sch, ok := s.schemas[ref]; ok {
+		return sch, nil
+	}
+	return domain.BackendValidationSchema{}, errors.New("no schema for ref " + ref)
+}
+func (s refSchemaStore) Save(string, domain.BackendValidationSchema) error { return nil }
+func (s refSchemaStore) Delete(string) error                               { return nil }
+
+// switchTestSession wires two backends: "old" knows ctx-size and old-only,
+// "new" knows only ctx-size.
+func switchTestSession() *Session {
+	oldSchema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "old",
+		Flags: map[string]domain.FlagSpec{
+			"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt},
+			"old-only": {Long: "old-only", Type: domain.FlagTypeString},
+		},
+		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{
+			{Name: "Essentials", Highlighted: true, Flags: []string{"ctx-size", "old-only"}},
+		}},
+	}
+	newSchema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "new",
+		Flags: map[string]domain.FlagSpec{
+			"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt},
+		},
+		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{
+			{Name: "Core", Highlighted: true, Flags: []string{"ctx-size"}},
+		}},
+	}
+	return &Session{deps: Deps{
+		Schemas: refSchemaStore{schemas: map[string]domain.BackendValidationSchema{
+			"old.json": oldSchema,
+			"new.json": newSchema,
+		}},
+		Catalog: multiBackendCatalog{backends: []domain.Backend{
+			{ID: "old", Name: "Old Backend", Kind: domain.BackendKindLlamaServer, SchemaRef: "schemas/old.json"},
+			{ID: "new", Name: "New Backend", Kind: domain.BackendKindLlamaServer, SchemaRef: "schemas/new.json"},
+		}},
+		InitialDraft: Draft{IsNew: true, Name: "P", BackendID: "old"},
+	}}
+}
+
+func postSwitchBackend(t *testing.T, s *Session, form url.Values) string {
+	t.Helper()
+	req := httptest.NewRequest("POST", "/switch-backend", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleSwitchBackend(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("switch-backend status %d: %s", rec.Code, rec.Body.String())
+	}
+	return rec.Body.String()
+}
+
+func assertInitialDraftUntouched(t *testing.T, s *Session) {
+	t.Helper()
+	if s.deps.InitialDraft.BackendID != "old" {
+		t.Fatalf("handleSwitchBackend must not mutate shared InitialDraft state, got BackendID=%q",
+			s.deps.InitialDraft.BackendID)
+	}
+}
+
+func TestSwitchBackend_CarriesSharedArgsAndRefreshesSidebar(t *testing.T) {
+	s := switchTestSession()
+	body := postSwitchBackend(t, s, url.Values{
+		"isNew": {"true"}, "name": {"P"},
+		"backendId": {"new"}, "prevBackendId": {"old"},
+		"arg.ctx-size": {"4096"},
+	})
+	if !strings.Contains(body, `value="4096"`) {
+		t.Fatalf("shared arg value must carry over to the new form: %s", body)
+	}
+	if !strings.Contains(body, `name="prevBackendId" value="new"`) {
+		t.Fatalf("new form must record the new backend as prevBackendId: %s", body)
+	}
+	if strings.Contains(body, "switch-confirm") {
+		t.Fatalf("no confirmation expected when nothing is dropped: %s", body)
+	}
+	if !strings.Contains(body, `id="sidebar-groups" hx-swap-oob="innerHTML"`) {
+		t.Fatalf("response must oob-refresh the sidebar tablist: %s", body)
+	}
+	if !strings.Contains(body, `x-init="activeGroup=&#39;Core&#39;"`) {
+		t.Fatalf("oob fragment must reset activeGroup to the new schema's first group: %s", body)
+	}
+	assertInitialDraftUntouched(t, s)
+}
+
+func TestSwitchBackend_DroppedArgsAskConfirmation(t *testing.T) {
+	s := switchTestSession()
+	body := postSwitchBackend(t, s, url.Values{
+		"isNew": {"true"}, "name": {"P"},
+		"backendId": {"new"}, "prevBackendId": {"old"},
+		"arg.ctx-size": {"4096"}, "arg.old-only": {"xyz"},
+	})
+	if !strings.Contains(body, "switch-confirm") {
+		t.Fatalf("expected confirmation banner when args would be dropped: %s", body)
+	}
+	if !strings.Contains(body, "old-only") {
+		t.Fatalf("banner must name the dropped flag: %s", body)
+	}
+	if !strings.Contains(body, "confirmSwitch") {
+		t.Fatalf("banner must re-post with confirmSwitch: %s", body)
+	}
+	// The OLD form is rendered back: the at-risk arg keeps its input + value...
+	if !strings.Contains(body, `name="arg.old-only"`) || !strings.Contains(body, `value="xyz"`) {
+		t.Fatalf("old form must still carry the dropped arg input with its value: %s", body)
+	}
+	// ...and the select shows the old backend selected again.
+	if !strings.Contains(body, `value="old" selected`) {
+		t.Fatalf("select must render reverted to the old backend: %s", body)
+	}
+	assertInitialDraftUntouched(t, s)
+}
+
+func TestSwitchBackend_ConfirmedDropsUnsupportedArgs(t *testing.T) {
+	s := switchTestSession()
+	// The confirm button re-posts the reverted old form plus confirmSwitch=new.
+	body := postSwitchBackend(t, s, url.Values{
+		"isNew": {"true"}, "name": {"P"},
+		"backendId": {"old"}, "prevBackendId": {"old"}, "confirmSwitch": {"new"},
+		"arg.ctx-size": {"4096"}, "arg.old-only": {"xyz"},
+	})
+	if !strings.Contains(body, `value="4096"`) {
+		t.Fatalf("kept arg must survive the confirmed switch: %s", body)
+	}
+	if strings.Contains(body, `name="arg.old-only"`) {
+		t.Fatalf("dropped arg must be gone after the confirmed switch: %s", body)
+	}
+	if strings.Contains(body, "switch-confirm") {
+		t.Fatalf("no banner expected on the confirmed switch: %s", body)
+	}
+	assertInitialDraftUntouched(t, s)
+}
+
 func TestDraftFromForm_ParsesEnvVars(t *testing.T) {
 	form := url.Values{
 		"id":          []string{"test"},

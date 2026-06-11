@@ -869,6 +869,32 @@ button.secondary:hover{
   box-shadow:0 0 0 3px var(--err-dim);
 }
 
+/* ── Backend switch confirmation banner ── */
+.switch-confirm{
+  margin-bottom:var(--sp-6);
+  padding:var(--sp-4) var(--sp-5);
+  background:var(--warn-dim);
+  border:1px solid var(--warn);
+  border-radius:var(--radius-md);
+}
+.switch-confirm p{
+  margin:0 0 var(--sp-2);
+}
+.switch-confirm ul{
+  margin:0 0 var(--sp-4);
+  padding-left:var(--sp-6);
+}
+.switch-confirm code{
+  font-family:'SF Mono',ui-monospace,monospace;
+  font-size:var(--text-sm);
+  color:var(--warn);
+}
+.switch-confirm-actions{
+  display:flex;
+  gap:var(--sp-3);
+  flex-wrap:wrap;
+}
+
 /* ── Toasts ── */
 .toast-root{
   position:fixed;

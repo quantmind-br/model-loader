@@ -21,6 +21,20 @@ type ViewModel struct {
 	AllFlags  []FlagEditVM
 	Rules     []domain.CrossFieldRule
 	Backends  []domain.Backend
+	// SwitchConfirm, when set, renders the backend-switch confirmation banner:
+	// the user picked a backend that does not support some configured args and
+	// must approve dropping them before the switch happens.
+	SwitchConfirm *SwitchConfirmVM
+}
+
+// DroppedArg is one configured profile arg the target backend does not support.
+type DroppedArg struct{ Flag, Value string }
+
+// SwitchConfirmVM feeds the confirmation banner shown before a backend switch
+// that would drop configured args.
+type SwitchConfirmVM struct {
+	NewBackendID, NewBackendName string
+	Dropped                      []DroppedArg
 }
 
 // FlagEditVM is the editable representation of one flag for customize mode.

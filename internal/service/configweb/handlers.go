@@ -1,10 +1,13 @@
 package configweb
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"html"
+	"html/template"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -437,27 +440,104 @@ func validateRules(rules []domain.CrossFieldRule, schema domain.BackendValidatio
 	return ""
 }
 
-// handleSwitchBackend updates the draft's backend and re-renders the form.
+// handleSwitchBackend re-renders the form for a new backend, carrying over
+// every configured arg the new schema supports. Args the new backend does NOT
+// support are never dropped silently: the first POST re-renders the old form
+// (select reverted, args intact) with a confirmation banner, and only a second
+// POST carrying confirmSwitch performs the switch and removes them.
 func (s *Session) handleSwitchBackend(w http.ResponseWriter, r *http.Request) {
-	_ = r.ParseForm()
-	newBackendID := r.FormValue("backendId")
-	if newBackendID == "" {
+	d := draftFromForm(r)
+	confirmed := r.FormValue("confirmSwitch") != ""
+	newID := r.FormValue("confirmSwitch")
+	if newID == "" {
+		newID = d.BackendID
+	}
+	prevID := r.FormValue("prevBackendId")
+	if newID == "" {
 		http.Error(w, "backendId required", http.StatusBadRequest)
 		return
 	}
 
-	s.deps.InitialDraft.BackendID = newBackendID
-
-	schema, err := s.loadSchema(newBackendID)
+	newSchema, err := s.loadSchema(newID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	backends, _ := s.loadBackends()
-	vm := BuildViewModel(s.deps.InitialDraft, schema, backends)
+	kept, dropped := partitionArgs(d.Args, newSchema.ToFlagSchema())
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(w, "configure", vm); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if len(dropped) > 0 && !confirmed {
+		// Render the OLD form back (args fully intact, select reverted) plus the
+		// confirmation banner; the switch only happens on the confirmed re-POST.
+		oldSchema, err := s.loadSchema(prevID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		d.BackendID = prevID
+		vm := BuildViewModel(d, oldSchema, backends)
+		vm.SwitchConfirm = &SwitchConfirmVM{
+			NewBackendID:   newID,
+			NewBackendName: backendName(backends, newID),
+			Dropped:        dropped,
+		}
+		s.renderSwitchResponse(w, vm)
+		return
 	}
+
+	d.BackendID = newID
+	d.Args = kept
+	vm := BuildViewModel(d, newSchema, backends)
+	s.renderSwitchResponse(w, vm)
+}
+
+// partitionArgs splits draft args into those the schema knows (kept) and those
+// it does not (dropped, sorted by flag for stable rendering).
+func partitionArgs(args map[string]string, fs domain.FlagSchema) (map[string]string, []DroppedArg) {
+	kept := map[string]string{}
+	var dropped []DroppedArg
+	for flag, val := range args {
+		if _, ok := fs.Lookup(domain.CanonicalFlag(flag)); ok {
+			kept[flag] = val
+		} else {
+			dropped = append(dropped, DroppedArg{Flag: flag, Value: val})
+		}
+	}
+	sort.Slice(dropped, func(i, j int) bool { return dropped[i].Flag < dropped[j].Flag })
+	return kept, dropped
+}
+
+func backendName(backends []domain.Backend, id string) string {
+	for _, b := range backends {
+		if b.ID == id && b.Name != "" {
+			return b.Name
+		}
+	}
+	return id
+}
+
+// renderSwitchResponse writes the swapped #profile-form (outerHTML target of
+// the backend select) followed by an out-of-band innerHTML refresh of the
+// #sidebar-groups tablist so the group tabs always match the rendered schema.
+// The oob fragment leads with a one-shot hidden x-init div that resets Alpine's
+// activeGroup to the first group of the rendered schema (Alpine initializes
+// htmx-inserted nodes via its MutationObserver).
+func (s *Session) renderSwitchResponse(w http.ResponseWriter, vm ViewModel) {
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "configure", vm); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	buf.WriteString(`<div id="sidebar-groups" hx-swap-oob="innerHTML">`)
+	if len(vm.Groups) > 0 {
+		expr := "activeGroup='" + template.JSEscapeString(vm.Groups[0].Name) + "'"
+		buf.WriteString(`<div x-init="` + htmlEscape(expr) + `" hidden></div>`)
+	}
+	if err := tmpl.ExecuteTemplate(&buf, "sidebar-tabs", vm); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	buf.WriteString(`</div>`)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(buf.Bytes())
 }

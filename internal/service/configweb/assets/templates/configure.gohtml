@@ -25,12 +25,29 @@
 <form id="profile-form" hx-post="/validate" hx-trigger="input changed delay:300ms" hx-target="#issues">
   <input type="hidden" name="origId" value="{{.Draft.OrigID}}">
   <input type="hidden" name="isNew" value="{{if .Draft.IsNew}}true{{else}}false{{end}}">
+  <input type="hidden" name="prevBackendId" value="{{.Draft.BackendID}}">
+
+  {{if .SwitchConfirm}}
+  <div class="switch-confirm" role="alert">
+    <p><strong>Switch to {{.SwitchConfirm.NewBackendName}}?</strong>
+      {{len .SwitchConfirm.Dropped}} option(s) set on this profile are not supported by it and will be removed:</p>
+    <ul>{{range .SwitchConfirm.Dropped}}<li><code>{{.Flag}}</code>{{if .Value}} = {{.Value}}{{end}}</li>{{end}}</ul>
+    <div class="switch-confirm-actions">
+      <button type="button" class="primary" hx-post="/switch-backend"
+        hx-vals='{"confirmSwitch":"{{.SwitchConfirm.NewBackendID}}"}'
+        hx-include="#profile-form" hx-target="#profile-form" hx-swap="outerHTML"
+        hx-disabled-elt="this">Switch and remove them</button>
+      <button type="button" class="ghost"
+        @click="$el.closest('.switch-confirm').remove()">Keep current backend</button>
+    </div>
+  </div>
+  {{end}}
 
   <div class="top-fields">
     {{if .Draft.IsNew}}
     <div class="field">
       <label for="profile-backend">Backend</label>
-      <select id="profile-backend" name="backendId" hx-post="/switch-backend" hx-target="#profile-form" hx-swap="outerHTML">
+      <select id="profile-backend" name="backendId" hx-post="/switch-backend" hx-target="#profile-form" hx-swap="outerHTML" hx-disabled-elt="this">
         {{range .Backends}}
         <option value="{{.ID}}"{{if eq .ID $.Draft.BackendID}} selected{{end}}>{{.Name}}</option>
         {{end}}
