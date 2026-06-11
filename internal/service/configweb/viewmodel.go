@@ -123,19 +123,28 @@ func fieldVM(long string, spec domain.FlagSpec, d Draft) FieldVM {
 		}
 		f.Value = v
 	}
+	if f.Widget == "toggle" {
+		// The default is interpolated into the widget's Alpine expression;
+		// restrict it to the toggle vocabulary so a customized free-text
+		// default can never break the component.
+		f.Default = normalizeToggle(f.Default)
+	}
 	return f
 }
 
 // normalizeToggle maps persisted bool spellings onto the toggle widget's
-// vocabulary ("true"→"on", "false"→"off"); anything else passes through.
+// vocabulary. Anything outside on/off/true/false is treated as unset: the
+// value is seeded into the widget's Alpine x-data expression, so an
+// unexpected stored string (e.g. after a flag's type was customized from
+// text to bool) must never reach it verbatim.
 func normalizeToggle(v string) string {
 	switch v {
-	case "true":
+	case "on", "true":
 		return "on"
-	case "false":
+	case "off", "false":
 		return "off"
 	}
-	return v
+	return ""
 }
 
 func flagEdit(long string, spec domain.FlagSpec) FlagEditVM {

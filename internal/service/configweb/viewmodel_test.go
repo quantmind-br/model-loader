@@ -122,7 +122,10 @@ func TestNormalizeToggle(t *testing.T) {
 		"on":      "on",
 		"off":     "off",
 		"":        "",
-		"garbage": "garbage",
+		// Whitelist: unexpected stored values are treated as unset so they
+		// can never reach the widget's Alpine expression verbatim.
+		"garbage": "",
+		"do'nt":   "",
 	}
 	for in, want := range cases {
 		if got := normalizeToggle(in); got != want {
