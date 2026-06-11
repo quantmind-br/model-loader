@@ -118,9 +118,24 @@ func fieldVM(long string, spec domain.FlagSpec, d Draft) FieldVM {
 	// stays empty (= not configured) so it never leaks into the saved profile;
 	// the schema default is surfaced only as a placeholder hint.
 	if v, ok := d.Args[long]; ok {
+		if f.Widget == "toggle" {
+			v = normalizeToggle(v)
+		}
 		f.Value = v
 	}
 	return f
+}
+
+// normalizeToggle maps persisted bool spellings onto the toggle widget's
+// vocabulary ("true"→"on", "false"→"off"); anything else passes through.
+func normalizeToggle(v string) string {
+	switch v {
+	case "true":
+		return "on"
+	case "false":
+		return "off"
+	}
+	return v
 }
 
 func flagEdit(long string, spec domain.FlagSpec) FlagEditVM {

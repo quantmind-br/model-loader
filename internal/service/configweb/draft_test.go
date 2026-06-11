@@ -41,6 +41,19 @@ func TestCoerceArgs_DropsReservedPort(t *testing.T) {
 	}
 }
 
+func TestCoerceArgs_BoolValues(t *testing.T) {
+	schema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"flash-attn": {Long: "flash-attn", Type: domain.FlagTypeBool},
+	}}
+	cases := map[string]bool{"on": true, "true": true, "off": false, "false": false}
+	for in, want := range cases {
+		out := coerceArgs(map[string]string{"flash-attn": in}, schema)
+		if out["flash-attn"] != want {
+			t.Errorf("coerceArgs bool %q = %#v, want %v", in, out["flash-attn"], want)
+		}
+	}
+}
+
 func TestDraft_ToProfile_CopiesEnv(t *testing.T) {
 	d := Draft{
 		ID:   "test",

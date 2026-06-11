@@ -115,6 +115,22 @@ func TestBuildViewModel_OrdersGroupsAndWidgets(t *testing.T) {
 	}
 }
 
+func TestNormalizeToggle(t *testing.T) {
+	cases := map[string]string{
+		"true":    "on",
+		"false":   "off",
+		"on":      "on",
+		"off":     "off",
+		"":        "",
+		"garbage": "garbage",
+	}
+	for in, want := range cases {
+		if got := normalizeToggle(in); got != want {
+			t.Errorf("normalizeToggle(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestBuildViewModel_UntouchedFlagStaysUnconfigured(t *testing.T) {
 	schema := domain.BackendValidationSchema{
 		BackendKind: domain.BackendKindLlamaServer,

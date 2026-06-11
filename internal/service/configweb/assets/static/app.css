@@ -396,6 +396,31 @@ form{
   line-height:1.4;
 }
 
+/* ── Tri-state toggle field (bool flags: unset/on/off) ── */
+.toggle-field{
+  display:flex;
+  align-items:center;
+  gap:var(--sp-3);
+  min-height:44px;
+}
+.toggle-field input[type="checkbox"].toggle-check{
+  width:20px;
+  height:20px;
+  flex:none;
+  margin:0;
+  padding:0;
+  accent-color:var(--accent);
+  cursor:pointer;
+}
+.toggle-field .toggle-state{
+  font-size:var(--text-sm);
+}
+.toggle-field button.toggle-reset{
+  min-height:32px;
+  padding:0.25rem 0.7rem;
+  font-size:var(--text-xs);
+}
+
 /* ── Group panel ── */
 .group-header{
   margin-bottom:var(--sp-6);

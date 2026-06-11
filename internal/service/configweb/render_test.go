@@ -113,6 +113,63 @@ func TestBackendPageRendersAccessibleLabels(t *testing.T) {
 	}
 }
 
+func toggleTestSession(args map[string]string) *Session {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{
+			"flash-attn": {Long: "flash-attn", Type: domain.FlagTypeBool, Default: true},
+		},
+		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{
+			{Name: "Essentials", Highlighted: true, Flags: []string{"flash-attn"}},
+		}},
+	}
+	return &Session{deps: Deps{
+		Schemas:      stubSchemaStore{schema: schema},
+		Catalog:      stubCatalog{id: "llama", ref: "llama.json"},
+		InitialDraft: Draft{ID: "p", Name: "P", BackendID: "llama", Args: args},
+	}}
+}
+
+func TestConfigureRendersTriStateToggleUnset(t *testing.T) {
+	s := toggleTestSession(map[string]string{})
+	rec := httptest.NewRecorder()
+	s.handleIndex(rec, httptest.NewRequest("GET", "/", nil))
+	body := rec.Body.String()
+	for _, want := range []string{
+		`x-data="{v:''}"`,                     // unset draft arg → tri-state starts at "default"
+		`type="hidden" name="arg.flash-attn"`, // hidden input owns the form name
+		`type="checkbox" id="arg-flash-attn"`, // checkbox carries the label target id
+		`Reset`,                               // reset-to-default affordance
+		`aria-label="Reset flash-attn to default"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("toggle widget missing %s in: %s", want, body)
+		}
+	}
+	if strings.Contains(body, `<select id="arg-flash-attn"`) {
+		t.Fatalf("bool flag must render as tri-state toggle, not a select")
+	}
+}
+
+func TestConfigureRendersTriStateToggleSetOn(t *testing.T) {
+	s := toggleTestSession(map[string]string{"flash-attn": "on"})
+	rec := httptest.NewRecorder()
+	s.handleIndex(rec, httptest.NewRequest("GET", "/", nil))
+	if body := rec.Body.String(); !strings.Contains(body, `x-data="{v:'on'}"`) {
+		t.Fatalf("toggle with draft arg \"on\" must seed x-data with 'on': %s", body)
+	}
+}
+
+func TestConfigureRendersTriStateToggleNormalizesTrue(t *testing.T) {
+	// Profiles persist bools as true/false; the widget vocabulary is on/off.
+	s := toggleTestSession(map[string]string{"flash-attn": "true"})
+	rec := httptest.NewRecorder()
+	s.handleIndex(rec, httptest.NewRequest("GET", "/", nil))
+	if body := rec.Body.String(); !strings.Contains(body, `x-data="{v:'on'}"`) {
+		t.Fatalf("persisted \"true\" must normalize to 'on' in the toggle: %s", body)
+	}
+}
+
 func TestIndexRendersIssuesLiveRegion(t *testing.T) {
 	schema := domain.BackendValidationSchema{
 		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
