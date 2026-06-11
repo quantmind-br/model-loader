@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"text/tabwriter"
 )
@@ -58,6 +59,19 @@ func indent(s, pad string) string {
 		lines[i] = pad + l
 	}
 	return strings.Join(lines, "\n")
+}
+
+// formatCandidates sorts labels, joins the first 10 with ", ", and appends
+// ", …" when there are more than 10.
+func formatCandidates(labels []string) string {
+	cp := make([]string, len(labels))
+	copy(cp, labels)
+	sort.Strings(cp)
+	const max = 10
+	if len(cp) > max {
+		return strings.Join(cp[:max], ", ") + ", …"
+	}
+	return strings.Join(cp, ", ")
 }
 
 // humanBytes renders a byte count in IEC-ish units (1024-based). Negative

@@ -228,8 +228,15 @@ func TestResolveDownloadID_Ambiguous(t *testing.T) {
 	mgr := &fakeDLManager{snapshot: []downloadmgr.State{
 		{ID: "aaa111"}, {ID: "aaa222"},
 	}}
-	if _, err := resolveDownloadID(mgr, "aaa"); err == nil || !strings.Contains(err.Error(), "ambiguous") {
+	_, err := resolveDownloadID(mgr, "aaa")
+	if err == nil || !strings.Contains(err.Error(), "ambiguous") {
 		t.Fatalf("expected ambiguous error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "aaa111") || !strings.Contains(err.Error(), "aaa222") {
+		t.Fatalf("ambiguous error should list candidate IDs, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "use a longer prefix") {
+		t.Fatalf("ambiguous error should hint about longer prefix, got: %v", err)
 	}
 }
 

@@ -77,20 +77,22 @@ func resolveBackend(mgr backendManager, idOrPrefix string) (domain.Backend, erro
 			return b, nil
 		}
 	}
-	var match domain.Backend
-	n := 0
+	var matches []domain.Backend
 	for _, b := range backends {
 		if strings.HasPrefix(b.ID, idOrPrefix) {
-			match = b
-			n++
+			matches = append(matches, b)
 		}
 	}
-	switch n {
+	switch len(matches) {
 	case 0:
 		return domain.Backend{}, fmt.Errorf("backend not found: %s", idOrPrefix)
 	case 1:
-		return match, nil
+		return matches[0], nil
 	default:
-		return domain.Backend{}, fmt.Errorf("ambiguous backend id: %s", idOrPrefix)
+		ids := make([]string, len(matches))
+		for i, m := range matches {
+			ids[i] = m.ID
+		}
+		return domain.Backend{}, fmt.Errorf("ambiguous backend id %q matches %d backends: %s; use a longer prefix", idOrPrefix, len(matches), formatCandidates(ids))
 	}
 }

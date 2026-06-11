@@ -89,8 +89,29 @@ func TestResolveInstance_ByPIDAndProfile(t *testing.T) {
 	if ri, err := resolveInstance(m, "alpha"); err != nil || ri.PID != 100 {
 		t.Fatalf("by profile id: %+v %v", ri, err)
 	}
-	if _, err := resolveInstance(m, "nope"); err == nil {
+	_, err := resolveInstance(m, "nope")
+	if err == nil {
 		t.Fatalf("expected not found")
+	}
+	if !strings.Contains(err.Error(), "use a pid or profile id") {
+		t.Fatalf("not-found error should hint about pid or profile id, got: %v", err)
+	}
+}
+
+func TestResolveInstance_AmbiguousPrefix(t *testing.T) {
+	m := &fakeManager{running: []domain.RunningInstance{
+		{ProfileID: "alpha-one", PID: 101},
+		{ProfileID: "alpha-two", PID: 102},
+	}}
+	_, err := resolveInstance(m, "alpha")
+	if err == nil {
+		t.Fatalf("expected ambiguous error")
+	}
+	if !strings.Contains(err.Error(), "101") || !strings.Contains(err.Error(), "102") {
+		t.Fatalf("ambiguous error should list candidate PIDs, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "use the pid") {
+		t.Fatalf("ambiguous error should hint about pid, got: %v", err)
 	}
 }
 

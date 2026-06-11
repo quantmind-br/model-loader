@@ -195,7 +195,11 @@ func resolveDownloadID(mgr downloadManager, ref string) (downloadmgr.ID, error) 
 	case 0:
 		return "", fmt.Errorf("download not found: %s", ref)
 	default:
-		return "", fmt.Errorf("ambiguous download id: %s matches %d downloads", ref, len(byPrefix))
+		labels := make([]string, len(byPrefix))
+		for i, id := range byPrefix {
+			labels[i] = string(id)
+		}
+		return "", fmt.Errorf("ambiguous download id %q matches %d downloads: %s; use a longer prefix", ref, len(byPrefix), formatCandidates(labels))
 	}
 }
 

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
@@ -149,8 +150,15 @@ func TestResolveBackend_AmbiguousPrefix(t *testing.T) {
 		{ID: "vllm-a", Kind: domain.BackendKindVLLM},
 		{ID: "vllm-b", Kind: domain.BackendKindVLLM},
 	}}
-	if _, err := resolveBackend(mgr, "vllm"); err == nil {
+	_, err := resolveBackend(mgr, "vllm")
+	if err == nil {
 		t.Fatal("expected ambiguous error")
+	}
+	if !strings.Contains(err.Error(), "vllm-a") || !strings.Contains(err.Error(), "vllm-b") {
+		t.Fatalf("ambiguous error should list candidate IDs, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "use a longer prefix") {
+		t.Fatalf("ambiguous error should hint about longer prefix, got: %v", err)
 	}
 }
 

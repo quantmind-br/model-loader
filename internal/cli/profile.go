@@ -81,7 +81,11 @@ func resolveProfileRef(store profilestore.Store, ref string) (domain.Profile, er
 	case 0:
 		return domain.Profile{}, fmt.Errorf("profile not found: %s", ref)
 	default:
-		return domain.Profile{}, fmt.Errorf("ambiguous profile name %q matches %d profiles; use the id", ref, len(matches))
+		ids := make([]string, len(matches))
+		for i, m := range matches {
+			ids[i] = m.ID
+		}
+		return domain.Profile{}, fmt.Errorf("ambiguous profile name %q matches %d profiles: %s; use the id", ref, len(matches), formatCandidates(ids))
 	}
 }
 

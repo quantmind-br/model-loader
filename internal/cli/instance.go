@@ -92,9 +92,13 @@ func resolveInstance(mgr processmgr.Manager, ref string) (domain.RunningInstance
 	case 1:
 		return byPrefix[0], nil
 	case 0:
-		return domain.RunningInstance{}, fmt.Errorf("instance not found: %s", ref)
+		return domain.RunningInstance{}, fmt.Errorf("instance not found: %s (use a pid or profile id)", ref)
 	default:
-		return domain.RunningInstance{}, fmt.Errorf("ambiguous instance ref %q matches %d instances; use the pid", ref, len(byPrefix))
+		labels := make([]string, len(byPrefix))
+		for i, ri := range byPrefix {
+			labels[i] = fmt.Sprintf("%d (%s)", ri.PID, ri.ProfileID)
+		}
+		return domain.RunningInstance{}, fmt.Errorf("ambiguous instance ref %q matches %d instances: %s; use the pid", ref, len(byPrefix), formatCandidates(labels))
 	}
 }
 

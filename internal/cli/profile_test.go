@@ -77,6 +77,22 @@ func TestResolveProfileRef_ByIDAndName(t *testing.T) {
 	}
 }
 
+func TestResolveProfileRef_AmbiguousName(t *testing.T) {
+	s := newTempStore(t)
+	seed(t, s, "alpha-1", "Duplicate")
+	seed(t, s, "alpha-2", "Duplicate")
+	_, err := resolveProfileRef(s, "duplicate")
+	if err == nil {
+		t.Fatalf("expected ambiguous error")
+	}
+	if !strings.Contains(err.Error(), "alpha-1") || !strings.Contains(err.Error(), "alpha-2") {
+		t.Fatalf("ambiguous error should list candidate IDs, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "use the id") {
+		t.Fatalf("ambiguous error should hint about using id, got: %v", err)
+	}
+}
+
 func TestShowProfile_JSON(t *testing.T) {
 	s := newTempStore(t)
 	seed(t, s, "alpha", "Alpha")
