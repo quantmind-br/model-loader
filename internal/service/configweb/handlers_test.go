@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -625,6 +626,91 @@ func TestSwitchBackend_DroppedArgsAskConfirmation(t *testing.T) {
 	assertInitialDraftUntouched(t, s)
 }
 
+// extractFormFields pulls name/value pairs from rendered inputs and selects
+// (selected option) so a test can re-submit a form exactly as the browser
+// would. Alpine-bound inputs (":name=") have no static name and
+// are skipped, matching what a real form submission includes.
+func extractFormFields(t *testing.T, body string) url.Values {
+	t.Helper()
+	fields := url.Values{}
+	attr := func(tag, name string) (string, bool) {
+		m := regexp.MustCompile(name + `="([^"]*)"`).FindStringSubmatch(tag)
+		if m == nil {
+			return "", false
+		}
+		return m[1], true
+	}
+	for _, tag := range regexp.MustCompile(`<input[^>]*>`).FindAllString(body, -1) {
+		name, ok := attr(tag, ` name`)
+		if !ok || name == "" {
+			continue
+		}
+		val, _ := attr(tag, `value`)
+		fields.Set(name, val)
+	}
+	for _, sel := range regexp.MustCompile(`(?s)<select[^>]*>.*?</select>`).FindAllString(body, -1) {
+		openTag := sel[:strings.Index(sel, ">")+1]
+		name, ok := attr(openTag, ` name`)
+		if !ok || name == "" {
+			continue
+		}
+		for _, opt := range regexp.MustCompile(`<option[^>]*>`).FindAllString(sel, -1) {
+			if strings.Contains(opt, " selected") {
+				val, _ := attr(opt, `value`)
+				fields.Set(name, val)
+			}
+		}
+	}
+	return fields
+}
+
+// TestSwitchBackend_ConfirmRoundTrip drives the full two-POST contract through
+// the HTML the handler actually renders: the confirmed re-POST is built from
+// the unconfirmed response's form fields (exactly what hx-include="#profile-form"
+// submits) plus the banner button's confirmSwitch value, so a field-name drift
+// between template and handler fails here instead of in the browser.
+func TestSwitchBackend_ConfirmRoundTrip(t *testing.T) {
+	s := switchTestSession()
+	first := postSwitchBackend(t, s, url.Values{
+		"isNew": {"true"}, "name": {"P"},
+		"backendId": {"new"}, "prevBackendId": {"old"},
+		"arg.ctx-size": {"4096"}, "arg.old-only": {"xyz"},
+	})
+	if !strings.Contains(first, "switch-confirm") {
+		t.Fatalf("expected confirmation banner: %s", first)
+	}
+	form := extractFormFields(t, first)
+	if got := form.Get("arg.old-only"); got != "xyz" {
+		t.Fatalf("reverted form must carry the at-risk arg, got %q", got)
+	}
+	if got := form.Get("prevBackendId"); got != "old" {
+		t.Fatalf("reverted form must carry prevBackendId=old, got %q", got)
+	}
+	if got := form.Get("backendId"); got != "old" {
+		t.Fatalf("reverted select must post the old backend, got %q", got)
+	}
+	// The banner button adds confirmSwitch via hx-vals on top of the form.
+	if !strings.Contains(first, `"confirmSwitch":"new"`) {
+		t.Fatalf("banner must carry confirmSwitch=new in hx-vals: %s", first)
+	}
+	form.Set("confirmSwitch", "new")
+
+	second := postSwitchBackend(t, s, form)
+	if !strings.Contains(second, `value="4096"`) {
+		t.Fatalf("kept arg must survive the round trip: %s", second)
+	}
+	if strings.Contains(second, `name="arg.old-only"`) {
+		t.Fatalf("dropped arg must be gone after the round trip: %s", second)
+	}
+	if strings.Contains(second, "switch-confirm") {
+		t.Fatalf("no banner expected after confirming: %s", second)
+	}
+	if !strings.Contains(second, `name="prevBackendId" value="new"`) {
+		t.Fatalf("round trip must land on the new backend's form: %s", second)
+	}
+	assertInitialDraftUntouched(t, s)
+}
+
 func TestSwitchBackend_ConfirmedDropsUnsupportedArgs(t *testing.T) {
 	s := switchTestSession()
 	// The confirm button re-posts the reverted old form plus confirmSwitch=new.
@@ -647,15 +733,15 @@ func TestSwitchBackend_ConfirmedDropsUnsupportedArgs(t *testing.T) {
 
 func TestDraftFromForm_ParsesEnvVars(t *testing.T) {
 	form := url.Values{
-		"id":          []string{"test"},
-		"name":        []string{"Test"},
-		"isNew":       []string{"true"},
-		"envKey_0":    []string{"FOO"},
-		"envValue_0":  []string{"bar"},
-		"envKey_1":    []string{"BAZ"},
-		"envValue_1":  []string{"qux"},
-		"envKey_2":    []string{""},
-		"envValue_2":  []string{"skip"},
+		"id":         []string{"test"},
+		"name":       []string{"Test"},
+		"isNew":      []string{"true"},
+		"envKey_0":   []string{"FOO"},
+		"envValue_0": []string{"bar"},
+		"envKey_1":   []string{"BAZ"},
+		"envValue_1": []string{"qux"},
+		"envKey_2":   []string{""},
+		"envValue_2": []string{"skip"},
 	}
 	req := httptest.NewRequest("POST", "/save", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

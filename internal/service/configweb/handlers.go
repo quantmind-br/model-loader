@@ -447,6 +447,9 @@ func validateRules(rules []domain.CrossFieldRule, schema domain.BackendValidatio
 // POST carrying confirmSwitch performs the switch and removes them.
 func (s *Session) handleSwitchBackend(w http.ResponseWriter, r *http.Request) {
 	d := draftFromForm(r)
+	// confirmSwitch does double duty: its presence marks the confirmed re-POST
+	// and its value carries the target backend (the re-posted form's backendId
+	// is the reverted OLD backend, so the select can't be the source then).
 	confirmed := r.FormValue("confirmSwitch") != ""
 	newID := r.FormValue("confirmSwitch")
 	if newID == "" {
@@ -458,6 +461,10 @@ func (s *Session) handleSwitchBackend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Errors here intentionally use http.Error, not renderIssueError: the swap
+	// target is #profile-form (outerHTML), so a 200 issue partial would replace
+	// the whole form. A 4xx leaves the form alone and surfaces through the
+	// htmx:responseError toast.
 	newSchema, err := s.loadSchema(newID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -469,6 +476,12 @@ func (s *Session) handleSwitchBackend(w http.ResponseWriter, r *http.Request) {
 	if len(dropped) > 0 && !confirmed {
 		// Render the OLD form back (args fully intact, select reverted) plus the
 		// confirmation banner; the switch only happens on the confirmed re-POST.
+		if prevID == "" {
+			// Never empty via the rendered form (hidden field); guard so a
+			// hand-crafted POST can't silently render the default backend.
+			http.Error(w, "prevBackendId required", http.StatusBadRequest)
+			return
+		}
 		oldSchema, err := s.loadSchema(prevID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -529,7 +542,10 @@ func (s *Session) renderSwitchResponse(w http.ResponseWriter, vm ViewModel) {
 		return
 	}
 	buf.WriteString(`<div id="sidebar-groups" hx-swap-oob="innerHTML">`)
-	if len(vm.Groups) > 0 {
+	if len(vm.Groups) > 0 && vm.SwitchConfirm == nil {
+		// Reset the active group only on a real switch — the confirmation
+		// response re-renders the OLD schema, so yanking the user's current
+		// group selection there would be gratuitous.
 		expr := "activeGroup='" + template.JSEscapeString(vm.Groups[0].Name) + "'"
 		buf.WriteString(`<div x-init="` + htmlEscape(expr) + `" hidden></div>`)
 	}
