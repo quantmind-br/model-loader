@@ -207,6 +207,18 @@ func (p ModelsPage) isScanning() bool {
 	return false
 }
 
+// hasErrorRoot reports whether any configured root failed its scan. The
+// library empty state uses it to say "Scan failed" instead of the
+// misleading "No .gguf files" copy when zero files is an error artifact.
+func (p ModelsPage) hasErrorRoot() bool {
+	for _, st := range p.statusMap {
+		if st.state == "error" {
+			return true
+		}
+	}
+	return false
+}
+
 // hasScannedRoot reports whether at least one configured root has finished
 // its initial scan. Empty-state copy only renders once we know the scan is
 // complete — otherwise the user might think their models are missing

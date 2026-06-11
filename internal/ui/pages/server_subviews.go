@@ -82,9 +82,15 @@ func (p *ServerPage) switchHistoryWindow(key rune) (tea.Model, tea.Cmd) {
 }
 
 // renderTable renders the bold "Running instances" header (prefixed with the
-// flash banner when set) followed by the bubbletea instances table.
+// flash banner when set, suffixed with a PAUSED marker when refresh is
+// paused) followed by the bubbletea instances table. The marker is plain
+// ASCII — no ⏸ or em-dash — because ambiguous-width glyphs corrupt borders
+// (see RENDER-02 in root.go).
 func (p *ServerPage) renderTable() string {
 	header := theme.Title.Render("Running instances")
+	if p.paused {
+		header += "  " + theme.Warn.Render("[PAUSED - Space to resume]")
+	}
 	if p.flash.Message() != "" {
 		header = p.flash.View() + "\n" + header
 	}

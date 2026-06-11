@@ -164,6 +164,8 @@ func (p *ServerPage) applyInstances(insts []domain.RunningInstance) tea.Cmd {
 // the red color bleeds into the next cell. In GPU-accelerated terminals
 // (Kitty/Ghostty) the corrupted SGR state also defeats subsequent redraws,
 // causing residual text from the previous tab to remain on screen.
+// The same rule applies to the "ERR" marker shown in the VRAM/Tokens
+// columns when the monitor subscription failed: plain unstyled ASCII only.
 func (p *ServerPage) renderRows(insts []domain.RunningInstance) []table.Row {
 	rows := make([]table.Row, 0, len(insts))
 	for _, ri := range insts {
@@ -178,8 +180,14 @@ func (p *ServerPage) renderRows(insts []domain.RunningInstance) []table.Row {
 			uptime = humanDuration(time.Since(ri.StartedAt))
 		}
 		if st, ok := p.subs[ri.PID]; ok && st != nil {
-			vram = formatVRAM(st.gpu.VRAMUsedMB, st.gpu.VRAMTotalMB)
-			toks = formatTokensPerSec(st.mets.TokensPerSec)
+			if st.subErr != "" {
+				// Monitor subscription failed: "--" would read as "no data
+				// yet"; ERR tells the user the metrics pipeline is broken.
+				vram, toks = "ERR", "ERR"
+			} else {
+				vram = formatVRAM(st.gpu.VRAMUsedMB, st.gpu.VRAMTotalMB)
+				toks = formatTokensPerSec(st.mets.TokensPerSec)
+			}
 		}
 		portCol := fmt.Sprintf("%d", ri.Port)
 		rows = append(rows, table.Row{

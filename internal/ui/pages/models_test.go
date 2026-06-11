@@ -237,6 +237,40 @@ func TestModelsPage_NoEmptyStateWhileScanning(t *testing.T) {
 	if strings.Contains(out, "No .gguf files") {
 		t.Errorf("scanning Models view should not show empty hint yet; got:\n%s", out)
 	}
+	if !strings.Contains(out, "Scanning configured paths") {
+		t.Errorf("scanning Models view missing scanning notice; got:\n%s", out)
+	}
+}
+
+// UIUX-011: zero files because a root failed to scan is an error artifact,
+// not an empty library — the view must say the scan failed, never the
+// misleading "No .gguf files" copy.
+func TestModelsPage_EmptyStateWhenScanErrored(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, []string{"/models"})
+	page.statusMap["/models"] = pathStatus{state: "error", err: "permission denied"}
+	out := page.View()
+	if !strings.Contains(out, "Scan failed for one or more paths") {
+		t.Errorf("error-root Models view missing scan-failed state; got:\n%s", out)
+	}
+	if strings.Contains(out, "No .gguf files") {
+		t.Errorf("error-root Models view must not claim no files exist; got:\n%s", out)
+	}
+}
+
+// UIUX-012: the filter prompt with its block cursor must appear the moment
+// filter mode is entered, before the first character is typed.
+func TestModelsPage_FilterPromptShowsCursorImmediately(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, []string{"/models"})
+	page.statusMap["/models"] = pathStatus{state: "scanned"}
+	updated, _ := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	page = updated.(ModelsPage)
+	if !page.filterMode {
+		t.Fatal("'/' did not enter filter mode")
+	}
+	out := page.View()
+	if !strings.Contains(out, "filter: ") || !strings.Contains(out, "█") {
+		t.Errorf("filter-mode view missing live prompt with cursor; got:\n%s", out)
+	}
 }
 
 func TestModelsPage_EmptyStateWhenFilterNoMatches(t *testing.T) {

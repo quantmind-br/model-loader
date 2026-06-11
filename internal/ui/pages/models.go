@@ -233,18 +233,23 @@ func (p ModelsPage) renderSubTabs() string {
 // flash are added by View.
 func (p ModelsPage) renderLibraryView() string {
 	statusLine := p.renderStatus()
-	filterLine := ""
-	if p.filterMode || p.filter != "" {
-		filterLine = theme.Subtitle.Render(fmt.Sprintf("filter: %q", p.filter))
-	}
+	filterLine := components.FilterLine(p.filterMode, p.filter)
 	var content string
-	if len(p.files) == 0 && (len(p.paths) == 0 || p.hasScannedRoot()) {
+	switch {
+	case len(p.files) == 0 && p.hasErrorRoot():
+		// Zero files with a failed root is an error artifact, not an empty
+		// library — say so instead of the misleading "No .gguf files" copy.
+		emptyMsg := components.EmptyState("Scan failed for one or more paths", "Press [R] to retry or edit ~/.config/model-loader/config.toml")
+		content = lipgloss.JoinVertical(lipgloss.Left, statusLine, emptyMsg, filterLine)
+	case len(p.files) == 0 && p.isScanning():
+		content = lipgloss.JoinVertical(lipgloss.Left, statusLine, theme.Subtitle.Render("Scanning configured paths…"), filterLine)
+	case len(p.files) == 0 && (len(p.paths) == 0 || p.hasScannedRoot()):
 		emptyMsg := components.EmptyState("No .gguf files in configured search paths", "Press [R] to rescan, or edit ~/.config/model-loader/config.toml")
 		content = lipgloss.JoinVertical(lipgloss.Left, statusLine, emptyMsg, filterLine)
-	} else if len(p.visibleFiles()) == 0 && p.filter != "" {
+	case len(p.visibleFiles()) == 0 && p.filter != "":
 		emptyMsg := components.EmptyState("No models match the current filter", "Press [esc] to clear filter, or [/] to edit filter")
 		content = lipgloss.JoinVertical(lipgloss.Left, statusLine, emptyMsg, filterLine)
-	} else {
+	default:
 		content = lipgloss.JoinVertical(lipgloss.Left, statusLine, p.table.View(), filterLine)
 	}
 	if p.infoPanel != nil {

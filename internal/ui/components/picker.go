@@ -291,10 +291,7 @@ func (m ModelPicker) View() string {
 	} else {
 		statusLine = theme.Subtitle.Render(fmt.Sprintf("%d models", len(m.files)))
 	}
-	filterLine := ""
-	if m.filterMode || m.filter != "" {
-		filterLine = theme.Subtitle.Render(fmt.Sprintf("filter: %q", m.filter))
-	}
+	filterLine := FilterLine(m.filterMode, m.filter)
 	boxW := pickerBoxWidth(m.width)
 	nameW, quantW, paramsW, pathW := pickerColumnWidths(boxW)
 	rowFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds  %%-%ds", nameW, quantW, paramsW, pathW)

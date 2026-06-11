@@ -309,8 +309,8 @@ func (p BenchmarkPage) viewProfilePick() string {
 		rows = append(rows, line)
 	}
 	parts := []string{title}
-	if p.filterMode || p.filter != "" {
-		parts = append(parts, theme.Subtitle.Render(fmt.Sprintf("filter: %q", p.filter)))
+	if fl := components.FilterLine(p.filterMode, p.filter); fl != "" {
+		parts = append(parts, fl)
 	}
 	parts = append(parts, strings.Join(rows, "\n"))
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)

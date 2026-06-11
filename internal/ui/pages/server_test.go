@@ -1801,3 +1801,43 @@ func TestServerPage_HHintMentionsMetricsDirKey(t *testing.T) {
 		t.Errorf("flash=%q; want it to mention 'logging.metrics_dir'", msg)
 	}
 }
+
+// UIUX-010: when the monitor subscription for an instance failed, the VRAM
+// and Tokens/s cells must read "ERR" (plain ASCII — see the ANSI-truncation
+// pitfall on renderRows) instead of the "no data yet" placeholder "--".
+func TestServerPage_RowShowsERRWhenSubscriptionFailed(t *testing.T) {
+	pm := &fakeProcMgr{}
+	mm := fakeMonMgr{}
+	p := NewServerPage(pm, mm, nil)
+	p.SetSize(120, 30)
+	p.subs[99] = &subState{subErr: "nvidia-smi not found"}
+
+	rows := p.renderRows([]domain.RunningInstance{
+		{PID: 99, Port: 7000, ProfileID: "alpha", LogPath: "/tmp/a.log"},
+	})
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(rows))
+	}
+	if rows[0][4] != "ERR" || rows[0][5] != "ERR" {
+		t.Errorf("VRAM/Tokens cells = %q/%q, want ERR/ERR", rows[0][4], rows[0][5])
+	}
+}
+
+// UIUX-024: pausing refresh must be visible from the monitor table header,
+// not only inside the logs sub-view.
+func TestServerPage_RenderTableShowsPausedMarker(t *testing.T) {
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{
+		{PID: 7, Port: 7000, ProfileID: "alpha", LogPath: "/tmp/a.log"},
+	}}
+	mm := fakeMonMgr{}
+	p := NewServerPage(pm, mm, nil)
+	p.SetSize(120, 30)
+
+	if out := p.renderTable(); strings.Contains(out, "[PAUSED") {
+		t.Errorf("unpaused table header must not show PAUSED marker; got:\n%s", out)
+	}
+	p.paused = true
+	if out := p.renderTable(); !strings.Contains(out, "[PAUSED - Space to resume]") {
+		t.Errorf("paused table header missing PAUSED marker; got:\n%s", out)
+	}
+}
