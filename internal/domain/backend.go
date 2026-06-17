@@ -12,6 +12,7 @@ const (
 	BackendKindDFlash       BackendKind = "dflash"
 	BackendKindBuunLlamaCpp BackendKind = "buun-llama-cpp"
 	BackendKindBeeLlamaCpp  BackendKind = "beellama-cpp"
+	BackendKindUnsloth      BackendKind = "unsloth"
 )
 
 // BackendMeta holds timestamps and bookkeeping for a backend entry.
