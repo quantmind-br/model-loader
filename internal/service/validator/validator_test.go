@@ -155,6 +155,28 @@ func TestValidator_HFRepoIDErrorsForLlamaServer(t *testing.T) {
 	}
 }
 
+func TestValidator_HFRepoIDAllowedForUnsloth(t *testing.T) {
+	v := New(log.Nop())
+	cases := []struct {
+		name    string
+		model   string
+		wantErr bool
+	}{
+		{"dotted HF repo ID allowed for unsloth", "Qwen/Qwen2.5-7B-Instruct", false},
+		{"local gguf file missing still errors", "models/model.gguf", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := domain.Profile{ID: "x", Model: tc.model}
+			rep := v.Validate(p, domain.FlagSchema{}, domain.BackendKindUnsloth)
+			gotErr := len(rep.Errors) > 0
+			if gotErr != tc.wantErr {
+				t.Errorf("Errors=%v, wantErr=%v", rep.Errors, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestValidator_ExistingLocalPathNotTreatedAsHFRepo(t *testing.T) {
 	tmp := t.TempDir()
 	existingDir := tmp + "/models"

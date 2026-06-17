@@ -306,7 +306,7 @@ func applyExistenceRules(p domain.Profile, kind domain.BackendKind, rep Report) 
 
 func supportsHFRepo(kind domain.BackendKind) bool {
 	switch kind {
-	case domain.BackendKindVLLM, domain.BackendKindSGLang:
+	case domain.BackendKindVLLM, domain.BackendKindSGLang, domain.BackendKindUnsloth:
 		return true
 	}
 	return false
