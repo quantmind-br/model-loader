@@ -206,3 +206,29 @@ func TestBuildArgsForBackend_VLLM_DedupModel(t *testing.T) {
 		t.Fatalf("BuildArgsForBackend(vllm dedup):\n got = %v\nwant = %v", got, want)
 	}
 }
+
+func TestBuildArgsForBackend_Unsloth(t *testing.T) {
+	p := domain.Profile{
+		Model: "unsloth/Qwen3-1.7B-GGUF",
+		Args: map[string]any{
+			"gguf-variant": "UD-Q4_K_XL",
+			"ctx-size":     float64(8192),
+			"port":         8123,
+		},
+		ExtraArgs: []string{"--jinja"},
+	}
+	got, err := BuildArgsForBackend(p, domain.BackendKindUnsloth, "")
+	if err != nil {
+		t.Fatalf("BuildArgsForBackend(unsloth): %v", err)
+	}
+	want := []string{
+		"--model", "unsloth/Qwen3-1.7B-GGUF",
+		"--ctx-size", "8192",
+		"--gguf-variant", "UD-Q4_K_XL",
+		"--port", "8123",
+		"--jinja",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("BuildArgsForBackend(unsloth):\n got = %v\nwant = %v", got, want)
+	}
+}
