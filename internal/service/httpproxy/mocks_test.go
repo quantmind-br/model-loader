@@ -153,6 +153,13 @@ func (m *stubManager) WaitHealthy(pid, port int, timeout time.Duration, attemptI
 	return m.healthFn(pid, port)
 }
 
+func (m *stubManager) WaitReady(inst domain.RunningInstance, timeout time.Duration, attemptID string) (string, error) {
+	if err := m.healthFn(inst.PID, inst.Port); err != nil {
+		return "", err
+	}
+	return "", nil
+}
+
 func (m *stubManager) TailLogs(pid int) (io.ReadCloser, error) {
 	return nil, processmgr.ErrUnknownPID
 }
