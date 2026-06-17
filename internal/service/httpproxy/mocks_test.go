@@ -96,7 +96,8 @@ type stubManager struct {
 	kills    []int
 	healthFn func(pid, port int) error
 
-	swapDelay time.Duration // optional: delay inside Launch to widen swap race
+	swapDelay  time.Duration // optional: delay inside Launch to widen swap race
+	readyToken string        // token WaitReady returns when healthFn passes
 }
 
 func newStubManager() *stubManager {
@@ -157,7 +158,7 @@ func (m *stubManager) WaitReady(inst domain.RunningInstance, timeout time.Durati
 	if err := m.healthFn(inst.PID, inst.Port); err != nil {
 		return "", err
 	}
-	return "", nil
+	return m.readyToken, nil
 }
 
 func (m *stubManager) TailLogs(pid int) (io.ReadCloser, error) {

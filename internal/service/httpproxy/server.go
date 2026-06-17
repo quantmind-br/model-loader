@@ -126,6 +126,7 @@ type loadedBackend struct {
 	pid       int
 	port      int
 	logPath   string
+	authToken string
 	proxy     *httputil.ReverseProxy
 }
 

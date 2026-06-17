@@ -221,14 +221,15 @@ func (s *Server) launchNewBackend(profile domain.Profile, profileID, attemptID s
 			fmt.Sprintf("launch %s: %v", profileID, launchErr)}
 	}
 
-	if hErr := s.deps.ProcessMgr.WaitHealthy(inst.PID, inst.Port, s.cfg.HealthCheckTimeout, attemptID); hErr != nil {
+	token, rErr := s.deps.ProcessMgr.WaitReady(inst, s.cfg.HealthCheckTimeout, attemptID)
+	if rErr != nil {
 		s.logger.Error("proxy_swap_unhealthy",
 			"profile_id", profileID, "pid", inst.PID, "port", inst.Port,
-			"attempt_id", attemptID, "err", hErr)
+			"attempt_id", attemptID, "err", rErr)
 		_ = s.deps.ProcessMgr.Kill(inst.PID)
-		s.recordError(fmt.Sprintf("healthcheck %s: %v", profileID, hErr))
+		s.recordError(fmt.Sprintf("readiness %s: %v", profileID, rErr))
 		return nil, &SwapError{http.StatusGatewayTimeout, "backend_error", "backend_unhealthy",
-			fmt.Sprintf("backend %s unhealthy: %v", profileID, hErr)}
+			fmt.Sprintf("backend %s not ready: %v", profileID, rErr)}
 	}
 
 	loaded := &loadedBackend{
@@ -236,7 +237,8 @@ func (s *Server) launchNewBackend(profile domain.Profile, profileID, attemptID s
 		pid:       inst.PID,
 		port:      inst.Port,
 		logPath:   inst.LogPath,
-		proxy:     newReverseProxy(inst.Port),
+		authToken: token,
+		proxy:     newReverseProxy(inst.Port, token),
 	}
 	s.stateMu.Lock()
 	s.current = loaded
