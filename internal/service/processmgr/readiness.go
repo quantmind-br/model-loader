@@ -43,13 +43,21 @@ func waitForLogToken(logPath string, re *regexp.Regexp, timeout time.Duration) (
 	deadline := time.Now().Add(timeout)
 	delay := 100 * time.Millisecond
 	const maxDelay = time.Second
-	for time.Now().Before(deadline) {
+	for {
 		if data, err := os.ReadFile(logPath); err == nil {
 			if m := re.Find(data); m != nil {
 				return string(m), nil
 			}
 		}
-		time.Sleep(delay)
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			break
+		}
+		sleep := delay
+		if sleep > remaining {
+			sleep = remaining
+		}
+		time.Sleep(sleep)
 		if delay < maxDelay {
 			delay *= 2
 			if delay > maxDelay {

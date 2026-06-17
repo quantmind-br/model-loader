@@ -1,6 +1,7 @@
 package processmgr
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -38,5 +39,16 @@ func TestWaitForLogToken_Timeout(t *testing.T) {
 	_, err := waitForLogToken(p, testKeyRe, 300*time.Millisecond)
 	if err == nil {
 		t.Fatal("expected timeout error")
+	}
+}
+
+func TestWaitForLogToken_MissingFileTimesOut(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "does-not-exist.log")
+	_, err := waitForLogToken(missing, testKeyRe, 250*time.Millisecond)
+	if err == nil {
+		t.Fatal("expected timeout error for missing file")
+	}
+	if !errors.Is(err, ErrReadyTimeout) {
+		t.Fatalf("expected ErrReadyTimeout, got %v", err)
 	}
 }
