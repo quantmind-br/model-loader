@@ -2,7 +2,6 @@ package benchmark
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -101,25 +100,9 @@ type graderVerdict struct {
 }
 
 func parseGraderVerdict(content string) (graderVerdict, error) {
-	raw := content
-	if start := strings.Index(raw, "{"); start >= 0 {
-		if end := strings.LastIndex(raw, "}"); end > start {
-			raw = raw[start : end+1]
-		}
-	}
-	var v struct {
-		Score     float64 `json:"score"`
-		Pass      bool    `json:"pass"`
-		Rationale string  `json:"rationale"`
-	}
-	if err := json.Unmarshal([]byte(raw), &v); err != nil {
+	v, err := parseVerdict(content)
+	if err != nil {
 		return graderVerdict{}, err
-	}
-	if v.Score < 0 {
-		v.Score = 0
-	}
-	if v.Score > 1 {
-		v.Score = 1
 	}
 	return graderVerdict{score: v.Score, pass: v.Pass, rationale: v.Rationale}, nil
 }

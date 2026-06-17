@@ -1,10 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/app"
@@ -87,27 +87,19 @@ func resolveInstance(mgr processmgr.Manager, ref string) (domain.RunningInstance
 			}
 		}
 	}
-	var byPrefix []domain.RunningInstance
-	for _, ri := range insts {
-		if ri.ProfileID == ref {
-			return ri, nil
+	ri, err := resolveByPrefix(insts, ref, func(ri domain.RunningInstance) []string { return []string{ri.ProfileID} })
+	if err != nil {
+		var amb *ambiguousMatchError[domain.RunningInstance]
+		if errors.As(err, &amb) {
+			labels := make([]string, len(amb.Matches))
+			for i, ri := range amb.Matches {
+				labels[i] = fmt.Sprintf("%d (%s)", ri.PID, ri.ProfileID)
+			}
+			return domain.RunningInstance{}, fmt.Errorf("ambiguous instance ref %q matches %d instances: %s; use the pid", ref, len(amb.Matches), formatCandidates(labels))
 		}
-		if strings.HasPrefix(ri.ProfileID, ref) {
-			byPrefix = append(byPrefix, ri)
-		}
-	}
-	switch len(byPrefix) {
-	case 1:
-		return byPrefix[0], nil
-	case 0:
 		return domain.RunningInstance{}, fmt.Errorf("instance not found: %s (use a pid or profile id)", ref)
-	default:
-		labels := make([]string, len(byPrefix))
-		for i, ri := range byPrefix {
-			labels[i] = fmt.Sprintf("%d (%s)", ri.PID, ri.ProfileID)
-		}
-		return domain.RunningInstance{}, fmt.Errorf("ambiguous instance ref %q matches %d instances: %s; use the pid", ref, len(byPrefix), formatCandidates(labels))
 	}
+	return ri, nil
 }
 
 func instanceStatus(ri domain.RunningInstance) string {

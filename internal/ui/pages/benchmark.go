@@ -116,6 +116,18 @@ func (p BenchmarkPage) StatusMessage() (string, components.StatusLevel) {
 	return p.flash.Current()
 }
 
+func (p BenchmarkPage) withFlash(msg string) (BenchmarkPage, tea.Cmd) {
+	var cmd tea.Cmd
+	p.flash, cmd = flashSuccess(p.flash, msg)
+	return p, cmd
+}
+
+func (p BenchmarkPage) withFlashError(msg string) (BenchmarkPage, tea.Cmd) {
+	var cmd tea.Cmd
+	p.flash, cmd = flashError(p.flash, msg)
+	return p, cmd
+}
+
 func (p BenchmarkPage) Hints() string {
 	if p.deleteConfirm.Active() {
 		return "[←→] choose  [enter] confirm  [esc] cancel"
@@ -220,8 +232,8 @@ type benchListCols struct {
 // distributed proportionally across when/profile/mode.
 func benchListColumns(width int) benchListCols {
 	const (
-		numericTail = 7 + 2 + 8 + 2 + 8 // "solve  tok/s  vram" columns
-		interCol    = 2 * 5             // 5 inter-column "  " separators
+		numericTail  = 7 + 2 + 8 + 2 + 8 // "solve  tok/s  vram" columns
+		interCol     = 2 * 5             // 5 inter-column "  " separators
 		cursorGutter = 2                 // "> " / "  " prefix
 	)
 	avail := width - numericTail - interCol - cursorGutter

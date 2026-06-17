@@ -107,6 +107,33 @@ func BuildViewModel(d Draft, schema domain.BackendValidationSchema, backends []d
 	return vm
 }
 
+// surfacedFlags returns the set of long-form flags the editor renders as
+// editable form fields for schema, mirroring BuildViewModel's group-render loop
+// (presentation-group flags that exist in schema.Flags, minus reserved flags).
+// The save path uses it to know which flags the submitted form is authoritative
+// for; everything else is a configured arg the editor never showed and must
+// preserve rather than drop.
+func surfacedFlags(schema domain.BackendValidationSchema) map[string]bool {
+	pres := schema.Presentation
+	if pres == nil {
+		bp := backendschema.BuildPresentation(schema)
+		pres = &bp
+	}
+	out := map[string]bool{}
+	for _, g := range pres.Groups {
+		for _, long := range g.Flags {
+			if reservedFlags[long] {
+				continue
+			}
+			if _, ok := schema.Flags[long]; !ok {
+				continue
+			}
+			out[long] = true
+		}
+	}
+	return out
+}
+
 func fieldVM(long string, spec domain.FlagSpec, d Draft) FieldVM {
 	f := FieldVM{
 		Flag:     long,

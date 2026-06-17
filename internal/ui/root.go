@@ -2,9 +2,6 @@
 package ui
 
 import (
-	"fmt"
-
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -74,74 +71,6 @@ func (t Tab) Title() string {
 		return "?"
 	}
 }
-
-// Page is the contract every tab page implements.
-type Page interface {
-	Init() tea.Cmd
-	Update(tea.Msg) (tea.Model, tea.Cmd)
-	View() string
-}
-
-// InputCapture is the optional contract a page implements to claim
-// global keybindings (Tab/Shift+Tab) while a modal/editor/picker is
-// active. When IsCapturingInput returns true the root forwards the
-// keystroke to the page instead of cycling tabs.
-type InputCapture interface {
-	IsCapturingInput() bool
-}
-
-// Reloader is the optional contract a page implements to refresh its
-// state on demand (e.g. on tab focus, when external files may have
-// changed).
-type Reloader interface {
-	Reload() tea.Cmd
-}
-
-// HintProvider is the optional contract a page implements to publish
-// page-local key hints. The root reads it after every tab activation
-// and key event, then concatenates with the global hints into the
-// status bar — pages no longer render their own footer strings.
-type HintProvider interface {
-	Hints() string
-}
-
-// HelpContextProvider is the optional contract a page implements to
-// supply richer markdown context for the help modal. When absent the
-// root falls back to HintProvider.Hints().
-type HelpContextProvider interface {
-	HelpContext() string
-}
-
-// StatusMessageProvider is the optional contract a page implements to
-// publish a short status string (success, warning, error) to the always-
-// visible right side of the status bar. This complements the in-body
-// flash component: at narrow geometries (e.g. 80x24) the flash can be
-// clipped below the visible viewport, so critical feedback (launch
-// failures, export results) ALSO needs to land in the status bar where
-// it is always rendered.
-//
-// Returning an empty message clears the status bar. The level controls
-// styling (info/warn/error). The root reads this after every event in
-// recomputeHints — pages do not need to push imperatively.
-type StatusMessageProvider interface {
-	StatusMessage() (msg string, level components.StatusLevel)
-}
-
-// Overlayer is the optional contract a page implements to expose an active
-// modal overlay that should be rendered on top of the page content.
-type Overlayer interface {
-	OverlayView() pages.Overlay
-}
-
-// Cleaner is the optional contract a page implements to release resources
-// (e.g. cancel an active web-edit session) when the TUI is about to quit.
-// RootModel calls Cleanup() on all pages before returning tea.Quit.
-type Cleaner interface {
-	Cleanup()
-}
-
-// globalHints is the prefix shown in every status bar line.
-const globalHints = "[1-5] tabs  [tab] next  [q] quit" + components.HelpToken
 
 // bootBlocker loads blocking modal content displayed over the entire UI.
 type bootBlocker struct {
@@ -350,101 +279,6 @@ func (m RootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return updated, cmd
 }
 
-// handleHelpKey runs while the help modal is on screen: `?` and `esc` close
-// it, `ctrl+c` still quits, scroll keys (Up/Down/PgUp/PgDn/k/j/home/end)
-// drive the viewport so long help content is reachable. Every other key
-// is swallowed.
-func (m RootModel) handleHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "?", "esc":
-		m.helpOpen = false
-		return m, nil
-	case "ctrl+c":
-		m.cleanupAll()
-		return m, tea.Quit
-	case "g", "home":
-		// Jump-to-top: the bubbles viewport keymap doesn't bind these, so
-		// drive GotoTop explicitly (DEAD-01).
-		m = m.ensureHelpViewport()
-		m.helpViewport.GotoTop()
-		return m, nil
-	case "G", "end":
-		m = m.ensureHelpViewport()
-		m.helpViewport.GotoBottom()
-		return m, nil
-	}
-	if helpScrollKey(msg) {
-		m = m.ensureHelpViewport()
-		var cmd tea.Cmd
-		m.helpViewport, cmd = m.helpViewport.Update(msg)
-		return m, cmd
-	}
-	return m, nil
-}
-
-// ensureHelpViewport guarantees the help viewport is sized, has the
-// current page's contextual help loaded, and is ready to receive scroll
-// keys — even on Update paths that never call View.
-func (m RootModel) ensureHelpViewport() RootModel {
-	if m.height <= 0 {
-		return m
-	}
-	viewportW, viewportH := helpViewportSize(m.width, m.height)
-	if !m.helpReady || m.helpViewport.Width != viewportW || m.helpViewport.Height != viewportH {
-		m.helpViewport = viewport.New(viewportW, viewportH)
-		m.helpReady = true
-	}
-	activeContext := ""
-	if h, ok := m.pages[m.active].(HelpContextProvider); ok {
-		activeContext = h.HelpContext()
-	} else if h, ok := m.pages[m.active].(HintProvider); ok {
-		activeContext = h.Hints()
-	}
-	// Wrap help at the viewport's inner width so glamour's word-wrap matches
-	// the visible area exactly — otherwise text wrapped wider than the box
-	// gets clipped mid-word at the right border (RENDER-04).
-	body, err := components.RenderContextualHelp(viewportW, activeContext)
-	if err != nil {
-		body = components.HelpMarkdown
-	}
-	m.helpViewport.SetContent(body)
-	return m
-}
-
-// helpViewportSize returns the inner width/height for the help modal
-// viewport, accounting for the modal box border + padding so the scroll
-// area always fits inside the terminal.
-func helpViewportSize(width, height int) (int, int) {
-	w := width - 16
-	if w < 16 {
-		w = 16
-	}
-	h := height - 8
-	if h < 5 {
-		h = 5
-	}
-	return w, h
-}
-
-// helpScrollKey reports whether msg matches a scroll keybinding the
-// viewport should consume while the help modal is open.
-func helpScrollKey(msg tea.KeyMsg) bool {
-	// Note: g/G/home/end are handled directly in handleHelpKey via
-	// GotoTop/GotoBottom, since the viewport keymap doesn't bind them.
-	scroll := []key.Binding{
-		key.NewBinding(key.WithKeys("up", "k")),
-		key.NewBinding(key.WithKeys("down", "j")),
-		key.NewBinding(key.WithKeys("pgup", "ctrl+u")),
-		key.NewBinding(key.WithKeys("pgdown", "ctrl+d")),
-	}
-	for _, b := range scroll {
-		if key.Matches(msg, b) {
-			return true
-		}
-	}
-	return false
-}
-
 // setActive is the single place a tab switch happens: it moves focus and
 // clears the tab's attention badge. Every path that assigns m.active must
 // go through it so badges can't outlive a visit.
@@ -495,28 +329,7 @@ func (m RootModel) View() string {
 		return components.Modal(m.bootBlocker.title, m.bootBlocker.body+"\n\nPress q to quit.", m.width, m.height)
 	}
 	if m.helpOpen {
-		if m.height <= 0 {
-			activeContext := ""
-			if h, ok := m.pages[m.active].(HelpContextProvider); ok {
-				activeContext = h.HelpContext()
-			} else if h, ok := m.pages[m.active].(HintProvider); ok {
-				activeContext = h.Hints()
-			}
-			body, err := components.RenderContextualHelp(m.width-8, activeContext)
-			if err != nil {
-				body = components.HelpMarkdown
-			}
-			return components.Modal("Keybindings", body, m.width, m.height)
-		}
-		m = m.ensureHelpViewport()
-		// Keep the title pure ASCII: arrow/middot glyphs are East-Asian
-		// ambiguous-width and some terminals render them 2 cells wide, which
-		// overran the computed box and left the right border ragged (RENDER-02).
-		title := "Keybindings  (up/down/PgUp/PgDn/k/j/g/G scroll  |  ? toggle  |  esc close)"
-		if m.width < 80 {
-			title = "Keybindings"
-		}
-		return components.Modal(title, m.helpViewport.View(), m.width, m.height)
+		return m.renderHelpModal()
 	}
 	header := m.renderTabs()
 	status := m.status.Render(m.width)
@@ -549,42 +362,6 @@ func (m RootModel) activate(t Tab) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// recomputeHints reads page-local hints (when the active page implements
-// HintProvider) and updates the status bar to globalHints + " | " +
-// page hints. Called after every page state change so the status footer
-// always reflects what the user can do right now. Also pulls the active
-// page's StatusMessage so critical feedback (launch errors, export
-// results) lands in the always-visible status bar instead of being
-// clipped to the in-body flash at narrow geometries.
-func (m *RootModel) recomputeHints() {
-	if h, ok := m.pages[m.active].(HintProvider); ok {
-		if ph := h.Hints(); ph != "" {
-			m.status.Hints = globalHints + " | " + ph
-		} else {
-			m.status.Hints = globalHints
-		}
-	} else {
-		m.status.Hints = globalHints
-	}
-	if sp, ok := m.pages[m.active].(StatusMessageProvider); ok {
-		msg, level := sp.StatusMessage()
-		if msg != "" {
-			m.status.SetMessage(level, msg)
-		} else if m.status.Message != "" && m.status.Level != components.StatusWarn {
-			// Clear stale page-sourced messages but preserve the boot
-			// warning (StatusWarn from WithStatusWarn) until it's
-			// explicitly replaced.
-			m.status.SetMessage(components.StatusInfo, "")
-		}
-	}
-	m.status.RestartCount = 0
-	if m.pm != nil {
-		for _, inst := range m.pm.List() {
-			m.status.RestartCount += inst.RestartCount
-		}
-	}
-}
-
 // cleanupAll calls Cleanup() on every page that implements Cleaner.
 // Invoked on both quit paths (ctrl+c, q) so pages can cancel lingering
 // goroutines (e.g. configweb sessions) before the process exits.
@@ -601,46 +378,4 @@ func (m RootModel) activePageCapturesInput() bool {
 		return ic.IsCapturingInput()
 	}
 	return false
-}
-
-// attentionTab maps a TabAttentionMsg page name to its Tab.
-func attentionTab(page string) (Tab, bool) {
-	switch page {
-	case pages.AttentionModels:
-		return TabModels, true
-	case pages.AttentionServer:
-		return TabServer, true
-	default:
-		return 0, false
-	}
-}
-
-// attentionGlyph is the badge rendered next to a tab label with a pending
-// background event; ASCII fallback under NO_COLOR. ● is East-Asian
-// ambiguous-width (RENDER-02): on CJK-wide terminals it may render 2 cells
-// and cost the strip a column — accepted, matching the ‹› indicators this
-// component already uses in color mode.
-func attentionGlyph() string {
-	if theme.NoColor() {
-		return "*"
-	}
-	return "●"
-}
-
-func (m RootModel) renderTabs() string {
-	labels := make([]string, tabCount)
-	badges := make([]string, tabCount)
-	glyph := attentionGlyph()
-	for i := Tab(0); i < tabCount; i++ {
-		labels[i] = fmt.Sprintf("%d %s", int(i)+1, i.Title())
-		if m.badges[i] {
-			badges[i] = glyph
-		}
-	}
-	return components.TabBar(components.TabBarOptions{
-		Labels:         labels,
-		ActiveIndex:    int(m.active),
-		AvailableWidth: m.width,
-		Badges:         badges,
-	})
 }

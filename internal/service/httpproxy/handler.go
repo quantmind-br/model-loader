@@ -117,18 +117,9 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	loaded, status, err := s.ensureLoaded(r.Context(), requested)
+	loaded, err := s.ensureLoaded(r.Context(), requested)
 	if err != nil {
-		switch status {
-		case http.StatusNotFound:
-			writeOpenAIError(w, status, "invalid_request_error", "model_not_found", err.Error())
-		case http.StatusGatewayTimeout:
-			writeOpenAIError(w, status, "backend_error", "backend_unhealthy", err.Error())
-		case http.StatusBadGateway:
-			writeOpenAIError(w, status, "backend_error", "backend_launch_failed", err.Error())
-		default:
-			writeOpenAIError(w, status, "server_error", "swap_failed", err.Error())
-		}
+		writeSwapError(w, err)
 		return
 	}
 
@@ -136,15 +127,16 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request) {
 }
 
 // ensureLoaded returns the snapshot of the loaded backend for profileID,
-// performing a swap if needed. Returns (snapshot, status, err) where status
-// is the HTTP status the caller should surface to the client when err != nil.
-func (s *Server) ensureLoaded(ctx context.Context, profileID string) (*loadedBackend, int, error) {
+// performing a swap if needed. On failure it returns a *SwapError carrying the
+// HTTP status/body the caller should surface (via writeSwapError). The body is
+// a sequence of phase helpers: resolve → kill-old → launch-new → record.
+func (s *Server) ensureLoaded(ctx context.Context, profileID string) (*loadedBackend, error) {
 	// Fast path: snapshot under read lock.
 	s.stateMu.RLock()
 	cur := s.current
 	s.stateMu.RUnlock()
 	if cur != nil && cur.profileID == profileID {
-		return cur, 0, nil
+		return cur, nil
 	}
 
 	// Serialize swaps.
@@ -156,43 +148,77 @@ func (s *Server) ensureLoaded(ctx context.Context, profileID string) (*loadedBac
 	cur = s.current
 	s.stateMu.RUnlock()
 	if cur != nil && cur.profileID == profileID {
-		return cur, 0, nil
+		return cur, nil
 	}
 
 	// Respect upstream cancellation before doing real work.
 	if err := ctx.Err(); err != nil {
-		return nil, http.StatusGatewayTimeout, fmt.Errorf("request canceled before swap: %w", err)
+		return nil, &SwapError{http.StatusGatewayTimeout, "backend_error", "backend_unhealthy",
+			fmt.Sprintf("request canceled before swap: %v", err)}
 	}
 
-	// Resolve the requested profile.
-	profile, err := s.deps.ProfileStore.Get(profileID)
+	profile, err := s.resolveProfile(profileID)
 	if err != nil {
-		if errors.Is(err, profilestore.ErrNotFound) || errors.Is(err, profilestore.ErrInvalidID) {
-			return nil, http.StatusNotFound, fmt.Errorf("profile %q not found", profileID)
-		}
-		s.recordError(fmt.Sprintf("profile_lookup_failed: %v", err))
-		return nil, http.StatusInternalServerError, fmt.Errorf("profile lookup: %w", err)
+		return nil, err
 	}
 
 	swapStart := time.Now()
 	attemptID := fmt.Sprintf("proxy-%d", swapStart.UnixNano())
 
-	// Kill old backend (if any) before launching the new one.
-	if cur != nil {
-		s.logger.Info("proxy_swap_killing",
-			"from_profile", cur.profileID, "pid", cur.pid, "attempt_id", attemptID)
-		if killErr := s.deps.ProcessMgr.Kill(cur.pid); killErr != nil && !errors.Is(killErr, processmgr.ErrUnknownPID) {
-			s.logger.Warn("proxy_swap_kill_warning", "err", killErr, "attempt_id", attemptID)
-		}
-		s.stateMu.Lock()
-		s.current = nil
-		s.stateMu.Unlock()
+	s.killOldBackend(cur, attemptID)
+
+	loaded, err := s.launchNewBackend(profile, profileID, attemptID)
+	if err != nil {
+		return nil, err
 	}
 
+	s.recordSwapMetrics(loaded, swapStart, attemptID)
+	return loaded, nil
+}
+
+// resolveProfile loads the requested profile, translating store errors into the
+// matching *SwapError: a missing/invalid id is a 404 model_not_found, any other
+// store error a recorded 500.
+func (s *Server) resolveProfile(profileID string) (domain.Profile, error) {
+	profile, err := s.deps.ProfileStore.Get(profileID)
+	if err != nil {
+		if errors.Is(err, profilestore.ErrNotFound) || errors.Is(err, profilestore.ErrInvalidID) {
+			return domain.Profile{}, &SwapError{http.StatusNotFound, "invalid_request_error",
+				"model_not_found", fmt.Sprintf("profile %q not found", profileID)}
+		}
+		s.recordError(fmt.Sprintf("profile_lookup_failed: %v", err))
+		return domain.Profile{}, &SwapError{http.StatusInternalServerError, "server_error",
+			"swap_failed", fmt.Sprintf("profile lookup: %v", err)}
+	}
+	return profile, nil
+}
+
+// killOldBackend terminates the previously-loaded backend (if any) and clears
+// s.current so a failed launch below can never leave a stale pointer. Kill
+// failures are non-fatal (logged), preserving the prior inline behavior.
+func (s *Server) killOldBackend(cur *loadedBackend, attemptID string) {
+	if cur == nil {
+		return
+	}
+	s.logger.Info("proxy_swap_killing",
+		"from_profile", cur.profileID, "pid", cur.pid, "attempt_id", attemptID)
+	if killErr := s.deps.ProcessMgr.Kill(cur.pid); killErr != nil && !errors.Is(killErr, processmgr.ErrUnknownPID) {
+		s.logger.Warn("proxy_swap_kill_warning", "err", killErr, "attempt_id", attemptID)
+	}
+	s.stateMu.Lock()
+	s.current = nil
+	s.stateMu.Unlock()
+}
+
+// launchNewBackend launches profile, waits for it to become healthy, and on
+// success installs it as s.current. A launch failure maps to 502; an unhealthy
+// backend is killed and maps to 504.
+func (s *Server) launchNewBackend(profile domain.Profile, profileID, attemptID string) (*loadedBackend, error) {
 	inst, launchErr := s.launchProfile(profile, attemptID)
 	if launchErr != nil {
 		s.recordError(fmt.Sprintf("launch %s: %v", profileID, launchErr))
-		return nil, http.StatusBadGateway, fmt.Errorf("launch %s: %w", profileID, launchErr)
+		return nil, &SwapError{http.StatusBadGateway, "backend_error", "backend_launch_failed",
+			fmt.Sprintf("launch %s: %v", profileID, launchErr)}
 	}
 
 	if hErr := s.deps.ProcessMgr.WaitHealthy(inst.PID, inst.Port, s.cfg.HealthCheckTimeout, attemptID); hErr != nil {
@@ -201,7 +227,8 @@ func (s *Server) ensureLoaded(ctx context.Context, profileID string) (*loadedBac
 			"attempt_id", attemptID, "err", hErr)
 		_ = s.deps.ProcessMgr.Kill(inst.PID)
 		s.recordError(fmt.Sprintf("healthcheck %s: %v", profileID, hErr))
-		return nil, http.StatusGatewayTimeout, fmt.Errorf("backend %s unhealthy: %w", profileID, hErr)
+		return nil, &SwapError{http.StatusGatewayTimeout, "backend_error", "backend_unhealthy",
+			fmt.Sprintf("backend %s unhealthy: %v", profileID, hErr)}
 	}
 
 	loaded := &loadedBackend{
@@ -214,13 +241,17 @@ func (s *Server) ensureLoaded(ctx context.Context, profileID string) (*loadedBac
 	s.stateMu.Lock()
 	s.current = loaded
 	s.stateMu.Unlock()
+	return loaded, nil
+}
 
+// recordSwapMetrics records the swap duration, clears the last error, and logs
+// completion.
+func (s *Server) recordSwapMetrics(loaded *loadedBackend, swapStart time.Time, attemptID string) {
 	s.recordSwap(time.Since(swapStart))
 	s.clearError()
 	s.logger.Info("proxy_swap_complete",
-		"profile_id", profileID, "pid", inst.PID, "port", inst.Port,
+		"profile_id", loaded.profileID, "pid", loaded.pid, "port", loaded.port,
 		"attempt_id", attemptID, "duration_ms", time.Since(swapStart).Milliseconds())
-	return loaded, 0, nil
 }
 
 // launchProfile is a thin wrapper to keep the swap path readable.
@@ -273,21 +304,8 @@ func (s *Server) handleAdminLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, status, err := s.ensureLoaded(r.Context(), profileID)
-	if err != nil {
-		switch status {
-		case http.StatusNotFound:
-			writeOpenAIError(w, status, "invalid_request_error", "model_not_found", err.Error())
-		case http.StatusGatewayTimeout:
-			writeOpenAIError(w, status, "backend_error", "backend_unhealthy", err.Error())
-		case http.StatusBadGateway:
-			writeOpenAIError(w, status, "backend_error", "backend_launch_failed", err.Error())
-		default:
-			if status == 0 {
-				status = http.StatusInternalServerError
-			}
-			writeOpenAIError(w, status, "server_error", "load_failed", err.Error())
-		}
+	if _, err := s.ensureLoaded(r.Context(), profileID); err != nil {
+		writeSwapError(w, err)
 		return
 	}
 	s.logger.Info("proxy_admin_load_ok", "profile_id", profileID)
@@ -346,8 +364,8 @@ func (s *Server) handleAdminUnload(w http.ResponseWriter, r *http.Request) {
 	if err := s.killCurrentBackend(); err != nil {
 		s.recordError("admin_unload_kill: " + err.Error())
 		s.logger.Error("proxy_admin_unload_kill_failed", "err", err)
-		writeOpenAIError(w, http.StatusInternalServerError, "server_error",
-			"unload_failed", err.Error())
+		writeSwapError(w, &SwapError{http.StatusInternalServerError, "server_error",
+			"unload_failed", err.Error()})
 		return
 	}
 	s.logger.Info("proxy_admin_unload_ok")

@@ -128,6 +128,28 @@ func TestModal_RectangularBorderWithWideGlyphs(t *testing.T) {
 	}
 }
 
+// TestModal_ClampsToTerminalWidth guarantees a body wider than the terminal
+// (e.g. a fixed-width huh confirm form on an 80-col screen) is clamped so the
+// box never overflows and its right border is never clipped (TUI_AUDIT F-01).
+func TestModal_ClampsToTerminalWidth(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	theme.RebuildStyles()
+	t.Cleanup(func() {
+		t.Setenv("NO_COLOR", "")
+		theme.RebuildStyles()
+	})
+
+	const width = 80
+	body := strings.Repeat("x", 200) + "\nshort line"
+	out := Modal("Delete profile", body, width, 24)
+
+	for i, ln := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		if w := lipgloss.Width(ln); w > width {
+			t.Errorf("line %d width %d exceeds terminal width %d (modal overflow):\n%s", i, w, width, out)
+		}
+	}
+}
+
 func containsUnderlineSGR(s string) bool {
 	return strings.Contains(s, "\x1b[4m") ||
 		strings.Contains(s, "\x1b[4;") ||

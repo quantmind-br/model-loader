@@ -7,7 +7,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
-//go:embed testdata/help-v7376.golden.json
+//go:embed testdata/help-v9680.golden.json
 var goldenHelpJSON []byte
 
 func loadGoldenSchema() (domain.FlagSchema, error) {
@@ -15,6 +15,6 @@ func loadGoldenSchema() (domain.FlagSchema, error) {
 	if err := json.Unmarshal(goldenHelpJSON, &fs); err != nil {
 		return domain.FlagSchema{}, err
 	}
-	fs.Version = "embedded-v7376-full"
+	fs.Version = "embedded-v9680-full"
 	return fs, nil
 }

@@ -38,12 +38,12 @@ func TestPrepareLaunch_ResolvesBackendKindWhenUnset(t *testing.T) {
 		t.Fatalf("prepareLaunch: %v", err)
 	}
 
-	if len(plan.args) < 2 || plan.args[0] != "--target" || plan.args[1] != p.Model {
-		t.Fatalf("expected args to begin with --target %s, got %v", p.Model, plan.args)
+	if len(plan.args) < 1 || plan.args[0] != p.Model {
+		t.Fatalf("expected args to begin with positional model %s, got %v", p.Model, plan.args)
 	}
 	for _, a := range plan.args {
-		if a == "--model" {
-			t.Fatalf("dflash backend must not emit --model; got %v", plan.args)
+		if a == "--model" || a == "--target" {
+			t.Fatalf("dflash backend must not emit %s; got %v", a, plan.args)
 		}
 	}
 }

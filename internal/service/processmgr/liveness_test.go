@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
 )
 
 func TestLiveness_MarksDeadPIDCrashed(t *testing.T) {
@@ -58,7 +59,7 @@ func TestLiveness_AliveStaysAlive(t *testing.T) {
 
 // Sanity: ESRCH from syscall.Kill is treated as "process gone".
 func TestLiveness_DefaultProbeRespectsESRCH(t *testing.T) {
-	if probePIDAlive(99999) {
+	if procutil.Alive(99999) {
 		// On Linux, syscall.Kill(99999, 0) typically returns ESRCH; if the
 		// machine is heavily loaded with PIDs this could exist. Skip when so.
 		t.Skip("PID 99999 is alive on this system; cannot validate ESRCH path")

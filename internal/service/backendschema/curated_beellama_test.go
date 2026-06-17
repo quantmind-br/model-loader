@@ -1,0 +1,179 @@
+package backendschema
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/validator"
+)
+
+// TestCuratedBeeLlama_SpecTypeEnum pins the spec-type enum to the BeeLlama
+// v0.3.x binary surface (build 10102), which added the native draft-simple,
+// draft-eagle3, and draft-mtp speculative types. The curated enum overrides
+// the parsed one in mergeWithCurated, so a stale list here rejects valid
+// profiles (real MTP profiles use spec-type=draft-mtp).
+func TestCuratedBeeLlama_SpecTypeEnum(t *testing.T) {
+	schema := CuratedBeeLlamaSchema().ToFlagSchema()
+	spec, ok := schema.Lookup("spec-type")
+	if !ok {
+		t.Fatal("spec-type missing from curated schema")
+	}
+	want := []string{
+		"none", "draft-simple", "draft-eagle3", "draft-mtp",
+		"ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod",
+		"ngram-cache", "suffix", "copyspec", "recycle", "dflash",
+	}
+	if !reflect.DeepEqual(spec.EnumValues, want) {
+		t.Fatalf("spec-type enum = %v, want %v", spec.EnumValues, want)
+	}
+}
+
+// TestCuratedBeeLlama_CacheTypesIncludeQ60 guards that the q6_0 KV cache type
+// added in BeeLlama v0.3.0 is accepted on all four cache-type enums.
+func TestCuratedBeeLlama_CacheTypesIncludeQ60(t *testing.T) {
+	schema := CuratedBeeLlamaSchema().ToFlagSchema()
+	for _, flag := range []string{"cache-type-k", "cache-type-v", "spec-draft-type-k", "spec-draft-type-v"} {
+		spec, ok := schema.Lookup(flag)
+		if !ok {
+			t.Fatalf("%s missing from curated schema", flag)
+		}
+		if !containsStr(spec.EnumValues, "q6_0") {
+			t.Fatalf("%s enum missing q6_0: %v", flag, spec.EnumValues)
+		}
+	}
+}
+
+// TestCuratedBeeLlama_RemovedV030SurfaceAbsent guards that flags and aliases
+// removed by BeeLlama v0.3.0 no longer appear anywhere in the curated schema.
+// Curated-only flags are re-injected and curated aliases override parsed ones
+// in mergeWithCurated, so stale entries resolve to arguments the binary now
+// rejects at startup.
+func TestCuratedBeeLlama_RemovedV030SurfaceAbsent(t *testing.T) {
+	schema := CuratedBeeLlamaSchema()
+
+	removedFlags := map[string]bool{
+		"spec-dflash-default":       true,
+		"checkpoint-every-n-tokens": true,
+	}
+	removedAliases := map[string]bool{
+		"draft": true, "draft-max": true, "draft-n": true,
+		"draft-min": true, "draft-n-min": true, "draft-topk": true,
+		"tree-budget": true, "spec-replace": true,
+	}
+
+	for key, spec := range schema.Flags {
+		if removedFlags[key] || removedFlags[spec.Long] {
+			t.Errorf("curated schema still defines removed flag %q", spec.Long)
+		}
+		for _, a := range spec.Aliases {
+			if removedAliases[a] || removedFlags[a] {
+				t.Errorf("flag %q still carries removed alias %q", spec.Long, a)
+			}
+		}
+	}
+
+	for _, rule := range schema.Rules {
+		if removedFlags[rule.When.Flag] || removedFlags[rule.Then.Flag] {
+			t.Errorf("cross-field rule %q references removed flag", rule.ID)
+		}
+	}
+
+	for _, group := range schema.Presentation.Groups {
+		for _, f := range group.Flags {
+			if removedFlags[f] {
+				t.Errorf("presentation group %q still lists removed flag %q", group.Name, f)
+			}
+		}
+	}
+}
+
+// TestCuratedBeeLlama_CheckpointMinStep guards the v0.3.0 replacement of
+// --checkpoint-every-n-tokens with --checkpoint-min-step (-cms, default 256).
+func TestCuratedBeeLlama_CheckpointMinStep(t *testing.T) {
+	curated := CuratedBeeLlamaSchema()
+	spec, ok := curated.ToFlagSchema().Lookup("checkpoint-min-step")
+	if !ok {
+		t.Fatal("checkpoint-min-step missing from curated schema")
+	}
+	if spec.Short != "cms" {
+		t.Errorf("checkpoint-min-step short = %q, want cms", spec.Short)
+	}
+	if spec.Default != 256 {
+		t.Errorf("checkpoint-min-step default = %v, want 256", spec.Default)
+	}
+
+	listed := false
+	for _, group := range curated.Presentation.Groups {
+		for _, f := range group.Flags {
+			if f == "checkpoint-min-step" {
+				listed = true
+			}
+		}
+	}
+	if !listed {
+		t.Error("checkpoint-min-step not listed in any presentation group")
+	}
+}
+
+// TestCuratedBeeLlama_SpecDraftNMaxDefault pins spec-draft-n-max to the
+// upstream default 3. Since v0.3.0 DFlash raises the effective omitted draft
+// max to 16 by itself; the curated default overrides the parsed one in
+// mergeWithCurated, so forcing 16 here would misreport the binary's behavior.
+func TestCuratedBeeLlama_SpecDraftNMaxDefault(t *testing.T) {
+	schema := CuratedBeeLlamaSchema().ToFlagSchema()
+	spec, ok := schema.Lookup("spec-draft-n-max")
+	if !ok {
+		t.Fatal("spec-draft-n-max missing from curated schema")
+	}
+	if spec.Default != 3 {
+		t.Fatalf("spec-draft-n-max default = %v, want 3", spec.Default)
+	}
+}
+
+// TestCuratedBeeLlama_SpecDraftTempIsString pins spec-draft-temp to string:
+// since v0.3.0 it accepts 'auto' (mirror target temperature) besides a float,
+// and the live --help parser already types it as string in merged schemas.
+func TestCuratedBeeLlama_SpecDraftTempIsString(t *testing.T) {
+	schema := CuratedBeeLlamaSchema().ToFlagSchema()
+	spec, ok := schema.Lookup("spec-draft-temp")
+	if !ok {
+		t.Fatal("spec-draft-temp missing from curated schema")
+	}
+	if spec.Type != domain.FlagTypeString {
+		t.Fatalf("spec-draft-temp should be FlagTypeString, got %v", spec.Type)
+	}
+}
+
+// TestCuratedBeeLlama_ValidatesMTPProfile guards that the curated fallback
+// schema validates a realistic BeeLlama v0.3.x MTP profile, including the
+// draft-mtp spec-type, the new checkpoint-min-step flag, the q6_0 cache type,
+// and spec-draft-temp=auto.
+func TestCuratedBeeLlama_ValidatesMTPProfile(t *testing.T) {
+	schema := CuratedBeeLlamaSchema().ToFlagSchema()
+
+	p := domain.Profile{
+		Args: map[string]any{
+			"batch-size":          float64(2048),
+			"ubatch-size":         float64(1024),
+			"cache-type-k":        "q8_0",
+			"cache-type-v":        "q6_0",
+			"ctx-size":            float64(200000),
+			"flash-attn":          "on",
+			"host":                "127.0.0.1",
+			"parallel":            float64(1),
+			"threads":             float64(2),
+			"threads-batch":       float64(8),
+			"reasoning-budget":    float64(2048),
+			"checkpoint-min-step": float64(256),
+			"spec-type":           "draft-mtp",
+			"spec-draft-n-max":    float64(3),
+			"spec-draft-temp":     "auto",
+		},
+	}
+
+	rep := validator.New(nil).Validate(p, schema, schema.BackendKind)
+	if rep.HasBlockingErrors() {
+		t.Fatalf("expected curated schema to validate MTP profile, got %d errors: %+v", len(rep.Errors), rep.Errors)
+	}
+}

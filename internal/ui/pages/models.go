@@ -234,6 +234,18 @@ func (p ModelsPage) renderSubTabs() string {
 func (p ModelsPage) renderLibraryView() string {
 	statusLine := p.renderStatus()
 	filterLine := components.FilterLine(p.filterMode, p.filter)
+	// While a filter is active the per-path header count ([N]) still shows the
+	// unfiltered total, so surface the live match count next to the filter
+	// itself (TUI_AUDIT F-05). The zero-match case has its own empty state.
+	if p.filter != "" {
+		if n := len(p.visibleFiles()); n > 0 {
+			word := "matches"
+			if n == 1 {
+				word = "match"
+			}
+			filterLine += theme.Subtitle.Render(fmt.Sprintf("  (%d %s)", n, word))
+		}
+	}
 	var content string
 	switch {
 	case len(p.files) == 0 && p.hasErrorRoot():

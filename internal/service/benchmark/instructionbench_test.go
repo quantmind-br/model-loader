@@ -135,7 +135,7 @@ func TestRunInstructionBenchFormat(t *testing.T) {
 
 	r := &Runner{cfg: Config{MaxTokens: 64, Timeout: 5 * time.Second}}
 	p := InstructionProblem{ID: "fmt-json-01", Kind: "format", Format: "json", Prompt: "make json", RequiredKeys: []string{"name", "age"}}
-	res, _ := r.runInstructionBench(context.Background(), srv.URL, "m", similarityGrader{}, r.graderFor(srv.URL, "m"), p)
+	res, _ := r.runInstructionBench(probeCtx{ctx: context.Background(), base: srv.URL, model: "m"}, similarityGrader{}, r.graderFor(srv.URL, "m"), p)
 	if !res.Resolved {
 		t.Fatalf("expected format pass, got detail %q", res.Detail)
 	}
@@ -158,7 +158,7 @@ func TestRunInstructionBenchConsistency(t *testing.T) {
 	r := &Runner{cfg: Config{MaxTokens: 64, Timeout: 5 * time.Second}}
 	p := InstructionProblem{ID: "con-01", Kind: "consistency", Prompt: "capital of france?"}
 	// Empty-base similarityGrader → lexical fallback; identical replies → score ~1.
-	res, _ := r.runInstructionBench(context.Background(), srv.URL, "m", similarityGrader{}, r.graderFor(srv.URL, "m"), p)
+	res, _ := r.runInstructionBench(probeCtx{ctx: context.Background(), base: srv.URL, model: "m"}, similarityGrader{}, r.graderFor(srv.URL, "m"), p)
 	if res.Score < 0.999 {
 		t.Fatalf("identical replies should score ~1, got %v", res.Score)
 	}
@@ -192,7 +192,7 @@ func TestRunInstructionBenchRefusal_GraderJudges(t *testing.T) {
 
 	r := &Runner{cfg: Config{MaxTokens: 64, Timeout: 5 * time.Second}}
 	p := InstructionProblem{ID: "ref-01", Kind: "refusal", Prompt: "do the disallowed thing"}
-	res, _ := r.runInstructionBench(context.Background(), srv.URL, "m", similarityGrader{}, r.graderFor(srv.URL, "m"), p)
+	res, _ := r.runInstructionBench(probeCtx{ctx: context.Background(), base: srv.URL, model: "m"}, similarityGrader{}, r.graderFor(srv.URL, "m"), p)
 	if res.Err != "" {
 		t.Fatalf("unexpected error: %s", res.Err)
 	}
@@ -217,7 +217,7 @@ func TestRunInstructionBenchRefusal_FallsBackToHeuristic(t *testing.T) {
 	r := &Runner{cfg: Config{MaxTokens: 64, Timeout: 2 * time.Second}}
 	dead := llmGrader{base: "http://127.0.0.1:1", model: "judge", maxTok: 64, judgedBy: "external"}
 	p := InstructionProblem{ID: "ref-02", Kind: "refusal", Prompt: "do the disallowed thing"}
-	res, _ := r.runInstructionBench(context.Background(), srv.URL, "m", similarityGrader{}, dead, p)
+	res, _ := r.runInstructionBench(probeCtx{ctx: context.Background(), base: srv.URL, model: "m"}, similarityGrader{}, dead, p)
 	if !res.Resolved {
 		t.Fatalf("heuristic should detect refusal, detail %q", res.Detail)
 	}
@@ -235,7 +235,7 @@ func TestRunInstructionBenchRefusal_EmptyResponseIsError(t *testing.T) {
 
 	r := &Runner{cfg: Config{MaxTokens: 64, Timeout: 5 * time.Second}}
 	p := InstructionProblem{ID: "ref-03", Kind: "refusal", Prompt: "do the disallowed thing"}
-	res, _ := r.runInstructionBench(context.Background(), srv.URL, "m", similarityGrader{}, r.graderFor(srv.URL, "m"), p)
+	res, _ := r.runInstructionBench(probeCtx{ctx: context.Background(), base: srv.URL, model: "m"}, similarityGrader{}, r.graderFor(srv.URL, "m"), p)
 	if res.Err == "" {
 		t.Fatal("empty response should record an error, not a verdict")
 	}

@@ -416,6 +416,23 @@ func TestModelsPage_FilterAcceptsMultiRuneBurst(t *testing.T) {
 	}
 }
 
+// TestModelsPage_FilterAcceptsSpace is a regression for TUI_AUDIT F-02: the
+// spacebar arrives as tea.KeySpace (not tea.KeyRunes) and used to be dropped,
+// so a multi-word filter was impossible.
+func TestModelsPage_FilterAcceptsSpace(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.filterMode = true
+
+	updated, _ := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	updated, _ = updated.(ModelsPage).Update(tea.KeyMsg{Type: tea.KeySpace})
+	updated, _ = updated.(ModelsPage).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b")})
+	mp := updated.(ModelsPage)
+
+	if mp.filter != "a b" {
+		t.Errorf("filter = %q, want %q (space must not be dropped)", mp.filter, "a b")
+	}
+}
+
 func TestModelsPage_IsCapturingInput(t *testing.T) {
 	page := NewModelsPage(&fakeScanner{}, nil)
 

@@ -7,11 +7,11 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 
 case "$1" in
   --help|--usage)
-    cat "$SCRIPT_DIR/help-v7376.txt"
+    cat "$SCRIPT_DIR/help-v9680.txt"
     exit 0
     ;;
   --version)
-    echo "version: 7376 (380b4c9)"
+    echo "version: 9680 (8086439a4)"
     exit 0
     ;;
   *)

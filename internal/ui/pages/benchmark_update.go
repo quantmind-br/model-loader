@@ -136,16 +136,16 @@ func (p BenchmarkPage) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (p BenchmarkPage) openProfilePick() (tea.Model, tea.Cmd) {
 	if p.runner == nil {
-		p.flash, _ = flashError(p.flash, "benchmark engine unavailable")
+		p, _ = p.withFlashError("benchmark engine unavailable")
 		return p, nil
 	}
 	profiles, err := p.store.List()
 	if err != nil {
-		p.flash, _ = flashError(p.flash, "load profiles: "+err.Error())
+		p, _ = p.withFlashError("load profiles: " + err.Error())
 		return p, nil
 	}
 	if len(profiles) == 0 {
-		p.flash, _ = flashError(p.flash, "no profiles — create one in the Profiles tab")
+		p, _ = p.withFlashError("no profiles — create one in the Profiles tab")
 		return p, nil
 	}
 	p.profiles = profiles
@@ -158,27 +158,13 @@ func (p BenchmarkPage) openProfilePick() (tea.Model, tea.Cmd) {
 
 func (p BenchmarkPage) keyProfilePick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if p.filterMode {
-		switch msg.String() {
-		case "esc", "/":
-			p.filterMode = false
-			return p, nil
-		case "backspace":
-			if len(p.filter) > 0 {
-				p.filter = p.filter[:len(p.filter)-1]
-			}
-			return p, nil
-		case "enter":
-			p.filterMode = false
-		default:
-			if len(msg.Runes) == 1 {
-				p.filter += string(msg.Runes)
-				if p.profCursor >= len(p.filteredProfiles()) {
-					p.profCursor = 0
-				}
-				return p, nil
-			}
-			return p, nil
+		np, cmd, handled := p.keyProfilePickFilter(msg)
+		if handled {
+			return np, cmd
 		}
+		// enter in filter mode falls through: it exits the filter (applied in
+		// np) and then lets the non-filter switch select the highlighted row.
+		p = np
 	}
 	switch msg.String() {
 	case "esc":
@@ -213,6 +199,45 @@ func (p BenchmarkPage) keyProfilePick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return p, nil
 }
 
+// keyProfilePickFilter handles keys while the profile picker's filter input is
+// active. handled is true when the key is fully consumed; it is false only for
+// "enter", which signals keyProfilePick to fall through to its non-filter
+// switch so enter both closes the filter and selects the highlighted profile.
+func (p BenchmarkPage) keyProfilePickFilter(msg tea.KeyMsg) (BenchmarkPage, tea.Cmd, bool) {
+	switch msg.String() {
+	case "esc", "/":
+		p.filterMode = false
+		return p, nil, true
+	case "backspace":
+		if len(p.filter) > 0 {
+			p.filter = p.filter[:len(p.filter)-1]
+		}
+		return p, nil, true
+	case "enter":
+		p.filterMode = false
+		return p, nil, false
+	case " ":
+		// Space arrives as tea.KeySpace (empty Runes), so the rune branch
+		// below would drop it (TUI_AUDIT F-02).
+		p.filter += " "
+		if p.profCursor >= len(p.filteredProfiles()) {
+			p.profCursor = 0
+		}
+		return p, nil, true
+	default:
+		// Append every rune in the message, not just single-rune events —
+		// fast/bursted typing and paste arrive as one KeyMsg carrying
+		// multiple runes (mirrors the INPUT-01 fix in models_messages.go).
+		if len(msg.Runes) > 0 {
+			p.filter += string(msg.Runes)
+			if p.profCursor >= len(p.filteredProfiles()) {
+				p.profCursor = 0
+			}
+		}
+		return p, nil, true
+	}
+}
+
 func (p BenchmarkPage) keyModePick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
@@ -239,26 +264,19 @@ func (p BenchmarkPage) askDeleteSelected() (tea.Model, tea.Cmd) {
 		return p, nil
 	}
 	id := p.runs[p.runCursor].ID
-	p.deleteConfirm = components.NewConfirm(
-		"Delete benchmark run "+id+"?",
-		id,
-		func(payload any) tea.Cmd {
-			rid, _ := payload.(string)
-			return func() tea.Msg { return benchmarkDeleteConfirmedMsg{id: rid} }
-		},
-		"Delete",
-		"Cancel",
-	)
-	return p, p.deleteConfirm.Init()
+	var cmd tea.Cmd
+	p.deleteConfirm, cmd = setupConfirm("Delete benchmark run "+id+"?", "Delete", "Cancel",
+		func() tea.Cmd { return func() tea.Msg { return benchmarkDeleteConfirmedMsg{id: id} } })
+	return p, cmd
 }
 
 func (p BenchmarkPage) performDelete(id string) (tea.Model, tea.Cmd) {
 	if err := p.bstore.Delete(id); err != nil {
-		p.flash, _ = flashError(p.flash, "delete: "+err.Error())
+		p, _ = p.withFlashError("delete: " + err.Error())
 		return p, nil
 	}
 	var fc tea.Cmd
-	p.flash, fc = flashSuccess(p.flash, "deleted run")
+	p, fc = p.withFlash("deleted run")
 	return p, tea.Batch(fc, p.loadRunsCmd())
 }
 
@@ -274,10 +292,10 @@ func (p BenchmarkPage) exportSelected() (tea.Model, tea.Cmd) {
 func (p BenchmarkPage) exportRunValue(r benchmark.Run) (tea.Model, tea.Cmd) {
 	jsonPath, _, err := exportRun(p.exportDir, r)
 	if err != nil {
-		p.flash, _ = flashError(p.flash, "export: "+err.Error())
+		p, _ = p.withFlashError("export: " + err.Error())
 		return p, nil
 	}
 	var fc tea.Cmd
-	p.flash, fc = flashSuccess(p.flash, "exported to "+filepath.Dir(jsonPath))
+	p, fc = p.withFlash("exported to " + filepath.Dir(jsonPath))
 	return p, fc
 }

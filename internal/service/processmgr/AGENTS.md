@@ -18,7 +18,7 @@ Process lifecycle service: spawns llama-server as background (detached) or foreg
 
 - **LaunchMode**: Background = detached + log file + registry persistence. Foreground = attached TUI stream, max 1 at a time.
 - **Logs**: Per-PID files under LogDir (`<pid>.log`), appended via os.OpenFile(O_APPEND).
-- **Health check**: TCP dial on the profile's port; timeout is configurable.
+- **Health check**: TCP dial on the manager-assigned ephemeral instance port (profiles no longer carry a `port` arg — it is stripped if present); timeout is configurable.
 - **Flag canonicalization**: `BuildArgs` calls `domain.CanonicalFlag()` to map user-friendly short keys (e.g. `"ngl"`) to long-form llama-server flags (`"n-gpu-layers"`) via the `shortToLong` table in `domain/flags.go`.
 - **Tests**: Use `fakeBinary(t)` helper for a no-op executable; `freePort(t)` to avoid conflicts.
 

@@ -68,7 +68,13 @@ func (judgeHandler) Execute(ctx context.Context, r *Runner, base, model string, 
 		wg.Add(1)
 		go func(p Problem, content string) {
 			defer wg.Done()
-			sem <- struct{}{}
+			// A cancelled run must unblock a goroutine waiting for a semaphore slot
+			// instead of stranding it behind a slow judge that will never drain.
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
 			defer func() { <-sem }()
 			// Distinct slots: each goroutine writes only its own problem.
 			r.scoreProblem(ctx, scorer, p, content, resPtr, trPtr)

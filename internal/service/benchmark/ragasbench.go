@@ -156,23 +156,19 @@ func (ragasHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
 
 func (ragasHandler) Execute(ctx context.Context, r *Runner, base, model string, _ Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
 	g := r.graderFor(base, model)
-	var results []ProblemResult
-	var transcripts []ProblemTranscript
-	for i, p := range r.ragasProblems {
-		select {
-		case <-ctx.Done():
-			return results, transcripts, ctx.Err()
-		default:
-		}
-		send(progress, Progress{Index: i + 1, Total: len(r.ragasProblems), ProblemID: p.ID, ProblemName: truncateQuestion(p.Question), Phase: "infer"})
-		pr, tr := r.runRagas(ctx, base, model, g, p)
-		results = append(results, pr)
-		if r.cfg.SaveTranscripts {
-			transcripts = append(transcripts, tr)
-		}
-		send(progress, Progress{Index: i + 1, Total: len(r.ragasProblems), ProblemID: p.ID, ProblemName: truncateQuestion(p.Question), Phase: "score"})
-	}
-	return results, transcripts, nil
+	total := len(r.ragasProblems)
+	return executeSerialBench(ctx, r, progress, total,
+		func(i int) (string, string) {
+			p := r.ragasProblems[i]
+			return p.ID, truncateQuestion(p.Question)
+		},
+		func(i int) (ProblemResult, ProblemTranscript) {
+			p := r.ragasProblems[i]
+			pr, tr := r.runRagas(ctx, base, model, g, p)
+			// Grading happens inside runRagas; emit the trailing "score" phase.
+			send(progress, Progress{Index: i + 1, Total: total, ProblemID: p.ID, ProblemName: truncateQuestion(p.Question), Phase: "score"})
+			return pr, tr
+		})
 }
 
 func init() {

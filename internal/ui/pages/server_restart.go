@@ -12,7 +12,6 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
-	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
 
 // monitorKillConfirmedMsg is emitted by killConfirm.onYes when the user
@@ -123,33 +122,16 @@ func (p *ServerPage) handleRestartConfirmed(m monitorRestartConfirmedMsg) (tea.M
 // onYes emits monitorKillConfirmedMsg; the actual Kill happens in Update so
 // manager I/O stays on the page.
 func (p *ServerPage) askConfirmKill(pid int) tea.Cmd {
-	p.killConfirm = components.NewConfirm(
-		fmt.Sprintf("Kill pid=%d?", pid),
-		pid,
-		func(payload any) tea.Cmd {
-			id, _ := payload.(int)
-			return func() tea.Msg { return monitorKillConfirmedMsg{pid: id} }
-		},
-		"Kill",
-		"Cancel",
-	)
-	return p.killConfirm.Init()
+	var cmd tea.Cmd
+	p.killConfirm, cmd = setupConfirm(fmt.Sprintf("Kill pid=%d?", pid), "Kill", "Cancel",
+		func() tea.Cmd { return func() tea.Msg { return monitorKillConfirmedMsg{pid: pid} } })
+	return cmd
 }
 
 func (p *ServerPage) handleConfirmKillKey(msg tea.KeyMsg) tea.Cmd {
 	var cmd tea.Cmd
 	p.killConfirm, cmd = p.killConfirm.Update(msg)
 	return cmd
-}
-
-// restartPayload bundles the data captured at the moment the user opens the
-// restart confirm. It is the Confirm.payload so onYes can emit a
-// monitorRestartConfirmedMsg with everything needed for the async
-// unload+load dispatch — no need to re-read p.pm.List() at completion time,
-// which would race with the periodic refresh.
-type restartPayload struct {
-	pid     int
-	profile domain.Profile
 }
 
 // askConfirmRestart preloads the profile for the selected PID and arms a
@@ -178,20 +160,13 @@ func (p *ServerPage) askConfirmRestart(pid int) tea.Cmd {
 		p.flash, cmd = p.flash.SetError(fmt.Sprintf("restart: profile %q not found", inst.ProfileID))
 		return cmd
 	}
-	payload := restartPayload{pid: pid, profile: prof}
-	p.restartConfirm = components.NewConfirm(
-		fmt.Sprintf("Restart pid=%d (%s)?", pid, prof.Name),
-		payload,
-		func(arg any) tea.Cmd {
-			rp, _ := arg.(restartPayload)
+	p.restartConfirm, cmd = setupConfirm(fmt.Sprintf("Restart pid=%d (%s)?", pid, prof.Name), "Restart", "Cancel",
+		func() tea.Cmd {
 			return func() tea.Msg {
-				return monitorRestartConfirmedMsg{pid: rp.pid, profile: rp.profile}
+				return monitorRestartConfirmedMsg{pid: pid, profile: prof}
 			}
-		},
-		"Restart",
-		"Cancel",
-	)
-	return p.restartConfirm.Init()
+		})
+	return cmd
 }
 
 func (p *ServerPage) handleConfirmRestartKey(msg tea.KeyMsg) tea.Cmd {

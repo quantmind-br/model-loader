@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/quantmind-br/model-loader/internal/config"
 	"github.com/quantmind-br/model-loader/internal/service/downloadmgr"
@@ -12,6 +11,12 @@ import (
 )
 
 func init() {
+	registerModelDownloadCmd()
+	registerModelDownloadsCmd()
+}
+
+// registerModelDownloadCmd registers `model download <repo> <file>`.
+func registerModelDownloadCmd() {
 	var (
 		snapshot bool
 		wait     bool
@@ -151,7 +156,8 @@ type downloadItem struct {
 	Total    int64  `json:"total"`
 }
 
-func init() {
+// registerModelDownloadsCmd registers `model downloads` and its subcommands.
+func registerModelDownloadsCmd() {
 	downloadsCmd := &cobra.Command{
 		Use:   "downloads",
 		Short: "List and manage downloads",
@@ -230,27 +236,19 @@ func listDownloads(out io.Writer, mgr downloadManager, asJSON bool) error {
 // resolveDownloadID matches ref against a download id exactly, then by unique prefix.
 func resolveDownloadID(mgr downloadManager, ref string) (downloadmgr.ID, error) {
 	states := mgr.Snapshot()
-	var byPrefix []downloadmgr.ID
-	for _, s := range states {
-		if string(s.ID) == ref {
-			return s.ID, nil
+	s, err := resolveByPrefix(states, ref, func(s downloadmgr.State) []string { return []string{string(s.ID)} })
+	if err != nil {
+		var amb *ambiguousMatchError[downloadmgr.State]
+		if errors.As(err, &amb) {
+			labels := make([]string, len(amb.Matches))
+			for i, m := range amb.Matches {
+				labels[i] = string(m.ID)
+			}
+			return "", fmt.Errorf("ambiguous download id %q matches %d downloads: %s; use a longer prefix", ref, len(amb.Matches), formatCandidates(labels))
 		}
-		if strings.HasPrefix(string(s.ID), ref) {
-			byPrefix = append(byPrefix, s.ID)
-		}
-	}
-	switch len(byPrefix) {
-	case 1:
-		return byPrefix[0], nil
-	case 0:
 		return "", fmt.Errorf("download not found: %s", ref)
-	default:
-		labels := make([]string, len(byPrefix))
-		for i, id := range byPrefix {
-			labels[i] = string(id)
-		}
-		return "", fmt.Errorf("ambiguous download id %q matches %d downloads: %s; use a longer prefix", ref, len(byPrefix), formatCandidates(labels))
 	}
+	return s.ID, nil
 }
 
 func cancelDownload(out io.Writer, mgr downloadManager, ref string, asJSON bool) error {

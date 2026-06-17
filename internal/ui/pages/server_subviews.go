@@ -25,8 +25,11 @@ const (
 
 func (p *ServerPage) openHistoryChart() (tea.Model, tea.Cmd) {
 	pid := p.selectedPID()
-	if pid <= 0 || p.metricsDir == "" {
-		return p.withFlashError("history: no metrics directory configured (set logging.metrics_dir in config.toml)")
+	if pid <= 0 {
+		return p.withFlashError("history: select a running instance first")
+	}
+	if p.metricsDir == "" {
+		return p.withFlashError("history: metrics directory unavailable")
 	}
 	insts := p.pm.List()
 	var profileID string
@@ -103,9 +106,9 @@ func (p *ServerPage) renderStatusLine() string {
 	return renderSubViewTabs(p.subView)
 }
 
-// renderSubViewBody renders the body of the active sub-view (logs, slots, or
-// metrics) for the currently-selected instance, or a fallback string when no
-// subscription state is available.
+// renderSubViewBody renders the body of the active sub-view (logs, slots,
+// metrics, or history) for the currently-selected instance, or a fallback
+// string when no subscription state is available.
 func (p *ServerPage) renderSubViewBody() string {
 	pid := p.selectedPID()
 	st := p.subs[pid]
@@ -114,66 +117,83 @@ func (p *ServerPage) renderSubViewBody() string {
 	}
 	switch p.subView {
 	case SubViewLogs:
-		if st.subErr != "" {
-			return theme.Error.Render("Logs unavailable: " + st.subErr)
-		}
-		visible := p.height - 12 // header + table + sub-tabs + status + flash + margins
-		if visible < 5 {
-			visible = 5
-		}
-		start := len(st.logs) - visible
-		if start < 0 {
-			start = 0
-		}
-		bottom := strings.Join(st.logs[start:], "\n")
-		if bottom == "" {
-			bottom = "(no log lines yet)"
-		}
-		if p.paused {
-			bottom = theme.Warn.Render("Logs (PAUSED — Space to resume)") + "\n" +
-				theme.Subtitle.Render(centeredDivider("PAUSED", p.width-4)) + "\n" + bottom
-		}
-		if len(st.logs) > visible {
-			bottom += "\n" + theme.Subtitle.Render(fmt.Sprintf("— showing last %d of %d (Space pauses, buffer 2000)", visible, len(st.logs)))
-		}
-		return bottom
+		return p.renderLogs(st)
 	case SubViewSlots:
-		var b strings.Builder
-		b.WriteString("idx | state      | ctx used/max | client\n")
-		for _, s := range st.slots.Slots {
-			fmt.Fprintf(&b, "%-3d | %-10s | %5d/%-5d | %s\n", s.ID, s.State, s.NCtxUsed, s.NCtxMax, s.Client)
-		}
-		bottom := b.String()
-		if bottom == "idx | state      | ctx used/max | client\n" {
-			bottom = "(no slot data yet)"
-		}
-		return bottom
+		return p.renderSlots(st)
 	case SubViewMetrics:
-		if st.subErr != "" {
-			return theme.Subtitle.Render("GPU metrics unavailable — check nvidia-smi or monitoring service")
-		}
-		if len(st.mets.TokensPerSec) == 0 && len(st.mets.RequestsPerSec) == 0 {
-			return "(no metrics yet — first sample arrives after the slots tick)"
-		}
-		// tokens/s is only sampled while the model is actively decoding, but
-		// req/s gets a 0-rate sample every slot tick. Inject an idle baseline
-		// so the tokens/s row renders a flat sparkline instead of blank space
-		// next to a populated req/s row (RENDER-03).
-		tokens := st.mets.TokensPerSec
-		if len(tokens) == 0 {
-			tokens = []float64{0}
-		}
-		var b strings.Builder
-		fmt.Fprintf(&b, "tokens/s: %s\n", theme.OK.Render(components.Sparkline(tokens, 40)))
-		fmt.Fprintf(&b, "req/s   : %s\n", theme.Warn.Render(components.Sparkline(st.mets.RequestsPerSec, 40)))
-		if st.gpu.VRAMTotalMB > 0 {
-			fmt.Fprintf(&b, "VRAM    : %d/%d MB  util %.0f%%\n", st.gpu.VRAMUsedMB, st.gpu.VRAMTotalMB, st.gpu.Utilization)
-		}
-		return b.String()
+		return p.renderMetrics(st)
 	case SubViewHistory:
 		return p.renderHistory()
 	}
 	return "no subscription"
+}
+
+// renderLogs renders the tail of the selected instance's log buffer, sized to
+// the available height and annotated with the paused banner / truncation note.
+func (p *ServerPage) renderLogs(st *subState) string {
+	if st.subErr != "" {
+		return theme.Error.Render("Logs unavailable: " + st.subErr)
+	}
+	visible := p.height - 12 // header + table + sub-tabs + status + flash + margins
+	if visible < 5 {
+		visible = 5
+	}
+	start := len(st.logs) - visible
+	if start < 0 {
+		start = 0
+	}
+	bottom := strings.Join(st.logs[start:], "\n")
+	if bottom == "" {
+		bottom = "(no log lines yet)"
+	}
+	if p.paused {
+		bottom = theme.Warn.Render("Logs (PAUSED — Space to resume)") + "\n" +
+			theme.Subtitle.Render(centeredDivider("PAUSED", p.width-4)) + "\n" + bottom
+	}
+	if len(st.logs) > visible {
+		bottom += "\n" + theme.Subtitle.Render(fmt.Sprintf("— showing last %d of %d (Space pauses, buffer 2000)", visible, len(st.logs)))
+	}
+	return bottom
+}
+
+// renderSlots renders the per-slot table for the selected instance.
+func (p *ServerPage) renderSlots(st *subState) string {
+	var b strings.Builder
+	b.WriteString("idx | state      | ctx used/max | client\n")
+	for _, s := range st.slots.Slots {
+		fmt.Fprintf(&b, "%-3d | %-10s | %5d/%-5d | %s\n", s.ID, s.State, s.NCtxUsed, s.NCtxMax, s.Client)
+	}
+	bottom := b.String()
+	if bottom == "idx | state      | ctx used/max | client\n" {
+		bottom = "(no slot data yet)"
+	}
+	return bottom
+}
+
+// renderMetrics renders the tokens/s + req/s sparklines and VRAM line for the
+// selected instance.
+func (p *ServerPage) renderMetrics(st *subState) string {
+	if st.subErr != "" {
+		return theme.Subtitle.Render("GPU metrics unavailable — check nvidia-smi or monitoring service")
+	}
+	if len(st.mets.TokensPerSec) == 0 && len(st.mets.RequestsPerSec) == 0 {
+		return "(no metrics yet — first sample arrives after the slots tick)"
+	}
+	// tokens/s is only sampled while the model is actively decoding, but
+	// req/s gets a 0-rate sample every slot tick. Inject an idle baseline
+	// so the tokens/s row renders a flat sparkline instead of blank space
+	// next to a populated req/s row (RENDER-03).
+	tokens := st.mets.TokensPerSec
+	if len(tokens) == 0 {
+		tokens = []float64{0}
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "tokens/s: %s\n", theme.OK.Render(components.Sparkline(tokens, 40)))
+	fmt.Fprintf(&b, "req/s   : %s\n", theme.Warn.Render(components.Sparkline(st.mets.RequestsPerSec, 40)))
+	if st.gpu.VRAMTotalMB > 0 {
+		fmt.Fprintf(&b, "VRAM    : %d/%d MB  util %.0f%%\n", st.gpu.VRAMUsedMB, st.gpu.VRAMTotalMB, st.gpu.Utilization)
+	}
+	return b.String()
 }
 
 // renderHistory renders the exit-history rows for the History sub-view,

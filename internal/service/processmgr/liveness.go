@@ -1,30 +1,12 @@
 package processmgr
 
 import (
-	"errors"
 	"runtime/debug"
 	"sync"
-	"syscall"
 	"time"
-)
 
-// probePIDAlive retorna true quando syscall.Kill(pid, 0) sucede, o que
-// significa que o processo existe (independente da permissão de signaling).
-// Em Linux, ESRCH indica que o PID já não existe.
-func probePIDAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	err := syscall.Kill(pid, 0)
-	if err == nil {
-		return true
-	}
-	if errors.Is(err, syscall.EPERM) {
-		// existe mas não temos permissão — ainda assim, vivo.
-		return true
-	}
-	return false
-}
+	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
+)
 
 // crashEvent batches a structured log emission to fire AFTER m.mu is
 // released. Liveness must not hold the lock across logger writes — see
@@ -96,7 +78,7 @@ func (m *fsManager) startLivenessWithProbe(interval time.Duration, probe func(in
 	}
 }
 
-// startLiveness usa a probe default (syscall.Kill) e tick de 5 segundos.
+// startLiveness uses the default probe (procutil.Alive) and a 5-second tick.
 func (m *fsManager) startLiveness() func() {
-	return m.startLivenessWithProbe(5*time.Second, probePIDAlive)
+	return m.startLivenessWithProbe(5*time.Second, procutil.Alive)
 }

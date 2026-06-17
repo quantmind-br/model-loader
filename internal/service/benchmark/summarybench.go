@@ -177,23 +177,19 @@ func (summaryHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
 
 func (summaryHandler) Execute(ctx context.Context, r *Runner, base, model string, _ Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
 	g := r.graderFor(base, model)
-	var results []ProblemResult
-	var transcripts []ProblemTranscript
-	for i, p := range r.summaryProblems {
-		select {
-		case <-ctx.Done():
-			return results, transcripts, ctx.Err()
-		default:
-		}
-		send(progress, Progress{Index: i + 1, Total: len(r.summaryProblems), ProblemID: p.ID, ProblemName: "summary " + p.ID, Phase: "infer"})
-		pr, tr := r.runSummary(ctx, base, model, g, p)
-		results = append(results, pr)
-		if r.cfg.SaveTranscripts {
-			transcripts = append(transcripts, tr)
-		}
-		send(progress, Progress{Index: i + 1, Total: len(r.summaryProblems), ProblemID: p.ID, ProblemName: "summary " + p.ID, Phase: "score"})
-	}
-	return results, transcripts, nil
+	total := len(r.summaryProblems)
+	return executeSerialBench(ctx, r, progress, total,
+		func(i int) (string, string) {
+			p := r.summaryProblems[i]
+			return p.ID, "summary " + p.ID
+		},
+		func(i int) (ProblemResult, ProblemTranscript) {
+			p := r.summaryProblems[i]
+			pr, tr := r.runSummary(ctx, base, model, g, p)
+			// Coherence grading happens inside runSummary; emit the "score" phase.
+			send(progress, Progress{Index: i + 1, Total: total, ProblemID: p.ID, ProblemName: "summary " + p.ID, Phase: "score"})
+			return pr, tr
+		})
 }
 
 func init() {

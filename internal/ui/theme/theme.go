@@ -17,8 +17,8 @@ var (
 	ColorDim        = lipgloss.AdaptiveColor{Light: "#57606a", Dark: "#6e7681"}
 	ColorSelectedBG = lipgloss.AdaptiveColor{Light: "#0969da", Dark: "#1f6feb"}
 	ColorSelectedFG = lipgloss.AdaptiveColor{Light: "#ffffff", Dark: "#ffffff"}
-	AccentBg      = ColorSelectedBG // alias for active tab background
-	AccentFg      = ColorSelectedFG // alias for active tab foreground
+	AccentBg        = ColorSelectedBG // alias for active tab background
+	AccentFg        = ColorSelectedFG // alias for active tab foreground
 
 	// Borders & layout.
 	Border = lipgloss.RoundedBorder()

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/service/benchmark"
@@ -37,5 +39,28 @@ func TestParseBenchMode(t *testing.T) {
 	}
 	if _, ok := parseBenchMode("bogus"); ok {
 		t.Fatalf("bogus mode must not parse")
+	}
+}
+
+// TestPrintRun_WritesToInjectedWriter verifies the benchmark print helpers route
+// every write through the injected io.Writer (rather than os.Stdout), so callers
+// passing cmd.OutOrStdout() can capture the rendered output.
+func TestPrintRun_WritesToInjectedWriter(t *testing.T) {
+	run := benchmark.Run{
+		ProfileID:   "p1",
+		ProfileName: "My Profile",
+		Mode:        benchmark.ModeJudge,
+		Aggregate:   benchmark.Aggregate{SolveRate: 0.5, Resolved: 1, Total: 2, AvgScore: 0.75},
+		Problems: []benchmark.ProblemResult{
+			{ProblemName: "issue-1", Resolved: true, Score: 1},
+		},
+	}
+	var buf bytes.Buffer
+	printRun(&buf, run)
+	out := buf.String()
+	for _, want := range []string{"My Profile", "p1", "Solve:", "issue-1", "Problems:"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("printRun output missing %q; got:\n%s", want, out)
+		}
 	}
 }

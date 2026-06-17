@@ -48,7 +48,24 @@ func Modal(title, body string, width, height int) string {
 	if w := lipgloss.Width(body); w > inner {
 		inner = w
 	}
-	content := lipgloss.NewStyle().Width(inner).Render(renderedTitle + "\n" + body)
+	// Clamp the interior to the terminal width so a body wider than the
+	// screen (e.g. a fixed-width huh confirm form on an 80-col terminal)
+	// cannot push the right border off-screen — without this the box is
+	// sized to its content and lipgloss.Place centers an over-wide box,
+	// clipping the right edge (TUI_AUDIT F-01). frame = left+right border (2)
+	// plus horizontal padding (Padding(1,2) → 4) = 6.
+	if width > 0 {
+		if avail := width - 6; avail >= 1 && inner > avail {
+			inner = avail
+		}
+	}
+	// MaxWidth truncates any over-wide line to `inner` (the excess is
+	// typically trailing form padding), then Width pads every line back up to
+	// `inner` so the framed box stays a clean rectangle — truncate, don't
+	// wrap, to avoid spurious extra rows.
+	content := lipgloss.NewStyle().Width(inner).Render(
+		lipgloss.NewStyle().MaxWidth(inner).Render(renderedTitle + "\n" + body),
+	)
 	box := modalBoxStyle().Render(content)
 	if width <= 0 || height <= 0 {
 		return box

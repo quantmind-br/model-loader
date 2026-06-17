@@ -127,6 +127,14 @@ func (p ModelsPage) handleFilterKey(msg tea.KeyMsg) (handled bool, m tea.Model, 
 			}
 			return true, p, nil
 		}
+		// The spacebar arrives as tea.KeySpace, not tea.KeyRunes, so the
+		// rune-append branch below never sees it — without this a filter
+		// could not contain spaces (TUI_AUDIT F-02).
+		if msg.Type == tea.KeySpace {
+			p.filter += " "
+			p.refreshRows()
+			return true, p, nil
+		}
 		// Append every rune in the message, not just single-rune events.
 		// Fast/bursted typing (and paste) arrives as one KeyMsg carrying
 		// multiple runes — the old `== 1` guard silently dropped those,

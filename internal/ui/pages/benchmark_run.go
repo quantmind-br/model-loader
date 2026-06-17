@@ -86,23 +86,23 @@ func (p BenchmarkPage) handleRunDone(msg benchRunDoneMsg) (tea.Model, tea.Cmd) {
 		// persist it flagged as partial (run.Err is set by the engine). Runs
 		// that died before producing anything (launch failure) are not saved.
 		if len(msg.run.Problems) == 0 {
-			p.flash, _ = flashError(p.flash, "run failed: "+msg.err.Error())
+			p, _ = p.withFlashError("run failed: " + msg.err.Error())
 			p.view = bvList
 			return p, nil
 		}
 		if err := p.bstore.Save(msg.run); err != nil {
-			p.flash, _ = flashError(p.flash, "save partial run: "+err.Error())
+			p, _ = p.withFlashError("save partial run: " + err.Error())
 			p.view = bvList
 			return p, p.loadRunsCmd()
 		}
 		run := msg.run
 		p.detail = &run
 		p.view = bvRunDetail
-		p.flash, _ = flashError(p.flash, "run incomplete (saved partial): "+msg.err.Error())
+		p, _ = p.withFlashError("run incomplete (saved partial): " + msg.err.Error())
 		return p, p.loadRunsCmd()
 	}
 	if err := p.bstore.Save(msg.run); err != nil {
-		p.flash, _ = flashError(p.flash, "save run: "+err.Error())
+		p, _ = p.withFlashError("save run: " + err.Error())
 		p.view = bvList
 		return p, p.loadRunsCmd()
 	}
@@ -110,6 +110,6 @@ func (p BenchmarkPage) handleRunDone(msg benchRunDoneMsg) (tea.Model, tea.Cmd) {
 	p.detail = &run
 	p.view = bvRunDetail
 	var fc tea.Cmd
-	p.flash, fc = flashSuccess(p.flash, "benchmark complete")
+	p, fc = p.withFlash("benchmark complete")
 	return p, tea.Batch(fc, p.loadRunsCmd())
 }

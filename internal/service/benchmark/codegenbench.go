@@ -228,22 +228,14 @@ func (codeGenHandler) Execute(ctx context.Context, r *Runner, base, model string
 		res.Detail = res.Err
 		return []ProblemResult{res}, nil, nil
 	}
-	var results []ProblemResult
-	var transcripts []ProblemTranscript
-	for i, p := range r.codeGenProblems {
-		select {
-		case <-ctx.Done():
-			return results, transcripts, ctx.Err()
-		default:
-		}
-		send(progress, Progress{Index: i + 1, Total: len(r.codeGenProblems), ProblemID: p.TaskID, ProblemName: p.TaskID, Phase: "infer"})
-		pr, tr := r.runCodeGenBench(ctx, base, model, p)
-		results = append(results, pr)
-		if r.cfg.SaveTranscripts {
-			transcripts = append(transcripts, tr)
-		}
-	}
-	return results, transcripts, nil
+	return executeSerialBench(ctx, r, progress, len(r.codeGenProblems),
+		func(i int) (string, string) {
+			p := r.codeGenProblems[i]
+			return p.TaskID, p.TaskID
+		},
+		func(i int) (ProblemResult, ProblemTranscript) {
+			return r.runCodeGenBench(ctx, base, model, r.codeGenProblems[i])
+		})
 }
 
 // lookPython is a seam resolving python3 on PATH (overridable in tests).

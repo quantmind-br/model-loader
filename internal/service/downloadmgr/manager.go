@@ -16,6 +16,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
 )
 
 // ErrManagerClosed is returned by Start/Cancel/Resume after Close.
@@ -117,27 +119,25 @@ func (m *Manager) WithPollInterval(d time.Duration) *Manager {
 
 // Start writes an initial state record and, if capacity is available,
 // spawns a worker for it. Otherwise the download is queued.
+//
+// Lock discipline: the record write + capacity decision happen under m.mu
+// (recordStartLocked); m.mu is then RELEASED before broadcast and spawn, and
+// spawn re-acquires m.mu internally to register the worker. This unlock →
+// spawn-outside-lock → relock split is intentional and must be preserved:
+// holding m.mu across the spawner's subprocess creation would serialize it
+// against every other Manager method. Manual Lock/Unlock (not defer) is
+// therefore required here.
 func (m *Manager) Start(spec Spec) (ID, error) {
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
 		return "", ErrManagerClosed
 	}
-	id := NewID()
-	rec := RecordFromSpec(id, spec)
-	if err := SaveRecord(m.stateDir, rec); err != nil {
-		m.mu.Unlock()
+	id, rec, spawnNow, err := m.recordStartLocked(spec)
+	m.mu.Unlock()
+	if err != nil {
 		return "", err
 	}
-	m.lastSnapshot[id] = rec
-
-	var spawnNow bool
-	if len(m.active) < m.maxConcurrent {
-		spawnNow = true
-	} else {
-		m.queue = append(m.queue, id)
-	}
-	m.mu.Unlock()
 
 	m.broadcast(Event{ID: id, State: rec.ToState()})
 
@@ -147,6 +147,24 @@ func (m *Manager) Start(spec Spec) (ID, error) {
 		}
 	}
 	return id, nil
+}
+
+// recordStartLocked mints an ID, persists the initial record, primes the
+// snapshot, and decides whether to spawn now or queue (returning spawnNow).
+// MUST be called with m.mu held — it performs no locking of its own.
+func (m *Manager) recordStartLocked(spec Spec) (ID, DownloadRecord, bool, error) {
+	id := NewID()
+	rec := RecordFromSpec(id, spec)
+	if err := SaveRecord(m.stateDir, rec); err != nil {
+		return "", DownloadRecord{}, false, err
+	}
+	m.lastSnapshot[id] = rec
+
+	spawnNow := len(m.active) < m.maxConcurrent
+	if !spawnNow {
+		m.queue = append(m.queue, id)
+	}
+	return id, rec, spawnNow, nil
 }
 
 // spawn runs the spawner for id, updates the record with PID + active
@@ -302,12 +320,12 @@ func (m *Manager) Snapshot() []State {
 func (m *Manager) Subscribe() <-chan Event {
 	ch := make(chan Event, 32)
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.closed {
 		close(ch)
 	} else {
 		m.subscribers = append(m.subscribers, ch)
 	}
-	m.mu.Unlock()
 	return ch
 }
 
@@ -329,7 +347,7 @@ func (m *Manager) Reconcile() error {
 		switch {
 		case r.Status.IsTerminal():
 			m.lastSnapshot[r.ID] = r
-		case r.PID > 0 && pidAlive(r.PID):
+		case r.PID > 0 && procutil.Alive(r.PID):
 			m.active[r.ID] = r.PID
 			m.lastSnapshot[r.ID] = r
 		default:
@@ -441,7 +459,7 @@ func (m *Manager) reapCompleted(recs []DownloadRecord) ([]pending, int) {
 			if r.Status.IsTerminal() {
 				delete(m.active, r.ID)
 				freedSlots++
-			} else if pid > 0 && !pidAlive(pid) {
+			} else if pid > 0 && !procutil.Alive(pid) {
 				// Worker died without writing terminal status —
 				// mark abandoned ourselves so the UI is honest.
 				r.Status = StatusAbandoned
@@ -508,21 +526,4 @@ func (m *Manager) broadcast(ev Event) {
 		default:
 		}
 	}
-}
-
-// pidAlive checks whether pid refers to a live process. Mirrors the
-// implementation in internal/service/processmgr/recover.go; we copy it
-// rather than import to avoid an inter-service package cycle.
-func pidAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	err := syscall.Kill(pid, 0)
-	if err == nil {
-		return true
-	}
-	if errors.Is(err, syscall.EPERM) {
-		return true
-	}
-	return false
 }

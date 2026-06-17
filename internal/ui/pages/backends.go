@@ -2,9 +2,7 @@
 package pages
 
 import (
-	"context"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -13,7 +11,6 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
@@ -22,23 +19,6 @@ import (
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
-
-type formMode int
-
-const (
-	formModeNone formMode = iota
-	formModeAdd
-	formModeEdit
-)
-
-type backendDraft struct {
-	ID          string
-	Name        string
-	Kind        string
-	Executable  string
-	Description string
-	Tags        string
-}
 
 type backendItem struct{ backend domain.Backend }
 
@@ -115,21 +95,6 @@ type backendRefreshConfirmedMsg struct{ id string }
 // (mirrors the modelsReloadMsg pattern).
 type backendsReloadMsg struct{}
 
-type backendProberIface interface {
-	Probe(context.Context) (<-chan backendcatalog.ProbeEvent, error)
-}
-
-type backendProbeResult struct {
-	status  backendcatalog.ProbeStatus
-	detail  string
-	latency time.Duration
-}
-
-type probeEventMsg struct {
-	event backendcatalog.ProbeEvent
-	epoch int
-}
-
 // NewBackendsPage constructs the page wired to a backendschema.Manager.
 func NewBackendsPage(manager *backendschema.Manager) BackendsPage {
 	delegate := list.NewDefaultDelegate()
@@ -145,12 +110,6 @@ func NewBackendsPage(manager *backendschema.Manager) BackendsPage {
 		flash:        components.NewFlash("backends"),
 		spinnerModel: components.NewLoadingSpinner(),
 	}
-}
-
-// WithProber wires a backend prober for health checks.
-func (p BackendsPage) WithProber(prober backendProberIface) BackendsPage {
-	p.prober = prober
-	return p
 }
 
 func (p BackendsPage) WithStores(catalog backendcatalog.Store, schema backendcatalog.SchemaStore) BackendsPage {
@@ -218,28 +177,11 @@ func (p BackendsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case spinner.TickMsg:
 		return p.handleSpinnerTick(m)
 	case backendWebEditStartedMsg:
-		p.webSession = m.session
-		p.webURL = m.url
-		return p, waitForBackendWebEdit(m.session)
+		return p.handleWebEditStarted(m)
 	case backendWebEditDoneMsg:
-		p.webEditing = false
-		p.webSession = nil
-		p.webURL = ""
-		var fc tea.Cmd
-		if m.err != nil {
-			p, fc = p.withFlashError("backend edit failed: " + m.err.Error())
-		} else if m.saved {
-			p, fc = p.withFlash("saved backend " + m.backendID)
-		} else {
-			p, fc = p.withFlash("backend edit cancelled")
-		}
-		return p, tea.Batch(p.loadCmd(), fc)
+		return p.handleWebEditDone(m)
 	case backendWebEditFailedMsg:
-		p.webEditing = false
-		p.webSession = nil
-		p.webURL = ""
-		p, fc := p.withFlashError("backend edit failed: " + m.err.Error())
-		return p, fc
+		return p.handleWebEditFailed(m)
 	case tea.KeyMsg:
 		return p.handleKey(m)
 	}
@@ -262,15 +204,7 @@ func (p BackendsPage) handleLoaded(msg backendsLoadedMsg) (tea.Model, tea.Cmd) {
 
 func (p BackendsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if p.webEditing {
-		if msg.String() == "esc" {
-			p.cleanupBackendWebEdit()
-			p.webEditing = false
-			p.webSession = nil
-			p.webURL = ""
-			p, fc := p.withFlash("backend edit cancelled")
-			return p, fc
-		}
-		return p, nil
+		return p.handleWebEditKey(msg)
 	}
 	if p.form != nil {
 		if msg.String() == "esc" {
@@ -352,123 +286,6 @@ func (p BackendsPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return p, cmd
 }
 
-func (p BackendsPage) renderWebEditModal() string {
-	return "\n  Editing backend in browser…\n\n  " + p.webURL + "\n\n  Save or cancel on the page. (esc cancels)\n"
-}
-
-func (p BackendsPage) View() string {
-	if p.webEditing {
-		return p.renderWebEditModal()
-	}
-	if p.form != nil {
-		return components.Modal("Backend", p.form.View(), p.width, p.height)
-	}
-
-	leftWidth, rightWidth := theme.SplitTwoPanes(p.width)
-	leftContent := p.list.View()
-	if len(p.list.Items()) == 0 {
-		leftContent = components.EmptyState("No backends yet", "Press [n] to add one")
-	}
-	left := lipgloss.NewStyle().Width(leftWidth).Render(leftContent)
-	rightContent := p.detailView()
-	if p.pendingRefresh {
-		rightContent = components.LoadingLine(p.spinnerModel, "Refreshing schema", 0) + "\n" + rightContent
-	}
-	if p.pendingProbe {
-		rightContent = components.LoadingLine(p.spinnerModel, "Probing backends", 0) + "\n" + rightContent
-	}
-	right := lipgloss.NewStyle().Width(rightWidth).Render(rightContent)
-	leftH := len(strings.Split(left, "\n"))
-	rightH := len(strings.Split(right, "\n"))
-	divH := leftH
-	if rightH > divH {
-		divH = rightH
-	}
-	divLine := lipgloss.NewStyle().Foreground(theme.ColorDim).Render("│")
-	divider := strings.Repeat(divLine+"\n", divH-1) + divLine
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
-
-	if v := p.flash.View(); v != "" {
-		body = lipgloss.JoinVertical(lipgloss.Left, body, v)
-	}
-	return body
-}
-
-// OverlayView routes the delete/refresh confirms through the shared centered
-// Modal overlay (the same path Profiles/Server/Benchmark use) instead of
-// returning the Modal straight from View(). Returning it from View() let
-// theme.ClampBody re-wrap the already-bordered box, which overflowed 80
-// columns and doubled the line spacing (RENDER-01).
-func (p BackendsPage) OverlayView() Overlay {
-	if p.refreshConfirm.Active() {
-		content := components.Modal("Refresh schema", p.refreshConfirm.View(), p.width, p.height)
-		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
-	}
-	if p.deleteConfirm.Active() {
-		content := components.Modal("Delete backend", p.deleteConfirm.View(), p.width, p.height)
-		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
-	}
-	return Overlay{}
-}
-
-func (p BackendsPage) detailView() string {
-	if len(p.list.Items()) == 0 {
-		return components.EmptyState("No backends yet", "Press [n] to add one")
-	}
-	sel, ok := p.selectedBackend()
-	if !ok {
-		return ""
-	}
-	defaultMark := ""
-	if sel.ID == p.defaultBackendID {
-		defaultMark = " " + theme.OK.Render("default")
-	}
-	tags := strings.Join(sel.Tags, ", ")
-	if tags == "" {
-		tags = "(none)"
-	}
-	desc := sel.Description
-	if desc == "" {
-		desc = "(none)"
-	}
-	probeLine := ""
-	if r, ok := p.probeResults[sel.ID]; ok {
-		statusStyle := theme.Subtitle
-		switch r.status {
-		case backendcatalog.ProbeStatusOK:
-			statusStyle = theme.OK
-		case backendcatalog.ProbeStatusErr:
-			statusStyle = theme.Error
-		}
-		probeLine = "\nProbe:       " + statusStyle.Render(string(r.status))
-		if r.latency > 0 {
-			probeLine += " (" + r.latency.String() + ")"
-		}
-	}
-	labelStyle := lipgloss.NewStyle().Width(13).Foreground(theme.ColorDim)
-
-	row := func(label, value string) string {
-		return lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render(label), value)
-	}
-
-	var b strings.Builder
-	if p.defaultBackendID == "" {
-		b.WriteString(components.EmptyState("No default backend set", "Press [D] to set a backend as default") + "\n\n")
-	}
-	b.WriteString(theme.Title.Render(sel.Name) + defaultMark + "\n")
-	b.WriteString(theme.Subtitle.Render(string(sel.Kind)) + "\n\n")
-	b.WriteString(row("ID:", sel.ID) + "\n")
-	b.WriteString(row("Kind:", string(sel.Kind)) + "\n")
-	b.WriteString(row("Executable:", sel.Executable) + "\n")
-	b.WriteString(row("SchemaRef:", sel.SchemaRef) + "\n")
-	b.WriteString(row("Description:", desc) + "\n")
-	b.WriteString(row("Tags:", tags) + "\n")
-	b.WriteString(row("Created:", formatBackendTime(sel.Meta.CreatedAt)) + "\n")
-	b.WriteString(row("Updated:", formatBackendTime(sel.Meta.UpdatedAt)) + "\n")
-	b.WriteString(probeLine)
-	return b.String()
-}
-
 func (p BackendsPage) Hints() string {
 	switch {
 	case p.webEditing:
@@ -515,292 +332,4 @@ func (p BackendsPage) withFlashError(msg string) (BackendsPage, tea.Cmd) {
 // lands in the always-visible status bar, level included.
 func (p BackendsPage) StatusMessage() (string, components.StatusLevel) {
 	return p.flash.Current()
-}
-
-func (p BackendsPage) startAdd() (tea.Model, tea.Cmd) {
-	if p.manager == nil {
-		p, fc := p.withFlashError("backend manager not available")
-		return p, fc
-	}
-	if len(p.kindOptions()) == 0 {
-		p, fc := p.withFlashError("no backend generators registered")
-		return p, fc
-	}
-	opts := p.sortedKinds()
-	kind := domain.BackendKindLlamaServer
-	if !p.hasKind(kind) && len(opts) > 0 {
-		kind = opts[0]
-	}
-	d := configweb.BackendDraft{
-		IsNew: true,
-		Kind:  kind,
-	}
-	p.webEditing = true
-	return p, p.startBackendWebEdit(d)
-}
-
-func (p BackendsPage) startEditSelected() (tea.Model, tea.Cmd) {
-	b, ok := p.selectedBackend()
-	if !ok {
-		return p, nil
-	}
-	d := configweb.BackendDraft{
-		ID:          b.ID,
-		OrigID:      b.ID,
-		IsNew:       false,
-		Name:        b.Name,
-		Kind:        b.Kind,
-		Executable:  b.Executable,
-		Description: b.Description,
-		Tags:        b.Tags,
-	}
-	p.webEditing = true
-	return p, p.startBackendWebEdit(d)
-}
-
-func (p BackendsPage) forwardToForm(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if p.form == nil {
-		return p, nil
-	}
-	updated, cmd := p.form.Update(msg)
-	if f, ok := updated.(*huh.Form); ok {
-		p.form = f
-	}
-	if p.form != nil && p.form.State == huh.StateCompleted {
-		return p.commitForm(cmd)
-	}
-	return p, cmd
-}
-
-func (p BackendsPage) commitForm(formCmd tea.Cmd) (tea.Model, tea.Cmd) {
-	if p.draft == nil {
-		p.form = nil
-		p.formMode = formModeNone
-		return p, formCmd
-	}
-	d := *p.draft
-	mode := p.formMode
-	p.form = nil
-	p.formMode = formModeNone
-	p.draft = nil
-
-	var err error
-	var b domain.Backend
-	switch mode {
-	case formModeAdd:
-		b, err = p.manager.AddBackend(context.Background(), d.Name, d.Executable, domain.BackendKind(d.Kind))
-		if err == nil && (d.Description != "" || d.Tags != "") {
-			b, err = p.manager.UpdateBackend(b.ID, domain.Backend{Name: b.Name, Executable: b.Executable, Description: d.Description, Tags: parseTags(d.Tags)})
-		}
-	case formModeEdit:
-		b, err = p.manager.UpdateBackend(d.ID, domain.Backend{Name: d.Name, Executable: d.Executable, Description: d.Description, Tags: parseTags(d.Tags)})
-	}
-
-	var fc tea.Cmd
-	if err != nil {
-		p, fc = p.withFlashError("save backend failed: " + err.Error())
-		return p, tea.Batch(formCmd, fc)
-	}
-	p, fc = p.withFlash("saved backend " + b.ID)
-	return p, tea.Batch(formCmd, p.loadCmd(), fc)
-}
-
-func (p BackendsPage) askDeleteSelected() (tea.Model, tea.Cmd) {
-	b, ok := p.selectedBackend()
-	if !ok {
-		return p, nil
-	}
-	p.deleteConfirm = components.NewConfirm(
-		"Delete backend "+b.Name+"?",
-		b.ID,
-		func(payload any) tea.Cmd {
-			id, _ := payload.(string)
-			return func() tea.Msg { return backendDeleteConfirmedMsg{id: id} }
-		},
-		"Delete",
-		"Cancel",
-	)
-	return p, p.deleteConfirm.Init()
-}
-
-func (p BackendsPage) performDelete(id string) (tea.Model, tea.Cmd) {
-	if p.manager == nil {
-		p, fc := p.withFlashError("backend manager not available")
-		return p, fc
-	}
-	var fc tea.Cmd
-	if err := p.manager.DeleteBackend(id); err != nil {
-		p, fc = p.withFlashError("delete failed: " + err.Error())
-	} else {
-		p, fc = p.withFlash("deleted " + id)
-	}
-	p.deleteConfirm = components.Confirm{}
-	return p, tea.Batch(p.loadCmd(), fc)
-}
-
-func (p BackendsPage) setDefaultSelected() (tea.Model, tea.Cmd) {
-	b, ok := p.selectedBackend()
-	if !ok {
-		return p, nil
-	}
-	if err := p.manager.SetDefaultBackend(b.ID); err != nil {
-		p, fc := p.withFlashError("set default failed: " + err.Error())
-		return p, fc
-	}
-	p.defaultBackendID = b.ID
-	p, fc := p.withFlash("default backend " + b.ID)
-	return p, fc
-}
-
-func (p BackendsPage) askRefreshSelected() (tea.Model, tea.Cmd) {
-	b, ok := p.selectedBackend()
-	if !ok {
-		return p, nil
-	}
-	p.refreshConfirm = components.NewConfirm(
-		"Refresh schema for "+b.Name+"?",
-		b.ID,
-		func(payload any) tea.Cmd {
-			id, _ := payload.(string)
-			return func() tea.Msg { return backendRefreshConfirmedMsg{id: id} }
-		},
-		"Refresh",
-		"Cancel",
-	)
-	return p, p.refreshConfirm.Init()
-}
-
-func (p BackendsPage) performRefresh(id string) (tea.Model, tea.Cmd) {
-	if p.manager == nil {
-		p.pendingRefresh = false
-		p, fc := p.withFlashError("backend manager not available")
-		return p, fc
-	}
-	p.refreshConfirm = components.Confirm{}
-	if err := p.manager.RefreshSchema(id); err != nil {
-		p.pendingRefresh = false
-		p, fc := p.withFlashError("refresh schema failed: " + err.Error())
-		return p, fc
-	}
-	p.pendingRefresh = false
-	p, fc := p.withFlash("schema refreshed " + id)
-	return p, fc
-}
-
-func (p BackendsPage) askProbeAll() (tea.Model, tea.Cmd) {
-	if p.prober == nil {
-		p, fc := p.withFlashError("prober not available")
-		return p, fc
-	}
-	p.pendingProbe = true
-	p.probeStartTime = time.Now()
-	p.probeEpoch++
-	p.probeResults = make(map[string]backendProbeResult)
-	ch, err := p.prober.Probe(context.Background())
-	if err != nil {
-		p.pendingProbe = false
-		p, fc := p.withFlashError("probe failed: " + err.Error())
-		return p, fc
-	}
-	p.probeCh = ch
-	return p, p.readNextProbeEvent(p.probeEpoch)
-}
-
-func (p BackendsPage) readNextProbeEvent(epoch int) tea.Cmd {
-	return func() tea.Msg {
-		if p.probeCh == nil {
-			return probeEventMsg{event: backendcatalog.ProbeEvent{Done: true}, epoch: epoch}
-		}
-		ev, ok := <-p.probeCh
-		if !ok {
-			return probeEventMsg{event: backendcatalog.ProbeEvent{Done: true}, epoch: epoch}
-		}
-		return probeEventMsg{event: ev, epoch: epoch}
-	}
-}
-
-func (p BackendsPage) handleProbeEvent(m probeEventMsg) (tea.Model, tea.Cmd) {
-	if m.epoch != p.probeEpoch {
-		return p, nil
-	}
-	if m.event.Done {
-		p.probeCh = nil
-		p.pendingProbe = false
-		p, fc := p.withFlash("probe complete")
-		return p, fc
-	}
-	p.probeResults[m.event.BackendID] = backendProbeResult{
-		status:  m.event.Status,
-		detail:  m.event.Detail,
-		latency: m.event.Latency,
-	}
-	return p, p.readNextProbeEvent(p.probeEpoch)
-}
-
-func (p BackendsPage) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
-	if p.pendingProbe && time.Since(p.probeStartTime) > 3*time.Second {
-		p.pendingProbe = false
-		p.probeCh = nil
-		p, fc := p.withFlashError("probe timed out")
-		return p, fc
-	}
-	updated, cmd := p.spinnerModel.Update(msg)
-	p.spinnerModel = updated
-	return p, cmd
-}
-
-func (p BackendsPage) selectedBackend() (domain.Backend, bool) {
-	item, ok := p.list.SelectedItem().(backendItem)
-	if !ok {
-		return domain.Backend{}, false
-	}
-	return item.backend, true
-}
-
-func (p BackendsPage) kindOptions() []huh.Option[string] {
-	kinds := p.sortedKinds()
-	opts := make([]huh.Option[string], 0, len(kinds))
-	for _, kind := range kinds {
-		opts = append(opts, huh.NewOption(string(kind), string(kind)))
-	}
-	return opts
-}
-
-func (p BackendsPage) sortedKinds() []domain.BackendKind {
-	if p.manager == nil {
-		return nil
-	}
-	kinds := make([]domain.BackendKind, 0, len(p.manager.Generators()))
-	for kind := range p.manager.Generators() {
-		kinds = append(kinds, kind)
-	}
-	slices.Sort(kinds)
-	return kinds
-}
-
-func (p BackendsPage) hasKind(kind domain.BackendKind) bool {
-	if p.manager == nil {
-		return false
-	}
-	_, ok := p.manager.Generators()[kind]
-	return ok
-}
-
-func parseTags(s string) []string {
-	parts := strings.Split(s, ",")
-	tags := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			tags = append(tags, part)
-		}
-	}
-	return tags
-}
-
-func formatBackendTime(t time.Time) string {
-	if t.IsZero() {
-		return "(unknown)"
-	}
-	return t.Format(time.RFC3339)
 }

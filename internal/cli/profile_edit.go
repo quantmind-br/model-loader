@@ -128,75 +128,15 @@ type profileWriteDeps struct {
 
 // runProfileWrite returns a process exit code (0 ok, 1 error, 2 validation).
 func runProfileWrite(out, errw io.Writer, deps profileWriteDeps, isEdit bool, ref, file string, in profileInput) int {
-	// 1. Establish the base profile.
-	var base domain.Profile
-	if isEdit {
-		p, err := resolveProfileRef(deps.store, ref)
-		if err != nil {
-			fmt.Fprintln(errw, err)
-			return 1
-		}
-		base = p
+	base, err := resolveBaseProfile(errw, deps, isEdit, ref, file, in)
+	if err != nil {
+		return 1
 	}
-	// Capture the resolved id before any overlay so the edit path cannot be
-	// hijacked by a --file JSON that carries a different id.
-	var resolvedID string
-	if isEdit {
-		resolvedID = base.ID
+	final, err := buildAndValidateProfile(errw, deps, base, in)
+	if err != nil {
+		return 2
 	}
-	// 2. Overlay --file/stdin JSON onto the base.
-	if file != "" {
-		raw, err := readInput(file)
-		if err != nil {
-			fmt.Fprintf(errw, "read profile input: %v\n", err)
-			return 1
-		}
-		if err := json.Unmarshal(raw, &base); err != nil {
-			fmt.Fprintf(errw, "parse profile JSON: %v\n", err)
-			return 1
-		}
-		if isEdit {
-			base.ID = resolvedID
-		}
-	}
-	// 3. Compute id for create.
-	if !isEdit {
-		base.ID = in.id
-		if base.ID == "" {
-			nm := in.name
-			if nm == "" {
-				nm = base.Name
-			}
-			base.ID = domain.Slugify(nm)
-		}
-		if base.ID == "" {
-			fmt.Fprintln(errw, "create: a profile needs --name or --id")
-			return 1
-		}
-	}
-	// 4. Resolve schema for arg coercion + validation. Apply the --backend
-	// override first so the schema/kind reflect the requested backend, not the
-	// catalog default (the rest of the overlay happens in assembleProfile).
-	if in.setBackend {
-		base.Launch.BackendID = in.backend
-	}
-	schema, kind := resolveSchema(deps.resolver, base)
-	// 5. Apply flag overrides.
-	final := assembleProfile(base, in, schema)
-	// 6. Validate (skip when deps.val is nil).
-	if deps.val != nil {
-		report := deps.val.Validate(final, schema, kind)
-		for _, w := range report.Warnings {
-			fmt.Fprintf(errw, "warning: %s: %s\n", w.Field, w.Message)
-		}
-		if report.HasBlockingErrors() {
-			for _, e := range report.Errors {
-				fmt.Fprintf(errw, "error: %s: %s\n", e.Field, e.Message)
-			}
-			return 2
-		}
-	}
-	// 7. Persist (edit serializes the RMW; create is a fresh file).
+	// Persist (edit serializes the RMW; create is a fresh file).
 	persist := func() error {
 		if isEdit {
 			return deps.store.Save(final)
@@ -226,6 +166,83 @@ func runProfileWrite(out, errw io.Writer, deps profileWriteDeps, isEdit bool, re
 		fmt.Fprintf(out, "%s profile %s\n", v, final.ID)
 	}
 	return 0
+}
+
+// resolveBaseProfile establishes the base profile for a write: it locates the
+// profile to edit, overlays --file/stdin JSON, and computes the id for create.
+// All failures here map to exit code 1.
+func resolveBaseProfile(errw io.Writer, deps profileWriteDeps, isEdit bool, ref, file string, in profileInput) (domain.Profile, error) {
+	var base domain.Profile
+	if isEdit {
+		p, err := resolveProfileRef(deps.store, ref)
+		if err != nil {
+			fmt.Fprintln(errw, err)
+			return domain.Profile{}, err
+		}
+		base = p
+	}
+	// Capture the resolved id before any overlay so the edit path cannot be
+	// hijacked by a --file JSON that carries a different id.
+	var resolvedID string
+	if isEdit {
+		resolvedID = base.ID
+	}
+	if file != "" {
+		raw, err := readInput(file)
+		if err != nil {
+			fmt.Fprintf(errw, "read profile input: %v\n", err)
+			return domain.Profile{}, err
+		}
+		if err := json.Unmarshal(raw, &base); err != nil {
+			fmt.Fprintf(errw, "parse profile JSON: %v\n", err)
+			return domain.Profile{}, err
+		}
+		if isEdit {
+			base.ID = resolvedID
+		}
+	}
+	if !isEdit {
+		base.ID = in.id
+		if base.ID == "" {
+			nm := in.name
+			if nm == "" {
+				nm = base.Name
+			}
+			base.ID = domain.Slugify(nm)
+		}
+		if base.ID == "" {
+			fmt.Fprintln(errw, "create: a profile needs --name or --id")
+			return domain.Profile{}, errors.New("create: a profile needs --name or --id")
+		}
+	}
+	return base, nil
+}
+
+// buildAndValidateProfile resolves the schema (honoring a --backend override),
+// applies the flag edits onto base, and validates the result. A non-nil error
+// signals blocking validation errors (exit code 2).
+func buildAndValidateProfile(errw io.Writer, deps profileWriteDeps, base domain.Profile, in profileInput) (domain.Profile, error) {
+	// Apply the --backend override first so the schema/kind reflect the requested
+	// backend, not the catalog default (the rest of the overlay happens in
+	// assembleProfile).
+	if in.setBackend {
+		base.Launch.BackendID = in.backend
+	}
+	schema, kind := resolveSchema(deps.resolver, base)
+	final := assembleProfile(base, in, schema)
+	if deps.val != nil {
+		report := deps.val.Validate(final, schema, kind)
+		for _, w := range report.Warnings {
+			fmt.Fprintf(errw, "warning: %s: %s\n", w.Field, w.Message)
+		}
+		if report.HasBlockingErrors() {
+			for _, e := range report.Errors {
+				fmt.Fprintf(errw, "error: %s: %s\n", e.Field, e.Message)
+			}
+			return domain.Profile{}, errors.New("profile validation failed")
+		}
+	}
+	return final, nil
 }
 
 func resolveSchema(resolver backendcatalog.Resolver, p domain.Profile) (domain.FlagSchema, domain.BackendKind) {

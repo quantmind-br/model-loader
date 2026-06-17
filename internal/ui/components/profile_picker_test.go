@@ -109,7 +109,7 @@ func TestProfilePicker_GAndCapitalG(t *testing.T) {
 func TestProfilePicker_PgDnAdvancesByTen(t *testing.T) {
 	profiles := make([]domain.Profile, 0, 50)
 	for i := range 50 {
-		profiles = append(profiles, domain.Profile{ID: string(rune('a' + i%26)) + string(rune('0' + i%10)), Name: string(rune('a' + i))})
+		profiles = append(profiles, domain.Profile{ID: string(rune('a'+i%26)) + string(rune('0'+i%10)), Name: string(rune('a' + i))})
 	}
 	p := NewProfilePicker(profiles)
 	p, _ = p.Update(tea.KeyMsg{Type: tea.KeyPgDown})

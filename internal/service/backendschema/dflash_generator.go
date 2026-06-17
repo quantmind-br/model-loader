@@ -8,8 +8,8 @@ import (
 )
 
 // DFlashGenerator generates schemas from the embedded DFlash flag catalog.
-// DFlash is launched through a wrapper script (run-server.sh) around
-// scripts/server.py, so its flags are hand-curated rather than parsed.
+// DFlash is the native lucebox-hub dflash_server binary; its flags are
+// hand-curated in dflashhelp rather than parsed from --help output.
 type DFlashGenerator struct {
 	*embeddedGenerator
 }

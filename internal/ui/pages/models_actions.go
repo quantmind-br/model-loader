@@ -53,16 +53,10 @@ func (p ModelsPage) askClearDone() (tea.Model, tea.Cmd) {
 	if p.dlManager == nil {
 		return p, nil
 	}
-	p.clearDoneConfirm = components.NewConfirm(
-		"Clear all finished downloads?",
-		nil,
-		func(any) tea.Cmd {
-			return func() tea.Msg { return downloadClearConfirmedMsg{} }
-		},
-		"Clear",
-		"Cancel",
-	)
-	return p, p.clearDoneConfirm.Init()
+	var cmd tea.Cmd
+	p.clearDoneConfirm, cmd = setupConfirm("Clear all finished downloads?", "Clear", "Cancel",
+		func() tea.Cmd { return func() tea.Msg { return downloadClearConfirmedMsg{} } })
+	return p, cmd
 }
 
 func (p ModelsPage) updateClearDoneConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -135,17 +129,10 @@ func (p ModelsPage) commitRootAction(choice, path string) (tea.Model, tea.Cmd) {
 		if idx := strings.LastIndex(path, "/"); idx >= 0 {
 			selectedName = path[idx+1:]
 		}
-		p.deleteConfirm = components.NewConfirm(
-			"Delete "+selectedName+" from disk?",
-			path,
-			func(payload any) tea.Cmd {
-				ppath, _ := payload.(string)
-				return func() tea.Msg { return modelDeleteConfirmedMsg{path: ppath} }
-			},
-			"Delete",
-			"Cancel",
-		)
-		return p, p.deleteConfirm.Init()
+		var cmd tea.Cmd
+		p.deleteConfirm, cmd = setupConfirm("Delete "+selectedName+" from disk?", "Delete", "Cancel",
+			func() tea.Cmd { return func() tea.Msg { return modelDeleteConfirmedMsg{path: path} } })
+		return p, cmd
 	}
 	p.action = nil
 	return p, nil

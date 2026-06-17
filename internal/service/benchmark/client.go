@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -129,16 +130,44 @@ func completeOnce(ctx context.Context, doer httpDoer, base, apiKey string, req C
 		return CompletionResult{}, resp.StatusCode >= 500, fmt.Errorf("chat request failed: status %d", resp.StatusCode)
 	}
 
+	st, retryable, err := parseStream(resp.Body, start)
+	// A cancelled/expired context must surface as an error — not a silently
+	// truncated "successful" answer that scoring would treat as a real reply.
+	// Check it before the stream error so a cancel is never reported as
+	// retryable (a read error from a cancelled body otherwise looks retryable).
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return CompletionResult{}, false, ctxErr
+	}
+	if err != nil {
+		return CompletionResult{}, retryable, err
+	}
+	return buildResult(st, start), false, nil
+}
+
+// streamState is the accumulated result of reading one SSE completion stream:
+// content/reasoning text, token usage, time-to-first-token, and any trailing
+// server timings block.
+type streamState struct {
+	content          string
+	reasoning        string
+	ttft             time.Duration
+	promptTokens     int
+	completionTokens int
+	timings          *chunkTimings
+}
+
+// parseStream reads the SSE body, accumulating content/reasoning deltas, the
+// time-to-first-token (first delta of any kind, measured from start), token
+// usage, and any trailing server timings block. The bool reports whether a read
+// failure is worth retrying; a malformed chunk is a hard (non-retryable) error.
+func parseStream(body io.Reader, start time.Time) (streamState, bool, error) {
 	var (
-		sb               strings.Builder
-		rb               strings.Builder
-		ttft             time.Duration
-		gotFirst         bool
-		promptTokens     int
-		completionTokens int
-		timings          *chunkTimings
+		sb       strings.Builder
+		rb       strings.Builder
+		st       streamState
+		gotFirst bool
 	)
-	scanner := bufio.NewScanner(resp.Body)
+	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -151,7 +180,7 @@ func completeOnce(ctx context.Context, doer httpDoer, base, apiKey string, req C
 		}
 		chunk, err := parseChunk(data)
 		if err != nil {
-			return CompletionResult{}, false, err
+			return streamState{}, false, err
 		}
 		content, reasoning := chunk.deltas()
 		if content != "" || reasoning != "" {
@@ -159,68 +188,70 @@ func completeOnce(ctx context.Context, doer httpDoer, base, apiKey string, req C
 			// stream reasoning_content long before the first visible content token,
 			// and that work is generation too.
 			if !gotFirst {
-				ttft = time.Since(start)
+				st.ttft = time.Since(start)
 				gotFirst = true
 			}
 			sb.WriteString(content)
 			rb.WriteString(reasoning)
 		}
 		if chunk.Usage != nil {
-			promptTokens = chunk.Usage.PromptTokens
-			completionTokens = chunk.Usage.CompletionTokens
+			st.promptTokens = chunk.Usage.PromptTokens
+			st.completionTokens = chunk.Usage.CompletionTokens
 		}
 		if chunk.Timings != nil {
-			timings = chunk.Timings
+			st.timings = chunk.Timings
 		}
 	}
-	// A cancelled/expired context must surface as an error — not a silently
-	// truncated "successful" answer that scoring would treat as a real reply.
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return CompletionResult{}, false, ctxErr
-	}
 	if err := scanner.Err(); err != nil {
-		return CompletionResult{}, true, fmt.Errorf("read stream: %w", err)
+		return streamState{}, true, fmt.Errorf("read stream: %w", err)
 	}
+	st.content = sb.String()
+	st.reasoning = rb.String()
+	return st, false, nil
+}
 
+// buildResult converts the accumulated streamState into a CompletionResult: it
+// applies the whitespace token-count fallback, derives wall-clock decode/prefill
+// speeds, then lets a server timings block override those estimates when present.
+func buildResult(st streamState, start time.Time) CompletionResult {
 	total := time.Since(start)
-	content := sb.String()
-	reasoning := rb.String()
+	completionTokens := st.completionTokens
 	if completionTokens == 0 {
-		completionTokens = estimateTokens(content) + estimateTokens(reasoning)
+		completionTokens = estimateTokens(st.content) + estimateTokens(st.reasoning)
 	}
-	genSeconds := (total - ttft).Seconds()
+	genSeconds := (total - st.ttft).Seconds()
 	tps := 0.0
 	if genSeconds > 0 && completionTokens > 0 {
 		tps = float64(completionTokens) / genSeconds
 	}
 	ppTps := 0.0
-	if ttft.Seconds() > 0 && promptTokens > 0 {
-		ppTps = float64(promptTokens) / ttft.Seconds()
+	if st.ttft.Seconds() > 0 && st.promptTokens > 0 {
+		ppTps = float64(st.promptTokens) / st.ttft.Seconds()
 	}
 	fromServer := false
 	// llama-server reports its own prefill/decode speeds in a trailing timings
 	// block; prefer them over wall-clock estimates when present.
-	if timings != nil {
-		if timings.PredictedPerSecond > 0 {
-			tps = timings.PredictedPerSecond
+	if st.timings != nil {
+		if st.timings.PredictedPerSecond > 0 {
+			tps = st.timings.PredictedPerSecond
 			fromServer = true
 		}
-		if timings.PromptPerSecond > 0 {
-			ppTps = timings.PromptPerSecond
+		if st.timings.PromptPerSecond > 0 {
+			ppTps = st.timings.PromptPerSecond
 			fromServer = true
 		}
 	}
 	return CompletionResult{
-		Content:             content,
-		Reasoning:           reasoning,
-		PromptTokens:        promptTokens,
+		Content:             st.content,
+		Reasoning:           st.reasoning,
+		PromptTokens:        st.promptTokens,
 		CompletionTokens:    completionTokens,
-		TTFT:                ttft,
+		TTFT:                st.ttft,
 		Total:               total,
 		TokensPerSecond:     tps,
 		PromptProcessingTPS: ppTps,
 		TimingsFromServer:   fromServer,
-	}, false, nil
+	}
 }
 
 // chunkTimings is llama-server's per-request timings block, appended to the

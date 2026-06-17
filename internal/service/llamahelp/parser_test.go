@@ -376,7 +376,7 @@ func TestParseFlagLine_NegationPairCanonicalIsPositive(t *testing.T) {
 }
 
 func TestParseHelp_SmokeOnFixture(t *testing.T) {
-	data, err := os.ReadFile("../../../testdata/help-v7376.txt")
+	data, err := os.ReadFile("../../../testdata/help-v9680.txt")
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
@@ -472,7 +472,7 @@ func contains(ss []string, want string) bool {
 var updateGolden = flag.Bool("update", false, "regenerate golden files")
 
 func TestParseHelp_Golden(t *testing.T) {
-	data, err := os.ReadFile("../../../testdata/help-v7376.txt")
+	data, err := os.ReadFile("../../../testdata/help-v9680.txt")
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
@@ -484,7 +484,7 @@ func TestParseHelp_Golden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	goldenPath := "../../../testdata/help-v7376.golden.json"
+	goldenPath := "../../../testdata/help-v9680.golden.json"
 	if *updateGolden {
 		if err := os.WriteFile(goldenPath, got, 0o644); err != nil {
 			t.Fatalf("write golden: %v", err)

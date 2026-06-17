@@ -1,7 +1,6 @@
 package profilestore
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -77,16 +76,15 @@ func (s *FSStore) Get(id string) (domain.Profile, error) {
 	if id == "" {
 		return domain.Profile{}, ErrInvalidID
 	}
-	data, err := os.ReadFile(s.path(id))
+	p, err := fsx.ReadJSON[domain.Profile](s.path(id))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return domain.Profile{}, ErrNotFound
 		}
+		if errors.Is(err, fsx.ErrInvalidJSON) {
+			return domain.Profile{}, fmt.Errorf("%w: %v", ErrInvalidJSON, err)
+		}
 		return domain.Profile{}, fmt.Errorf("read profile: %w", err)
-	}
-	var p domain.Profile
-	if err := json.Unmarshal(data, &p); err != nil {
-		return domain.Profile{}, fmt.Errorf("%w: %v", ErrInvalidJSON, err)
 	}
 	// The filename is the authoritative storage key: List enumerates by it,
 	// path() rebuilds it, and Save/Delete address files by p.ID. A profile
@@ -126,18 +124,13 @@ func (s *FSStore) Save(p domain.Profile) error {
 	}
 	p.Meta.UpdatedAt = now
 
-	if _, err := os.Stat(s.path(p.ID)); err == nil {
-		var current domain.Profile
-		if data, err := os.ReadFile(s.path(p.ID)); err == nil {
-			if err := json.Unmarshal(data, &current); err == nil {
-				// Key the undo snapshot by the storage filename, not the
-				// possibly-stale embedded id (a manual copy / pre-heal file),
-				// so LoadPrevious(dir, p.ID) finds it and restore writes back
-				// to the same file.
-				current.ID = p.ID
-				_ = SavePrevious(s.dir, current)
-			}
-		}
+	if current, err := fsx.ReadJSON[domain.Profile](s.path(p.ID)); err == nil {
+		// Key the undo snapshot by the storage filename, not the possibly-stale
+		// embedded id (a manual copy / pre-heal file), so LoadPrevious(dir, p.ID)
+		// finds it and restore writes back to the same file. A missing/corrupt
+		// current file yields err != nil and is simply not snapshotted.
+		current.ID = p.ID
+		_ = SavePrevious(s.dir, current)
 	}
 
 	if err := fsx.WriteJSONAtomic(s.path(p.ID), p); err != nil {

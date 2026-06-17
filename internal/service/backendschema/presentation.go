@@ -19,7 +19,7 @@ var essentialSeed = map[domain.BackendKind][]string{
 	domain.BackendKindBeeLlamaCpp:  {"n-gpu-layers", "ctx-size", "flash-attn", "cache-type-k", "cache-type-v", "cache-ram", "kv-unified", "spec-type", "spec-draft-hf", "spec-draft-model", "spec-draft-ngl", "spec-dflash-cross-ctx", "spec-dflash-max-slots"},
 	domain.BackendKindVLLM:         {"tensor-parallel-size", "gpu-memory-utilization", "max-model-len", "dtype", "quantization", "served-model-name"},
 	domain.BackendKindSGLang:       {"tp-size", "dp-size", "mem-fraction-static", "dtype", "quantization", "context-length", "served-model-name"},
-	domain.BackendKindDFlash:       {"draft", "max-ctx", "budget", "verify-mode", "cache-type-k", "cache-type-v", "fa-window"},
+	domain.BackendKindDFlash:       {"draft", "max-ctx", "ddtree", "ddtree-budget", "cache-type-k", "cache-type-v", "fa-window"},
 }
 
 // BuildPresentation synthesizes a default Presentation from a schema:

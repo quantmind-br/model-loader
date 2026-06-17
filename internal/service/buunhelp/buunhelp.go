@@ -8,6 +8,7 @@ package buunhelp
 
 import (
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/internal/ptrutil"
 	"github.com/quantmind-br/model-loader/internal/service/llamahelp"
 )
 
@@ -44,11 +45,9 @@ var buunRows = []domain.FlagSpecRow{
 	{Long: "cache-type-v", Short: "ctv", Type: domain.FlagTypeEnum, EnumValues: kvTurboTypes, HelpText: "KV cache data type for V (incl. turbo* fork types)", Group: "embedded"},
 	{Long: "spec-draft-model", Short: "md", Aliases: []string{"model-draft", "draft-model"}, Type: domain.FlagTypeString, HelpText: "Path to the speculative draft model", Group: "embedded"},
 	{Long: "spec-dflash-default", Type: domain.FlagTypeBool, HelpText: "Enable default DFlash speculative decoding config (requires -md)", Group: "embedded"},
-	{Long: "dflash-max-slots", Type: domain.FlagTypeInt, Default: 1, Min: iptr(1), Max: iptr(1024), HelpText: "Max concurrent server slots with DFlash state", Group: "embedded"},
+	{Long: "dflash-max-slots", Type: domain.FlagTypeInt, Default: 1, Min: ptrutil.Ptr(1), Max: ptrutil.Ptr(1024), HelpText: "Max concurrent server slots with DFlash state", Group: "embedded"},
 	{Long: "spec-type", Type: domain.FlagTypeEnum, EnumValues: specTypes, Default: "none", HelpText: "Speculative decoding strategy", Group: "embedded"},
-	{Long: "draft-max", Aliases: []string{"draft", "draft-n"}, Type: domain.FlagTypeInt, Default: 16, Min: iptr(0), Max: iptr(512), HelpText: "Max draft tokens for speculative decoding", Group: "embedded"},
-	{Long: "draft-min", Aliases: []string{"draft-n-min"}, Type: domain.FlagTypeInt, Default: 0, Min: iptr(0), Max: iptr(512), HelpText: "Min draft tokens for speculative decoding", Group: "embedded"},
-	{Long: "port", Type: domain.FlagTypeInt, Default: 8080, Min: iptr(1), Max: iptr(65535), IsPort: true, HelpText: "Port to listen on", Group: "embedded"},
+	{Long: "draft-max", Aliases: []string{"draft", "draft-n"}, Type: domain.FlagTypeInt, Default: 16, Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(512), HelpText: "Max draft tokens for speculative decoding", Group: "embedded"},
+	{Long: "draft-min", Aliases: []string{"draft-n-min"}, Type: domain.FlagTypeInt, Default: 0, Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(512), HelpText: "Min draft tokens for speculative decoding", Group: "embedded"},
+	{Long: "port", Type: domain.FlagTypeInt, Default: 8080, Min: ptrutil.Ptr(1), Max: ptrutil.Ptr(65535), IsPort: true, HelpText: "Port to listen on", Group: "embedded"},
 }
-
-func iptr(v int) *int { return &v }

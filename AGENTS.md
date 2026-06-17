@@ -28,7 +28,7 @@ TUI application for managing llama.cpp profiles and llama-server processes. Buil
 | Schema generation | `internal/service/backendschema/` | orchestrates `AddBackend` for all kinds |
 | Process lifecycle | `internal/service/processmgr/` | survives TUI exit, recovers from `instances.json` |
 | Profile CRUD | `internal/service/profilestore/` | FS-based JSON |
-| HTTP proxy | `internal/service/httpproxy/` | OpenAI-shaped reverse proxy |
+| HTTP proxy | `internal/service/httpproxy/` | OpenAI-shaped reverse proxy — only client channel to backends; auto-started by TUI (default 127.0.0.1:4321); `model` = profile ID |
 | Web profile editor | `internal/service/configweb/` | on-demand HTTP GUI (HTMX/Alpine) |
 | Benchmark engine | `internal/service/benchmark/` | SWE-bench Lite + needle probe |
 | GPU monitoring | `internal/service/monitor/` | `nvidia-smi` |
@@ -111,6 +111,7 @@ go test ./pkg/... -run TestName  # Run a single test
 ## NOTES
 
 - **Binary managed**: `llama-server` (not model-loader)
+- **Instance ports**: ephemeral, assigned by the process manager at launch; `port` in profile args is reserved — ignored and stripped on load/save. All inference goes through the proxy (health-check wait defaults to 180s)
 - **Config path**: `~/.config/model-loader/config.toml`
 - **State path**: `~/.local/state/model-loader/instances.json`
 - **Profiles dir**: `~/.config/model-loader/profiles/` (config `paths.profiles_dir`)

@@ -209,14 +209,19 @@ func (s *Server) Start(_ context.Context) error {
 	s.serveErrCh = make(chan error, 1)
 	s.clearError()
 
+	// Capture srv/ch as locals: Stop() nils s.httpSrv and s.serveErrCh under
+	// s.startMu, and this goroutine runs without that lock, so it must not read
+	// the shared fields after launch (race-free shutdown handoff).
+	srv := s.httpSrv
+	ch := s.serveErrCh
 	go func() {
-		err := s.httpSrv.Serve(ln)
+		err := srv.Serve(ln)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			s.recordError(fmt.Sprintf("serve: %v", err))
 			s.logger.Error("proxy_serve_failed", "err", err)
-			s.serveErrCh <- err
+			ch <- err
 		}
-		close(s.serveErrCh)
+		close(ch)
 	}()
 
 	s.logger.Info("proxy_listening",

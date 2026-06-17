@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
@@ -42,8 +42,8 @@ type ProxyActionResultMsg struct {
 // line(s) and owns the Start/Stop action state. It does not draw a frame —
 // the owning page composes it above whatever content follows.
 type ProxyPanel struct {
-	srv    HTTPProxyController
-	status httpproxy.Status
+	srv     HTTPProxyController
+	status  httpproxy.Status
 	pending pendingAction
 	flash   Flash
 	width   int

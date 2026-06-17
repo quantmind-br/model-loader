@@ -118,14 +118,6 @@ func (r *Runner) runMathBench(ctx context.Context, base, model string, p MathPro
 	return res, tr
 }
 
-func truncateQuestion(q string) string {
-	q = strings.ReplaceAll(q, "\n", " ")
-	if len(q) > 60 {
-		return q[:57] + "..."
-	}
-	return q
-}
-
 type mathHandler struct{}
 
 func (mathHandler) Mode() Mode                      { return ModeMathBench }
@@ -152,22 +144,14 @@ func (mathHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
 }
 
 func (mathHandler) Execute(ctx context.Context, r *Runner, base, model string, _ Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
-	var results []ProblemResult
-	var transcripts []ProblemTranscript
-	for i, p := range r.mathProblems {
-		select {
-		case <-ctx.Done():
-			return results, transcripts, ctx.Err()
-		default:
-		}
-		send(progress, Progress{Index: i + 1, Total: len(r.mathProblems), ProblemID: p.ID, ProblemName: truncateQuestion(p.Question), Phase: "infer"})
-		pr, tr := r.runMathBench(ctx, base, model, p)
-		results = append(results, pr)
-		if r.cfg.SaveTranscripts {
-			transcripts = append(transcripts, tr)
-		}
-	}
-	return results, transcripts, nil
+	return executeSerialBench(ctx, r, progress, len(r.mathProblems),
+		func(i int) (string, string) {
+			p := r.mathProblems[i]
+			return p.ID, truncateQuestion(p.Question)
+		},
+		func(i int) (ProblemResult, ProblemTranscript) {
+			return r.runMathBench(ctx, base, model, r.mathProblems[i])
+		})
 }
 
 func init() {

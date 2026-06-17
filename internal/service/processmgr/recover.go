@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
 )
 
 // Reconcile reads the on-disk registry, validates each entry against the
@@ -115,7 +116,7 @@ func (m *fsManager) refreshTracked(event string) (survivors []domain.RunningInst
 // Linux truncates /proc/<pid>/comm to TASK_COMM_LEN-1 (15 bytes), so
 // expectedComm is truncated to the same length before comparison.
 func pidAliveAndNameMatches(pid int, expectedComm string) bool {
-	if !pidAlive(pid) {
+	if !procutil.Alive(pid) {
 		return false
 	}
 	commBytes, err := os.ReadFile(filepath.Join("/proc", fmt.Sprintf("%d", pid), "comm"))
@@ -138,7 +139,7 @@ func pidAliveAndNameMatches(pid int, expectedComm string) bool {
 // commands (e.g. "python -m sglang.launch_server") where /proc/comm
 // only shows the executable basename.
 func pidAliveAndCmdlineContains(pid int, token string) bool {
-	if !pidAlive(pid) {
+	if !procutil.Alive(pid) {
 		return false
 	}
 	cmdlineBytes, err := os.ReadFile(filepath.Join("/proc", fmt.Sprintf("%d", pid), "cmdline"))
@@ -151,18 +152,4 @@ func pidAliveAndCmdlineContains(pid int, token string) bool {
 	// cmdline uses null bytes as separators; join with spaces for matching.
 	cmdline := strings.Join(strings.Split(string(cmdlineBytes), "\x00"), " ")
 	return strings.Contains(cmdline, token)
-}
-
-func pidAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	err := syscall.Kill(pid, 0)
-	if err == nil {
-		return true
-	}
-	if errors.Is(err, syscall.EPERM) {
-		return true
-	}
-	return false
 }

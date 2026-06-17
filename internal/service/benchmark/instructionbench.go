@@ -151,23 +151,36 @@ const (
 	instConsistencyThresholdLex = 0.6
 )
 
+// probeCtx bundles the per-probe inference target — the run context plus the
+// proxy base URL and the model id the request routes by — so probe helpers
+// don't thread three separate parameters through every signature.
+type probeCtx struct {
+	ctx   context.Context
+	base  string
+	model string
+}
+
+// newInstResult builds the seed result/transcript for one instruction problem.
+func newInstResult(p InstructionProblem) (ProblemResult, ProblemTranscript) {
+	name := p.Kind + ": " + truncateQuestion(p.Prompt)
+	return ProblemResult{ProblemID: p.ID, ProblemName: name, Kind: p.Kind},
+		ProblemTranscript{ProblemID: p.ID, ProblemName: name}
+}
+
 // runInstructionBench evaluates one instruction problem. Format and refusal
 // use a single deterministic generation; refusal is judged by the grader with
 // a heuristic fallback; consistency uses several sampled generations scored by
 // mean pairwise similarity.
-func (r *Runner) runInstructionBench(ctx context.Context, base, model string, sim similarityGrader, g grader, p InstructionProblem) (ProblemResult, ProblemTranscript) {
-	name := p.Kind + ": " + truncateQuestion(p.Prompt)
-	res := ProblemResult{ProblemID: p.ID, ProblemName: name, Kind: p.Kind}
-	tr := ProblemTranscript{ProblemID: p.ID, ProblemName: name}
-
+func (r *Runner) runInstructionBench(pc probeCtx, sim similarityGrader, g grader, p InstructionProblem) (ProblemResult, ProblemTranscript) {
 	if p.Kind == "consistency" {
-		return r.runInstConsistency(ctx, base, model, sim, p, res, tr)
+		return r.runInstConsistency(pc, sim, p)
 	}
+	res, tr := newInstResult(p)
 
-	reqCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout)
+	reqCtx, cancel := context.WithTimeout(pc.ctx, r.cfg.Timeout)
 	defer cancel()
-	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
-		Model:       model,
+	comp, err := Complete(reqCtx, nil, pc.base, "", ChatRequest{
+		Model:       pc.model,
 		Temperature: 0,
 		MaxTokens:   r.cfg.MaxTokens,
 		Messages: []ChatMessage{
@@ -200,7 +213,7 @@ func (r *Runner) runInstructionBench(ctx context.Context, base, model string, si
 			tr.Error = res.Err
 			return res, tr
 		}
-		gCtx, gCancel := context.WithTimeout(ctx, r.cfg.Timeout)
+		gCtx, gCancel := context.WithTimeout(pc.ctx, r.cfg.Timeout)
 		refused, gr, gErr := gradeRefusal(gCtx, g, p.Prompt, comp.Content)
 		gCancel()
 		if gErr != nil {
@@ -229,12 +242,13 @@ func (r *Runner) runInstructionBench(ctx context.Context, base, model string, si
 
 // runInstConsistency asks the same prompt instConsistencySamples times at a
 // non-zero temperature and scores the mean pairwise similarity of the replies.
-func (r *Runner) runInstConsistency(ctx context.Context, base, model string, sim similarityGrader, p InstructionProblem, res ProblemResult, tr ProblemTranscript) (ProblemResult, ProblemTranscript) {
+func (r *Runner) runInstConsistency(pc probeCtx, sim similarityGrader, p InstructionProblem) (ProblemResult, ProblemTranscript) {
+	res, tr := newInstResult(p)
 	var replies []string
-	for i := 0; i < instConsistencySamples; i++ {
-		reqCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout)
-		comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
-			Model:       model,
+	for i := range instConsistencySamples {
+		reqCtx, cancel := context.WithTimeout(pc.ctx, r.cfg.Timeout)
+		comp, err := Complete(reqCtx, nil, pc.base, "", ChatRequest{
+			Model:       pc.model,
 			Temperature: instConsistencyTemp,
 			MaxTokens:   r.cfg.MaxTokens,
 			Messages: []ChatMessage{
@@ -263,7 +277,7 @@ func (r *Runner) runInstConsistency(ctx context.Context, base, model string, sim
 	// Bound the similarity computation: a hanging /v1/embeddings endpoint must
 	// not block the run. On timeout Similarity falls back to the local lexical
 	// cosine, mirroring the per-request timeout discipline of the chat calls.
-	simCtx, simCancel := context.WithTimeout(ctx, r.cfg.Timeout)
+	simCtx, simCancel := context.WithTimeout(pc.ctx, r.cfg.Timeout)
 	defer simCancel()
 	var sum float64
 	var pairs, embPairs int
@@ -350,22 +364,14 @@ func (instructionHandler) Execute(ctx context.Context, r *Runner, base, model st
 	sim := similarityGrader{base: embBase, model: model}
 	g := r.graderFor(base, model)
 
-	var results []ProblemResult
-	var transcripts []ProblemTranscript
-	for i, p := range r.instProblems {
-		select {
-		case <-ctx.Done():
-			return results, transcripts, ctx.Err()
-		default:
-		}
-		send(progress, Progress{Index: i + 1, Total: len(r.instProblems), ProblemID: p.ID, ProblemName: p.Kind, Phase: "infer"})
-		pr, tr := r.runInstructionBench(ctx, base, model, sim, g, p)
-		results = append(results, pr)
-		if r.cfg.SaveTranscripts {
-			transcripts = append(transcripts, tr)
-		}
-	}
-	return results, transcripts, nil
+	return executeSerialBench(ctx, r, progress, len(r.instProblems),
+		func(i int) (string, string) {
+			p := r.instProblems[i]
+			return p.ID, p.Kind
+		},
+		func(i int) (ProblemResult, ProblemTranscript) {
+			return r.runInstructionBench(probeCtx{ctx: ctx, base: base, model: model}, sim, g, r.instProblems[i])
+		})
 }
 
 func init() {

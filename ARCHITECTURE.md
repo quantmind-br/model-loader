@@ -70,7 +70,7 @@ The codebase is organized into 9 top-level functional areas (derived from 303 au
 | `migration` | One-time config/state migrations |
 | `playground` | OpenAI-compatible chat streaming client |
 | `sizing` | GPU memory fit calculator |
-| `llamahelp` | llama-server `--help` parser + embedded v7376 schema |
+| `llamahelp` | llama-server `--help` parser + embedded v9680 schema |
 | `llamabin` | Binary path resolver (PATH + Python fallback) |
 | `buunhelp` | Embedded schema for buun-llama-cpp backend |
 | `dflashhelp` | Embedded schema for DFlash speculative-decoding runtime |
@@ -129,7 +129,7 @@ The codebase is organized into 9 top-level functional areas (derived from 303 au
 1. **Editable check** — If the existing schema has `Source.Editable = true`, skip regeneration to preserve manual edits.
 2. **Binary resolution** — `llamabin.Resolve(backend.Executable)` finds the binary (PATH lookup + Python fallback).
 3. **Live parsing** — Runs `llama-server --help` with a 10s timeout; parses flags into a `FlagSchema`.
-4. **Golden fallback** — If the binary is missing or parsing fails, loads the embedded v7376 golden JSON (188 flags).
+4. **Golden fallback** — If the binary is missing or parsing fails, loads the embedded v9680 golden JSON (244 flags).
 5. **Curation overlay** — `mergeWithCurated(full, CuratedLlamaSchema())` applies groups, descriptions, and aliases.
 6. **Persistence** — Saves the final schema to `~/.config/model-loader/backends/schemas/<id>.json`.
 

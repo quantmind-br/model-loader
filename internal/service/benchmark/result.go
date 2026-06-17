@@ -1,6 +1,14 @@
 package benchmark
 
-import "time"
+import (
+	"fmt"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/quantmind-br/model-loader/internal/domain"
+)
 
 // Mode selects how a model's answer is scored.
 type Mode string
@@ -178,4 +186,102 @@ type Run struct {
 	// Transcript holds raw per-problem I/O for debugging. Excluded from the run
 	// JSON (json:"-"); benchmarkstore writes it to a separate file.
 	Transcript []ProblemTranscript `json:"-"`
+}
+
+// aggregate rolls the per-problem results up into the run-level Aggregate,
+// folding in the GPU sampler's peak VRAM and average utilization. Problems
+// that errored count in Errored and are excluded from the quality rates.
+func aggregate(results []ProblemResult, peakVRAM uint64, avgUtil float64) Aggregate {
+	a := Aggregate{Total: len(results), PeakVRAMMB: peakVRAM, AvgGPUUtil: avgUtil}
+	var scoreSum, tpsSum, ttftSum, ppSum, decSum float64
+	var tpsN, ttftN, ppN, decN int
+	for _, r := range results {
+		if r.Err != "" {
+			// Request/judge failures are infrastructure noise, not model quality:
+			// count them separately and keep them out of the quality rates below.
+			a.Errored++
+		}
+		if r.Resolved {
+			a.Resolved++
+		}
+		scoreSum += r.Score
+		a.TotalPromptTokens += r.PromptTokens
+		a.TotalCompletionTokens += r.CompletionTokens
+		a.TotalMs += r.TotalMs
+		if r.TokensPerSecond > 0 {
+			tpsSum += r.TokensPerSecond
+			tpsN++
+		}
+		if r.PromptProcessingTPS > 0 {
+			ppSum += r.PromptProcessingTPS
+			ppN++
+		}
+		if r.DecodeTPS > 0 {
+			decSum += r.DecodeTPS
+			decN++
+		}
+		if r.TTFTms > 0 {
+			ttftSum += float64(r.TTFTms)
+			ttftN++
+		}
+	}
+	if answered := a.Total - a.Errored; answered > 0 {
+		a.SolveRate = float64(a.Resolved) / float64(answered)
+		a.AvgScore = scoreSum / float64(answered)
+	}
+	if tpsN > 0 {
+		a.AvgTokensPerSecond = tpsSum / float64(tpsN)
+	}
+	if ttftN > 0 {
+		a.AvgTTFTms = ttftSum / float64(ttftN)
+	}
+	if ppN > 0 {
+		a.AvgPromptProcessingTPS = ppSum / float64(ppN)
+	}
+	if decN > 0 {
+		a.AvgDecodeTPS = decSum / float64(decN)
+	}
+	return a
+}
+
+var quantRe = regexp.MustCompile(`(?i)(IQ?\d+(_[A-Z0-9]+)*|Q\d+_[A-Z0-9_]+|Q\d+|F16|BF16|F32)`)
+
+// snapshotProfile records the quantization-relevant config so comparisons make
+// explicit what changed between runs.
+func snapshotProfile(p domain.Profile) ProfileSnapshot {
+	s := ProfileSnapshot{Model: p.Model, KeyArgs: map[string]string{}}
+	if m := quantRe.FindString(filepath.Base(p.Model)); m != "" {
+		s.Quantization = strings.ToUpper(m)
+	}
+	s.CacheTypeK = argString(p.Args, "cache-type-k")
+	s.CacheTypeV = argString(p.Args, "cache-type-v")
+	if v := argString(p.Args, "ctx-size"); v != "" {
+		fmt.Sscanf(v, "%d", &s.CtxSize)
+	}
+	for _, k := range []string{"cache-type-k", "cache-type-v", "ctx-size", "n-gpu-layers", "flash-attn", "threads"} {
+		if v := argString(p.Args, k); v != "" {
+			s.KeyArgs[k] = v
+		}
+	}
+	return s
+}
+
+func argString(args map[string]any, key string) string {
+	v, ok := args[key]
+	if !ok {
+		return ""
+	}
+	switch t := v.(type) {
+	case string:
+		return t
+	case float64:
+		return strings.TrimSuffix(fmt.Sprintf("%v", t), ".0")
+	case bool:
+		if t {
+			return "true"
+		}
+		return "false"
+	default:
+		return fmt.Sprintf("%v", t)
+	}
 }

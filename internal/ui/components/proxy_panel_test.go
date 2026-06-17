@@ -189,14 +189,14 @@ func TestProxyPanel_ViewShowsStoppedStatus(t *testing.T) {
 
 func TestProxyPanel_ViewShowsLastSwapAndInflight(t *testing.T) {
 	f := &fakeHTTPProxy{status: httpproxy.Status{
-		Running:           true,
-		Addr:              "http://localhost:8080",
-		LoadedProfileID:   "qwen",
-		LastSwapAt:        time.Now().Add(-2 * time.Second),
-		LastSwapDur:       140 * time.Millisecond,
-		InflightRequests:  3,
-		LastError:         "some error",
-		LastErrorAt:       time.Now().Add(-5 * time.Second),
+		Running:          true,
+		Addr:             "http://localhost:8080",
+		LoadedProfileID:  "qwen",
+		LastSwapAt:       time.Now().Add(-2 * time.Second),
+		LastSwapDur:      140 * time.Millisecond,
+		InflightRequests: 3,
+		LastError:        "some error",
+		LastErrorAt:      time.Now().Add(-5 * time.Second),
 	}}
 	p := NewProxyPanel(f)
 	v := p.View()

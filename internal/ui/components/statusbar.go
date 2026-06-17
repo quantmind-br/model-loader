@@ -112,23 +112,38 @@ func (s StatusBar) Render(width int) string {
 	}
 	gw := lipgloss.Width(theme.Subtitle.Render(globalPart))
 	pw := lipgloss.Width(theme.Subtitle.Render(pagePart))
-	msg := s.styledMessage()
 	badge := s.restartBadge()
-	gap := width - gw - separatorWidth - pw - lipgloss.Width(msg) - lipgloss.Width(badge)
+	bw := lipgloss.Width(badge)
+	// The flash message is also shown in full as an in-body banner, so when
+	// space is tight sacrifice its status-bar echo BEFORE the page key-hints —
+	// the hints are what the user actually needs to act (TUI_AUDIT F-04). Only
+	// if the hints alone still overflow do we truncate the page hints, always
+	// keeping the global hints.
+	msgText := s.Message
+	gap := width - gw - separatorWidth - pw - lipgloss.Width(s.styledMessage()) - bw
 	if gap < 1 {
-		avail := width - gw - separatorWidth - lipgloss.Width(msg) - lipgloss.Width(badge) - 1
-		if avail > 0 {
-			pagePart = truncateString(pagePart, avail)
+		// Step 1: reclaim space from the message echo (truncate, then drop).
+		if avail := width - gw - separatorWidth - pw - bw - 1; avail > 0 {
+			msgText = truncateString(msgText, avail)
 		} else {
-			pagePart = ""
+			msgText = ""
 		}
-		gap = 1
+		// Step 2: if the hints alone still don't fit, truncate the page hints.
+		gap = width - gw - separatorWidth - pw - lipgloss.Width(s.styledMessageText(msgText)) - bw
+		if gap < 1 {
+			if avail := width - gw - separatorWidth - bw - lipgloss.Width(s.styledMessageText(msgText)) - 1; avail > 0 {
+				pagePart = truncateString(pagePart, avail)
+			} else {
+				pagePart = ""
+			}
+			gap = 1
+		}
 	}
 	hints := theme.Subtitle.Render(globalPart)
 	if pagePart != "" {
 		hints += theme.Subtitle.Render(" | " + pagePart)
 	}
-	return hints + strings.Repeat(" ", gap) + badge + msg
+	return hints + strings.Repeat(" ", gap) + badge + s.styledMessageText(msgText)
 }
 
 // renderMode draws a compact footer when the page has declared a mode.
@@ -163,16 +178,23 @@ func (s StatusBar) restartBadge() string {
 }
 
 func (s StatusBar) styledMessage() string {
-	if s.Message == "" {
+	return s.styledMessageText(s.Message)
+}
+
+// styledMessageText applies the bar's level styling to an arbitrary text. It
+// exists so Render can style a *truncated* copy of the message without
+// slicing the already-styled string (which would corrupt ANSI escapes).
+func (s StatusBar) styledMessageText(text string) string {
+	if text == "" {
 		return ""
 	}
 	switch s.Level {
 	case StatusError:
-		return theme.Error.Render(s.Message)
+		return theme.Error.Render(text)
 	case StatusWarn:
-		return theme.Warn.Render(s.Message)
+		return theme.Warn.Render(text)
 	default:
-		return theme.Subtitle.Render(s.Message)
+		return theme.Subtitle.Render(text)
 	}
 }
 

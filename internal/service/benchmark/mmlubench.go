@@ -148,22 +148,14 @@ func (mmluHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
 }
 
 func (mmluHandler) Execute(ctx context.Context, r *Runner, base, model string, _ Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
-	var results []ProblemResult
-	var transcripts []ProblemTranscript
-	for i, p := range r.mmluProblems {
-		select {
-		case <-ctx.Done():
-			return results, transcripts, ctx.Err()
-		default:
-		}
-		send(progress, Progress{Index: i + 1, Total: len(r.mmluProblems), ProblemID: p.ID, ProblemName: p.Category, Phase: "infer"})
-		pr, tr := r.runMMLUBench(ctx, base, model, p)
-		results = append(results, pr)
-		if r.cfg.SaveTranscripts {
-			transcripts = append(transcripts, tr)
-		}
-	}
-	return results, transcripts, nil
+	return executeSerialBench(ctx, r, progress, len(r.mmluProblems),
+		func(i int) (string, string) {
+			p := r.mmluProblems[i]
+			return p.ID, p.Category
+		},
+		func(i int) (ProblemResult, ProblemTranscript) {
+			return r.runMMLUBench(ctx, base, model, r.mmluProblems[i])
+		})
 }
 
 func init() {

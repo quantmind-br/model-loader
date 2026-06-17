@@ -4,13 +4,14 @@
 // schema with the essential flags.
 package vllmhelp
 
-import "github.com/quantmind-br/model-loader/internal/domain"
+import (
+	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/internal/ptrutil"
+)
 
 // EmbeddedSchema returns a FlagSchema covering the most common vllm serve
 // arguments. It is used as the fallback when auto-generation from the binary
 // is not available or not yet implemented.
-func iptr(v int) *int     { return &v }
-func fptr(v float64) *float64 { return &v }
 
 func EmbeddedSchema() domain.FlagSchema {
 	return domain.BuildFlagSchema("embedded-vllm-v1", vllmRows)
@@ -20,12 +21,12 @@ var vllmRows = []domain.FlagSpecRow{
 	{Long: "model", Type: domain.FlagTypeString, Default: "", HelpText: "HuggingFace model ID, local path, or GGUF file", Group: "common"},
 	{Long: "dtype", Type: domain.FlagTypeEnum, EnumValues: []string{"auto", "half", "float16", "bfloat16", "float", "float32"}, Default: "auto", HelpText: "Data type for model weights and activations", Group: "common"},
 	{Long: "host", Type: domain.FlagTypeString, Default: "0.0.0.0", HelpText: "Host address to bind the server", Group: "common"},
-	{Long: "tensor-parallel-size", Type: domain.FlagTypeInt, Default: float64(1), Min: iptr(1), Max: iptr(64), HelpText: "Number of GPUs to use for tensor parallelism", Group: "common"},
-	{Long: "pipeline-parallel-size", Type: domain.FlagTypeInt, Default: float64(1), Min: iptr(1), Max: iptr(64), HelpText: "Number of pipeline stages", Group: "common"},
-	{Long: "max-model-len", Type: domain.FlagTypeInt, Default: float64(0), Min: iptr(0), Max: iptr(1024 * 1024), HelpText: "Maximum context length (0 = auto from model config)", Group: "common"},
-	{Long: "gpu-memory-utilization", Type: domain.FlagTypeFloat, Default: float64(0.9), FloatMin: fptr(0.0), FloatMax: fptr(1.0), HelpText: "Fraction of GPU memory to use (0.0–1.0)", Group: "common"},
-	{Long: "swap-space", Type: domain.FlagTypeInt, Default: float64(4), Min: iptr(0), Max: iptr(1024 * 1024), HelpText: "CPU swap space size (GiB) per GPU", Group: "common"},
-	{Long: "max-num-seqs", Type: domain.FlagTypeInt, Default: float64(0), Min: iptr(0), Max: iptr(1024 * 1024), HelpText: "Maximum number of sequences per iteration (0 = auto)", Group: "common"},
+	{Long: "tensor-parallel-size", Type: domain.FlagTypeInt, Default: float64(1), Min: ptrutil.Ptr(1), Max: ptrutil.Ptr(64), HelpText: "Number of GPUs to use for tensor parallelism", Group: "common"},
+	{Long: "pipeline-parallel-size", Type: domain.FlagTypeInt, Default: float64(1), Min: ptrutil.Ptr(1), Max: ptrutil.Ptr(64), HelpText: "Number of pipeline stages", Group: "common"},
+	{Long: "max-model-len", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(1024 * 1024), HelpText: "Maximum context length (0 = auto from model config)", Group: "common"},
+	{Long: "gpu-memory-utilization", Type: domain.FlagTypeFloat, Default: float64(0.9), FloatMin: ptrutil.Ptr(0.0), FloatMax: ptrutil.Ptr(1.0), HelpText: "Fraction of GPU memory to use (0.0–1.0)", Group: "common"},
+	{Long: "swap-space", Type: domain.FlagTypeInt, Default: float64(4), Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(1024 * 1024), HelpText: "CPU swap space size (GiB) per GPU", Group: "common"},
+	{Long: "max-num-seqs", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(1024 * 1024), HelpText: "Maximum number of sequences per iteration (0 = auto)", Group: "common"},
 	{Long: "quantization", Type: domain.FlagTypeEnum, EnumValues: []string{"None", "awq", "gptq", "gguf", "fp8", "marlin", "bitsandbytes", "compressed-tensors", "quark", "aqlm"}, Default: "None", HelpText: "Quantization method applied to the model weights", Group: "common"},
 	{Long: "port", Type: domain.FlagTypeInt, Default: float64(8000), IsPort: true, HelpText: "Port to listen on", Group: "common"},
 	{Long: "api-key", Type: domain.FlagTypeString, Default: "", HelpText: "API key for authenticating requests", Group: "common"},

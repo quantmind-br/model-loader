@@ -11,7 +11,6 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
-	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
 
 // proxyLoadTimeout bounds EnsureRunning + Load. Model load can take minutes
@@ -121,17 +120,11 @@ func (p ProfilesPage) askUnloadCurrent() (tea.Model, tea.Cmd) {
 		p, fc := p.withFlash("no model loaded")
 		return p, fc
 	}
-	p.killConfirm = components.NewConfirm(
-		fmt.Sprintf("Unload %s?", st.LoadedProfileID),
-		st.LoadedProfileID,
-		func(payload any) tea.Cmd {
-			id, _ := payload.(string)
-			return func() tea.Msg { return profilesUnloadConfirmedMsg{profileID: id} }
-		},
-		"Unload",
-		"Cancel",
-	)
-	return p, p.killConfirm.Init()
+	id := st.LoadedProfileID
+	var cmd tea.Cmd
+	p.killConfirm, cmd = setupConfirm(fmt.Sprintf("Unload %s?", id), "Unload", "Cancel",
+		func() tea.Cmd { return func() tea.Msg { return profilesUnloadConfirmedMsg{profileID: id} } })
+	return p, cmd
 }
 
 func (p ProfilesPage) handleUnloadConfirmed(msg profilesUnloadConfirmedMsg) (tea.Model, tea.Cmd) {

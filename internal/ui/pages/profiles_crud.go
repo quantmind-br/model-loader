@@ -10,7 +10,6 @@ import (
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/configweb"
-	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
 
 func formatArgsBlock(args map[string]any) string {
@@ -185,15 +184,8 @@ func (p ProfilesPage) askDeleteSelected() (tea.Model, tea.Cmd) {
 	default:
 		return p, nil
 	}
-	p.deleteConfirm = components.NewConfirm(
-		"Delete profile "+id+"?",
-		id,
-		func(payload any) tea.Cmd {
-			pid, _ := payload.(string)
-			return func() tea.Msg { return profileDeleteConfirmedMsg{id: pid} }
-		},
-		"Delete",
-		"Cancel",
-	)
-	return p, p.deleteConfirm.Init()
+	var cmd tea.Cmd
+	p.deleteConfirm, cmd = setupConfirm("Delete profile "+id+"?", "Delete", "Cancel",
+		func() tea.Cmd { return func() tea.Msg { return profileDeleteConfirmedMsg{id: id} } })
+	return p, cmd
 }

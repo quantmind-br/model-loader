@@ -42,9 +42,35 @@ func BuildArgsForBackend(p domain.Profile, kind domain.BackendKind, executable s
 	}
 }
 
-func buildLlamaArgs(p domain.Profile) []string {
+// argBuildOpts parameterizes buildArgs for a specific backend's CLI shape.
+type argBuildOpts struct {
+	// skipKeys are p.Args keys never emitted as flags (the model is already
+	// emitted from p.Model, so its alias keys must be skipped to avoid dups).
+	skipKeys []string
+	// modelFlag is the flag the model is emitted under (e.g. "--model"). An
+	// empty modelFlag emits the model as a bare positional argument (vllm serve).
+	modelFlag string
+	// canonical maps user-friendly short keys to long-form flags via
+	// domain.CanonicalFlag (llama-server only; other backends pass keys verbatim).
+	canonical bool
+}
+
+// buildArgs converts a Profile into the CLI args slice for a backend described
+// by opts: model first (flag or positional), then p.Args sorted by key (minus
+// skipKeys) formatted by value type, then p.ExtraArgs verbatim. This is the
+// single home of the value type-switch shared by every backend.
+func buildArgs(p domain.Profile, opts argBuildOpts) []string {
 	args := make([]string, 0, 2+2*len(p.Args)+len(p.ExtraArgs))
-	args = append(args, "--model", p.Model)
+	if opts.modelFlag != "" {
+		args = append(args, opts.modelFlag, p.Model)
+	} else {
+		args = append(args, p.Model)
+	}
+
+	skip := make(map[string]bool, len(opts.skipKeys))
+	for _, k := range opts.skipKeys {
+		skip[k] = true
+	}
 
 	keys := make([]string, 0, len(p.Args))
 	for k := range p.Args {
@@ -53,10 +79,14 @@ func buildLlamaArgs(p domain.Profile) []string {
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		if k == "model" {
+		if skip[k] {
 			continue
 		}
-		flag := "--" + domain.CanonicalFlag(k)
+		name := k
+		if opts.canonical {
+			name = domain.CanonicalFlag(k)
+		}
+		flag := "--" + name
 		switch v := p.Args[k].(type) {
 		case bool:
 			if v {
@@ -82,147 +112,36 @@ func buildLlamaArgs(p domain.Profile) []string {
 	}
 	args = append(args, p.ExtraArgs...)
 	return args
+}
+
+func buildLlamaArgs(p domain.Profile) []string {
+	return buildArgs(p, argBuildOpts{skipKeys: []string{"model"}, modelFlag: "--model", canonical: true})
 }
 
 func buildSGLangArgs(p domain.Profile) []string {
-	args := make([]string, 0, 2+2*len(p.Args)+len(p.ExtraArgs))
-	args = append(args, "--model-path", p.Model)
-
-	keys := make([]string, 0, len(p.Args))
-	for k := range p.Args {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, k := range keys {
-		// model-path is already emitted from p.Model above.
-		if k == "model-path" {
-			continue
-		}
-		flag := "--" + k
-		switch v := p.Args[k].(type) {
-		case bool:
-			if v {
-				args = append(args, flag)
-			}
-		case string:
-			args = append(args, flag, v)
-		case int:
-			args = append(args, flag, strconv.Itoa(v))
-		case int32:
-			args = append(args, flag, strconv.FormatInt(int64(v), 10))
-		case int64:
-			args = append(args, flag, strconv.FormatInt(v, 10))
-		case float64:
-			args = append(args, flag, formatFloat(v))
-		case []any:
-			parts := make([]string, len(v))
-			for i, x := range v {
-				parts[i] = fmt.Sprint(x)
-			}
-			args = append(args, flag, strings.Join(parts, ","))
-		}
-	}
-	args = append(args, p.ExtraArgs...)
-	return args
+	return buildArgs(p, argBuildOpts{skipKeys: []string{"model-path"}, modelFlag: "--model-path"})
 }
 
 func buildVLLMArgs(p domain.Profile, executable string) []string {
-	args := make([]string, 0, 2+2*len(p.Args)+len(p.ExtraArgs))
-
-	// vLLM has two CLI shapes:
-	//   - "vllm serve" expects the model as a positional argument
-	//   - "python -m vllm.entrypoints.openai.api_server" expects --model
-	// We detect the exact token "serve" in the command to decide.
+	// vLLM has two CLI shapes: "vllm serve" expects the model as a positional
+	// argument; "python -m vllm.entrypoints.openai.api_server" expects --model.
+	// The exact token "serve" in the command selects the positional shape.
+	modelFlag := "--model"
 	if hasToken(executable, "serve") {
-		args = append(args, p.Model)
-	} else {
-		args = append(args, "--model", p.Model)
+		modelFlag = ""
 	}
-
-	keys := make([]string, 0, len(p.Args))
-	for k := range p.Args {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, k := range keys {
-		// model is already emitted from p.Model above.
-		if k == "model" {
-			continue
-		}
-		flag := "--" + k
-		switch v := p.Args[k].(type) {
-		case bool:
-			if v {
-				args = append(args, flag)
-			}
-		case string:
-			args = append(args, flag, v)
-		case int:
-			args = append(args, flag, strconv.Itoa(v))
-		case int32:
-			args = append(args, flag, strconv.FormatInt(int64(v), 10))
-		case int64:
-			args = append(args, flag, strconv.FormatInt(v, 10))
-		case float64:
-			args = append(args, flag, formatFloat(v))
-		case []any:
-			parts := make([]string, len(v))
-			for i, x := range v {
-				parts[i] = fmt.Sprint(x)
-			}
-			args = append(args, flag, strings.Join(parts, ","))
-		}
-	}
-	args = append(args, p.ExtraArgs...)
-	return args
+	return buildArgs(p, argBuildOpts{skipKeys: []string{"model"}, modelFlag: modelFlag})
 }
 
-// buildDFlashArgs builds args for the DFlash runtime (lucebox-hub server.py).
-// The model maps to --target; every other flag in p.Args is emitted verbatim
-// as --<key> <value>. The draft model is expected as the "draft" key in p.Args.
+// buildDFlashArgs builds args for the DFlash runtime (lucebox-hub
+// dflash_server). The native server takes the target model as its first
+// positional argument and rejects unknown options, so the model is emitted
+// bare; every other flag in p.Args is emitted verbatim as --<key> <value>.
+// The draft model is expected as the "draft" key in p.Args.
 func buildDFlashArgs(p domain.Profile) []string {
-	args := make([]string, 0, 2+2*len(p.Args)+len(p.ExtraArgs))
-	args = append(args, "--target", p.Model)
-
-	keys := make([]string, 0, len(p.Args))
-	for k := range p.Args {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, k := range keys {
-		// target is already emitted from p.Model above; "model" is an alias guard.
-		if k == "target" || k == "model" {
-			continue
-		}
-		flag := "--" + k
-		switch v := p.Args[k].(type) {
-		case bool:
-			if v {
-				args = append(args, flag)
-			}
-		case string:
-			args = append(args, flag, v)
-		case int:
-			args = append(args, flag, strconv.Itoa(v))
-		case int32:
-			args = append(args, flag, strconv.FormatInt(int64(v), 10))
-		case int64:
-			args = append(args, flag, strconv.FormatInt(v, 10))
-		case float64:
-			args = append(args, flag, formatFloat(v))
-		case []any:
-			parts := make([]string, len(v))
-			for i, x := range v {
-				parts[i] = fmt.Sprint(x)
-			}
-			args = append(args, flag, strings.Join(parts, ","))
-		}
-	}
-	args = append(args, p.ExtraArgs...)
-	return args
+	// "target" and "model" are alias guards for the positional model path
+	// ("target" was the flag used by the retired Python wrapper).
+	return buildArgs(p, argBuildOpts{skipKeys: []string{"target", "model"}, modelFlag: ""})
 }
 
 func formatFloat(f float64) string {

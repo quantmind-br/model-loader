@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -111,17 +112,45 @@ func Compact(dataDir, profileID string, retention time.Duration, maxBytes int64)
 	}
 
 	tmp := p + ".tmp"
-	f, err := os.Create(tmp)
+	f, err := createWriter(tmp)
 	if err != nil {
 		return fmt.Errorf("metricsstore: create tmp: %w", err)
 	}
-	for _, rec := range keep {
-		line, _ := json.Marshal(rec)
-		f.Write(line)
-		f.Write([]byte{'\n'})
+	// On any marshal/write/close failure, drop the half-written temp file and
+	// return the error so the original (still-valid) file is never replaced by
+	// a truncated rewrite.
+	if err := writeRecords(f, keep); err != nil {
+		f.Close()
+		_ = os.Remove(tmp)
+		return err
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("metricsstore: close tmp: %w", err)
+	}
 	return os.Rename(tmp, p)
+}
+
+// createWriter opens the compaction temp file. It is a package-level seam so
+// tests can inject a writer that fails mid-rewrite.
+var createWriter = func(name string) (io.WriteCloser, error) {
+	return os.Create(name)
+}
+
+// writeRecords marshals each record as a single JSON line and writes it to w,
+// returning the first marshal or write error encountered.
+func writeRecords(w io.Writer, recs []Record) error {
+	for _, rec := range recs {
+		line, err := json.Marshal(rec)
+		if err != nil {
+			return fmt.Errorf("metricsstore: marshal: %w", err)
+		}
+		line = append(line, '\n')
+		if _, err := w.Write(line); err != nil {
+			return fmt.Errorf("metricsstore: write: %w", err)
+		}
+	}
+	return nil
 }
 
 func estimateSize(recs []Record) int64 {

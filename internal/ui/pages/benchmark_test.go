@@ -20,14 +20,31 @@ type fakeBStore struct {
 	saved   []benchmark.Run
 }
 
-func (f *fakeBStore) Save(r benchmark.Run) error                      { f.saved = append(f.saved, r); return nil }
-func (f *fakeBStore) List() ([]benchmark.Run, error)                  { return nil, nil }
-func (f *fakeBStore) ListByProfile(string) ([]benchmark.Run, error)   { return nil, nil }
-func (f *fakeBStore) Delete(id string) error                          { f.deleted = append(f.deleted, id); return nil }
+func (f *fakeBStore) Save(r benchmark.Run) error                    { f.saved = append(f.saved, r); return nil }
+func (f *fakeBStore) List() ([]benchmark.Run, error)                { return nil, nil }
+func (f *fakeBStore) ListByProfile(string) ([]benchmark.Run, error) { return nil, nil }
+func (f *fakeBStore) Delete(id string) error                        { f.deleted = append(f.deleted, id); return nil }
 func (f *fakeBStore) LoadTranscript(string) ([]benchmark.ProblemTranscript, error) {
 	return nil, nil
 }
 func (f *fakeBStore) TranscriptPath(string) string { return "" }
+
+// TestBenchmarkPage_ProfileFilterAcceptsSpaceAndBurst is a regression for
+// TUI_AUDIT F-02: the profile-picker filter dropped the spacebar (it arrives as
+// tea.KeySpace, not tea.KeyRunes) and also dropped multi-rune paste bursts (the
+// old `len(Runes) == 1` guard).
+func TestBenchmarkPage_ProfileFilterAcceptsSpaceAndBurst(t *testing.T) {
+	page := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
+	page.filterMode = true
+
+	page, _, _ = page.keyProfilePickFilter(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Qwen")})
+	page, _, _ = page.keyProfilePickFilter(tea.KeyMsg{Type: tea.KeySpace})
+	page, _, _ = page.keyProfilePickFilter(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("27B")})
+
+	if page.filter != "Qwen 27B" {
+		t.Errorf("filter = %q, want %q (space and multi-rune burst must survive)", page.filter, "Qwen 27B")
+	}
+}
 
 // TestBenchmarkPage_DeleteRunRequiresConfirm locks in DESTRUCT-01: uppercase
 // 'X' opens a confirm and does NOT delete until the affirmative path runs,

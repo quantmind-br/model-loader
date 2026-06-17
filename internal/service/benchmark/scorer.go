@@ -2,7 +2,6 @@ package benchmark
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -133,25 +132,9 @@ func (j judgeScorer) callOnce(ctx context.Context, user string, temp float64) (j
 }
 
 func parseJudgeVerdict(content string) (judgeVerdict, error) {
-	raw := content
-	if start := strings.Index(raw, "{"); start >= 0 {
-		if end := strings.LastIndex(raw, "}"); end > start {
-			raw = raw[start : end+1]
-		}
-	}
-	var v struct {
-		Score     float64 `json:"score"`
-		Resolved  bool    `json:"resolved"`
-		Rationale string  `json:"rationale"`
-	}
-	if err := json.Unmarshal([]byte(raw), &v); err != nil {
+	v, err := parseVerdict(content)
+	if err != nil {
 		return judgeVerdict{}, err
-	}
-	if v.Score < 0 {
-		v.Score = 0
-	}
-	if v.Score > 1 {
-		v.Score = 1
 	}
 	return judgeVerdict{Score: v.Score, Resolved: v.Resolved, Rationale: v.Rationale}, nil
 }

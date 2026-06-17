@@ -4,8 +4,8 @@
 package benchmarkstore
 
 import (
-	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -62,47 +62,28 @@ func (s *fsStore) Save(run benchmark.Run) error {
 
 // LoadTranscript reads the raw I/O captured for a run.
 func (s *fsStore) LoadTranscript(id string) ([]benchmark.ProblemTranscript, error) {
-	b, err := os.ReadFile(s.TranscriptPath(id))
+	tr, err := fsx.ReadJSON[[]benchmark.ProblemTranscript](s.TranscriptPath(id))
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil, ErrNotFound
 		}
-		return nil, err
-	}
-	var tr []benchmark.ProblemTranscript
-	if err := json.Unmarshal(b, &tr); err != nil {
 		return nil, err
 	}
 	return tr, nil
 }
 
+// isRunFile reports whether name is a run JSON file, excluding the sidecar
+// `.transcript.json` files that live in the same directory.
+func isRunFile(name string) bool {
+	return strings.HasSuffix(name, ".json") && !strings.HasSuffix(name, ".transcript.json")
+}
+
 // List returns all runs sorted newest-first. Corrupt or unreadable files are
 // skipped so one bad file never hides the rest.
 func (s *fsStore) List() ([]benchmark.Run, error) {
-	entries, err := os.ReadDir(s.dir)
+	runs, err := fsx.ListJSONFiles[benchmark.Run](s.dir, isRunFile)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
 		return nil, err
-	}
-	runs := make([]benchmark.Run, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
-			continue
-		}
-		if strings.HasSuffix(e.Name(), ".transcript.json") {
-			continue // sidecar transcript, not a run
-		}
-		b, err := os.ReadFile(filepath.Join(s.dir, e.Name()))
-		if err != nil {
-			continue
-		}
-		var run benchmark.Run
-		if err := json.Unmarshal(b, &run); err != nil {
-			continue
-		}
-		runs = append(runs, run)
 	}
 	sort.Slice(runs, func(i, j int) bool { return runs[i].StartedAt.After(runs[j].StartedAt) })
 	return runs, nil

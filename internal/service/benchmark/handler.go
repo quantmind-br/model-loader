@@ -2,6 +2,37 @@ package benchmark
 
 import "context"
 
+// executeSerialBench drives the shared serial-benchmark loop used by every
+// non-judge mode: for each of total items it checks cancellation, streams an
+// "infer" Progress (id/name from meta), runs runOne, then appends the result
+// and — when transcript saving is enabled — its transcript. On cancellation it
+// returns the partial results formed so far with ctx.Err(), preserving the
+// per-mode partial-run semantics. Modes with a trailing "score" phase send it
+// from inside their runOne closure.
+func executeSerialBench(
+	ctx context.Context, r *Runner, progress chan<- Progress,
+	total int, meta func(int) (id, name string),
+	runOne func(int) (ProblemResult, ProblemTranscript),
+) ([]ProblemResult, []ProblemTranscript, error) {
+	var results []ProblemResult
+	var transcripts []ProblemTranscript
+	for i := range total {
+		select {
+		case <-ctx.Done():
+			return results, transcripts, ctx.Err()
+		default:
+		}
+		id, name := meta(i)
+		send(progress, Progress{Index: i + 1, Total: total, ProblemID: id, ProblemName: name, Phase: "infer"})
+		pr, tr := runOne(i)
+		results = append(results, pr)
+		if r.cfg.SaveTranscripts {
+			transcripts = append(transcripts, tr)
+		}
+	}
+	return results, transcripts, nil
+}
+
 // Category groups modes for the UI picker.
 type Category string
 

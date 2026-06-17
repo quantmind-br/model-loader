@@ -320,7 +320,7 @@ func TestHandleAdminUnload_KillsBackend_200(t *testing.T) {
 	srv := newTestServer(t, store, mgr)
 
 	// Pre-load alpha via the normal swap path.
-	if _, _, err := srv.ensureLoaded(context.Background(), "alpha"); err != nil {
+	if _, err := srv.ensureLoaded(context.Background(), "alpha"); err != nil {
 		t.Fatalf("preload: %v", err)
 	}
 	if srv.Status().LoadedProfileID != "alpha" {
@@ -355,7 +355,7 @@ func TestHandleAdminUnload_ForceTrueSkipsDrain(t *testing.T) {
 	store := newStubStore(makeProfile("alpha", 9212))
 	mgr := newStubManager()
 	srv := newTestServer(t, store, mgr)
-	if _, _, err := srv.ensureLoaded(context.Background(), "alpha"); err != nil {
+	if _, err := srv.ensureLoaded(context.Background(), "alpha"); err != nil {
 		t.Fatalf("preload: %v", err)
 	}
 
@@ -392,7 +392,7 @@ func TestHandleAdminUnload_DrainCompletesThenKills(t *testing.T) {
 	store := newStubStore(makeProfile("alpha", 9213))
 	mgr := newStubManager()
 	srv := newTestServer(t, store, mgr)
-	if _, _, err := srv.ensureLoaded(context.Background(), "alpha"); err != nil {
+	if _, err := srv.ensureLoaded(context.Background(), "alpha"); err != nil {
 		t.Fatalf("preload: %v", err)
 	}
 
@@ -431,7 +431,7 @@ func TestHandleAdminUnload_DrainTimeoutProceedsToKill(t *testing.T) {
 	store := newStubStore(makeProfile("alpha", 9214))
 	mgr := newStubManager()
 	srv := newTestServer(t, store, mgr)
-	if _, _, err := srv.ensureLoaded(context.Background(), "alpha"); err != nil {
+	if _, err := srv.ensureLoaded(context.Background(), "alpha"); err != nil {
 		t.Fatalf("preload: %v", err)
 	}
 
@@ -464,7 +464,7 @@ func TestHandleAdminUnload_KillError_500_CurrentCleared(t *testing.T) {
 	store := newStubStore(makeProfile("alpha", 9215))
 	mgr := newStubManager()
 	srv := newTestServer(t, store, mgr)
-	if _, _, err := srv.ensureLoaded(context.Background(), "alpha"); err != nil {
+	if _, err := srv.ensureLoaded(context.Background(), "alpha"); err != nil {
 		t.Fatalf("preload: %v", err)
 	}
 

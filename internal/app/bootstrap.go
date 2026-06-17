@@ -152,8 +152,8 @@ func Bootstrap(cliLevel string) (*Services, error) {
 	}, nil
 }
 
-// ensureDefaultCatalog is copied verbatim from cmd/model-loader/main.go.
-// It ensures a default backend catalog exists and returns the default FlagSchema.
+// ensureDefaultCatalog ensures a default backend catalog exists and returns the
+// default FlagSchema.
 func ensureDefaultCatalog(catalogStore backendcatalog.Store, schemaStore backendcatalog.SchemaStore, _ *backendschema.Manager, fallbackBinary string, logger *slog.Logger) domain.FlagSchema {
 	catalog, err := catalogStore.Load()
 	if err != nil {
@@ -195,7 +195,8 @@ func ensureDefaultCatalog(catalogStore backendcatalog.Store, schemaStore backend
 	return domain.BackendValidationSchema{}.ToFlagSchema()
 }
 
-// buildResolver is copied verbatim from cmd/model-loader/main.go.
+// buildResolver returns a resolver that maps a profile to its binary path and
+// backend kind.
 func buildResolver(resolver backendcatalog.Resolver) func(domain.Profile) (string, domain.BackendKind, error) {
 	return func(p domain.Profile) (string, domain.BackendKind, error) {
 		rb, err := resolver.Resolve(p)

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/app"
-	"github.com/quantmind-br/model-loader/internal/config"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
@@ -77,32 +76,20 @@ With --json the proxy status object is printed on stdout. Key fields:
 	})
 }
 
-// instanceLifecycleRunE acquires the single-instance flock before bootstrap and
-// fails fast if the TUI/serve holds it, then constructs the proxy supervisor
-// (the only client channel to backends) and runs fn. Mirrors benchmark.go.
+// instanceLifecycleRunE acquires the single-instance flock + bootstrap via the
+// shared bootstrapWithLock helper (failing fast if the TUI/serve holds the lock),
+// then constructs the proxy supervisor (the only client channel to backends) and
+// runs fn. The benchmark command shares the same prologue.
 func instanceLifecycleRunE(fn func(ctx context.Context, out io.Writer, errw io.Writer, svc *app.Services, proxy proxyClient, args []string) error) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
+		svc, release, err := bootstrapWithLock(cmd.ErrOrStderr(), logLevel)
 		if err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "config error: %v\n", err)
+			if errors.Is(err, errAnotherInstance) {
+				fmt.Fprintln(cmd.ErrOrStderr(), "another model-loader instance is running (TUI/serve) — close it first, or run on a headless host.")
+			}
 			return &ExitError{Code: 1}
 		}
-		release, acquired, lErr := app.AcquireSingleInstanceLock(cfg.Paths.StateDir)
-		if lErr != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "single-instance lock: %v\n", lErr)
-		}
-		if release != nil {
-			defer release()
-		}
-		if !acquired {
-			fmt.Fprintln(cmd.ErrOrStderr(), "another model-loader instance is running (TUI/serve) — close it first, or run on a headless host.")
-			return &ExitError{Code: 1}
-		}
-		svc, err := app.Bootstrap(logLevel)
-		if err != nil {
-			return &ExitError{Code: 1}
-		}
-		defer svc.Close()
+		defer release()
 
 		supervisor := proxysupervisor.New(proxysupervisor.Config{
 			StatePath: filepath.Join(svc.Cfg.Paths.StateDir, "proxy-state.json"),

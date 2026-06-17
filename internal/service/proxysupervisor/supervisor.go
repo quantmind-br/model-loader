@@ -17,6 +17,7 @@ import (
 
 	"github.com/quantmind-br/model-loader/internal/log"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
+	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
 )
 
 // ErrAlreadyRunning is returned by Start when the proxy is already live.
@@ -232,7 +233,7 @@ func (s *Supervisor) Reconcile() error {
 		return nil
 	}
 
-	if !pidAlive(st.PID) || !portOpen(st.Host, st.Port) {
+	if !procutil.Alive(st.PID) || !portOpen(st.Host, st.Port) {
 		s.logger.Info("proxy_reconcile_dropped", "pid", st.PID, "reason", "pid_or_port_mismatch")
 		if err := saveState(s.statePath, nil); err != nil {
 			s.logger.Error("proxy_reconcile_cleanup_failed", "err", err)
@@ -251,7 +252,7 @@ func (s *Supervisor) isAliveLocked() bool {
 	if s.state == nil {
 		return false
 	}
-	return pidAlive(s.state.PID) && portOpen(s.state.Host, s.state.Port)
+	return procutil.Alive(s.state.PID) && portOpen(s.state.Host, s.state.Port)
 }
 
 func (s *Supervisor) addr(st *State) string {
@@ -271,20 +272,6 @@ func (s *Supervisor) waitForPort(ctx context.Context, host string, port int) err
 			}
 		}
 	}
-}
-
-func pidAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	err := syscall.Kill(pid, 0)
-	if err == nil {
-		return true
-	}
-	if errors.Is(err, syscall.EPERM) {
-		return true
-	}
-	return false
 }
 
 func portOpen(host string, port int) bool {

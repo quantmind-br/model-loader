@@ -58,7 +58,8 @@ func init() {
 }
 
 // resolveProfileRef looks up a profile by id, then falls back to a
-// case-insensitive exact Name match. Ambiguous name matches are an error.
+// case-insensitive Name match (exact, else unique prefix). Ambiguous name
+// matches are an error.
 func resolveProfileRef(store profilestore.Store, ref string) (domain.Profile, error) {
 	if p, err := store.Get(ref); err == nil {
 		return p, nil
@@ -69,24 +70,19 @@ func resolveProfileRef(store profilestore.Store, ref string) (domain.Profile, er
 	if err != nil {
 		return domain.Profile{}, err
 	}
-	var matches []domain.Profile
-	for _, p := range all {
-		if strings.EqualFold(p.Name, ref) {
-			matches = append(matches, p)
+	p, err := resolveByPrefix(all, ref, func(p domain.Profile) []string { return []string{p.Name} })
+	if err != nil {
+		var amb *ambiguousMatchError[domain.Profile]
+		if errors.As(err, &amb) {
+			ids := make([]string, len(amb.Matches))
+			for i, m := range amb.Matches {
+				ids[i] = m.ID
+			}
+			return domain.Profile{}, fmt.Errorf("ambiguous profile name %q matches %d profiles: %s; use the id", ref, len(amb.Matches), formatCandidates(ids))
 		}
-	}
-	switch len(matches) {
-	case 1:
-		return matches[0], nil
-	case 0:
 		return domain.Profile{}, fmt.Errorf("profile not found: %s", ref)
-	default:
-		ids := make([]string, len(matches))
-		for i, m := range matches {
-			ids[i] = m.ID
-		}
-		return domain.Profile{}, fmt.Errorf("ambiguous profile name %q matches %d profiles: %s; use the id", ref, len(matches), formatCandidates(ids))
 	}
+	return p, nil
 }
 
 func listProfiles(w io.Writer, store profilestore.Store, asJSON bool) error {

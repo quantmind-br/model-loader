@@ -2,8 +2,8 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/config"
@@ -72,27 +72,17 @@ func resolveBackend(mgr backendManager, idOrPrefix string) (domain.Backend, erro
 	if err != nil {
 		return domain.Backend{}, fmt.Errorf("list backends: %w", err)
 	}
-	for _, b := range backends {
-		if b.ID == idOrPrefix {
-			return b, nil
+	b, err := resolveByPrefix(backends, idOrPrefix, func(b domain.Backend) []string { return []string{b.ID} })
+	if err != nil {
+		var amb *ambiguousMatchError[domain.Backend]
+		if errors.As(err, &amb) {
+			ids := make([]string, len(amb.Matches))
+			for i, m := range amb.Matches {
+				ids[i] = m.ID
+			}
+			return domain.Backend{}, fmt.Errorf("ambiguous backend id %q matches %d backends: %s; use a longer prefix", idOrPrefix, len(amb.Matches), formatCandidates(ids))
 		}
-	}
-	var matches []domain.Backend
-	for _, b := range backends {
-		if strings.HasPrefix(b.ID, idOrPrefix) {
-			matches = append(matches, b)
-		}
-	}
-	switch len(matches) {
-	case 0:
 		return domain.Backend{}, fmt.Errorf("backend not found: %s", idOrPrefix)
-	case 1:
-		return matches[0], nil
-	default:
-		ids := make([]string, len(matches))
-		for i, m := range matches {
-			ids[i] = m.ID
-		}
-		return domain.Backend{}, fmt.Errorf("ambiguous backend id %q matches %d backends: %s; use a longer prefix", idOrPrefix, len(matches), formatCandidates(ids))
 	}
+	return b, nil
 }

@@ -2,6 +2,7 @@
 package configweb
 
 import (
+	"maps"
 	"strconv"
 	"time"
 
@@ -43,19 +44,46 @@ func (d Draft) ToProfile(schema domain.FlagSchema) domain.Profile {
 }
 
 // ApplyTo overlays the draft onto an existing profile, preserving Meta/Launch
-// fields the web form does not edit.
-func (d Draft) ApplyTo(existing domain.Profile, schema domain.FlagSchema) domain.Profile {
+// fields the web form does not edit. Args are merged, not replaced: flags the
+// editor surfaced as form fields (`surfaced`) are form-driven (submitted = set,
+// absent = cleared), while configured args the editor never rendered are
+// preserved verbatim — otherwise saving would silently drop any flag the
+// schema's presentation omits (e.g. tool-calling flags).
+func (d Draft) ApplyTo(existing domain.Profile, schema domain.FlagSchema, surfaced map[string]bool) domain.Profile {
 	existing.ID = d.ID
 	existing.Name = d.Name
 	existing.Description = d.Description
 	existing.Tags = d.Tags
 	existing.Model = d.Model
-	existing.Args = coerceArgs(d.Args, schema)
+	existing.Args = mergeArgs(existing.Args, d.Args, schema, surfaced)
 	existing.ExtraArgs = d.ExtraArgs
 	existing.Launch.BackendID = d.BackendID
 	existing.Launch.Env = d.Env
 	existing.Meta.UpdatedAt = time.Now().UTC()
 	return existing
+}
+
+// mergeArgs overlays the form-submitted args onto the existing profile's args.
+// Flags the editor surfaced as form fields are form-driven (the submission is
+// authoritative: present = set, absent = the user cleared it). Configured args
+// the editor never surfaced are preserved verbatim with their original type, so
+// a save can never silently drop a flag the schema's presentation omits.
+// Reserved (manager-owned) flags are always excluded.
+func mergeArgs(existing map[string]any, form map[string]string, schema domain.FlagSchema, surfaced map[string]bool) map[string]any {
+	out := map[string]any{}
+	for k, v := range existing {
+		if reservedFlags[k] {
+			continue
+		}
+		// Surfaced flags come from the form below (so an unticked/cleared one is
+		// correctly removed); keys the form never rendered are preserved as-is.
+		if surfaced[domain.CanonicalFlag(k)] {
+			continue
+		}
+		out[k] = v
+	}
+	maps.Copy(out, coerceArgs(form, schema))
+	return out
 }
 
 func coerceArgs(in map[string]string, schema domain.FlagSchema) map[string]any {

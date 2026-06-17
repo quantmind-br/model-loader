@@ -321,6 +321,28 @@ func TestServerPage_MetricsPlaceholderWhenEmpty(t *testing.T) {
 	}
 }
 
+// TestServerPage_HistoryWithoutInstanceFlashesSelect is a regression for
+// TUI_AUDIT F-03: pressing 'h' with no instance selected used to flash a
+// misleading message pointing at a non-existent `logging.metrics_dir` config
+// key. It must now report that an instance needs selecting.
+func TestServerPage_HistoryWithoutInstanceFlashesSelect(t *testing.T) {
+	pm := &fakeProcMgr{}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil)
+
+	p2, _ := updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+
+	if p2.historyChart != nil {
+		t.Fatal("history chart must not open without a selected instance")
+	}
+	msg := p2.flash.Message()
+	if !strings.Contains(msg, "select a running instance") {
+		t.Errorf("flash = %q, want it to mention selecting a running instance", msg)
+	}
+	if strings.Contains(msg, "metrics_dir") {
+		t.Errorf("flash %q must not reference the non-existent logging.metrics_dir key", msg)
+	}
+}
+
 func TestServerPage_HistoryChartCapturesInput(t *testing.T) {
 	pm := &fakeProcMgr{}
 	p := NewServerPage(pm, &fakeMonMgr{}, nil)
@@ -1783,10 +1805,11 @@ func TestServerPage_HistoryRefreshedOnInstanceRefresh(t *testing.T) {
 	}
 }
 
-// F-08 regression: pressing H without metrics_dir configured must flash a
-// message that names the exact config key (logging.metrics_dir) so the
-// user knows what to set in config.toml.
-func TestServerPage_HHintMentionsMetricsDirKey(t *testing.T) {
+// TUI_AUDIT F-03: pressing 'h' with an instance selected but no metrics
+// directory wired must report the directory is unavailable — NOT point at
+// `logging.metrics_dir`, a config key that does not exist (the metrics dir is
+// always derived from state_dir; see cmd/model-loader/main.go).
+func TestServerPage_HMetricsUnavailableMessage(t *testing.T) {
 	pm := &fakeProcMgr{insts: []domain.RunningInstance{
 		{PID: 1234, Port: 8080, ProfileID: "p1"},
 	}}
@@ -1797,8 +1820,11 @@ func TestServerPage_HHintMentionsMetricsDirKey(t *testing.T) {
 	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
 
 	msg := p.flash.Message()
-	if !strings.Contains(msg, "logging.metrics_dir") {
-		t.Errorf("flash=%q; want it to mention 'logging.metrics_dir'", msg)
+	if !strings.Contains(msg, "metrics directory unavailable") {
+		t.Errorf("flash=%q; want it to report the metrics directory is unavailable", msg)
+	}
+	if strings.Contains(msg, "metrics_dir") {
+		t.Errorf("flash=%q must not reference the non-existent logging.metrics_dir config key", msg)
 	}
 }
 
