@@ -28,6 +28,9 @@ func (m *watchdogTestManager) Launch(p domain.Profile, mode LaunchMode, attemptI
 func (m *watchdogTestManager) Kill(int) error                                    { return nil }
 func (m *watchdogTestManager) List() []domain.RunningInstance                    { return nil }
 func (m *watchdogTestManager) WaitHealthy(int, int, time.Duration, string) error { return nil }
+func (m *watchdogTestManager) WaitReady(domain.RunningInstance, time.Duration, string) (string, error) {
+	return "", nil
+}
 func (m *watchdogTestManager) TailLogs(int) (io.ReadCloser, error)               { return io.NopCloser(nil), nil }
 func (m *watchdogTestManager) Close() error                                      { return nil }
 func (m *watchdogTestManager) GetExitInfo(int) (ExitInfo, bool)                  { return ExitInfo{}, false }

@@ -37,6 +37,8 @@ func BuildArgsForBackend(p domain.Profile, kind domain.BackendKind, executable s
 		return buildLlamaArgs(p), nil
 	case domain.BackendKindBeeLlamaCpp:
 		return buildLlamaArgs(p), nil
+	case domain.BackendKindUnsloth:
+		return buildUnslothArgs(p), nil
 	default:
 		return nil, fmt.Errorf("unsupported backend kind for arg building: %s", kind)
 	}
@@ -142,6 +144,14 @@ func buildDFlashArgs(p domain.Profile) []string {
 	// "target" and "model" are alias guards for the positional model path
 	// ("target" was the flag used by the retired Python wrapper).
 	return buildArgs(p, argBuildOpts{skipKeys: []string{"target", "model"}, modelFlag: ""})
+}
+
+// buildUnslothArgs builds args for `unsloth studio run`. The model (HF repo or
+// local GGUF path) is emitted under --model; every other flag in p.Args is
+// emitted verbatim as --<key> <value>. --port is injected by prepareLaunch.
+// The wrapper script forces the headless/loopback flags.
+func buildUnslothArgs(p domain.Profile) []string {
+	return buildArgs(p, argBuildOpts{skipKeys: []string{"model"}, modelFlag: "--model"})
 }
 
 func formatFloat(f float64) string {

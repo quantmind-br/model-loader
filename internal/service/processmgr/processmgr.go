@@ -34,6 +34,11 @@ type Manager interface {
 	// attemptID matches the one passed to Launch so the two log streams
 	// can be correlated by grep attempt_id=...
 	WaitHealthy(pid, port int, timeout time.Duration, attemptID string) error
+	// WaitReady blocks until the backend is ready to serve and returns any
+	// upstream auth token the proxy must inject (empty for kinds that need
+	// none). For unsloth it captures the printed sk-unsloth key from the log,
+	// which also signals the model has finished loading.
+	WaitReady(inst domain.RunningInstance, timeout time.Duration, attemptID string) (authToken string, err error)
 	TailLogs(pid int) (io.ReadCloser, error)
 	Close() error
 	// GetExitInfo returns the captured exit cause for pid if the Wait

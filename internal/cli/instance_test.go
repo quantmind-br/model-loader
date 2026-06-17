@@ -43,6 +43,9 @@ func (f *fakeManager) List() []domain.RunningInstance { return f.running }
 func (f *fakeManager) WaitHealthy(pid, port int, timeout time.Duration, attemptID string) error {
 	return nil
 }
+func (f *fakeManager) WaitReady(inst domain.RunningInstance, timeout time.Duration, attemptID string) (string, error) {
+	return "", nil
+}
 func (f *fakeManager) TailLogs(pid int) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader(f.tail)), nil
 }

@@ -1,6 +1,7 @@
 package processmgr
 
 import (
+	"path/filepath"
 	"slices"
 	"strconv"
 	"testing"
@@ -63,5 +64,32 @@ func TestPrepareLaunch_PortIsOSAllocated(t *testing.T) {
 	}
 	if plan.port <= 0 || plan.port > 65535 {
 		t.Fatalf("plan.port = %d, want a valid OS-allocated port", plan.port)
+	}
+}
+
+func TestLaunch_SetsInstanceKind(t *testing.T) {
+	dir := t.TempDir()
+	port := freePort(t)
+	mgr := New(Config{
+		Resolver: func(_ domain.Profile) (string, domain.BackendKind, error) {
+			return fakeBinary(t), domain.BackendKindUnsloth, nil
+		},
+		LogDir:       filepath.Join(dir, "logs"),
+		RegistryPath: filepath.Join(dir, "i.json"),
+	})
+	t.Cleanup(func() { _ = mgr.Close() })
+
+	p := domain.Profile{
+		ID:    "unsloth-kind-test",
+		Model: "unsloth/Qwen3-1.7B-GGUF", // HF-repo form: passes Launch's model-stat check
+		Args:  map[string]any{"port": float64(port)},
+	}
+	inst, err := mgr.Launch(p, LaunchBackground, "test-kind")
+	if err != nil {
+		t.Fatalf("launch: %v", err)
+	}
+	t.Cleanup(func() { _ = mgr.Kill(inst.PID) })
+	if inst.Kind != domain.BackendKindUnsloth {
+		t.Fatalf("RunningInstance.Kind = %q, want %q", inst.Kind, domain.BackendKindUnsloth)
 	}
 }
