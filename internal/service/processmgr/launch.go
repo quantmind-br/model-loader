@@ -20,6 +20,7 @@ type launchPlan struct {
 	args   []string
 	env    []string
 	port   int
+	kind   domain.BackendKind
 }
 
 func (m *fsManager) prepareLaunch(p domain.Profile) (launchPlan, error) {
@@ -63,6 +64,7 @@ func (m *fsManager) prepareLaunch(p domain.Profile) (launchPlan, error) {
 		args:   profileArgs,
 		env:    applyProfileEnv(p.Launch.Env),
 		port:   port,
+		kind:   resolvedKind,
 	}, nil
 }
 
@@ -123,6 +125,7 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 		Port:           plan.port,
 		LogPath:        logPath,
 		BinaryPath:     plan.binary,
+		Kind:           plan.kind,
 		StartedAt:      time.Now().UTC(),
 		Background:     true,
 		RestartPolicy:  string(p.Launch.RestartPolicy),
@@ -211,6 +214,7 @@ func (m *fsManager) launchForeground(p domain.Profile, plan launchPlan, attemptI
 		Port:       plan.port,
 		LogPath:    logPath,
 		BinaryPath: plan.binary,
+		Kind:       plan.kind,
 		StartedAt:  time.Now().UTC(),
 		Background: false,
 	}

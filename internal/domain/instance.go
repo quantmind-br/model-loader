@@ -8,7 +8,8 @@ type RunningInstance struct {
 	PID        int        `json:"pid"`
 	Port       int        `json:"port"`
 	LogPath    string     `json:"logPath"`
-	BinaryPath string     `json:"binaryPath,omitempty"`
+	BinaryPath string      `json:"binaryPath,omitempty"`
+	Kind       BackendKind `json:"kind,omitempty"`
 	StartedAt  time.Time  `json:"startedAt"`
 	Background bool       `json:"background"`
 	Crashed    bool       `json:"crashed,omitempty"`
