@@ -39,6 +39,12 @@ const (
 // below was synchronized against the BeeLlama source tree at git
 // v0.3.1-6-g85e22ea0b (commit 85e22ea0b), reading common/arg.cpp and common.h
 // directly as the source of truth.
+//
+// Flags that common/arg.cpp restricts via set_examples to non-server examples
+// are intentionally excluded: llama-server does not register them and rejects
+// them at launch ("error: invalid argument"). The notable case is
+// --spec-draft-cpu-range-batch (LLAMA_EXAMPLE_SPECULATIVE only); its batch-mask
+// and non-batch siblings remain because they include LLAMA_EXAMPLE_SERVER.
 func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 	flags := map[string]domain.FlagSpec{}
 	add := func(spec domain.FlagSpec) {
@@ -219,7 +225,6 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		intFlag("spec-draft-prio", "", []string{"prio-draft"}, 0, "Draft process/thread priority: 0=normal, 1=medium, 2=high, 3=realtime.", beeGroupSpeculative, ptrutil.Ptr(0), ptrutil.Ptr(3)),
 		intFlag("spec-draft-poll", "", []string{"poll-draft"}, nil, "Use polling (0|1) while waiting for draft work; defaults to --poll.", beeGroupSpeculative, nil, nil),
 		strFlag("spec-draft-cpu-mask-batch", "Cbd", []string{"cpu-mask-batch-draft"}, nil, "Draft model batch CPU affinity mask.", beeGroupSpeculative, false),
-		strFlag("spec-draft-cpu-range-batch", "Crbd", []string{"cpu-range-batch-draft"}, nil, "Draft model batch CPU affinity range (lo-hi).", beeGroupSpeculative, false),
 		intFlag("spec-draft-cpu-strict-batch", "", []string{"cpu-strict-batch-draft"}, nil, "Strict CPU placement for draft batch processing (0|1).", beeGroupSpeculative, nil, nil),
 		intFlag("spec-draft-prio-batch", "", []string{"prio-batch-draft"}, 0, "Draft batch process/thread priority: 0=normal, 1=medium, 2=high, 3=realtime.", beeGroupSpeculative, ptrutil.Ptr(0), ptrutil.Ptr(3)),
 		intFlag("spec-draft-poll-batch", "", []string{"poll-batch-draft"}, nil, "Use polling (0|1) while waiting for draft batch work.", beeGroupSpeculative, nil, nil),
@@ -326,6 +331,6 @@ func BeeLlamaPresentation() *domain.Presentation {
 		{Name: beeGroupHTTP, Flags: []string{"host", "port", "api-key", "api-key-file", "path", "ui", "timeout", "threads-http", "metrics", "slots", "parallel", "cont-batching", "cache-prompt", "alias"}},
 		{Name: beeGroupMultimodal, Flags: []string{"mmproj", "mmproj-url", "mmproj-auto", "mmproj-offload"}},
 		{Name: beeGroupLora, Flags: []string{"lora", "lora-scaled", "control-vector", "control-vector-scaled"}},
-		{Name: beeGroupSpeculative, Flags: []string{"spec-type", "spec-draft-model", "spec-draft-hf", "spec-draft-ngl", "spec-draft-n-max", "spec-draft-n-min", "spec-draft-p-split", "spec-draft-p-min", "spec-draft-ctx-size", "spec-draft-device", "spec-draft-top-k", "spec-draft-temp", "spec-draft-type-k", "spec-draft-type-v", "spec-draft-threads", "spec-draft-threads-batch", "spec-draft-cpu-mask", "spec-draft-cpu-range", "spec-draft-cpu-strict", "spec-draft-prio", "spec-draft-poll", "spec-draft-cpu-mask-batch", "spec-draft-cpu-range-batch", "spec-draft-cpu-strict-batch", "spec-draft-prio-batch", "spec-draft-poll-batch", "spec-draft-cpu-moe", "spec-draft-n-cpu-moe", "spec-draft-override-tensor", "spec-draft-backend-sampling", "spec-branch-budget", "spec-dflash-max-slots", "spec-dflash-cross-ctx", "spec-default", "spec-dm-adaptive", "spec-dm-fringe-min", "spec-dm-fringe-max", "spec-dm-off-dwell", "spec-dm-explore-interval", "spec-dm-min-reach", "spec-dm-probe-interval", "spec-dm-probe-fraction", "spec-dm-controller", "spec-dm-profit-min", "spec-dm-profit-raise-margin", "spec-dm-profit-lower-margin", "spec-dm-profit-ewma-alpha", "spec-dm-profit-min-samples", "spec-dm-profit-warmup", "spec-dm-profit-baseline-interval", "spec-ngram-mod-n-min", "spec-ngram-mod-n-max", "spec-ngram-mod-n-match", "spec-ngram-simple-size-n", "spec-ngram-simple-size-m", "spec-ngram-simple-min-hits", "spec-ngram-map-k-size-n", "spec-ngram-map-k-size-m", "spec-ngram-map-k-min-hits", "spec-ngram-map-k4v-size-n", "spec-ngram-map-k4v-size-m", "spec-ngram-map-k4v-min-hits"}},
+		{Name: beeGroupSpeculative, Flags: []string{"spec-type", "spec-draft-model", "spec-draft-hf", "spec-draft-ngl", "spec-draft-n-max", "spec-draft-n-min", "spec-draft-p-split", "spec-draft-p-min", "spec-draft-ctx-size", "spec-draft-device", "spec-draft-top-k", "spec-draft-temp", "spec-draft-type-k", "spec-draft-type-v", "spec-draft-threads", "spec-draft-threads-batch", "spec-draft-cpu-mask", "spec-draft-cpu-range", "spec-draft-cpu-strict", "spec-draft-prio", "spec-draft-poll", "spec-draft-cpu-mask-batch", "spec-draft-cpu-strict-batch", "spec-draft-prio-batch", "spec-draft-poll-batch", "spec-draft-cpu-moe", "spec-draft-n-cpu-moe", "spec-draft-override-tensor", "spec-draft-backend-sampling", "spec-branch-budget", "spec-dflash-max-slots", "spec-dflash-cross-ctx", "spec-default", "spec-dm-adaptive", "spec-dm-fringe-min", "spec-dm-fringe-max", "spec-dm-off-dwell", "spec-dm-explore-interval", "spec-dm-min-reach", "spec-dm-probe-interval", "spec-dm-probe-fraction", "spec-dm-controller", "spec-dm-profit-min", "spec-dm-profit-raise-margin", "spec-dm-profit-lower-margin", "spec-dm-profit-ewma-alpha", "spec-dm-profit-min-samples", "spec-dm-profit-warmup", "spec-dm-profit-baseline-interval", "spec-ngram-mod-n-min", "spec-ngram-mod-n-max", "spec-ngram-mod-n-match", "spec-ngram-simple-size-n", "spec-ngram-simple-size-m", "spec-ngram-simple-min-hits", "spec-ngram-map-k-size-n", "spec-ngram-map-k-size-m", "spec-ngram-map-k-min-hits", "spec-ngram-map-k4v-size-n", "spec-ngram-map-k4v-size-m", "spec-ngram-map-k4v-min-hits"}},
 	}}
 }

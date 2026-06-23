@@ -88,6 +88,38 @@ func TestCuratedBeeLlama_RemovedV030SurfaceAbsent(t *testing.T) {
 	}
 }
 
+// TestCuratedBeeLlama_ServerInvisibleDraftFlagsAbsent guards that the curated
+// schema omits draft flags the llama-server binary does not register. Some
+// draft CPU-affinity flags in common/arg.cpp are restricted via
+// set_examples({LLAMA_EXAMPLE_SPECULATIVE}) (no LLAMA_EXAMPLE_SERVER), so
+// llama-server rejects them at launch with "error: invalid argument". Because
+// curated-only flags are re-injected by mergeWithCurated, keeping one here
+// would make the web editor offer an option that fails when the profile starts.
+func TestCuratedBeeLlama_ServerInvisibleDraftFlagsAbsent(t *testing.T) {
+	schema := CuratedBeeLlamaSchema()
+
+	// name -> why llama-server does not expose it
+	invisible := map[string]string{
+		"spec-draft-cpu-range-batch": "set_examples is LLAMA_EXAMPLE_SPECULATIVE only; llama-server rejects it",
+	}
+
+	for key, spec := range schema.Flags {
+		if reason, ok := invisible[spec.Long]; ok {
+			t.Errorf("curated schema defines server-invisible flag %q (%s)", spec.Long, reason)
+		}
+		if reason, ok := invisible[key]; ok {
+			t.Errorf("curated schema key %q is a server-invisible flag (%s)", key, reason)
+		}
+	}
+	for _, group := range schema.Presentation.Groups {
+		for _, f := range group.Flags {
+			if reason, ok := invisible[f]; ok {
+				t.Errorf("presentation group %q lists server-invisible flag %q (%s)", group.Name, f, reason)
+			}
+		}
+	}
+}
+
 // TestCuratedBeeLlama_CheckpointMinStep guards the v0.3.0 replacement of
 // --checkpoint-every-n-tokens with --checkpoint-min-step (-cms, default 256).
 func TestCuratedBeeLlama_CheckpointMinStep(t *testing.T) {

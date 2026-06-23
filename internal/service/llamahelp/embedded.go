@@ -7,7 +7,7 @@ import (
 
 // EmbeddedSchema returns the compile-time fallback FlagSchema covering the
 // curated essential flags listed in the design spec. The schema is pinned to
-// llama.cpp build "v9680 (8086439a4)" — last validated on 2026-06-17.
+// llama.cpp build "v9761 (721354fbd)" — last validated on 2026-06-22.
 //
 // To refresh against a newer llama.cpp build:
 //   1. capture the help into testdata: llama-server --help > testdata/help-vXXXX.txt
@@ -16,7 +16,7 @@ import (
 //   4. bump the Version field below to "embedded-vXXXX"
 
 func EmbeddedSchema() domain.FlagSchema {
-	return domain.BuildFlagSchema("embedded-v9680", llamaRows)
+	return domain.BuildFlagSchema("embedded-v9761", llamaRows)
 }
 
 var llamaRows = []domain.FlagSpecRow{

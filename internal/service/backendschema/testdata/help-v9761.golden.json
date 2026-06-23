@@ -22,6 +22,18 @@
       "HelpText": "adaptive-p: select tokens near this probability (valid range 0.0 to",
       "Group": "sampling"
     },
+    "agent": {
+      "Long": "agent",
+      "Short": "ag",
+      "Aliases": [
+        "no-agent"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "whether to enable CORS proxy and all built-in tools - do not enable in",
+      "Group": "example-specific"
+    },
     "alias": {
       "Long": "alias",
       "Short": "a",
@@ -48,8 +60,8 @@
       "Aliases": null,
       "Type": 3,
       "EnumValues": null,
-      "Default": "none",
-      "HelpText": "path to file containing API keys (default: none)",
+      "Default": null,
+      "HelpText": "path to file containing API keys, one per line; lines starting with a",
       "Group": "example-specific"
     },
     "api-prefix": {
@@ -1417,8 +1429,8 @@
       "Aliases": null,
       "Type": 1,
       "EnumValues": null,
-      "Default": 1024,
-      "HelpText": "maximum number of image tokens per batch when encoding images (default: 1024)",
+      "Default": null,
+      "HelpText": "maximum number of image tokens per batch when encoding images",
       "Group": "example-specific"
     },
     "n-cpu-moe": {
@@ -2434,7 +2446,9 @@
       "Long": "ui",
       "Short": "",
       "Aliases": [
-        "no-ui"
+        "webui",
+        "no-ui",
+        "no-webui"
       ],
       "Type": 0,
       "EnumValues": null,
@@ -2442,31 +2456,13 @@
       "HelpText": "whether to enable the Web UI (default: enabled)",
       "Group": "example-specific"
     },
-    "ui-config": {
-      "Long": "ui-config",
-      "Short": "",
-      "Aliases": null,
-      "Type": 3,
-      "EnumValues": null,
-      "Default": null,
-      "HelpText": "JSON that provides default UI settings (overrides UI defaults)",
-      "Group": "example-specific"
-    },
-    "ui-config-file": {
-      "Long": "ui-config-file",
-      "Short": "",
-      "Aliases": null,
-      "Type": 3,
-      "EnumValues": null,
-      "Default": null,
-      "HelpText": "JSON file that provides default UI settings (overrides UI defaults)",
-      "Group": "example-specific"
-    },
     "ui-mcp-proxy": {
       "Long": "ui-mcp-proxy",
       "Short": "",
       "Aliases": [
-        "no-ui-mcp-proxy"
+        "webui-mcp-proxy",
+        "no-ui-mcp-proxy",
+        "no-webui-mcp-proxy"
       ],
       "Type": 0,
       "EnumValues": null,
@@ -2528,48 +2524,28 @@
       "HelpText": "whether to perform warmup with an empty run (default: enabled)",
       "Group": "example-specific"
     },
-    "webui": {
-      "Long": "webui",
-      "Short": "",
-      "Aliases": [
-        "no-webui"
-      ],
-      "Type": 0,
-      "EnumValues": null,
-      "Default": null,
-      "HelpText": "[DEPRECATED: use --ui/--no-ui] whether to enable the Web UI",
-      "Group": "example-specific"
-    },
     "webui-config": {
       "Long": "webui-config",
       "Short": "",
-      "Aliases": null,
+      "Aliases": [
+        "ui-config"
+      ],
       "Type": 3,
       "EnumValues": null,
       "Default": null,
-      "HelpText": "[DEPRECATED: use --ui-config] JSON that provides default WebUI",
+      "HelpText": "JSON that provides default UI settings (overrides UI defaults)",
       "Group": "example-specific"
     },
     "webui-config-file": {
       "Long": "webui-config-file",
       "Short": "",
-      "Aliases": null,
+      "Aliases": [
+        "ui-config-file"
+      ],
       "Type": 3,
       "EnumValues": null,
       "Default": null,
-      "HelpText": "[DEPRECATED: use --ui-config-file] JSON file that provides default",
-      "Group": "example-specific"
-    },
-    "webui-mcp-proxy": {
-      "Long": "webui-mcp-proxy",
-      "Short": "",
-      "Aliases": [
-        "no-webui-mcp-proxy"
-      ],
-      "Type": 0,
-      "EnumValues": null,
-      "Default": null,
-      "HelpText": "[DEPRECATED: use --ui-mcp-proxy/--no-ui-mcp-proxy] experimental:",
+      "HelpText": "JSON file that provides default UI settings (overrides UI defaults)",
       "Group": "example-specific"
     },
     "xtc-probability": {

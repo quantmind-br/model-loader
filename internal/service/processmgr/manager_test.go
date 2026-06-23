@@ -173,6 +173,79 @@ func envContains(env []string, want string) bool {
 	return slices.Contains(env, want)
 }
 
+func TestBuildLaunchEnv(t *testing.T) {
+	t.Run("NativeBackendNilEnvStaysNil", func(t *testing.T) {
+		// Native (C++) backends keep the legacy fast-path: nil env so Go
+		// inherits os.Environ() implicitly and no PYTHONUNBUFFERED is forced.
+		for _, kind := range []domain.BackendKind{
+			domain.BackendKindLlamaServer,
+			domain.BackendKindBeeLlamaCpp,
+			domain.BackendKindBuunLlamaCpp,
+			domain.BackendKindDFlash,
+		} {
+			if got := buildLaunchEnv(kind, nil); got != nil {
+				t.Errorf("kind %q: nil profile env → %v, want nil", kind, got)
+			}
+		}
+	})
+	t.Run("PythonBackendsForceUnbuffered", func(t *testing.T) {
+		for _, kind := range []domain.BackendKind{
+			domain.BackendKindVLLM,
+			domain.BackendKindSGLang,
+			domain.BackendKindUnsloth,
+		} {
+			got := buildLaunchEnv(kind, nil)
+			if !envContains(got, "PYTHONUNBUFFERED=1") {
+				t.Errorf("kind %q: missing PYTHONUNBUFFERED=1; got %v", kind, got)
+			}
+		}
+	})
+	t.Run("PythonBackendInheritsBaseEnv", func(t *testing.T) {
+		t.Setenv("MODELLOADER_PY_INHERIT", "preserved")
+		got := buildLaunchEnv(domain.BackendKindVLLM, nil)
+		if !envContains(got, "MODELLOADER_PY_INHERIT=preserved") {
+			t.Errorf("inherited env dropped; got %v", got)
+		}
+		if !envContains(got, "PYTHONUNBUFFERED=1") {
+			t.Errorf("missing PYTHONUNBUFFERED=1; got %v", got)
+		}
+	})
+	t.Run("PythonBackendKeepsProfileEnv", func(t *testing.T) {
+		got := buildLaunchEnv(domain.BackendKindVLLM, []domain.EnvVar{
+			{Key: "MODELLOADER_PY_EXTRA", Value: "ok"},
+		})
+		if !envContains(got, "MODELLOADER_PY_EXTRA=ok") {
+			t.Errorf("profile env dropped; got %v", got)
+		}
+		if !envContains(got, "PYTHONUNBUFFERED=1") {
+			t.Errorf("missing PYTHONUNBUFFERED=1; got %v", got)
+		}
+	})
+	t.Run("RespectsExplicitProfileOverride", func(t *testing.T) {
+		// A profile that explicitly sets PYTHONUNBUFFERED wins — we must not
+		// append our own =1 on top of the user's choice.
+		got := buildLaunchEnv(domain.BackendKindVLLM, []domain.EnvVar{
+			{Key: "PYTHONUNBUFFERED", Value: "0"},
+		})
+		if !envContains(got, "PYTHONUNBUFFERED=0") {
+			t.Errorf("explicit override lost; got %v", got)
+		}
+		if envContains(got, "PYTHONUNBUFFERED=1") {
+			t.Errorf("forced =1 over explicit =0; got %v", got)
+		}
+	})
+	t.Run("RespectsInheritedOverride", func(t *testing.T) {
+		t.Setenv("PYTHONUNBUFFERED", "0")
+		got := buildLaunchEnv(domain.BackendKindVLLM, nil)
+		if !envContains(got, "PYTHONUNBUFFERED=0") {
+			t.Errorf("inherited override lost; got %v", got)
+		}
+		if envContains(got, "PYTHONUNBUFFERED=1") {
+			t.Errorf("forced =1 over inherited =0; got %v", got)
+		}
+	})
+}
+
 func TestManager_LaunchBackground_NoOverrideUsesDefaultBinary(t *testing.T) {
 	fb := fakeBinary(t)
 	mgr, _ := newTestManager(t)

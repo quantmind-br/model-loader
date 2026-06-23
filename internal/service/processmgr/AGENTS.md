@@ -1,7 +1,7 @@
 # AGENTS.md — internal/service/processmgr
 
 ## OVERVIEW
-Process lifecycle service: spawns llama-server as background (detached) or foreground (attached) processes, tracks them in memory, and persists state to instances.json.
+Process lifecycle service: spawns inference backends (llama.cpp, vLLM, SGLang, DFlash, Unsloth, buun-llama-cpp, beellama.cpp) as background (detached) or foreground (attached) processes, tracks them in memory, and persists state to instances.json. Cross-backend Python handling is centralized in `launch.go`.
 
 ## WHERE TO LOOK
 
@@ -9,17 +9,22 @@ Process lifecycle service: spawns llama-server as background (detached) or foreg
 |------|---------|
 | processmgr.go | Manager interface, LaunchMode enum, sentinel errors |
 | manager.go | fsManager implementation: Launch, Kill, List, WaitHealthy, TailLogs |
-| args.go | BuildArgs(p domain.Profile) → []string for llama-server CLI |
+| args.go | `BuildArgsForBackend(p, kind, exe)` dispatcher → `buildLlamaArgs` / `buildVLLMArgs` / `buildSGLangArgs` / `buildDFlashArgs` / `buildUnslothArgs` |
+| launch.go | `prepareLaunch` (port alloc + backend resolve), `Launch`/`launchForeground`, **Python unbuffered env injection** for vLLM/SGLang/Unsloth |
+| logs.go | `TailLogs(pid) (io.ReadCloser, error)` — opens the on-disk log file from offset 0 (NOT a tail). Used by CLI `instance logs` only; the TUI uses `monitor.Subscribe` instead. |
 | registry.go | JSON load/save for instances.json |
-| recover.go | Reconcile(): drops zombie PIDs, keeps live llama-server processes |
+| recover.go | Reconcile(): drops zombie PIDs, keeps live processes |
 | liveness.go | Background goroutine probing PIDs; marks dead ones Crashed |
 
 ## CONVENTIONS
 
-- **LaunchMode**: Background = detached + log file + registry persistence. Foreground = attached TUI stream, max 1 at a time.
-- **Logs**: Per-PID files under LogDir (`<pid>.log`), appended via os.OpenFile(O_APPEND).
-- **Health check**: TCP dial on the manager-assigned ephemeral instance port (profiles no longer carry a `port` arg — it is stripped if present); timeout is configurable.
-- **Flag canonicalization**: `BuildArgs` calls `domain.CanonicalFlag()` to map user-friendly short keys (e.g. `"ngl"`) to long-form llama-server flags (`"n-gpu-layers"`) via the `shortToLong` table in `domain/flags.go`.
+- **LaunchMode**: Background = detached (`Setsid`) + log file + registry persistence. Foreground = attached TUI stream, max 1 at a time (enforced by `fgPID` sentinel).
+- **Port management**: `prepareLaunch` allocates an ephemeral loopback port via `net.Listen("tcp", "127.0.0.1:0")` and **always injects it under the `port` key** in `p.Args` before calling `BuildArgsForBackend`. Per-backend arg builders emit `--port` (llama.cpp/vLLM-python module/SGLang/Unsloth) or omit it (vLLM-`serve` shape, DFlash — port positional or fixed).
+- **Logs**: One file per instance under `LogDir`, path = `<profile-id>-<port>.log` (NOT `<pid>.log` — the port-keyed name avoids stale filenames after PIDs recycle). Created via `os.OpenFile(O_CREATE|O_WRONLY|O_APPEND, 0o644)`; both `cmd.Stdout` and `cmd.Stderr` point at the same fd (merged stream).
+- **Health check**: TCP dial on the manager-assigned ephemeral instance port; timeout is configurable.
+- **Backend resolution**: `p.Launch.ResolvedExecutable` + `p.Launch.ResolvedBackendKind` are pre-resolved by TUI/benchmark/restart paths; HTTP proxy on-demand launch falls back to `m.resolver(p)` because both fields are empty.
+- **Python unbuffering** (`launch.go:252-276`): `pythonBackends` map declares vLLM/SGLang/Unsloth as Python-based. `buildLaunchEnv` overlays the profile env and **always appends `PYTHONUNBUFFERED=1`** unless the profile already defines it. Without this, Python's stdout/stderr block-buffers to the log file (writes in 4KB chunks instead of per-line), making the TUI Server tab show logs in late bursts. Do NOT remove — llama.cpp flushes per line and would not need this.
+- **Flag canonicalization**: Only the llama.cpp arg builder enables `opts.canonical = true`, mapping short keys (`"ngl"`) to long-form flags (`"n-gpu-layers"`) via `domain.CanonicalFlag`. vLLM/SGLang/DFlash/Unsloth emit `p.Args` keys verbatim as `--<key>` because their CLIs do not share llama.cpp's alias table.
 - **Tests**: Use `fakeBinary(t)` helper for a no-op executable; `freePort(t)` to avoid conflicts.
 
 ## ANTI-PATTERNS

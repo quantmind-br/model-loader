@@ -62,7 +62,7 @@ func (m *fsManager) prepareLaunch(p domain.Profile) (launchPlan, error) {
 	return launchPlan{
 		binary: resolvedBinary,
 		args:   profileArgs,
-		env:    applyProfileEnv(p.Launch.Env),
+		env:    buildLaunchEnv(resolvedKind, p.Launch.Env),
 		port:   port,
 		kind:   resolvedKind,
 	}, nil
@@ -240,6 +240,50 @@ func (m *fsManager) launchForeground(p domain.Profile, plan launchPlan, attemptI
 		return inst, fmt.Errorf("fg started but registry save failed: %w", err)
 	}
 	return inst, nil
+}
+
+// pythonBackends are launched through a Python interpreter (vllm serve,
+// unsloth studio run, python -m sglang.launch_server). Python block-buffers
+// stdout when it is redirected to a file (the managed log) instead of a TTY,
+// so log lines reach the file in large delayed chunks instead of per-line.
+// The monitor tails that file via fsnotify Write events, so buffered output
+// makes the Server tab show logs in late bursts — unlike the C++ llama-server,
+// which flushes per line. PYTHONUNBUFFERED=1 forces unbuffered stdio so the
+// logs stream live. (dflash is the native dflash_server binary, not Python.)
+var pythonBackends = map[domain.BackendKind]bool{
+	domain.BackendKindVLLM:    true,
+	domain.BackendKindSGLang:  true,
+	domain.BackendKindUnsloth: true,
+}
+
+// buildLaunchEnv overlays the profile env (applyProfileEnv) and, for
+// Python-based backends, ensures PYTHONUNBUFFERED=1 so backend logs stream live
+// in the Server tab. A profile (or the inherited env) that already sets
+// PYTHONUNBUFFERED wins. Non-Python backends keep the legacy behavior: a nil
+// env so Go inherits os.Environ() implicitly.
+func buildLaunchEnv(kind domain.BackendKind, profileEnv []domain.EnvVar) []string {
+	env := applyProfileEnv(profileEnv)
+	if !pythonBackends[kind] {
+		return env
+	}
+	if env == nil {
+		env = os.Environ()
+	}
+	if !envHasKey(env, "PYTHONUNBUFFERED") {
+		env = append(env, "PYTHONUNBUFFERED=1")
+	}
+	return env
+}
+
+// envHasKey reports whether env (KEY=VALUE entries) already defines key.
+func envHasKey(env []string, key string) bool {
+	prefix := key + "="
+	for _, kv := range env {
+		if strings.HasPrefix(kv, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // applyProfileEnv overlays profile env vars on the inherited process env.
