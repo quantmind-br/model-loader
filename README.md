@@ -1,14 +1,14 @@
 # model-loader
 
-A terminal UI (TUI) for managing [llama.cpp](https://github.com/ggerganov/llama.cpp) `llama-server` profiles and processes. Built with Go + [Bubble Tea](https://github.com/charmbracelet/bubbletea).
+A terminal UI (TUI) for managing inference server profiles and processes across multiple backends — [llama.cpp](https://github.com/ggerganov/llama.cpp), vLLM, SGLang, DFlash, Unsloth, buun-llama-cpp, and beellama.cpp. Built with Go + [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
 ## Features
 
-- **Profile Editor** — Create and manage llama-server launch profiles with curated essential flags and an advanced flag editor
+- **Profile Editor** — Create and manage launch profiles through a schema-driven web editor (curated Essentials plus an advanced flag editor), one backend per profile
 - **Model Browser** — Scan configured directories for `.gguf` models with metadata extraction
-- **Launcher** — Launch llama-server instances in foreground (with live log streaming) or background (detached)
+- **Launch & Hot-swap** — Load a profile with `Enter` on the Profiles tab; all inference flows through an OpenAI-shaped proxy that hot-swaps the active backend on demand
 - **Monitor** — Real-time monitoring of running instances: logs, health status, slot usage, GPU metrics, and throughput
-- **Multi-instance** — Run multiple llama-server instances concurrently, each with its own PID and port
+- **Multi-instance** — Run multiple backend instances concurrently, each with its own PID and port
 - **Instance Recovery** — Background instances survive TUI exit and are recovered on restart
 - **Backend Catalog** — Manage multiple backends — `llama-server` forks/versions plus other server kinds (vLLM, SGLang) — each with per-backend validation schemas
 - **Schema-driven Validation** — Each backend has its own validation schema (auto-generated from `--help`, editable by user)
@@ -47,13 +47,11 @@ make install
 
 2. **Launch** (Tab 1 — Profiles):
    - Select a profile from the list
-   - Toggle `b` for background mode (default) or foreground
-   - Press `Enter` to launch
+   - Press `Enter` to load it through the HTTP proxy (the proxy hot-swaps the active backend)
 
 3. **Create a profile** (Tab 1 — Profiles):
-   - Press `n` to create a new profile
-   - Fill in the model path, name, and parameters (use `Tab` / `Shift+Tab` to move between fields)
-   - Press `Enter` on the **Save** button to persist the profile (or `Esc` to cancel)
+   - Press `n` to create a new profile (or `e` to edit) — this opens a schema-driven editor in your browser
+   - Fill in the model, backend, and flags, then Save on the page; the TUI reloads the list (`Esc` cancels)
 
 4. **Server** (Tab 2 — Server):
    - Select a running instance to view logs, slots, GPU stats, and metrics
@@ -81,19 +79,18 @@ make install
 
 | Key | Action |
 |-----|--------|
-| `Enter` | Launch selected profile |
-| `E` | Edit selected profile |
+| `Enter` | Load selected profile through the HTTP proxy (hot-swaps the active model) |
+| `e` | Edit selected profile (opens the web editor) |
 | `n` | New profile |
 | `d` | Duplicate profile |
-| `x` | Delete profile |
-| `b` | Toggle background / foreground mode |
-| `k` | Kill most recent launched instance |
-| `r` | Refresh profile list |
+| `X` | Delete profile (confirm) |
+| `K` | Unload the currently loaded model (confirm) |
+| `R` | Refresh profile list |
 | `p` | Pin selected profile |
 | `I` | Import profiles from JSON bundle |
 | `u` | Undo last import |
-| `e` | Export all profiles to JSON bundle |
-| `Ctrl+T` | Toggle Essentials / Advanced sub-tab (while editing) |
+| `E` | Export all profiles to JSON bundle |
+| `Ctrl+T` | Cycle Essentials / Advanced / Environment / Sizing (while editing) |
 | `/` | Filter profiles |
 
 ### Server Tab
@@ -102,10 +99,10 @@ make install
 |-----|--------|
 | `v` | Cycle Logs / Slots / Metrics / History sub-views |
 | `Space` | Pause / resume log scroll |
-| `k` | Kill selected instance |
-| `r` | Restart selected instance |
-| `H` | Open history chart |
-| `1` / `2` / `3` / `4` | History chart window: 1h / 6h / 24h / 7d |
+| `K` | Kill selected instance (confirm) |
+| `R` | Restart selected instance (confirm) |
+| `h` | Open history chart |
+| `1` / `2` / `3` / `4` | History chart window: 1h / 6h / 24h / 7d (while chart open) |
 | `s` | Start HTTP proxy listener |
 | `x` | Stop HTTP proxy listener |
 

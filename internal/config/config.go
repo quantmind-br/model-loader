@@ -159,6 +159,34 @@ func LoadFrom(path string) (AppConfig, error) {
 	return cfg, nil
 }
 
+// UpdateSearchPaths rewrites models.search_paths in the default config file,
+// preserving every other value. Used by the Models tab to drop a broken search
+// path without hand-editing config.toml. Comments and original key ordering are
+// not preserved (viper re-serializes the whole file), matching the existing
+// default_tab migration behavior in LoadFrom.
+func UpdateSearchPaths(paths []string) error {
+	path, err := DefaultConfigPath()
+	if err != nil {
+		return err
+	}
+	return updateSearchPathsAt(path, paths)
+}
+
+func updateSearchPathsAt(path string, paths []string) error {
+	v := viper.New()
+	v.SetConfigFile(path)
+	v.SetConfigType("toml")
+	applyDefaults(v)
+	if err := v.ReadInConfig(); err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+	v.Set("models.search_paths", paths)
+	if err := v.WriteConfigAs(path); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	return nil
+}
+
 // expandTilde replaces a leading "~" with the user's home directory.
 func expandTilde(path string) string {
 	if path == "" || !strings.HasPrefix(path, "~") {

@@ -49,6 +49,7 @@ _Convention: lowercase keys are light/cheap actions (navigate, edit, view); uppe
 - ` + "`enter`" + ` — actions: use in new profile / existing profile / reveal path
 - ` + "`s`" + ` — search Hugging Face
 - ` + "`i`" + ` — show model info panel
+- ` + "`X`" + ` — remove a broken search path from config (confirm; shown when a path fails to scan)
 - ` + "`→`" + ` / ` + "`g`" + ` — navigate to sizing for this model
 
 ## Backends tab

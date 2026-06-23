@@ -49,6 +49,12 @@ type ModelsPage struct {
 	// reversible [c] hide-done toggle can't wipe the download history
 	// (DESTRUCT-02).
 	clearDoneConfirm components.Confirm
+	// removePathConfirm gates the [X] "remove broken search path" action (B9)
+	// behind a yes/no modal so a slipped key can't silently rewrite the config.
+	removePathConfirm components.Confirm
+	// persistSearchPaths persists an edited search-path list to config.toml.
+	// nil-safe: when unset, [X] removal applies in-memory only for the session.
+	persistSearchPaths func([]string) error
 
 	profilePicker           *components.ProfilePicker
 	profilePickerTargetPath string
@@ -142,6 +148,14 @@ func (p ModelsPage) WithProfileStore(store profilestore.Store) ModelsPage {
 	return p
 }
 
+// WithSearchPathPersister wires the callback that persists an edited search-
+// path list to the config file, enabling the [X] "remove broken search path"
+// action (B9). Without it, removal is session-only and a flash warns the user.
+func (p ModelsPage) WithSearchPathPersister(fn func([]string) error) ModelsPage {
+	p.persistSearchPaths = fn
+	return p
+}
+
 // WithHFClient injects a Hugging Face Hub client so the page can offer
 // remote model search ("s" key in T14). Without it, the HF entry points
 // stay disabled.
@@ -184,6 +198,9 @@ func (p ModelsPage) View() string {
 	}
 	if p.clearDoneConfirm.Active() {
 		return p.clearDoneConfirm.View()
+	}
+	if p.removePathConfirm.Active() {
+		return p.removePathConfirm.View()
 	}
 	if p.action != nil {
 		return p.renderActionMenu()
@@ -302,6 +319,9 @@ func (p ModelsPage) Hints() string {
 	if p.clearDoneConfirm.Active() {
 		return "[←→] choose  [enter] confirm  [esc] cancel"
 	}
+	if p.removePathConfirm.Active() {
+		return "[←→] choose  [enter] confirm  [esc] cancel"
+	}
 	if p.action != nil {
 		return "[↑↓] move  [enter] select  [esc] cancel"
 	}
@@ -326,6 +346,10 @@ func (p ModelsPage) Hints() string {
 	case mvDiscover:
 		return "[←/→] section  [enter] search HF  [esc] back to library"
 	default:
-		return "[←/→] section  [/] filter  [R] rescan  [s] search HF  [enter] actions  [i] info  [esc] clear"
+		base := "[←/→] section  [/] filter  [R] rescan  [s] search HF  [enter] actions  [i] info  [esc] clear"
+		if p.hasErrorRoot() {
+			base += "  [X] remove broken path"
+		}
+		return base
 	}
 }

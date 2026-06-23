@@ -98,6 +98,7 @@ func runTUI(cliLevel string) int {
 		WithExportDir(exportDir)
 	modelsPage := pages.NewModelsPage(scanner, svc.Cfg.Models.SearchPaths).
 		WithProfileStore(svc.Store).
+		WithSearchPathPersister(config.UpdateSearchPaths).
 		WithHFClient(hfClient).
 		WithDownloadManager(dlManager)
 	profilesPage = profilesPage.

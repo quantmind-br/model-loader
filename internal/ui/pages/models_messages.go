@@ -12,7 +12,7 @@ import (
 )
 
 type modelsKeyMap struct {
-	Filter, Rescan, Enter, Cancel key.Binding
+	Filter, Rescan, Enter, Cancel, RemovePath key.Binding
 }
 
 // NavigateToSizingMsg is emitted by ModelsPage when the user presses →/g on
@@ -27,8 +27,9 @@ func defaultModelsKeys() modelsKeyMap {
 	return modelsKeyMap{
 		Filter: key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
 		Rescan: key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "rescan")),
-		Enter:  key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "actions")),
-		Cancel: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "clear filter")),
+		Enter:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "actions")),
+		Cancel:     key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "clear filter")),
+		RemovePath: key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "remove broken path")),
 	}
 }
 
@@ -42,6 +43,7 @@ func (p ModelsPage) IsCapturingInput() bool {
 		func() bool { return p.pathChooser != nil },
 		func() bool { return p.deleteConfirm.Active() },
 		func() bool { return p.clearDoneConfirm.Active() },
+		func() bool { return p.removePathConfirm.Active() },
 		func() bool { return p.filterMode },
 		func() bool { return p.profilePicker != nil },
 		func() bool { return p.hfSearch != nil && p.hfSearch.IsActive() },
@@ -87,6 +89,11 @@ type scanChannelClosedMsg struct {
 // tab. It triggers a silent rescan (no flash) so external filesystem
 // changes surface without requiring the user to press R.
 type modelsReloadMsg struct{}
+
+// removePathConfirmedMsg is emitted when the user confirms removing the
+// broken search path(s) from the config (B9). performRemoveBrokenPaths
+// drops them, persists the new list, and rescans.
+type removePathConfirmedMsg struct{}
 
 // downloadEventMsg lifts a downloadmgr.Event onto the Bubble Tea bus so
 // the page can react to lifecycle changes (queued → active → completed/
@@ -228,6 +235,10 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		next, cmd := p.beginRescan(true)
 		return next, cmd
+	case key.Matches(msg, p.keys.RemovePath):
+		if p.hasErrorRoot() {
+			return p.askRemoveBrokenPaths()
+		}
 	case key.Matches(msg, p.keys.Enter):
 		return p.openActionMenuForSelection()
 	case msg.String() == "i":

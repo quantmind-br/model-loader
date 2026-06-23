@@ -219,6 +219,68 @@ func (p ModelsPage) hasErrorRoot() bool {
 	return false
 }
 
+// brokenPaths returns the configured roots whose scan ended in error.
+func (p ModelsPage) brokenPaths() []string {
+	var out []string
+	for _, root := range p.paths {
+		if p.statusMap[root].state == "error" {
+			out = append(out, root)
+		}
+	}
+	return out
+}
+
+// askRemoveBrokenPaths arms the confirm modal for dropping every broken search
+// path from the config (B9). The actual removal runs in Update via
+// performRemoveBrokenPaths once the user confirms.
+func (p ModelsPage) askRemoveBrokenPaths() (tea.Model, tea.Cmd) {
+	broken := p.brokenPaths()
+	if len(broken) == 0 {
+		return p, nil
+	}
+	title := fmt.Sprintf("Remove %d broken search path(s) from config?", len(broken))
+	var cmd tea.Cmd
+	p.removePathConfirm, cmd = setupConfirm(title, "Remove", "Cancel",
+		func() tea.Cmd { return func() tea.Msg { return removePathConfirmedMsg{} } })
+	return p, cmd
+}
+
+// performRemoveBrokenPaths drops every errored root from the search-path list,
+// persists the new list to config.toml (when a persister is wired), and kicks
+// off a fresh scan. A flash reports the outcome (B9).
+func (p ModelsPage) performRemoveBrokenPaths() (tea.Model, tea.Cmd) {
+	kept := make([]string, 0, len(p.paths))
+	removed := 0
+	for _, root := range p.paths {
+		if p.statusMap[root].state == "error" {
+			delete(p.statusMap, root)
+			removed++
+			continue
+		}
+		kept = append(kept, root)
+	}
+	if removed == 0 {
+		return p, nil
+	}
+	p.paths = kept
+	if p.persistSearchPaths != nil {
+		if err := p.persistSearchPaths(kept); err != nil {
+			return p.withFlashError("removed for this session, but saving config failed: " + err.Error())
+		}
+	}
+	m, cmd := p.beginRescan(false)
+	var fc tea.Cmd
+	m, fc = m.withFlash(fmt.Sprintf("removed %d broken search path(s)", removed))
+	return m, tea.Batch(cmd, fc)
+}
+
+// updateRemovePathConfirm forwards key input to the remove-broken-path confirm.
+func (p ModelsPage) updateRemovePathConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	p.removePathConfirm, cmd = p.removePathConfirm.Update(msg)
+	return p, cmd
+}
+
 // hasScannedRoot reports whether at least one configured root has finished
 // its initial scan. Empty-state copy only renders once we know the scan is
 // complete — otherwise the user might think their models are missing
