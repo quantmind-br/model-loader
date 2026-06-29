@@ -288,6 +288,177 @@ def store_repo_keys(search_paths: list[str]) -> set[str]:
     return keys
 
 
+import argparse
+import sys
+from dataclasses import asdict
+
+
+def load_download_states(downloads_dir: str) -> list[dict]:
+    states = []
+    for f in sorted(glob.glob(os.path.join(downloads_dir, "*.json"))):
+        try:
+            with open(f) as fh:
+                states.append(json.load(fh))
+        except (OSError, json.JSONDecodeError):
+            continue
+    return states
+
+
+def _pid_alive(pid) -> bool:
+    try:
+        return os.path.exists(f"/proc/{int(pid)}")
+    except (TypeError, ValueError):
+        return False
+
+
+def active_download_paths(states: list[dict]) -> set[str]:
+    """Targets of downloads whose worker is still alive (in progress)."""
+    out = set()
+    for st in states:
+        if _pid_alive(st.get("pid")):
+            for k in ("dest_file", "dest_dir"):
+                v = st.get(k)
+                if isinstance(v, str) and v:
+                    out.add(v)
+                    if k == "dest_file":
+                        out.add(v + ".partial")
+    return out
+
+
+def running_instances(instances_path: str) -> list[dict]:
+    try:
+        with open(instances_path) as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return []
+    arr = data.get("instances", data) if isinstance(data, dict) else data
+    return [i for i in arr if _pid_alive(i.get("pid"))]
+
+
+def _profile_paths_by_id(profiles: list[dict]) -> dict[str, set[str]]:
+    out = {}
+    for prof in profiles:
+        files, dirs = protected_closure([prof])
+        out[prof.get("id", "")] = files | dirs
+    return out
+
+
+def apply_blocked(cands, running, profiles, active_dl):
+    by_id = _profile_paths_by_id(profiles)
+    running_paths = set()
+    blocker_of = {}
+    for inst in running:
+        pid_paths = by_id.get(inst.get("profileId", ""), set())
+        for p in pid_paths:
+            running_paths.add(p)
+            blocker_of[p] = inst.get("profileId", "")
+    for c in cands:
+        targets = {c.path, c.delete_unit, os.path.realpath(c.delete_unit)}
+        if targets & active_dl:
+            c.blocked = True
+            c.blocked_by = "active-download"
+        for p in targets:
+            if p in running_paths:
+                c.blocked = True
+                c.blocked_by = blocker_of.get(p, "running-instance")
+
+
+@dataclass
+class Report:
+    candidates: list
+
+    _ORDER = (CAT_ORPHAN, CAT_SIBLING, CAT_INCOMPLETE,
+              CAT_CACHE_INCOMPLETE, CAT_CACHE_DUP, CAT_CACHE_OTHER)
+
+    def totals(self) -> dict:
+        t = {cat: 0 for cat in self._ORDER}
+        grand = 0
+        blocked = 0
+        for c in self.candidates:
+            if c.blocked:
+                blocked += 1
+                continue
+            t[c.category] = t.get(c.category, 0) + c.size
+            grand += c.size
+        t["grand_total"] = grand
+        t["blocked"] = blocked
+        return t
+
+    def to_dict(self) -> dict:
+        return {"candidates": [asdict(c) for c in self.candidates],
+                "totals": self.totals()}
+
+    def to_table(self) -> str:
+        lines = []
+        for cat in self._ORDER:
+            rows = [c for c in self.candidates if c.category == cat]
+            if not rows:
+                continue
+            lines.append(f"\n== {cat} ({len(rows)}) ==")
+            for c in sorted(rows, key=lambda x: x.size, reverse=True):
+                flag = "  [BLOCKED]" if c.blocked else ""
+                lines.append(f"  {human(c.size):>10}  {c.delete_unit}{flag}")
+                lines.append(f"             {c.reason}")
+        t = self.totals()
+        lines.append("\n-- reclaimable totals --")
+        for cat in self._ORDER:
+            if t.get(cat):
+                lines.append(f"  {cat:<22} {human(t[cat])}")
+        lines.append(f"  {'GRAND TOTAL':<22} {human(t['grand_total'])}")
+        lines.append(f"  blocked (skipped): {t['blocked']}")
+        return "\n".join(lines)
+
+
+def analyze(profiles_dir, search_paths, cache_hub_dir,
+            downloads_dir, instances_path, include_cache=True) -> Report:
+    profiles = load_profiles(profiles_dir)
+    files, dirs = protected_closure(profiles)
+    repos = list_repo_dirs(search_paths)
+    used, orphan = classify_repos(repos, files, dirs)
+    states = load_download_states(downloads_dir)
+    cands = []
+    cands += orphan_candidates(orphan)
+    cands += sibling_candidates(used, files, dirs)
+    cands += incomplete_candidates(search_paths, states)
+    if include_cache:
+        cands += cache_candidates(cache_hub_dir, store_repo_keys(search_paths))
+    apply_blocked(cands, running_instances(instances_path), profiles,
+                  active_download_paths(states))
+    return Report(candidates=cands)
+
+
+def load_config_search_paths() -> list[str]:
+    import tomllib
+    cfg = os.path.expanduser("~/.config/model-loader/config.toml")
+    try:
+        with open(cfg, "rb") as fh:
+            data = tomllib.load(fh)
+        paths = data.get("models", {}).get("search_paths", [])
+    except (OSError, tomllib.TOMLDecodeError):
+        paths = []
+    return [os.path.expanduser(p) for p in paths]
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description="model-loader cleanup analyzer (read-only)")
+    home = os.path.expanduser("~")
+    ap.add_argument("--profiles", default=os.path.join(home, ".config/model-loader/profiles"))
+    ap.add_argument("--cache", default=os.path.join(home, ".cache/huggingface/hub"))
+    ap.add_argument("--downloads", default=os.path.join(home, ".local/state/model-loader/downloads"))
+    ap.add_argument("--instances", default=os.path.join(home, ".local/state/model-loader/instances.json"))
+    ap.add_argument("--no-cache", action="store_true", help="skip the HF cache pass")
+    ap.add_argument("--json", metavar="PATH", help="write the JSON manifest to PATH")
+    args = ap.parse_args(argv)
+    rep = analyze(args.profiles, load_config_search_paths(), args.cache,
+                  args.downloads, args.instances, include_cache=not args.no_cache)
+    print(rep.to_table())
+    if args.json:
+        with open(args.json, "w") as fh:
+            json.dump(rep.to_dict(), fh, indent=2)
+        print(f"\nJSON manifest written to {args.json}")
+    return 0
+
+
 def cache_candidates(cache_hub_dir: str, store_keys: set[str]) -> list[Candidate]:
     cands: list[Candidate] = []
     if not os.path.isdir(cache_hub_dir):
@@ -323,3 +494,7 @@ def cache_candidates(cache_hub_dir: str, store_keys: set[str]) -> list[Candidate
                 reason="not in store/profiles — may belong to ComfyUI or another tool",
                 delete_unit=repo_dir))
     return cands
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -227,5 +227,50 @@ class CacheTest(unittest.TestCase):
         self.assertTrue(oth[0].delete_unit.endswith("models--black-forest-labs--FLUX.1-dev"))
 
 
+class OrchestrationTest(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.profiles = os.path.join(self.root, "profiles")
+        self.store = os.path.join(self.root, "store")
+        self.hub = os.path.join(self.root, "hub")
+        os.makedirs(self.profiles)
+        os.makedirs(self.hub)
+        used = os.path.join(self.store, "pub", "used-GGUF")
+        os.makedirs(used)
+        self.used_model = os.path.join(used, "m-Q4.gguf")
+        open(self.used_model, "wb").write(b"GGUF" + b"0" * 10)
+        self.orphan = os.path.join(self.store, "pub", "orphan-GGUF")
+        os.makedirs(self.orphan)
+        open(os.path.join(self.orphan, "o.gguf"), "wb").write(b"GGUF" + b"0" * 300)
+        _write_profile(self.profiles, "p1", model=self.used_model)
+        # download-in-progress (alive pid) targeting the orphan -> BLOCKED
+        self.dl_dir = os.path.join(self.root, "downloads")
+        os.makedirs(self.dl_dir)
+        with open(os.path.join(self.dl_dir, "dl-1.json"), "w") as f:
+            json.dump({"status": "downloading", "pid": os.getpid(),
+                       "dest_file": os.path.join(self.orphan, "o.gguf"),
+                       "dest_dir": self.orphan}, f)
+        self.instances = os.path.join(self.root, "instances.json")
+        with open(self.instances, "w") as f:
+            json.dump({"instances": []}, f)
+
+    def test_active_download_blocks_candidate(self):
+        rep = A.analyze(self.profiles, [self.store], self.hub,
+                        self.dl_dir, self.instances, include_cache=False)
+        orphans = [c for c in rep.candidates if c.category == A.CAT_ORPHAN]
+        self.assertEqual(len(orphans), 1)
+        self.assertTrue(orphans[0].blocked)
+
+    def test_report_totals_and_serialization(self):
+        rep = A.analyze(self.profiles, [self.store], self.hub,
+                        self.dl_dir, self.instances, include_cache=False)
+        totals = rep.totals()
+        self.assertIn("grand_total", totals)
+        self.assertIn("blocked", totals)
+        d = rep.to_dict()
+        self.assertIn("candidates", d)
+        self.assertIsInstance(rep.to_table(), str)
+
+
 if __name__ == "__main__":
     unittest.main()
