@@ -153,5 +153,42 @@ class SiblingTest(unittest.TestCase):
         self.assertEqual(cands[0].size, 504)
 
 
+class IncompleteTest(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.store = os.path.join(self.root, "store")
+        repo = os.path.join(self.store, "pub", "GGUF")
+        os.makedirs(os.path.join(repo, ".cache", "huggingface", "download"))
+        self.repo = repo
+        # good gguf (not flagged)
+        open(os.path.join(repo, "good.gguf"), "wb").write(b"GGUF" + b"0" * 10)
+        # bad magic gguf (flagged)
+        self.bad = os.path.join(repo, "bad.gguf")
+        open(self.bad, "wb").write(b"NOPE" + b"0" * 10)
+        # multipart missing shard 2 (part1 present, flagged) ; part1 has magic so not bad-magic
+        self.part1 = os.path.join(repo, "split-00001-of-00002.gguf")
+        open(self.part1, "wb").write(b"GGUF" + b"0" * 10)
+        # incomplete + partial markers
+        self.inc = os.path.join(repo, ".cache", "huggingface", "download", "x.incomplete")
+        open(self.inc, "wb").write(b"0" * 5)
+        self.partial = os.path.join(repo, "y.gguf.partial")
+        open(self.partial, "wb").write(b"0" * 5)
+
+    def test_incomplete_detection(self):
+        failed_state = {"status": "failed",
+                        "dest_file": os.path.join(self.repo, "good.gguf"),
+                        "dest_dir": self.repo}
+        cands = A.incomplete_candidates([self.store], [failed_state])
+        reasons = {c.path: c.reason for c in cands}
+        self.assertIn(self.bad, reasons)
+        self.assertIn("magic", reasons[self.bad].lower())
+        self.assertIn(self.part1, reasons)
+        self.assertIn("shard", reasons[self.part1].lower())
+        self.assertIn(self.inc, reasons)
+        self.assertIn(self.partial, reasons)
+        # the failed download's dest_file (exists) is flagged
+        self.assertIn(os.path.join(self.repo, "good.gguf"), reasons)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -211,3 +211,63 @@ def sibling_candidates(used_repos: list[str], files: set[str], dirs: set[str]) -
                 delete_unit=fp,
             ))
     return cands
+
+
+GGUF_MAGIC = b"GGUF"
+_FAILED_STATES = {"failed", "abandoned", "cancelled", "canceled"}
+
+
+def _inc(path: str, reason: str) -> Candidate:
+    return Candidate(path=path, size=real_size(path), mtime=safe_mtime(path),
+                     category=CAT_INCOMPLETE, reason=reason, delete_unit=path)
+
+
+def incomplete_candidates(search_paths: list[str], download_states: list[dict]) -> list[Candidate]:
+    cands: list[Candidate] = []
+    seen: set[str] = set()
+    groups: dict[tuple, list] = {}  # (dir, base) -> [present_parts:set, total:int]
+
+    def emit(path, reason):
+        if path not in seen and os.path.exists(path):
+            seen.add(path)
+            cands.append(_inc(path, reason))
+
+    for base in search_paths:
+        if not os.path.isdir(base):
+            continue
+        for root, _dirs, fnames in os.walk(base, followlinks=False):
+            for fn in fnames:
+                fp = os.path.join(root, fn)
+                if fn.endswith(".partial"):
+                    emit(fp, "partial download (.partial)")
+                    continue
+                if fn.endswith(".incomplete"):
+                    emit(fp, "HF incomplete-download marker (.incomplete)")
+                    continue
+                if fn.endswith(".gguf") and not os.path.islink(fp):
+                    g = multipart_group(fn)
+                    if g:
+                        key = (root, g[0])
+                        groups.setdefault(key, [set(), g[2]])
+                        groups[key][0].add(g[1])
+                    if g is None or g[1] == 1:
+                        try:
+                            with open(fp, "rb") as fh:
+                                if fh.read(4) != GGUF_MAGIC:
+                                    emit(fp, "GGUF magic mismatch (corrupt/truncated)")
+                        except OSError:
+                            pass
+
+    for (d, b), (have, total) in groups.items():
+        if len(have) != total:
+            for n in sorted(have):
+                fp = os.path.join(d, f"{b}-{n:05d}-of-{total:05d}.gguf")
+                emit(fp, f"incomplete multipart group: have {len(have)}/{total} shards")
+
+    for st in download_states:
+        status = str(st.get("status", "")).lower()
+        if status in _FAILED_STATES:
+            for p in (st.get("dest_file"), str(st.get("dest_file", "")) + ".partial"):
+                if p:
+                    emit(p, f"download {status}")
+    return cands
