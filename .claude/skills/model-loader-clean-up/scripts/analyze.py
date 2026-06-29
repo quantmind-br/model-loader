@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # ---- categories -----------------------------------------------------------
 CAT_ORPHAN = "store-orphan-repo"
@@ -39,7 +39,6 @@ def human(n: int) -> str:
         if f < 1024 or unit == "TiB":
             return f"{f:.1f}{unit}"
         f /= 1024
-    return f"{f:.1f}TiB"
 
 
 def safe_mtime(path: str) -> float:
