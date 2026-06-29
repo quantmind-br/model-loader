@@ -130,3 +130,49 @@ def is_protected(path: str, files: set[str], dirs: set[str]) -> bool:
         if rp == d or rp.startswith(d + os.sep) or path == d or path.startswith(d + os.sep):
             return True
     return False
+
+
+def list_repo_dirs(search_paths: list[str]) -> list[str]:
+    out = []
+    for base in search_paths:
+        if not os.path.isdir(base):
+            continue
+        for pub in sorted(os.listdir(base)):
+            pubp = os.path.join(base, pub)
+            if not os.path.isdir(pubp):
+                continue
+            for repo in sorted(os.listdir(pubp)):
+                rp = os.path.join(pubp, repo)
+                if os.path.isdir(rp):
+                    out.append(rp)
+    return out
+
+
+def classify_repos(repos: list[str], files: set[str], dirs: set[str]):
+    used, orphan = [], []
+    for rp in repos:
+        if os.path.realpath(rp) in dirs:
+            used.append(rp)
+            continue
+        protected_inside = False
+        for root, _dirs, fnames in os.walk(rp, followlinks=False):
+            for fn in fnames:
+                if is_protected(os.path.join(root, fn), files, dirs):
+                    protected_inside = True
+                    break
+            if protected_inside:
+                break
+        (used if protected_inside else orphan).append(rp)
+    return used, orphan
+
+
+def orphan_candidates(orphan_repos: list[str]) -> list[Candidate]:
+    cands = []
+    for rp in orphan_repos:
+        cands.append(Candidate(
+            path=rp, size=real_size(rp), mtime=safe_mtime(rp),
+            category=CAT_ORPHAN,
+            reason="no profile references anything inside this repo",
+            delete_unit=rp,
+        ))
+    return cands

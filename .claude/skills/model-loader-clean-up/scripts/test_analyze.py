@@ -90,5 +90,33 @@ class ClosureTest(unittest.TestCase):
             os.path.join(self.store, "other", "x.gguf"), files, dirs))
 
 
+class OrphanTest(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.profiles = os.path.join(self.root, "profiles")
+        self.store = os.path.join(self.root, "store")
+        os.makedirs(self.profiles)
+        used = os.path.join(self.store, "pub", "used-GGUF")
+        os.makedirs(used)
+        self.used_model = os.path.join(used, "m-Q4.gguf")
+        open(self.used_model, "wb").write(b"GGUF" + b"0" * 100)
+        self.orphan = os.path.join(self.store, "pub", "orphan-GGUF")
+        os.makedirs(self.orphan)
+        open(os.path.join(self.orphan, "o-Q4.gguf"), "wb").write(b"GGUF" + b"0" * 200)
+        _write_profile(self.profiles, "p1", model=self.used_model)
+
+    def test_classify_and_orphan_candidates(self):
+        files, dirs = A.protected_closure(A.load_profiles(self.profiles))
+        repos = A.list_repo_dirs([self.store])
+        used, orphan = A.classify_repos(repos, files, dirs)
+        self.assertIn(os.path.join(self.store, "pub", "used-GGUF"), used)
+        self.assertIn(self.orphan, orphan)
+        cands = A.orphan_candidates(orphan)
+        self.assertEqual(len(cands), 1)
+        self.assertEqual(cands[0].category, A.CAT_ORPHAN)
+        self.assertEqual(cands[0].delete_unit, self.orphan)
+        self.assertEqual(cands[0].size, 204)  # 4 + 200
+
+
 if __name__ == "__main__":
     unittest.main()
