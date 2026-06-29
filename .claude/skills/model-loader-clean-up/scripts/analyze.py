@@ -271,3 +271,55 @@ def incomplete_candidates(search_paths: list[str], download_states: list[dict]) 
                 if p:
                     emit(p, f"download {status}")
     return cands
+
+
+def store_repo_keys(search_paths: list[str]) -> set[str]:
+    keys = set()
+    for base in search_paths:
+        if not os.path.isdir(base):
+            continue
+        for pub in os.listdir(base):
+            pubp = os.path.join(base, pub)
+            if not os.path.isdir(pubp):
+                continue
+            for repo in os.listdir(pubp):
+                if os.path.isdir(os.path.join(pubp, repo)):
+                    keys.add(f"{pub}/{repo}")
+    return keys
+
+
+def cache_candidates(cache_hub_dir: str, store_keys: set[str]) -> list[Candidate]:
+    cands: list[Candidate] = []
+    if not os.path.isdir(cache_hub_dir):
+        return cands
+    # Tier 0: incomplete blobs anywhere in the cache
+    for root, _dirs, fnames in os.walk(cache_hub_dir, followlinks=False):
+        for fn in fnames:
+            if fn.endswith(".incomplete"):
+                fp = os.path.join(root, fn)
+                cands.append(Candidate(
+                    path=fp, size=real_size(fp), mtime=safe_mtime(fp),
+                    category=CAT_CACHE_INCOMPLETE,
+                    reason="HF cache incomplete-download blob", delete_unit=fp))
+    # Tier A / Tier B: per cache repo
+    for entry in sorted(os.listdir(cache_hub_dir)):
+        if not entry.startswith("models--"):
+            continue
+        repo_dir = os.path.join(cache_hub_dir, entry)
+        if not os.path.isdir(repo_dir):
+            continue
+        org, _, repo = entry[len("models--"):].partition("--")
+        key = f"{org}/{repo}"
+        size = real_size(repo_dir)
+        mt = safe_mtime(repo_dir)
+        if key in store_keys:
+            cands.append(Candidate(
+                path=repo_dir, size=size, mtime=mt, category=CAT_CACHE_DUP,
+                reason=f"duplicate of store repo {key} (store copy is canonical)",
+                delete_unit=repo_dir))
+        else:
+            cands.append(Candidate(
+                path=repo_dir, size=size, mtime=mt, category=CAT_CACHE_OTHER,
+                reason="not in store/profiles — may belong to ComfyUI or another tool",
+                delete_unit=repo_dir))
+    return cands

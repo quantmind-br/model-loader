@@ -190,5 +190,42 @@ class IncompleteTest(unittest.TestCase):
         self.assertIn(os.path.join(self.repo, "good.gguf"), reasons)
 
 
+class CacheTest(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.store = os.path.join(self.root, "store")
+        os.makedirs(os.path.join(self.store, "cyankiwi", "AWQ-Model"))
+        open(os.path.join(self.store, "cyankiwi", "AWQ-Model", "m.safetensors"),
+             "wb").write(b"0" * 10)
+        self.hub = os.path.join(self.root, "hub")
+        # duplicate of the store repo
+        dup = os.path.join(self.hub, "models--cyankiwi--AWQ-Model", "blobs")
+        os.makedirs(dup)
+        open(os.path.join(dup, "blob1"), "wb").write(b"0" * 100)
+        # other tool's repo (not in store)
+        oth = os.path.join(self.hub, "models--black-forest-labs--FLUX.1-dev", "blobs")
+        os.makedirs(oth)
+        open(os.path.join(oth, "blob1"), "wb").write(b"0" * 200)
+        # incomplete blob
+        self.inc = os.path.join(self.hub, "models--black-forest-labs--FLUX.1-dev",
+                                "blobs", "z.incomplete")
+        open(self.inc, "wb").write(b"0" * 5)
+
+    def test_cache_tiers(self):
+        keys = A.store_repo_keys([self.store])
+        self.assertIn("cyankiwi/AWQ-Model", keys)
+        cands = A.cache_candidates(self.hub, keys)
+        by_cat = {}
+        for c in cands:
+            by_cat.setdefault(c.category, []).append(c)
+        self.assertEqual(len(by_cat[A.CAT_CACHE_INCOMPLETE]), 1)
+        dup = by_cat[A.CAT_CACHE_DUP]
+        self.assertEqual(len(dup), 1)
+        self.assertTrue(dup[0].delete_unit.endswith("models--cyankiwi--AWQ-Model"))
+        oth = by_cat[A.CAT_CACHE_OTHER]
+        self.assertEqual(len(oth), 1)
+        self.assertTrue(oth[0].delete_unit.endswith("models--black-forest-labs--FLUX.1-dev"))
+
+
 if __name__ == "__main__":
     unittest.main()
