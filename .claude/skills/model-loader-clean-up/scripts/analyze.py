@@ -11,6 +11,7 @@ import os
 import re
 import glob
 import json
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 
 # ---- categories -----------------------------------------------------------
@@ -122,7 +123,7 @@ def protected_closure(profiles: list[dict]):
     return files, dirs
 
 
-def is_protected(path: str, files: set[str], dirs: set[str]) -> bool:
+def is_protected(path: str, files: AbstractSet[str], dirs: AbstractSet[str]) -> bool:
     rp = os.path.realpath(path)
     if path in files or rp in files:
         return True
@@ -130,6 +131,22 @@ def is_protected(path: str, files: set[str], dirs: set[str]) -> bool:
         if rp == d or rp.startswith(d + os.sep) or path == d or path.startswith(d + os.sep):
             return True
     return False
+
+
+def protected_repo_keys(profiles: list[dict]) -> set[str]:
+    """`org/repo` keys for profile `model` values that are HF repo refs (not absolute paths).
+
+    Such models are served from the HF cache (`models--org--repo`), so they must
+    never be proposed for deletion from the cache.
+    """
+    keys = set()
+    for prof in profiles:
+        model = prof.get("model")
+        if isinstance(model, str) and model and not model.startswith("/"):
+            parts = model.strip("/").split("/")
+            if len(parts) >= 2:
+                keys.add(f"{parts[0]}/{parts[1]}")
+    return keys
 
 
 def list_repo_dirs(search_paths: list[str]) -> list[str]:
@@ -222,13 +239,15 @@ def _inc(path: str, reason: str) -> Candidate:
                      category=CAT_INCOMPLETE, reason=reason, delete_unit=path)
 
 
-def incomplete_candidates(search_paths: list[str], download_states: list[dict]) -> list[Candidate]:
+def incomplete_candidates(search_paths: list[str], download_states: list[dict],
+                          files: AbstractSet[str] = frozenset(),
+                          dirs: AbstractSet[str] = frozenset()) -> list[Candidate]:
     cands: list[Candidate] = []
     seen: set[str] = set()
     groups: dict[tuple, list] = {}  # (dir, base) -> [present_parts:set, total:int]
 
     def emit(path, reason):
-        if path not in seen and os.path.exists(path):
+        if path not in seen and os.path.exists(path) and not is_protected(path, files, dirs):
             seen.add(path)
             cands.append(_inc(path, reason))
 
@@ -260,6 +279,12 @@ def incomplete_candidates(search_paths: list[str], download_states: list[dict]) 
 
     for (d, b), (have, total) in groups.items():
         if len(have) != total:
+            group_protected = any(
+                is_protected(os.path.join(d, f"{b}-{n:05d}-of-{total:05d}.gguf"), files, dirs)
+                for n in have
+            )
+            if group_protected:
+                continue
             for n in sorted(have):
                 fp = os.path.join(d, f"{b}-{n:05d}-of-{total:05d}.gguf")
                 emit(fp, f"incomplete multipart group: have {len(have)}/{total} shards")
@@ -404,7 +429,8 @@ class Report:
         for cat in self._ORDER:
             if t.get(cat):
                 lines.append(f"  {cat:<22} {human(t[cat])}")
-        lines.append(f"  {'GRAND TOTAL':<22} {human(t['grand_total'])}")
+        lines.append(f"  {'GRAND TOTAL (upper bound)':<26} {human(t['grand_total'])}")
+        lines.append("  (upper bound: a file inside a flagged repo is counted in both)")
         lines.append(f"  blocked (skipped): {t['blocked']}")
         return "\n".join(lines)
 
@@ -413,15 +439,16 @@ def analyze(profiles_dir, search_paths, cache_hub_dir,
             downloads_dir, instances_path, include_cache=True) -> Report:
     profiles = load_profiles(profiles_dir)
     files, dirs = protected_closure(profiles)
+    repo_keys = protected_repo_keys(profiles)
     repos = list_repo_dirs(search_paths)
     used, orphan = classify_repos(repos, files, dirs)
     states = load_download_states(downloads_dir)
     cands = []
     cands += orphan_candidates(orphan)
     cands += sibling_candidates(used, files, dirs)
-    cands += incomplete_candidates(search_paths, states)
+    cands += incomplete_candidates(search_paths, states, files, dirs)
     if include_cache:
-        cands += cache_candidates(cache_hub_dir, store_repo_keys(search_paths))
+        cands += cache_candidates(cache_hub_dir, store_repo_keys(search_paths), repo_keys)
     apply_blocked(cands, running_instances(instances_path), profiles,
                   active_download_paths(states))
     return Report(candidates=cands)
@@ -459,7 +486,8 @@ def main(argv=None) -> int:
     return 0
 
 
-def cache_candidates(cache_hub_dir: str, store_keys: set[str]) -> list[Candidate]:
+def cache_candidates(cache_hub_dir: str, store_keys: AbstractSet[str],
+                     protected_keys: AbstractSet[str] = frozenset()) -> list[Candidate]:
     cands: list[Candidate] = []
     if not os.path.isdir(cache_hub_dir):
         return cands
@@ -481,6 +509,8 @@ def cache_candidates(cache_hub_dir: str, store_keys: set[str]) -> list[Candidate
             continue
         org, _, repo = entry[len("models--"):].partition("--")
         key = f"{org}/{repo}"
+        if key in protected_keys:
+            continue  # referenced by a profile (HF repo ref) — in use, never a candidate
         size = real_size(repo_dir)
         mt = safe_mtime(repo_dir)
         if key in store_keys:

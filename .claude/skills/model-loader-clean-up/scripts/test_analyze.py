@@ -272,5 +272,77 @@ class OrchestrationTest(unittest.TestCase):
         self.assertIsInstance(rep.to_table(), str)
 
 
+class ProtectionGapTest(unittest.TestCase):
+    def test_hf_repo_ref_model_protects_cache_repo(self):
+        root = tempfile.mkdtemp()
+        profiles = os.path.join(root, "profiles")
+        os.makedirs(profiles)
+        hub = os.path.join(root, "hub")
+        # referenced HF-repo-ref model -> cache repo must NOT be proposed
+        ref_repo = os.path.join(hub, "models--unsloth--Qwen3.6-27B-GGUF", "blobs")
+        os.makedirs(ref_repo)
+        open(os.path.join(ref_repo, "blob1"), "wb").write(b"0" * 100)
+        # an unreferenced cache repo -> still proposed (cache-other)
+        oth = os.path.join(hub, "models--other--Thing", "blobs")
+        os.makedirs(oth)
+        open(os.path.join(oth, "blob1"), "wb").write(b"0" * 50)
+        _write_profile(profiles, "p1", model="unsloth/Qwen3.6-27B-GGUF")
+        profs = A.load_profiles(profiles)
+        keys = A.protected_repo_keys(profs)
+        self.assertIn("unsloth/Qwen3.6-27B-GGUF", keys)
+        cands = A.cache_candidates(hub, set(), keys)
+        units = {c.delete_unit for c in cands}
+        self.assertFalse(any("models--unsloth--Qwen3.6-27B-GGUF" in u for u in units))
+        self.assertTrue(any("models--other--Thing" in u for u in units))
+
+    def test_incomplete_skips_referenced_corrupt_gguf(self):
+        root = tempfile.mkdtemp()
+        profiles = os.path.join(root, "profiles")
+        store = os.path.join(root, "store")
+        os.makedirs(profiles)
+        repo = os.path.join(store, "pub", "GGUF")
+        os.makedirs(repo)
+        referenced = os.path.join(repo, "ref-bad.gguf")
+        open(referenced, "wb").write(b"NOPE" + b"0" * 10)  # bad magic, but referenced
+        unref = os.path.join(repo, "unref-bad.gguf")
+        open(unref, "wb").write(b"NOPE" + b"0" * 10)        # bad magic, unreferenced
+        _write_profile(profiles, "p1", model=referenced)
+        files, dirs = A.protected_closure(A.load_profiles(profiles))
+        cands = A.incomplete_candidates([store], [], files, dirs)
+        paths = {c.path for c in cands}
+        self.assertNotIn(referenced, paths)   # referenced corrupt -> protected
+        self.assertIn(unref, paths)           # unreferenced corrupt -> flagged
+
+    def test_incomplete_skips_referenced_multipart_missing_shard(self):
+        root = tempfile.mkdtemp()
+        profiles = os.path.join(root, "profiles")
+        store = os.path.join(root, "store")
+        os.makedirs(profiles)
+        repo = os.path.join(store, "pub", "GGUF")
+        os.makedirs(repo)
+        # group of 3, only parts 1 and 2 present (shard 3 missing); part 1 referenced
+        part1 = os.path.join(repo, "big-00001-of-00003.gguf")
+        part2 = os.path.join(repo, "big-00002-of-00003.gguf")
+        open(part1, "wb").write(b"GGUF" + b"0" * 10)
+        open(part2, "wb").write(b"0" * 10)
+        _write_profile(profiles, "p1", model=part1)
+        files, dirs = A.protected_closure(A.load_profiles(profiles))
+        cands = A.incomplete_candidates([store], [], files, dirs)
+        paths = {c.path for c in cands}
+        self.assertNotIn(part1, paths)
+        self.assertNotIn(part2, paths)  # whole group protected because part 1 referenced
+
+    def test_complete_multipart_not_flagged_and_part2_magic_ok(self):
+        root = tempfile.mkdtemp()
+        store = os.path.join(root, "store")
+        repo = os.path.join(store, "pub", "GGUF")
+        os.makedirs(repo)
+        # complete group of 2; part 2 legitimately lacks GGUF magic
+        open(os.path.join(repo, "ok-00001-of-00002.gguf"), "wb").write(b"GGUF" + b"0" * 10)
+        open(os.path.join(repo, "ok-00002-of-00002.gguf"), "wb").write(b"0" * 10)
+        cands = A.incomplete_candidates([store], [])
+        self.assertEqual([c.path for c in cands], [])  # nothing flagged
+
+
 if __name__ == "__main__":
     unittest.main()

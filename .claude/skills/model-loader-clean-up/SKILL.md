@@ -1,6 +1,6 @@
 ---
 name: model-loader-clean-up
-description: Use when the operator wants to reclaim disk space from the model-loader model store or Hugging Face cache by removing incomplete/corrupt or unused-by-any-profile model artifacts. Triggers — "clean up models", "free disk space", "remove unused models", "delete old/incomplete downloads", "limpar modelos", "recuperar espaço em disco", "modelos não usados", or any request to audit which downloaded weights no profile still references. Cross-references every profile against the store + HF cache, reports reclaimable space by category, and deletes only what the operator confirms item by item.
+description: Use when the operator wants to reclaim disk space from the model-loader model store or Hugging Face cache by removing incomplete/corrupt or unused-by-any-profile model artifacts, including non-English requests to clean up models. Triggers — "clean up models", "free disk space", "remove unused models", "delete old/incomplete downloads", or any request to audit which downloaded weights no profile still references. Cross-references every profile against the store + HF cache, reports reclaimable space by category, and deletes only what the operator confirms item by item.
 ---
 
 # model-loader Clean-Up
@@ -16,6 +16,7 @@ python3 "$SKILL_DIR/scripts/analyze.py" --json /tmp/cleanup-manifest.json
 ```
 
 (`$SKILL_DIR` is this skill's directory. Add `--no-cache` to skip the shared HF cache pass.)
+Pass `--profiles`, `--cache`, `--downloads`, or `--instances` to point at non-default locations.
 
 The report has these categories (each line shows real reclaimable bytes + the exact delete unit):
 
@@ -33,7 +34,9 @@ Items marked `[BLOCKED]` (active download or running instance) are excluded — 
 ## Step 2 — Review with the operator, item by item
 
 Read the manifest (`/tmp/cleanup-manifest.json`). Present candidates grouped by category, largest
-first, with size and reason. Default is **keep**. Treat each category by risk:
+first, with size and reason. Default is **keep**.
+Skip any candidate whose `blocked` field is true (shown as `[BLOCKED]` in the table) — never present or delete it.
+Treat each category by risk:
 
 - `store-orphan-repo` / `store-incomplete` / `cache-incomplete` / `cache-duplicate` — low risk, but
   still confirm each (an "orphan" may be kept intentionally for a planned profile — e.g. a draft
