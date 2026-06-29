@@ -176,3 +176,38 @@ def orphan_candidates(orphan_repos: list[str]) -> list[Candidate]:
             delete_unit=rp,
         ))
     return cands
+
+
+def sibling_candidates(used_repos: list[str], files: set[str], dirs: set[str]) -> list[Candidate]:
+    cands = []
+    for rp in used_repos:
+        if os.path.realpath(rp) in dirs:
+            continue  # directory-model: never prune inside
+        ggufs = []
+        for root, _dirs, fnames in os.walk(rp, followlinks=False):
+            for fn in fnames:
+                if not fn.endswith(".gguf"):
+                    continue
+                fp = os.path.join(root, fn)
+                if os.path.islink(fp):
+                    continue
+                ggufs.append(fp)
+        protected_groups = set()
+        for fp in ggufs:
+            if is_protected(fp, files, dirs):
+                g = multipart_group(os.path.basename(fp))
+                if g:
+                    protected_groups.add((os.path.dirname(fp), g[0]))
+        for fp in ggufs:
+            if is_protected(fp, files, dirs):
+                continue
+            g = multipart_group(os.path.basename(fp))
+            if g and (os.path.dirname(fp), g[0]) in protected_groups:
+                continue
+            cands.append(Candidate(
+                path=fp, size=real_size(fp), mtime=safe_mtime(fp),
+                category=CAT_SIBLING,
+                reason="unused GGUF inside a used repo",
+                delete_unit=fp,
+            ))
+    return cands

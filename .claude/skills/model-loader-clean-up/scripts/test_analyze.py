@@ -118,5 +118,40 @@ class OrphanTest(unittest.TestCase):
         self.assertEqual(cands[0].size, 204)  # 4 + 200
 
 
+class SiblingTest(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.profiles = os.path.join(self.root, "profiles")
+        self.store = os.path.join(self.root, "store")
+        os.makedirs(self.profiles)
+        repo = os.path.join(self.store, "pub", "GGUF")
+        os.makedirs(os.path.join(repo, "MTP"))
+        self.repo = repo
+        self.used = os.path.join(repo, "m-Q4.gguf")
+        open(self.used, "wb").write(b"GGUF" + b"0" * 100)
+        # referenced draft via symlink into MTP/
+        open(os.path.join(repo, "MTP", "draft.gguf"), "wb").write(b"GGUF" + b"0" * 30)
+        self.draft_link = os.path.join(repo, "draft.gguf")
+        os.symlink(os.path.join("MTP", "draft.gguf"), self.draft_link)
+        # an UNUSED sibling quant
+        self.unused = os.path.join(repo, "m-Q8.gguf")
+        open(self.unused, "wb").write(b"GGUF" + b"0" * 500)
+        # a referenced multipart group (part 1 referenced -> both parts protected)
+        open(os.path.join(repo, "big-00001-of-00002.gguf"), "wb").write(b"GGUF" + b"a" * 10)
+        open(os.path.join(repo, "big-00002-of-00002.gguf"), "wb").write(b"b" * 10)
+        self.part1 = os.path.join(repo, "big-00001-of-00002.gguf")
+        _write_profile(self.profiles, "p1", model=self.used,
+                       args={"spec-draft-model": self.draft_link})
+        _write_profile(self.profiles, "p2", model=self.part1)
+
+    def test_only_unused_sibling_flagged(self):
+        files, dirs = A.protected_closure(A.load_profiles(self.profiles))
+        cands = A.sibling_candidates([self.repo], files, dirs)
+        paths = {c.path for c in cands}
+        self.assertEqual(paths, {self.unused})
+        self.assertEqual(cands[0].category, A.CAT_SIBLING)
+        self.assertEqual(cands[0].size, 504)
+
+
 if __name__ == "__main__":
     unittest.main()
