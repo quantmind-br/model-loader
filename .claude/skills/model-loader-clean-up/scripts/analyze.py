@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import os
 import re
+import glob
+import json
 from dataclasses import dataclass
 
 # ---- categories -----------------------------------------------------------
@@ -78,3 +80,53 @@ def multipart_group(name: str):
     if not m:
         return None
     return (m.group(1), int(m.group(2)), int(m.group(3)))
+
+
+def load_profiles(profiles_dir: str) -> list[dict]:
+    profs = []
+    for f in sorted(glob.glob(os.path.join(profiles_dir, "*.json"))):
+        try:
+            with open(f) as fh:
+                profs.append(json.load(fh))
+        except (OSError, json.JSONDecodeError):
+            # corrupt profile: ignore for protection purposes (reported elsewhere)
+            continue
+    return profs
+
+
+_PATH_ARG_KEYS = ("mmproj", "spec-draft-model", "chat-template-file")
+
+
+def protected_closure(profiles: list[dict]):
+    files: set[str] = set()
+    dirs: set[str] = set()
+
+    def add_file(p):
+        if isinstance(p, str) and p.startswith("/"):
+            files.add(p)
+            files.add(os.path.realpath(p))
+
+    for prof in profiles:
+        model = prof.get("model")
+        if isinstance(model, str) and model.startswith("/"):
+            if os.path.isdir(model):
+                dirs.add(os.path.realpath(model))
+            else:
+                add_file(model)
+        args = prof.get("args") or {}
+        for key in _PATH_ARG_KEYS:
+            add_file(args.get(key))
+        for ea in prof.get("extraArgs") or []:
+            if isinstance(ea, str) and ea.startswith("/"):
+                add_file(ea)
+    return files, dirs
+
+
+def is_protected(path: str, files: set[str], dirs: set[str]) -> bool:
+    rp = os.path.realpath(path)
+    if path in files or rp in files:
+        return True
+    for d in dirs:
+        if rp == d or rp.startswith(d + os.sep) or path == d or path.startswith(d + os.sep):
+            return True
+    return False

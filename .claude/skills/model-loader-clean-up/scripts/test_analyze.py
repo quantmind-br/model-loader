@@ -1,4 +1,5 @@
 import os, tempfile, unittest
+import json
 import analyze as A
 
 
@@ -34,6 +35,59 @@ class HelpersTest(unittest.TestCase):
                         category=A.CAT_ORPHAN, reason="r", delete_unit="/p")
         self.assertFalse(c.blocked)
         self.assertEqual(c.blocked_by, "")
+
+
+def _write_profile(d, pid, **kw):
+    obj = {"schemaVersion": 3, "id": pid, "model": kw.get("model", "")}
+    if "args" in kw:
+        obj["args"] = kw["args"]
+    if "extraArgs" in kw:
+        obj["extraArgs"] = kw["extraArgs"]
+    with open(os.path.join(d, pid + ".json"), "w") as f:
+        json.dump(obj, f)
+
+
+class ClosureTest(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.profiles = os.path.join(self.root, "profiles")
+        self.store = os.path.join(self.root, "store")
+        os.makedirs(self.profiles)
+        # repo with a real model + a draft symlink into MTP/
+        repo = os.path.join(self.store, "unsloth", "gemma-GGUF")
+        os.makedirs(os.path.join(repo, "MTP"))
+        self.model = os.path.join(repo, "model-Q4.gguf")
+        open(self.model, "wb").write(b"GGUF" + b"0" * 10)
+        real_draft = os.path.join(repo, "MTP", "draft-Q8-MTP.gguf")
+        open(real_draft, "wb").write(b"GGUF" + b"1" * 10)
+        self.draft_link = os.path.join(repo, "draft-Q8-MTP.gguf")
+        os.symlink(os.path.join("MTP", "draft-Q8-MTP.gguf"), self.draft_link)
+        self.real_draft = real_draft
+        # a directory-model (safetensors)
+        self.dirmodel = os.path.join(self.store, "cyankiwi", "AWQ")
+        os.makedirs(self.dirmodel)
+        open(os.path.join(self.dirmodel, "model.safetensors"), "wb").write(b"z" * 10)
+        _write_profile(self.profiles, "p1", model=self.model,
+                       args={"spec-draft-model": self.draft_link})
+        _write_profile(self.profiles, "p2", model=self.dirmodel)
+
+    def test_load_profiles_reads_all(self):
+        profs = A.load_profiles(self.profiles)
+        self.assertEqual({p["id"] for p in profs}, {"p1", "p2"})
+
+    def test_closure_protects_symlink_and_target_and_dir(self):
+        files, dirs = A.protected_closure(A.load_profiles(self.profiles))
+        # the model file, the draft symlink, and its realpath target are protected
+        self.assertTrue(A.is_protected(self.model, files, dirs))
+        self.assertTrue(A.is_protected(self.draft_link, files, dirs))
+        self.assertTrue(A.is_protected(self.real_draft, files, dirs))
+        # the safetensors dir and a file inside it are protected
+        self.assertTrue(A.is_protected(self.dirmodel, files, dirs))
+        self.assertTrue(A.is_protected(
+            os.path.join(self.dirmodel, "model.safetensors"), files, dirs))
+        # an unrelated path is NOT protected
+        self.assertFalse(A.is_protected(
+            os.path.join(self.store, "other", "x.gguf"), files, dirs))
 
 
 if __name__ == "__main__":
