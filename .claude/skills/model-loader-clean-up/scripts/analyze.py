@@ -35,10 +35,11 @@ class Candidate:
 # ---- helpers --------------------------------------------------------------
 def human(n: int) -> str:
     f = float(n)
-    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
-        if f < 1024 or unit == "TiB":
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if f < 1024:
             return f"{f:.1f}{unit}"
         f /= 1024
+    return f"{f:.1f}TiB"
 
 
 def safe_mtime(path: str) -> float:
