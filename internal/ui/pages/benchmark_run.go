@@ -87,12 +87,12 @@ func (p BenchmarkPage) handleRunDone(msg benchRunDoneMsg) (tea.Model, tea.Cmd) {
 		// that died before producing anything (launch failure) are not saved.
 		if len(msg.run.Problems) == 0 {
 			p, _ = p.withFlashError("run failed: " + msg.err.Error())
-			p.view = bvList
+			p.view = bvDashboard
 			return p, nil
 		}
 		if err := p.bstore.Save(msg.run); err != nil {
 			p, _ = p.withFlashError("save partial run: " + err.Error())
-			p.view = bvList
+			p.view = bvDashboard
 			return p, p.loadRunsCmd()
 		}
 		run := msg.run
@@ -103,7 +103,7 @@ func (p BenchmarkPage) handleRunDone(msg benchRunDoneMsg) (tea.Model, tea.Cmd) {
 	}
 	if err := p.bstore.Save(msg.run); err != nil {
 		p, _ = p.withFlashError("save run: " + err.Error())
-		p.view = bvList
+		p.view = bvDashboard
 		return p, p.loadRunsCmd()
 	}
 	run := msg.run

@@ -62,11 +62,12 @@ func (p BenchmarkPage) openCompare() (tea.Model, tea.Cmd) {
 
 // openHistory shows every run of the selected run's profile over time.
 func (p BenchmarkPage) openHistory() (tea.Model, tea.Cmd) {
-	if p.runCursor >= len(p.runs) {
+	seed, ok := p.selectedDashboardRun()
+	if !ok {
 		p, _ = p.withFlashError("select a run first")
 		return p, nil
 	}
-	target := p.runs[p.runCursor].ProfileID
+	target := seed.ProfileID
 	hist := make([]benchmark.Run, 0)
 	for _, r := range p.runs {
 		if r.ProfileID == target {

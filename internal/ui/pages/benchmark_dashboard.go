@@ -115,6 +115,37 @@ func (p BenchmarkPage) modesWithRuns() []benchmark.Mode {
 	return out
 }
 
+// selectedDashboardRun returns the Latest run of the leaderboard row under the
+// dashCursor for the focused mode, or ok=false when the cursor is out of range
+// (empty leaderboard). Used by the dashboard's [enter] to open run detail.
+func (p BenchmarkPage) selectedDashboardRun() (benchmark.Run, bool) {
+	rows := dashboardRows(p.runs, p.focusedDashboardMode())
+	if p.dashCursor < 0 || p.dashCursor >= len(rows) {
+		return benchmark.Run{}, false
+	}
+	return rows[p.dashCursor].Latest, true
+}
+
+// cycleFocusMode returns the mode dir steps away (wrapping) from the currently
+// focused mode within the set of modes that have complete runs. With no such
+// modes it leaves the focus unchanged.
+func (p BenchmarkPage) cycleFocusMode(dir int) benchmark.Mode {
+	modes := p.modesWithRuns()
+	if len(modes) == 0 {
+		return p.focusMode
+	}
+	current := p.focusedDashboardMode()
+	idx := 0
+	for i, m := range modes {
+		if m == current {
+			idx = i
+			break
+		}
+	}
+	idx = (idx + dir + len(modes)) % len(modes)
+	return modes[idx]
+}
+
 // viewDashboard renders the leaderboard-first dashboard: a summary strip, a
 // mode-focus bar, the ranked leaderboard for the focused mode, and an insight
 // panel for the selected row. It reads only p.runs (never p.runner), so it

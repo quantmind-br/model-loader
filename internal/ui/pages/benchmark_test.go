@@ -52,7 +52,9 @@ func TestBenchmarkPage_ProfileFilterAcceptsSpaceAndBurst(t *testing.T) {
 func TestBenchmarkPage_DeleteRunRequiresConfirm(t *testing.T) {
 	bs := &fakeBStore{}
 	page := NewBenchmarkPage(nil, bs, nil, t.TempDir())
-	page.runs = []benchmark.Run{{ID: "run-1"}}
+	page.focusMode = benchmark.ModeJudge
+	page.runs = []benchmark.Run{{ID: "run-1", ProfileID: "p1", Mode: benchmark.ModeJudge,
+		Aggregate: benchmark.Aggregate{SolveRate: 0.5}}}
 
 	m, _ := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
 	page = m.(BenchmarkPage)
@@ -168,7 +170,7 @@ func TestViewModePickShowsCategoryHeaders(t *testing.T) {
 
 func TestBenchmarkSpinner_StopsOutsideRunning(t *testing.T) {
 	page := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
-	page.view = bvList
+	page.view = bvDashboard
 	_, cmd := page.Update(spinner.TickMsg{})
 	if cmd != nil {
 		t.Fatal("spinner tick outside bvRunning must not re-arm")
@@ -203,8 +205,8 @@ func TestHandleRunDone_DiscardsRunWithoutProblems(t *testing.T) {
 	if len(bs.saved) != 0 {
 		t.Fatalf("launch failure (0 problems) must not be saved; saved=%v", bs.saved)
 	}
-	if page.view != bvList {
-		t.Fatal("launch failure should return to the list view")
+	if page.view != bvDashboard {
+		t.Fatal("launch failure should return to the dashboard view")
 	}
 }
 
@@ -274,29 +276,64 @@ func TestRunRow_FlagsPartialRuns(t *testing.T) {
 	}
 }
 
-// UIUX-022: g/G (and home/end) jump to the top/bottom of the run list.
-func TestBenchmarkPage_RunListJumpKeys(t *testing.T) {
+// UIUX-022: g/G (and home/end) jump to the top/bottom of the dashboard
+// leaderboard. The leaderboard collapses to one row per profile, so each test
+// run uses a distinct profile to get distinct rows.
+func TestBenchmarkPage_DashboardJumpKeys(t *testing.T) {
 	page := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
-	page.runs = []benchmark.Run{{ID: "r1"}, {ID: "r2"}, {ID: "r3"}}
+	page.focusMode = benchmark.ModeJudge
+	page.runs = []benchmark.Run{
+		{ID: "r1", ProfileID: "p1", ProfileName: "P1", Mode: benchmark.ModeJudge,
+			Aggregate: benchmark.Aggregate{SolveRate: 0.1}},
+		{ID: "r2", ProfileID: "p2", ProfileName: "P2", Mode: benchmark.ModeJudge,
+			Aggregate: benchmark.Aggregate{SolveRate: 0.2}},
+		{ID: "r3", ProfileID: "p3", ProfileName: "P3", Mode: benchmark.ModeJudge,
+			Aggregate: benchmark.Aggregate{SolveRate: 0.3}},
+	}
 
 	m, _ := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
 	page = m.(BenchmarkPage)
-	if page.runCursor != 2 {
-		t.Fatalf("runCursor after G = %d, want 2", page.runCursor)
+	if page.dashCursor != 2 {
+		t.Fatalf("dashCursor after G = %d, want 2", page.dashCursor)
 	}
 
 	m, _ = page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
 	page = m.(BenchmarkPage)
-	if page.runCursor != 0 {
-		t.Fatalf("runCursor after g = %d, want 0", page.runCursor)
+	if page.dashCursor != 0 {
+		t.Fatalf("dashCursor after g = %d, want 0", page.dashCursor)
 	}
 
-	// G on an empty list must not underflow the cursor.
+	// G on an empty dashboard must not underflow the cursor.
 	empty := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
 	m, _ = empty.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
 	empty = m.(BenchmarkPage)
-	if empty.runCursor != 0 {
-		t.Fatalf("runCursor after G on empty list = %d, want 0", empty.runCursor)
+	if empty.dashCursor != 0 {
+		t.Fatalf("dashCursor after G on empty dashboard = %d, want 0", empty.dashCursor)
+	}
+}
+
+// Right/left cycle the focused mode across modes that have runs, and enter on
+// the dashboard opens the selected leaderboard row's run detail.
+func TestBenchmarkPage_DashboardModeCycleAndEnter(t *testing.T) {
+	page := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
+	page.focusMode = benchmark.ModeJudge
+	page.runs = []benchmark.Run{
+		{ID: "judge", ProfileID: "p1", ProfileName: "Judge", Mode: benchmark.ModeJudge,
+			Aggregate: benchmark.Aggregate{SolveRate: 0.5}},
+		{ID: "mmlu", ProfileID: "p2", ProfileName: "MMLU", Mode: benchmark.ModeMMLUBench,
+			Aggregate: benchmark.Aggregate{SolveRate: 0.7}},
+	}
+
+	m, _ := page.Update(tea.KeyMsg{Type: tea.KeyRight})
+	page = m.(BenchmarkPage)
+	if page.focusMode != benchmark.ModeMMLUBench {
+		t.Fatalf("focusMode after right = %q, want mmlu-bench", page.focusMode)
+	}
+
+	m, _ = page.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	page = m.(BenchmarkPage)
+	if page.view != bvRunDetail || page.detail == nil || page.detail.ID != "mmlu" {
+		t.Fatalf("enter should open mmlu detail; view=%v detail=%+v", page.view, page.detail)
 	}
 }
 

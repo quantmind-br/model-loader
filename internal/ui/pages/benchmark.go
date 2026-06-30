@@ -23,7 +23,7 @@ import (
 type benchView int
 
 const (
-	bvList        benchView = iota // runs list (+ selected run summary)
+	bvDashboard   benchView = iota // leaderboard dashboard (+ selected run insight)
 	bvProfilePick                  // choose a profile to benchmark
 	bvModePick                     // choose scoring mode
 	bvRunning                      // run in progress
@@ -96,7 +96,7 @@ func NewBenchmarkPage(store profilestore.Store, bstore benchmarkstore.Store, run
 		bstore:    bstore,
 		runner:    runner,
 		exportDir: exportDir,
-		view:      bvList,
+		view:      bvDashboard,
 		flash:     components.NewFlash("benchmark"),
 		spinner:   components.NewLoadingSpinner(),
 	}
@@ -114,7 +114,7 @@ func (p BenchmarkPage) Reload() tea.Cmd { return p.loadRunsCmd() }
 // IsCapturingInput claims global keys whenever a modal-like view is active or
 // the user is typing a filter, so [1-5]/[q]/[tab] don't get stolen mid-flow.
 func (p BenchmarkPage) IsCapturingInput() bool {
-	return p.deleteConfirm.Active() || p.view != bvList || p.filterMode
+	return p.deleteConfirm.Active() || p.view != bvDashboard || p.filterMode
 }
 
 // StatusMessage implements ui.StatusMessageProvider: the page's flash also
@@ -156,7 +156,7 @@ func (p BenchmarkPage) Hints() string {
 	case bvHistory:
 		return "[esc] back"
 	default:
-		hints := "[b] run  [enter] details  [c] compare  [E] export  [X] del  [R] reload"
+		hints := "[b] run  [←→] mode  [enter] details  [c] compare  [E] export  [X] del  [R] reload"
 		if len(p.runs) > 0 {
 			hints += "  [h] history"
 		}
@@ -180,7 +180,7 @@ func (p BenchmarkPage) View() string {
 	case bvHistory:
 		body = p.viewHistory()
 	default:
-		body = p.viewList()
+		body = p.viewDashboard()
 	}
 	if fv := p.flash.View(); fv != "" {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, fv)

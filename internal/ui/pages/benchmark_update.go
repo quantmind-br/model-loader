@@ -31,6 +31,11 @@ func (p BenchmarkPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if p.runCursor >= len(p.runs) {
 				p.runCursor = 0
 			}
+			// Keep the dashboard cursor in range after a reload: a delete or
+			// a focus-mode change can shrink the leaderboard under it.
+			if rows := dashboardRows(p.runs, p.focusedDashboardMode()); p.dashCursor >= len(rows) {
+				p.dashCursor = 0
+			}
 		}
 		return p, nil
 	case benchProgressMsg:
@@ -84,7 +89,7 @@ func (p BenchmarkPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p, nil
 	case bvRunDetail, bvCompare, bvHistory:
 		if msg.String() == "esc" {
-			p.view = bvList
+			p.view = bvDashboard
 			return p, nil
 		}
 		if msg.String() == "E" && p.view == bvRunDetail && p.detail != nil {
@@ -92,31 +97,37 @@ func (p BenchmarkPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return p, nil
 	default:
-		return p.keyList(msg)
+		return p.keyDashboard(msg)
 	}
 }
 
-func (p BenchmarkPage) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (p BenchmarkPage) keyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	rows := dashboardRows(p.runs, p.focusedDashboardMode())
 	switch msg.String() {
 	case "up", "k":
-		if p.runCursor > 0 {
-			p.runCursor--
+		if p.dashCursor > 0 {
+			p.dashCursor--
 		}
 	case "down", "j":
-		if p.runCursor < len(p.runs)-1 {
-			p.runCursor++
+		if p.dashCursor < len(rows)-1 {
+			p.dashCursor++
 		}
 	case "g", "home":
-		p.runCursor = 0
+		p.dashCursor = 0
 	case "G", "end":
-		if len(p.runs) > 0 {
-			p.runCursor = len(p.runs) - 1
+		if len(rows) > 0 {
+			p.dashCursor = len(rows) - 1
 		}
+	case "left", "[":
+		p.focusMode = p.cycleFocusMode(-1)
+		p.dashCursor = 0
+	case "right", "]":
+		p.focusMode = p.cycleFocusMode(1)
+		p.dashCursor = 0
 	case "b":
 		return p.openProfilePick()
 	case "enter":
-		if p.runCursor < len(p.runs) {
-			r := p.runs[p.runCursor]
+		if r, ok := p.selectedDashboardRun(); ok {
 			p.detail = &r
 			p.view = bvRunDetail
 		}
@@ -168,7 +179,7 @@ func (p BenchmarkPage) keyProfilePick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch msg.String() {
 	case "esc":
-		p.view = bvList
+		p.view = bvDashboard
 	case "/":
 		p.filterMode = true
 	case "up", "k":
@@ -260,10 +271,11 @@ func (p BenchmarkPage) keyModePick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // onYes callback emits benchmarkDeleteConfirmedMsg so the actual store delete
 // runs in Update via performDelete (DESTRUCT-01).
 func (p BenchmarkPage) askDeleteSelected() (tea.Model, tea.Cmd) {
-	if p.runCursor >= len(p.runs) {
+	r, ok := p.selectedDashboardRun()
+	if !ok {
 		return p, nil
 	}
-	id := p.runs[p.runCursor].ID
+	id := r.ID
 	var cmd tea.Cmd
 	p.deleteConfirm, cmd = setupConfirm("Delete benchmark run "+id+"?", "Delete", "Cancel",
 		func() tea.Cmd { return func() tea.Msg { return benchmarkDeleteConfirmedMsg{id: id} } })
@@ -280,12 +292,13 @@ func (p BenchmarkPage) performDelete(id string) (tea.Model, tea.Cmd) {
 	return p, tea.Batch(fc, p.loadRunsCmd())
 }
 
-// exportSelected exports the run highlighted in the list.
+// exportSelected exports the run highlighted on the dashboard leaderboard.
 func (p BenchmarkPage) exportSelected() (tea.Model, tea.Cmd) {
-	if p.runCursor >= len(p.runs) {
+	r, ok := p.selectedDashboardRun()
+	if !ok {
 		return p, nil
 	}
-	return p.exportRunValue(p.runs[p.runCursor])
+	return p.exportRunValue(r)
 }
 
 // exportRunValue writes a run to the exports dir and flashes the result.
