@@ -118,6 +118,49 @@ func TestCompareVisual_RateBarsAreProportional(t *testing.T) {
 	}
 }
 
+// TestCompareVisual_LowerBetterZeroNotBest is a regression: a run with a 0
+// TTFT/VRAM (metric not collected) must not be ranked best (carrying ▲) nor
+// rendered with a full bar when the user cycles to a lower-is-better metric.
+func TestCompareVisual_LowerBetterZeroNotBest(t *testing.T) {
+	page := BenchmarkPage{
+		compareMetric: 2, // TTFT (lower is better)
+		compareSections: []benchCompareSection{{
+			Mode: benchmark.ModeJudge,
+			Runs: []benchmark.Run{
+				{ProfileID: "real", ProfileName: "Real", Mode: benchmark.ModeJudge,
+					Aggregate: benchmark.Aggregate{SolveRate: 0.5, AvgTTFTms: 150}},
+				{ProfileID: "nodata", ProfileName: "NoData", Mode: benchmark.ModeJudge,
+					Aggregate: benchmark.Aggregate{SolveRate: 0.5, AvgTTFTms: 0}},
+			},
+		}},
+	}
+	out := page.viewCompare()
+	lines := strings.Split(out, "\n")
+	var dataRows []string
+	for _, l := range lines {
+		if strings.Contains(l, "Real") || strings.Contains(l, "NoData") {
+			dataRows = append(dataRows, l)
+		}
+	}
+	if len(dataRows) != 2 {
+		t.Fatalf("expected 2 data rows, got %d:\n%s", len(dataRows), out)
+	}
+	// The run with real TTFT data must rank first (data-less rows sink).
+	if !strings.Contains(dataRows[0], "Real") {
+		t.Fatalf("Real (TTFT 150) must rank above NoData (TTFT 0):\n%s", out)
+	}
+	// The data-less row must render an empty bar (no filled blocks).
+	var noDataRow string
+	for _, l := range dataRows {
+		if strings.Contains(l, "NoData") {
+			noDataRow = l
+		}
+	}
+	if strings.Count(noDataRow, "█")+strings.Count(noDataRow, "#") != 0 {
+		t.Fatalf("NoData (TTFT=0) must render an empty bar, got:\n%s", noDataRow)
+	}
+}
+
 // TestHistory_NavigationAndEnter asserts the history view cursor moves and
 // enter opens the selected run's detail.
 func TestHistory_NavigationAndEnter(t *testing.T) {

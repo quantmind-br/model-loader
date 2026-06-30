@@ -157,13 +157,18 @@ func compareMetricValue(r benchmark.Run, metric int, mode benchmark.Mode) (float
 // normalizeCompareFrac scales a raw metric value into [0,1] for the bar:
 // rate metrics (solve/recall) are already 0..1 so the raw value IS the fill;
 // throughput scales by section max; TTFT/VRAM invert and scale by section max
-// so lower fills more bar.
+// so lower fills more bar. For the lower-is-better metrics a raw value of 0 is
+// treated as "not collected" and renders an empty bar (never a full one).
 func normalizeCompareFrac(raw float64, metric int, runs []benchmark.Run, mode benchmark.Mode) float64 {
 	if metric == 0 {
 		// Primary metric: rate modes are already 0..1; throughput needs scaling.
 		if primaryMetric(benchmark.Run{Mode: mode}).Rate {
 			return raw
 		}
+	}
+	// Lower-is-better metrics with no data (0) are unknown, not "best".
+	if (metric == 2 || metric == 3) && raw <= 0 {
+		return 0
 	}
 	// Find max for scaling.
 	maxVal := 0.0
@@ -184,13 +189,23 @@ func normalizeCompareFrac(raw float64, metric int, runs []benchmark.Run, mode be
 }
 
 // sortedCompareRuns returns the section's runs sorted by the selected metric
-// (best first). Lower-is-better metrics sort ascending.
+// (best first). Lower-is-better metrics sort ascending, but a value of 0 means
+// "not collected" and is pushed to the end so a data-less run never wins.
 func sortedCompareRuns(sec benchCompareSection, metric int) []benchmark.Run {
 	out := make([]benchmark.Run, len(sec.Runs))
 	copy(out, sec.Runs)
+	lowerBetter := metric == 2 || metric == 3
 	sort.SliceStable(out, func(i, j int) bool {
 		vi, _, higher := compareMetricValue(out[i], metric, sec.Mode)
 		vj, _, _ := compareMetricValue(out[j], metric, sec.Mode)
+		if lowerBetter {
+			// Treat 0 (unknown) as worst: a real measurement always ranks above it.
+			iZero, jZero := vi <= 0, vj <= 0
+			if iZero != jZero {
+				return jZero // the non-zero run comes first
+			}
+			return vi < vj
+		}
 		if higher {
 			return vi > vj
 		}
