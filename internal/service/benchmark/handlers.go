@@ -17,7 +17,7 @@ type judgeHandler struct{}
 
 func (judgeHandler) Mode() Mode                           { return ModeJudge }
 func (judgeHandler) Category() Category                   { return CatQuality }
-func (judgeHandler) Count(r *Runner) int                  { return len(r.problems) }
+func (judgeHandler) Count(r *Runner) int                  { return r.capCount(len(r.problems)) }
 func (judgeHandler) Prepare(r *Runner) (Scorer, error)    { return r.newScorer(ModeJudge) }
 func (judgeHandler) Finalize(*Aggregate, []ProblemResult) {}
 
@@ -31,7 +31,7 @@ const judgeScoreConcurrency = 2
 // background goroutines overlapped with the next problem's inference.
 // Results are written by index, so ordering matches the dataset.
 func (judgeHandler) Execute(ctx context.Context, r *Runner, base, model string, scorer Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
-	total := len(r.problems)
+	total := r.capCount(len(r.problems))
 	// Capacity MUST cover every append: scoring goroutines hold &results[idx],
 	// so the backing array can never reallocate mid-run.
 	results := make([]ProblemResult, 0, total)
@@ -45,7 +45,7 @@ func (judgeHandler) Execute(ctx context.Context, r *Runner, base, model string, 
 	defer wg.Wait()
 
 	done := false
-	for i, p := range r.problems {
+	for i, p := range r.problems[:total] {
 		select {
 		case <-ctx.Done():
 			done = true
@@ -118,20 +118,21 @@ type llamaBenchHandler struct{}
 
 func (llamaBenchHandler) Mode() Mode                           { return ModeLlamaBench }
 func (llamaBenchHandler) Category() Category                   { return CatSpeed }
-func (llamaBenchHandler) Count(r *Runner) int                  { return len(r.presets) }
+func (llamaBenchHandler) Count(r *Runner) int                  { return r.capCount(len(r.presets)) }
 func (llamaBenchHandler) Prepare(*Runner) (Scorer, error)      { return nil, nil }
 func (llamaBenchHandler) Finalize(*Aggregate, []ProblemResult) {}
 
 func (llamaBenchHandler) Execute(ctx context.Context, r *Runner, base, model string, _ Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
 	var results []ProblemResult
 	var transcripts []ProblemTranscript
-	for i, ps := range r.presets {
+	total := r.capCount(len(r.presets))
+	for i, ps := range r.presets[:total] {
 		select {
 		case <-ctx.Done():
 			return results, transcripts, ctx.Err()
 		default:
 		}
-		send(progress, Progress{Index: i + 1, Total: len(r.presets), ProblemID: ps.id(), ProblemName: ps.name(), Phase: "infer"})
+		send(progress, Progress{Index: i + 1, Total: total, ProblemID: ps.id(), ProblemName: ps.name(), Phase: "infer"})
 		pr, tr := r.runLlamaBench(ctx, base, model, ps)
 		results = append(results, pr)
 		if r.cfg.SaveTranscripts {

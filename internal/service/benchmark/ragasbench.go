@@ -129,7 +129,7 @@ type ragasHandler struct{}
 
 func (ragasHandler) Mode() Mode                      { return ModeRagasBench }
 func (ragasHandler) Category() Category              { return CatQuality }
-func (ragasHandler) Count(r *Runner) int             { return len(r.ragasProblems) }
+func (ragasHandler) Count(r *Runner) int             { return r.capCount(len(r.ragasProblems)) }
 func (ragasHandler) Prepare(*Runner) (Scorer, error) { return nil, nil }
 
 // Finalize averages each grader criterion across all answered problems,
@@ -156,7 +156,7 @@ func (ragasHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
 
 func (ragasHandler) Execute(ctx context.Context, r *Runner, base, model string, _ Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
 	g := r.graderFor(base, model)
-	total := len(r.ragasProblems)
+	total := r.capCount(len(r.ragasProblems))
 	return executeSerialBench(ctx, r, progress, total,
 		func(i int) (string, string) {
 			p := r.ragasProblems[i]

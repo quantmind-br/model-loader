@@ -13,6 +13,7 @@ const (
 	BackendKindBuunLlamaCpp BackendKind = "buun-llama-cpp"
 	BackendKindBeeLlamaCpp  BackendKind = "beellama-cpp"
 	BackendKindUnsloth      BackendKind = "unsloth"
+	BackendKindTabby        BackendKind = "tabby"
 )
 
 // BackendMeta holds timestamps and bookkeeping for a backend entry.

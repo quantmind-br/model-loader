@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,6 +64,13 @@ const (
 	// per-instance Docker images, scoring each instance pass/fail by fail_to_pass +
 	// pass_to_pass. Objective; requires a cloned harness + Docker + python.
 	ModeSweBenchPro Mode = "swe-bench-pro"
+	// ModeDeepSWE: agentic software-engineering benchmark — wraps the external
+	// Pier harness (datacurve-ai/pier) running the DeepSWE task corpus
+	// (datacurve-ai/deep-swe). The mini-swe-agent works inside a per-task Docker
+	// sandbox pointed at the proxy (LiteLLM chat completions) and commits a patch;
+	// Pier's program-based verifier scores each task pass/fail in a pristine
+	// container. Objective; requires the `pier` CLI + Docker + a cloned task corpus.
+	ModeDeepSWE Mode = "deep-swe"
 )
 
 // Title returns a short human label for the mode.
@@ -90,6 +98,8 @@ func (m Mode) Title() string {
 		return "Agentic terminal tasks (Terminal-Bench)"
 	case ModeSweBenchPro:
 		return "Agentic SWE tasks (SWE-bench Pro)"
+	case ModeDeepSWE:
+		return "Agentic SWE tasks (DeepSWE)"
 	default:
 		return string(m)
 	}
@@ -137,6 +147,7 @@ type ProblemResult struct {
 	TPSStdDev  float64            `json:"tpsStdDev,omitempty"`  // llama-bench: tok/s spread across reps
 	TPSMin     float64            `json:"tpsMin,omitempty"`
 	TPSMax     float64            `json:"tpsMax,omitempty"`
+	FillPct    int                `json:"fillPct,omitempty"`    // llama-bench: context fill percent for this preset
 	Sandbox    string             `json:"sandbox,omitempty"` // codegen: "bwrap" | "subprocess"
 }
 
@@ -162,6 +173,7 @@ type Aggregate struct {
 	SummaryCoherence       float64 `json:"summaryCoherence,omitempty"`       // 0..1 multi-doc coherence + fact coverage
 	TerminalBenchAccuracy  float64 `json:"terminalBenchAccuracy,omitempty"`  // 0..1 resolved-task rate from the Terminal-Bench harness
 	SweBenchProAccuracy    float64 `json:"sweBenchProAccuracy,omitempty"`    // 0..1 resolved-instance rate from the SWE-bench Pro harness
+	DeepSWEAccuracy        float64 `json:"deepSweAccuracy,omitempty"`        // 0..1 resolved-task rate from the DeepSWE (Pier) harness
 	AvgTTFTms              float64 `json:"avgTtftMs"`
 	TotalPromptTokens      int     `json:"totalPromptTokens"`
 	TotalCompletionTokens  int     `json:"totalCompletionTokens"`
@@ -301,4 +313,49 @@ func argString(args map[string]any, key string) string {
 	default:
 		return fmt.Sprintf("%v", t)
 	}
+}
+
+// effectiveCtxTokens returns the profile's context window in tokens, reading
+// the first context arg present: ctx-size (llama/beellama), max-ctx (dflash),
+// max-model-len (vllm/sglang). 0 → unknown (caller falls back).
+func effectiveCtxTokens(p domain.Profile) int {
+	for _, k := range []string{"ctx-size", "max-ctx", "max-model-len"} {
+		if n := parseCtxTokens(argString(p.Args, k)); n > 0 {
+			return n
+		}
+	}
+	return 0
+}
+
+// parseCtxTokens parses a plain int, vLLM k/m shorthand ("131072","128k","1m"),
+// or a float string. Numeric profile args decode from JSON as float64 and
+// argString renders large values (≥1e6) in scientific notation ("1.048576e+06"),
+// so an Atoi-only parse would silently fail on million-token contexts; the
+// ParseFloat fallback keeps those parseable.
+func parseCtxTokens(s string) int {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return 0
+	}
+	mult := 1
+	switch {
+	case strings.HasSuffix(s, "k"):
+		mult = 1024
+		s = strings.TrimSuffix(s, "k")
+	case strings.HasSuffix(s, "m"):
+		mult = 1024 * 1024
+		s = strings.TrimSuffix(s, "m")
+	}
+	s = strings.TrimSpace(s)
+	if n, err := strconv.Atoi(s); err == nil {
+		if n <= 0 {
+			return 0
+		}
+		return n * mult
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil || f <= 0 {
+		return 0
+	}
+	return int(f) * mult
 }

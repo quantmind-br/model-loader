@@ -201,7 +201,7 @@ type codeGenHandler struct{}
 
 func (codeGenHandler) Mode() Mode                      { return ModeCodeGenBench }
 func (codeGenHandler) Category() Category              { return CatQuality }
-func (codeGenHandler) Count(r *Runner) int             { return len(r.codeGenProblems) }
+func (codeGenHandler) Count(r *Runner) int             { return r.capCount(len(r.codeGenProblems)) }
 func (codeGenHandler) Prepare(*Runner) (Scorer, error) { return nil, nil }
 
 // Finalize sets CodePassRate over EXECUTED problems only (those without an Err);
@@ -228,7 +228,7 @@ func (codeGenHandler) Execute(ctx context.Context, r *Runner, base, model string
 		res.Detail = res.Err
 		return []ProblemResult{res}, nil, nil
 	}
-	return executeSerialBench(ctx, r, progress, len(r.codeGenProblems),
+	return executeSerialBench(ctx, r, progress, r.capCount(len(r.codeGenProblems)),
 		func(i int) (string, string) {
 			p := r.codeGenProblems[i]
 			return p.TaskID, p.TaskID

@@ -32,7 +32,12 @@ func portOf(t *testing.T, ts *httptest.Server) int {
 
 func TestHandleModelsList_ReturnsAllProfiles(t *testing.T) {
 	store := newStubStore(
-		domain.Profile{ID: "alpha", Name: "Alpha"},
+		domain.Profile{
+			ID:     "alpha",
+			Name:   "Alpha",
+			Args:   map[string]any{"ctx-size": float64(4096)},
+			Launch: domain.LaunchConfig{BackendID: "llama-cpp-default"},
+		},
 		domain.Profile{ID: "beta", Name: "Beta"},
 	)
 	srv := newTestServer(t, store, newStubManager())
@@ -55,17 +60,36 @@ func TestHandleModelsList_ReturnsAllProfiles(t *testing.T) {
 	if len(body.Data) != 2 {
 		t.Fatalf("data len = %d, want 2", len(body.Data))
 	}
-	ids := map[string]bool{body.Data[0].ID: true, body.Data[1].ID: true}
-	if !ids["alpha"] || !ids["beta"] {
-		t.Errorf("missing expected ids: %v", body.Data)
-	}
+	byID := make(map[string]orModel, len(body.Data))
 	for _, m := range body.Data {
-		if m.Object != "model" {
-			t.Errorf("entry object = %q, want model", m.Object)
-		}
-		if m.OwnedBy != "model-loader" {
-			t.Errorf("owned_by = %q, want model-loader", m.OwnedBy)
-		}
+		byID[m.ID] = m
+	}
+	if _, ok := byID["alpha"]; !ok {
+		t.Errorf("missing alpha: %v", body.Data)
+	}
+	if _, ok := byID["beta"]; !ok {
+		t.Errorf("missing beta: %v", body.Data)
+	}
+	// OpenRouter-shaped enrichment: canonical_slug mirrors id, context_length
+	// is derived from args, pricing is zeroed, arch defaults to text-only.
+	a := byID["alpha"]
+	if a.Object != "model" {
+		t.Errorf("object = %q, want model", a.Object)
+	}
+	if a.OwnedBy != "llama-cpp-default" {
+		t.Errorf("owned_by = %q, want llama-cpp-default", a.OwnedBy)
+	}
+	if a.CanonicalSlug != "alpha" {
+		t.Errorf("canonical_slug = %q, want alpha", a.CanonicalSlug)
+	}
+	if a.ContextLength == nil || *a.ContextLength != 4096 {
+		t.Errorf("alpha context_length = %v, want 4096", derefInt(a.ContextLength))
+	}
+	if a.Pricing.Prompt != "0" {
+		t.Errorf("pricing.prompt = %q, want 0", a.Pricing.Prompt)
+	}
+	if a.Architecture.Modality != "text->text" {
+		t.Errorf("modality = %q, want text->text", a.Architecture.Modality)
 	}
 }
 
@@ -137,6 +161,41 @@ func TestHandleForward_InvalidProfileID_400(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", rr.Code)
+	}
+}
+
+
+func TestHandleForward_LiteLLMOpenAIPrefix_RoutesToBackend(t *testing.T) {
+	hits := make(chan string, 4)
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits <- r.URL.Path
+		fmt.Fprint(w, `{"ok":true}`)
+	}))
+	defer backend.Close()
+
+	store := newStubStore(makeProfile("alpha", portOf(t, backend)))
+	mgr := newStubManager()
+	mgr.nextPID = 5001
+	srv := newTestServer(t, store, mgr)
+	mux := http.NewServeMux()
+	srv.registerRoutes(mux)
+
+	body := strings.NewReader(`{"model":"openai/alpha","messages":[]}`)
+	r := httptest.NewRequest("POST", "/v1/chat/completions", body)
+	r.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, r)
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d body=%s", rr.Code, rr.Body.String())
+	}
+	select {
+	case path := <-hits:
+		if path != "/v1/chat/completions" {
+			t.Errorf("backend saw path %q", path)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("backend did not receive request")
 	}
 }
 

@@ -28,6 +28,15 @@ func TestExtractProfileID(t *testing.T) {
 			wantBody:    `{"model":"qwen-7b","messages":[]}`,
 		},
 		{
+			name:        "litellm openai prefix stripped from json model",
+			method:      "POST",
+			path:        "/v1/chat/completions",
+			contentType: "application/json",
+			body:        `{"model":"openai/alpha-profile","messages":[]}`,
+			want:        "alpha-profile",
+			wantBody:    `{"model":"openai/alpha-profile","messages":[]}`,
+		},
+		{
 			name:        "json body without model field",
 			method:      "POST",
 			path:        "/v1/chat/completions",
@@ -131,6 +140,22 @@ func TestExtractProfileID_BodyAboveCap(t *testing.T) {
 	got := extractProfileID(r, 1<<20) // 1 MiB cap
 	if got != "fallback" {
 		t.Errorf("got %q, want fallback (query)", got)
+	}
+}
+
+func TestNormalizeRequestModel(t *testing.T) {
+	cases := map[string]string{
+		"":                              "",
+		"  qwen-7b  ":                   "qwen-7b",
+		"openai/qwen-7b":                "qwen-7b",
+		"openai/ornith-aeon-35b-a3b-q4km-mtp-vision-layer2-256k": "ornith-aeon-35b-a3b-q4km-mtp-vision-layer2-256k",
+		"hosted_vllm/my-profile":        "my-profile",
+		"no-slash-id":                   "no-slash-id",
+	}
+	for in, want := range cases {
+		if got := normalizeRequestModel(in); got != want {
+			t.Errorf("normalizeRequestModel(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 

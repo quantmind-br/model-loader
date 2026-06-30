@@ -117,6 +117,7 @@ func runTUI(cliLevel string) int {
 	benchStore := benchmarkstore.New(filepath.Join(svc.Cfg.Paths.StateDir, "benchmark", "runs"))
 	benchRunner, err := benchmark.NewRunner(svc.Store, mon, supervisor, benchmark.Config{
 		MaxTokens:         svc.Cfg.Benchmark.MaxTokens,
+		Limit:             svc.Cfg.Benchmark.Limit,
 		Temperature:       svc.Cfg.Benchmark.Temperature,
 		Timeout:           time.Duration(svc.Cfg.Benchmark.TimeoutSec) * time.Second,
 		LongContextTokens: svc.Cfg.Benchmark.LongContextTokens,
@@ -154,6 +155,19 @@ func runTUI(cliLevel string) int {
 		SweBenchProAgentCmd:      svc.Cfg.Benchmark.SweBenchPro.AgentCmd,
 		SweBenchProTimeout:       time.Duration(svc.Cfg.Benchmark.SweBenchPro.TimeoutSec) * time.Second,
 		SweBenchProExtraArgs:     svc.Cfg.Benchmark.SweBenchPro.ExtraArgs,
+
+		DeepSWECmd:        svc.Cfg.Benchmark.DeepSWE.Command,
+		DeepSWETasksDir:   svc.Cfg.Benchmark.DeepSWE.TasksDir,
+		DeepSWEAgent:      svc.Cfg.Benchmark.DeepSWE.Agent,
+		DeepSWEProvider:   svc.Cfg.Benchmark.DeepSWE.Provider,
+		DeepSWEModelClass: svc.Cfg.Benchmark.DeepSWE.ModelClass,
+		DeepSWEAPIBase:    svc.Cfg.Benchmark.DeepSWE.APIBase,
+		DeepSWETasks:      svc.Cfg.Benchmark.DeepSWE.Tasks,
+		DeepSWENTasks:     svc.Cfg.Benchmark.DeepSWE.NTasks,
+		DeepSWESampleSeed: svc.Cfg.Benchmark.DeepSWE.SampleSeed,
+		DeepSWEConcurrent: svc.Cfg.Benchmark.DeepSWE.Concurrent,
+		DeepSWETimeout:    time.Duration(svc.Cfg.Benchmark.DeepSWE.TimeoutSec) * time.Second,
+		DeepSWEExtraArgs:  svc.Cfg.Benchmark.DeepSWE.ExtraArgs,
 	})
 	if err != nil {
 		svc.Logger.Error("benchmark_dataset_load_failed", "err", err)

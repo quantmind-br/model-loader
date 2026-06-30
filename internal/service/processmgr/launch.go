@@ -254,6 +254,7 @@ var pythonBackends = map[domain.BackendKind]bool{
 	domain.BackendKindVLLM:    true,
 	domain.BackendKindSGLang:  true,
 	domain.BackendKindUnsloth: true,
+	domain.BackendKindTabby:   true,
 }
 
 // buildLaunchEnv overlays the profile env (applyProfileEnv) and, for

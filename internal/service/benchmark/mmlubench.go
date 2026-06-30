@@ -125,7 +125,7 @@ type mmluHandler struct{}
 
 func (mmluHandler) Mode() Mode                      { return ModeMMLUBench }
 func (mmluHandler) Category() Category              { return CatKnowledge }
-func (mmluHandler) Count(r *Runner) int             { return len(r.mmluProblems) }
+func (mmluHandler) Count(r *Runner) int             { return r.capCount(len(r.mmluProblems)) }
 func (mmluHandler) Prepare(*Runner) (Scorer, error) { return nil, nil }
 
 // Finalize sets MMLUAccuracy over answered problems only (request errors are
@@ -148,7 +148,7 @@ func (mmluHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
 }
 
 func (mmluHandler) Execute(ctx context.Context, r *Runner, base, model string, _ Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
-	return executeSerialBench(ctx, r, progress, len(r.mmluProblems),
+	return executeSerialBench(ctx, r, progress, r.capCount(len(r.mmluProblems)),
 		func(i int) (string, string) {
 			p := r.mmluProblems[i]
 			return p.ID, p.Category

@@ -36,6 +36,36 @@
       "prompt": "Create a profile for my GGUF at /home/diogo/models/huggingface/unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q4_K_M.gguf on the buun-llama-cpp backend, 32k context.",
       "expected_output": "Detects buun-llama-cpp has NO catalog entry and never fabricates a backendId: either registers it properly (backend add with the built binary at backends/buun-llama-cpp/build/bin/llama-server, backend schema refresh, backend probe) before creating the profile, or recommends beellama-rtx3090/llama-cpp-cuda as the superseding cataloged alternatives; mentions beellama supersedes buun; does not mix buun-era DFlash flag names with beellama spellings.",
       "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "I have two RTX 3090 now (48 GiB, no NVLink). Set up deepreinforce-ai/Ornith-1.0-35B-GGUF with the maximum context the cards can hold, and use MTP if the model supports it.",
+      "expected_output": "Recognizes Ornith is a qwen3_5_moe hybrid-attention MoE (full_attention_interval 4 -> cheap KV) whose Q4_K_M (~21 GiB) FITS one card, so the optimized path is SINGLE-GPU pinned to GPU1 (launch.env CUDA_DEVICE_ORDER=PCI_BUS_ID + CUDA_VISIBLE_DEVICES=1), NOT a naive split: without NVLink, splitting a fitting model yields no single-stream speedup (-3..-6%). Uses spec-type draft-mtp (model has mtp_num_hidden_layers:1) but ONLY after confirming the GGUF actually exports the nextn head in the launch log, falling back to no-spec if absent. Mirrors the 35B-A3B anchor (q4_0/q4_0 KV, ctx ~192-256k, temp 0.6 top-k 20 top-p 0.95-1.0 per the Ornith card, llama-cpp-default). Notes that genuinely using BOTH cards means Q8_0 (~37 GiB) layer-split for quality/capacity, not Q4 split for speed. Records per-card nvidia-smi VRAM + tok/s and validates a long generation; passes profile validate; no port key.",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "I have two 3090s now — make my qwen3.6-27b run FASTER by using both GPUs. It already runs fine on one card, I just want more tok/s.",
+      "expected_output": "Explains plainly that without NVLink, tensor/row split over PCIe does NOT speed single-user decode (all-reduce ~2x/layer staged through host RAM -> -3..-6% vs one card); more VRAM gives no speedup once the model fits one card. Keeps the 27B on ONE card pinned to GPU1, and gets speed from the real lever — DFlash/MTP speculative decoding (beellama) — not multi-GPU. Offers the actual uses of the second card: a bigger model, more context, or a second model pinned to the other GPU. If the user still insists on tensor-parallel, builds it but records the measured cost in the description and never presents split as a speedup.",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "With my two RTX 3090, run a 27B coder on one card and an 8B vision model on the other at the same time. How do I pin each to a specific GPU?",
+      "expected_output": "Builds two SINGLE-GPU profiles, each pinned via launch.env: CUDA_DEVICE_ORDER=PCI_BUS_ID on both; the heavy 27B coder CUDA_VISIBLE_DEVICES=1 on the clean GPU1; the 8B vision model CUDA_VISIBLE_DEVICES=0 on GPU0, budgeting the ~0.6-1 GiB desktop (lower its gpu-memory-utilization / ctx). Keeps tensor-parallel-size 1 / no split, and does NOT also set llama.cpp -mg 1 / --device CUDA1 or sglang --base-gpu-id 1 (the mask remaps the visible card to cuda:0). Surfaces the runtime reality: the :4321 proxy and 'instance start' are single-active (loading the 2nd model evicts the 1st via swap), so to keep BOTH live run a second 'model-loader serve --port 4322' for the secondary model (serve does not take the single-instance lock, so two proxies coexist); each profile still lands on the GPU fixed in its env. No NCCL/NVLink/tensor-parallel config needed.",
+      "files": []
+    },
+    {
+      "id": 10,
+      "prompt": "Set up Llama-3.3-70B-Instruct for maximum quality on my two 3090s, 32k context.",
+      "expected_output": "Recognizes 70B int4 (AWQ/GPTQ ~42-45 GiB, GGUF Q4 ~42-50) exceeds one 24 GiB card but fits the ~46 GiB pool -> MULTI-GPU split as a CAPACITY decision. Prefers llama.cpp layer-split (split-mode layer, NOT row; tensor-split 0.45,0.55 in device-index order so the clean GPU1 gets the larger share; main-gpu 1; CUDA_DEVICE_ORDER=PCI_BUS_ID) or vLLM AWQ with tensor-parallel-size 2 + distributed-executor-backend mp + disable-custom-all-reduce. Applies the 46 GiB cap: weights leave only ~1-6 GiB for KV, so 32k requires quantized KV (q8/q4) and/or the context adjustment rule transparently lowers ctx; sets realistic expectation ~15-21 tok/s single-user and notes a 32B-Q8 on one card may be the better quality/speed call. Validates a long / non-English generation (corruption bugs llama.cpp #20052, vLLM #40725) and records per-card peak GiB; never sets GGML_CUDA_P2P=1.",
+      "files": []
+    },
+    {
+      "id": 11,
+      "prompt": "Run Qwen3-235B-A22B on my 48 GiB dual 3090 setup.",
+      "expected_output": "Detects Qwen3-235B-A22B needs >=112 GiB even at Q3 — it does NOT fit the ~46 GiB pool and would require --n-cpu-moe CPU expert offload, which violates the user's no-offload policy. Does NOT generate a profile that would silently OOM; instead recommends a model that fits the pool (e.g. a 32B at Q8 single-card, a 35B-A3B MoE, or a 70B int4 layer-split across both cards) and explains the VRAM math. Never fabricates a dual-GPU config for an impossible fit.",
+      "files": []
     }
   ]
 }

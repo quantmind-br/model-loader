@@ -15,9 +15,9 @@ import (
 // the profile's Model field by processmgr.buildDFlashArgs); the draft model
 // is the --draft flag below.
 //
-// Schema tracks lucebox-hub commit bdbc038 (2026-06-17).
+// Schema tracks lucebox-hub commit 1b11c50 (2026-06-29).
 func EmbeddedSchema() domain.FlagSchema {
-	return domain.BuildFlagSchema("embedded-dflash-v2", dflashRows)
+	return domain.BuildFlagSchema("embedded-dflash-v3", dflashRows)
 }
 
 var kvTypes = []string{"f16", "bf16", "q4_0", "q4_1", "q5_0", "q5_1", "q8_0", "tq3_0"}
@@ -33,6 +33,7 @@ var dflashRows = []domain.FlagSpecRow{
 	{Long: "model-name", Type: domain.FlagTypeString, Default: "dflash", HelpText: "Model name reported by /v1/models (OpenAI model field)", Group: "common"},
 	{Long: "chat-template-file", Type: domain.FlagTypeString, Default: "", HelpText: "Jinja chat template file overriding the hardcoded renderer; empty or missing falls back", Group: "common"},
 	{Long: "prefix-cache-slots", Type: domain.FlagTypeInt, Default: float64(32), Min: ptrutil.Ptr(0), HelpText: "Live prefix-cache slot count (0 disables)", Group: "common"},
+	{Long: "prefill-cache-slots", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), HelpText: "Full prompt/prefill cache slot count (0 disables); distinct from --prefix-cache-slots", Group: "common"},
 	{Long: "chunk", Type: domain.FlagTypeInt, Default: float64(512), Min: ptrutil.Ptr(1), HelpText: "Chunked-prefill chunk (ubatch) size", Group: "common"},
 	{Long: "fa-window", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(1024 * 1024), HelpText: "Flash-attention sliding window; 0 = full attention (qwen3.6 full-attn layers need the whole context for tool calls)", Group: "common"},
 	{Long: "no-cors", Type: domain.FlagTypeBool, Default: false, HelpText: "Disable CORS headers", Group: "common"},
@@ -40,6 +41,9 @@ var dflashRows = []domain.FlagSpecRow{
 	// Speculative decode (DFlash + DDTree)
 	{Long: "ddtree", Type: domain.FlagTypeBool, Default: false, HelpText: "Enable DDTree tree-verify speculative decode (default: chain verify)", Group: "speculative-decode"},
 	{Long: "ddtree-budget", Type: domain.FlagTypeInt, Default: float64(22), Min: ptrutil.Ptr(1), Max: ptrutil.Ptr(512), HelpText: "DDTree token budget per step (22 on RTX 3090, 40 on RTX 5090; re-sweep per card)", Group: "speculative-decode"},
+	{Long: "verify-width", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), HelpText: "Laguna chain speculative-verify width (0 = auto)", Group: "speculative-decode"},
+	{Long: "fast-rollback", Type: domain.FlagTypeBool, Default: true, HelpText: "Speculative fast rollback (on by default; --ddtree also enables it). Set --no-fast-rollback to disable", Group: "speculative-decode"},
+	{Long: "no-fast-rollback", Type: domain.FlagTypeBool, Default: false, HelpText: "Disable speculative fast rollback, even with --ddtree (overrides the on-by-default --fast-rollback)", Group: "speculative-decode"},
 	{Long: "draft-swa", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), HelpText: "Draft sliding-window attention size (0 = off; e.g. 2048 for unsloth Qwen3.6 targets)", Group: "speculative-decode"},
 	{Long: "draft-residency", Type: domain.FlagTypeEnum, EnumValues: []string{"auto", "persistent", "request-scoped"}, Default: "auto", HelpText: "Draft weights VRAM lifetime: request-scoped frees them after each request, persistent keeps them resident, auto honors the low-VRAM hint", Group: "speculative-decode"},
 	{Long: "lazy-draft", Type: domain.FlagTypeBool, Default: false, HelpText: "Legacy alias for --draft-residency=request-scoped", Group: "speculative-decode"},
@@ -57,7 +61,7 @@ var dflashRows = []domain.FlagSpecRow{
 
 	// KVFlash (bounded KV residency)
 	{Long: "kvflash", Type: domain.FlagTypeString, Default: "", HelpText: "Bounded KV residency: keep attention KV in a fixed pool of N tokens (or 'auto'); cold 64-token chunks page to host. Works with or without PFlash; forces AR decode. Empty = off", Group: "kv-cache"},
-	{Long: "kvflash-policy", Type: domain.FlagTypeEnum, EnumValues: []string{"drafter", "lru"}, HelpText: "KVFlash residency scorer: drafter scores the keep-set with the loaded drafter, lru evicts least-recently-used (unset = drafter when a drafter is loaded, else lru)", Group: "kv-cache"},
+	{Long: "kvflash-policy", Type: domain.FlagTypeEnum, EnumValues: []string{"drafter", "lru", "qk"}, HelpText: "KVFlash residency scorer: drafter scores the keep-set with the loaded drafter, lru evicts least-recently-used, qk scores pooled post-RoPE keys against the query at reselect (no drafter). Unset = drafter when a drafter is loaded, else lru", Group: "kv-cache"},
 	{Long: "kvflash-tau", Type: domain.FlagTypeInt, Min: ptrutil.Ptr(1), HelpText: "KVFlash keep-set reselect interval in decode steps (positive)", Group: "kv-cache"},
 
 	// Prefill compression (PFlash)

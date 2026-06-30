@@ -315,7 +315,7 @@ type instructionHandler struct{}
 
 func (instructionHandler) Mode() Mode                      { return ModeInstBench }
 func (instructionHandler) Category() Category              { return CatRobustness }
-func (instructionHandler) Count(r *Runner) int             { return len(r.instProblems) }
+func (instructionHandler) Count(r *Runner) int             { return r.capCount(len(r.instProblems)) }
 func (instructionHandler) Prepare(*Runner) (Scorer, error) { return nil, nil }
 
 // Finalize sets the three instruction rates, keyed on the structured Kind
@@ -364,7 +364,7 @@ func (instructionHandler) Execute(ctx context.Context, r *Runner, base, model st
 	sim := similarityGrader{base: embBase, model: model}
 	g := r.graderFor(base, model)
 
-	return executeSerialBench(ctx, r, progress, len(r.instProblems),
+	return executeSerialBench(ctx, r, progress, r.capCount(len(r.instProblems)),
 		func(i int) (string, string) {
 			p := r.instProblems[i]
 			return p.ID, p.Kind

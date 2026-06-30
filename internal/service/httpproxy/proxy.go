@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -13,7 +14,7 @@ import (
 // "Authorization: Bearer <authToken>" on every UPSTREAM request — this is
 // outbound auth (proxy → backend, e.g. Unsloth Studio), NOT inbound client
 // auth; the proxy itself remains unauthenticated on the client side.
-func newReverseProxy(port int, authToken string) *httputil.ReverseProxy {
+func newReverseProxy(port int, authToken string, maxBodyBuffer int64) *httputil.ReverseProxy {
 	target := &url.URL{
 		Scheme: "http",
 		Host:   fmt.Sprintf("127.0.0.1:%d", port),
@@ -36,6 +37,30 @@ func newReverseProxy(port int, authToken string) *httputil.ReverseProxy {
 	}
 	rp.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
 		writeOpenAIError(w, http.StatusBadGateway, "backend_error", "upstream_unavailable", err.Error())
+	}
+	rp.ModifyResponse = func(resp *http.Response) error {
+		if resp == nil || resp.Request == nil {
+			return nil
+		}
+		if !isChatCompletionsPath(resp.Request.URL.Path) {
+			return nil
+		}
+		ct := strings.ToLower(resp.Header.Get("Content-Type"))
+		if strings.Contains(ct, "text/event-stream") {
+			return nil
+		}
+		if !shouldNormalizeChatResponse(resp) {
+			return nil
+		}
+		newBody, n, err := wrapChatCompletionResponseBody(resp.Body, maxBodyBuffer)
+		if err != nil {
+			return err
+		}
+		resp.Body = newBody
+		resp.ContentLength = n
+		resp.Header.Set("Content-Length", fmt.Sprintf("%d", n))
+		resp.Header.Del("Content-Encoding")
+		return nil
 	}
 	return rp
 }

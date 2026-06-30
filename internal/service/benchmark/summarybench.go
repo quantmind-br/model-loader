@@ -152,7 +152,7 @@ type summaryHandler struct{}
 
 func (summaryHandler) Mode() Mode                      { return ModeSummaryBench }
 func (summaryHandler) Category() Category              { return CatQuality }
-func (summaryHandler) Count(r *Runner) int             { return len(r.summaryProblems) }
+func (summaryHandler) Count(r *Runner) int             { return r.capCount(len(r.summaryProblems)) }
 func (summaryHandler) Prepare(*Runner) (Scorer, error) { return nil, nil }
 
 // Finalize sets SummaryCoherence to the mean grader coherence sub-score across
@@ -177,7 +177,7 @@ func (summaryHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
 
 func (summaryHandler) Execute(ctx context.Context, r *Runner, base, model string, _ Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
 	g := r.graderFor(base, model)
-	total := len(r.summaryProblems)
+	total := r.capCount(len(r.summaryProblems))
 	return executeSerialBench(ctx, r, progress, total,
 		func(i int) (string, string) {
 			p := r.summaryProblems[i]

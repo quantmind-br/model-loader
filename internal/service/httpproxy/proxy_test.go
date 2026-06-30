@@ -23,7 +23,7 @@ func TestNewReverseProxy_InjectsAuthorization(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	rp := newReverseProxy(backendPort(t, upstream), "sk-unsloth-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	rp := newReverseProxy(backendPort(t, upstream), "sk-unsloth-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", defaultMaxBodyBuffer)
 	rec := httptest.NewRecorder()
 	rp.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil))
 
@@ -40,7 +40,7 @@ func TestNewReverseProxy_NoTokenNoHeader(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	rp := newReverseProxy(backendPort(t, upstream), "")
+	rp := newReverseProxy(backendPort(t, upstream), "", defaultMaxBodyBuffer)
 	rec := httptest.NewRecorder()
 	rp.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil))
 

@@ -20,17 +20,17 @@ func TestParsePresets_DefaultWhenEmpty(t *testing.T) {
 	if len(got) != len(defaultPresets) {
 		t.Fatalf("want %d default presets, got %d", len(defaultPresets), len(got))
 	}
-	if got[0] != (tpPreset{PromptTokens: 128, GenTokens: 512}) {
+	if got[0] != (tpPreset{FillPct: 5, GenTokens: 256}) {
 		t.Errorf("first default preset = %+v", got[0])
 	}
 }
 
 func TestParsePresets_Valid(t *testing.T) {
-	got, err := parsePresets([]string{"512/128", " 4096 / 256 "})
+	got, err := parsePresets([]string{"50%/256", " 90% / 128 "})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := []tpPreset{{512, 128}, {4096, 256}}
+	want := []tpPreset{{50, 256}, {90, 128}}
 	for i := range want {
 		if got[i] != want[i] {
 			t.Errorf("preset %d = %+v, want %+v", i, got[i], want[i])
@@ -39,7 +39,7 @@ func TestParsePresets_Valid(t *testing.T) {
 }
 
 func TestParsePresets_Invalid(t *testing.T) {
-	for _, bad := range []string{"512", "x/128", "512/0", "0/128", "512/y", "512abc/128", "512/128/2", "512/128abc"} {
+	for _, bad := range []string{"512", "x/128", "512/0", "0/128", "512/y", "512abc/128", "512/128/2", "512/128abc", "512/128", "150%/64", "50%/0"} {
 		if _, err := parsePresets([]string{bad}); err == nil {
 			t.Errorf("expected error for %q, got nil", bad)
 		}
@@ -51,7 +51,7 @@ func TestDefaultPresets_Expanded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := []tpPreset{{128, 512}, {512, 128}, {2048, 256}, {4096, 256}, {8192, 128}, {16384, 64}}
+	want := []tpPreset{{5, 256}, {25, 256}, {50, 256}, {90, 128}}
 	if len(got) != len(want) {
 		t.Fatalf("got %d default presets, want %d", len(got), len(want))
 	}
@@ -63,7 +63,7 @@ func TestDefaultPresets_Expanded(t *testing.T) {
 }
 
 func TestCountForMode_LlamaBench(t *testing.T) {
-	r := &Runner{presets: []tpPreset{{512, 128}, {4096, 256}}, problems: make([]Problem, 5)}
+	r := &Runner{presets: []tpPreset{{FillPct: 50, GenTokens: 128}, {FillPct: 90, GenTokens: 256}}, problems: make([]Problem, 5)}
 	if got := r.CountForMode(ModeLlamaBench); got != 2 {
 		t.Errorf("CountForMode(llama-bench) = %d, want 2", got)
 	}
@@ -103,8 +103,8 @@ func TestRunLlamaBench_VarianceAndServerTimings(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	r := &Runner{cfg: Config{MaxTokens: 64, Timeout: 5 * time.Second}, reps: 3, warmup: 0}
-	res, _ := r.runLlamaBench(context.Background(), srv.URL, "m", tpPreset{PromptTokens: 8, GenTokens: 2})
+	r := &Runner{cfg: Config{MaxTokens: 64, Timeout: 5 * time.Second}, reps: 3, warmup: 0, runCtxTokens: 16}
+	res, _ := r.runLlamaBench(context.Background(), srv.URL, "m", tpPreset{FillPct: 50, GenTokens: 2})
 	if res.Err != "" {
 		t.Fatalf("unexpected error: %s", res.Err)
 	}
@@ -125,5 +125,8 @@ func TestRunLlamaBench_VarianceAndServerTimings(t *testing.T) {
 	}
 	if !strings.Contains(res.Detail, "±") {
 		t.Errorf("Detail should include spread: %q", res.Detail)
+	}
+	if !strings.Contains(res.Detail, "fill 50%") {
+		t.Errorf("Detail should note fill level: %q", res.Detail)
 	}
 }

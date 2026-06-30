@@ -105,7 +105,8 @@ OOM/doesn't-fit ladder: use the printed max-model-len → gpu-memory-utilization
   trained heads (exist for vanilla Qwen/Llama, not for custom merges); STANDALONE takes any
   small same-tokenizer draft. Gains workload-dependent — benchmark before keeping.
 - Qwen thinking models: `reasoning-parser: qwen3`, `tool-call-parser: qwen`.
-- `tp-size`/`tensor-parallel-size` are aliases — set neither (single GPU).
+- `tp-size`/`tensor-parallel-size` are aliases. **Model fits one card → set neither** and pin via
+  `CUDA_VISIBLE_DEVICES` (GPU1). Checkpoint + KV exceed one card → see §Multi-GPU below.
 - Sampling per-request; `sampling-defaults: model` (default) keeps the model's generation
   config.
 
@@ -126,6 +127,40 @@ OOM/doesn't-fit ladder: use the printed max-model-len → gpu-memory-utilization
 
 OOM ladder: mem-fraction-static ↓ (0.90→0.87) → context-length ↓ → 4-bit checkpoint →
 kv-cache-dtype fp8_e5m2 (verify) → chunked-prefill-size 4096.
+
+## Multi-GPU (TP / PP / DP) on the dual-3090 rig (no NVLink)
+
+Only when the checkpoint + KV exceed one card. A 4-bit checkpoint that fits 24 GiB → keep it
+single-GPU (pin GPU1 via `launch.env` `CUDA_VISIBLE_DEVICES=1`). Full rationale in
+**references/dual-gpu.md**; essentials:
+
+**vLLM**
+- `"tensor-parallel-size": 2`, `"distributed-executor-backend": "mp"` (default+correct for 2 local
+  GPUs; not `ray`), `"disable-custom-all-reduce": true` (GeForce custom all-reduce needs P2P/NVLink).
+- `gpu-memory-utilization` is per-GPU; with TP=2 each card frees ~half → KV ~doubles.
+- Dense + latency-sensitive single-user → `"pipeline-parallel-size": 2` instead of TP.
+- MoE → `"tensor-parallel-size": 2, "enable-expert-parallel": true` (low PCIe traffic).
+- Hang at `using nccl==…`? `launch.env`: `NCCL_P2P_DISABLE=1` (ACS/IOMMU/board-dependent).
+- ⚠ vLLM #40725: TP>1 on PCIe 3090 garbled **non-English** output — validate a non-English prompt.
+
+**SGLang**
+- `"tp-size": 2`, `"disable-custom-all-reduce": true` (else "peer access is not supported between
+  these two devices"), `"attention-backend": "flashinfer"`. `launch.env`: `NCCL_P2P_DISABLE=1` if it
+  hangs at "Init torch distributed".
+- Model FITS one card → `"dp-size": 2` (one replica per GPU, zero inter-GPU traffic, ~2× aggregate
+  throughput), NOT `tp-size`.
+
+Both: `served-model-name` = profile id still required. Validate a long / non-English generation
+before trusting the profile.
+
+**Measured anchor (2026-06-28, 2×3090 no NVLink):** Nex-N2-mini compressed-tensors W4A16 (24.4 GB,
+qwen3_5_moe MoE — does NOT fit one card), vLLM `tensor-parallel-size 2 + enable-expert-parallel +
+disable-custom-all-reduce + language-model-only`, util 0.88 → idle 23098/21372 MiB; llama-bench avg
+**149.5 tok/s** (TTFT 56–667 ms), **+13% over the same model's GGUF Q4_K_XL on ONE card (132.8 tok/s)**
+and ~4× better TTFT. The win grows with prefill depth (+6% decode → +29% @pp16k). Output coherent
+(no #40725). Takeaway: MoE+EP tensor-parallel scales well even without NVLink, and for a model too
+big for one card vLLM TP beats GGUF-on-one — unlike llama.cpp `row` split, which lost 3× on a model
+that fit one card. TP is a loss only when you split a model that already fits one card.
 
 ## Fits and anchors
 

@@ -232,3 +232,60 @@ func TestBuildArgsForBackend_Unsloth(t *testing.T) {
 		t.Fatalf("BuildArgsForBackend(unsloth):\n got = %v\nwant = %v", got, want)
 	}
 }
+
+func TestBuildArgsForBackend_Tabby(t *testing.T) {
+	p := domain.Profile{
+		Model: "/models/exl3/Qwen3.6-35B-A3B-exl3-4bpw",
+		Args: map[string]any{
+			"cache-mode":      "8,8",
+			"max-seq-len":     float64(32768),
+			"tensor-parallel": true,
+			"gpu-split":       "21,23", // nargs: must expand to separate tokens
+			"port":            5123,
+		},
+		ExtraArgs: []string{"--reasoning"},
+	}
+	got, err := BuildArgsForBackend(p, domain.BackendKindTabby, "")
+	if err != nil {
+		t.Fatalf("BuildArgsForBackend(tabby): %v", err)
+	}
+	// model dir/name split first, then flags sorted by key, then ExtraArgs.
+	want := []string{
+		"--model-dir", "/models/exl3", "--model-name", "Qwen3.6-35B-A3B-exl3-4bpw",
+		"--cache-mode", "8,8",
+		"--gpu-split", "21", "23",
+		"--max-seq-len", "32768",
+		"--port", "5123",
+		"--tensor-parallel", "true",
+		"--reasoning",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("BuildArgsForBackend(tabby):\n got = %v\nwant = %v", got, want)
+	}
+}
+
+// Bools emit an explicit value (TabbyAPI flags are not store_true); a JSON-list
+// nargs value expands element-by-element.
+func TestBuildArgsForBackend_Tabby_BoolValueAndListExpand(t *testing.T) {
+	p := domain.Profile{
+		Model: "/m/Model-exl2-6bpw",
+		Args: map[string]any{
+			"tensor-parallel":   false,           // emitted as --tensor-parallel false
+			"autosplit-reserve": []any{2048, 96}, // nargs from JSON list
+			"port":              7000,
+		},
+	}
+	got, err := BuildArgsForBackend(p, domain.BackendKindTabby, "")
+	if err != nil {
+		t.Fatalf("BuildArgsForBackend(tabby): %v", err)
+	}
+	want := []string{
+		"--model-dir", "/m", "--model-name", "Model-exl2-6bpw",
+		"--autosplit-reserve", "2048", "96",
+		"--port", "7000",
+		"--tensor-parallel", "false",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("BuildArgsForBackend(tabby list):\n got = %v\nwant = %v", got, want)
+	}
+}

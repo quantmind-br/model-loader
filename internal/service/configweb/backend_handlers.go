@@ -10,9 +10,9 @@ import (
 )
 
 type BackendViewModel struct {
-	Draft     BackendDraft
-	Kinds     []domain.BackendKind
-	IsNew     bool
+	Draft        BackendDraft
+	Kinds        []domain.BackendKind
+	IsNew        bool
 	ReadOnlyKind bool
 }
 
@@ -26,6 +26,7 @@ func (s *Session) handleBackendIndex(w http.ResponseWriter, r *http.Request) {
 			domain.BackendKindDFlash,
 			domain.BackendKindBuunLlamaCpp,
 			domain.BackendKindBeeLlamaCpp,
+			domain.BackendKindTabby,
 		},
 		IsNew:        s.deps.InitialBackendDraft.IsNew,
 		ReadOnlyKind: !s.deps.InitialBackendDraft.IsNew,

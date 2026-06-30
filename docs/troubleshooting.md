@@ -21,7 +21,7 @@ Common issues and their solutions.
 **Solution:**
 - Instance ports are assigned automatically by the process manager (a `port` argument in a profile is ignored and stripped), so backend port conflicts no longer occur
 - If the proxy port (default `4321`) is taken, change `port` under `[serve]` in `config.toml` or pass `serve --port`
-- Kill a stuck instance from the Server tab (`k`)
+- Kill a stuck instance from the Server tab (`K`)
 
 ## Model file not found
 
@@ -51,8 +51,8 @@ Common issues and their solutions.
 
 **Solution:**
 - Only one foreground instance is allowed at a time
-- Switch to background mode in the Profiles tab (`b`) before launching
-- Or kill the existing foreground instance from the Server tab
+- Profiles launch as background (proxy-mediated) instances by default — the foreground limit only applies to an explicit foreground launch
+- Kill the existing foreground instance from the Server tab (`K`)
 
 ## Health check timeout
 
@@ -91,7 +91,7 @@ Common issues and their solutions.
 - VRAM is held by the running backend process (e.g. `llama-server`), not by individual requests
 - To fully release GPU memory, the backend has to exit. Either:
   - From the headless HTTP proxy: `curl -sX POST http://127.0.0.1:4321/_admin/unload` (use `?force=true` to skip waiting for in-flight requests)
-  - From the TUI: Server tab → `k` to kill the selected instance
+  - From the TUI: Server tab → `K` to kill the selected instance
 - Verify with `nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits` before and after
 - The proxy does **not** call `nvidia-smi --gpu-reset` — that requires root and can disturb other GPU clients. Killing the process is the supported way
 

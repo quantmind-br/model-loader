@@ -21,6 +21,7 @@ var essentialSeed = map[domain.BackendKind][]string{
 	domain.BackendKindSGLang:       {"tp-size", "dp-size", "mem-fraction-static", "dtype", "quantization", "context-length", "served-model-name"},
 	domain.BackendKindDFlash:       {"draft", "max-ctx", "ddtree", "ddtree-budget", "cache-type-k", "cache-type-v", "fa-window"},
 	domain.BackendKindUnsloth:      {"gguf-variant", "ctx-size", "n-gpu-layers", "parallel", "flash-attn", "cache-type-k", "cache-type-v"},
+	domain.BackendKindTabby:        {"max-seq-len", "cache-mode", "cache-size", "tensor-parallel", "gpu-split", "gpu-split-auto", "vision"},
 }
 
 // BuildPresentation synthesizes a default Presentation from a schema:

@@ -31,9 +31,14 @@ func init() {
 		minSolve      float64
 		transcript    string
 		tbTasks       []string
+		tbNTasks      int
+		limit         int
 		sweapInstance []string
 		sweapHarness  string
 		sweapPatches  string
+		deepTasks     []string
+		deepNTasks    int
+		deepTasksDir  string
 	)
 
 	cmd := &cobra.Command{
@@ -59,7 +64,7 @@ func init() {
 			}
 			if profileID == "" {
 				fmt.Fprintln(errw, "usage:")
-				fmt.Fprintln(errw, "  model-loader benchmark --profile <id> [--mode judge|longctx|llama-bench|terminal-bench|swe-bench-pro] [--tb-task <id>] [--sweap-instance <id>] [--json] [--min-solve N]")
+				fmt.Fprintln(errw, "  model-loader benchmark --profile <id> [--mode judge|longctx|llama-bench|terminal-bench|swe-bench-pro|deep-swe] [--limit N] [--tb-task <id>] [--tb-n-tasks N] [--sweap-instance <id>] [--deepswe-task <id>] [--deepswe-n-tasks N] [--json] [--min-solve N]")
 				fmt.Fprintln(errw, "  model-loader benchmark --list [--json]")
 				fmt.Fprintln(errw, "  model-loader benchmark --compare [--profile <id>] [--json]")
 				fmt.Fprintln(errw, "  model-loader benchmark --transcript <run-id> [--json]")
@@ -79,6 +84,26 @@ func init() {
 			if len(tbTasks) > 0 {
 				cfg.Benchmark.TerminalBench.Tasks = tbTasks
 			}
+			if tbNTasks > 0 {
+				cfg.Benchmark.TerminalBench.Tasks = nil
+				cfg.Benchmark.TerminalBench.NTasks = tbNTasks
+			}
+			// --limit is the uniform reduced-run knob: it caps the in-process
+			// dataset modes + llama-bench presets (benchmark.Config.Limit) and,
+			// for the agentic terminal-bench/deep-swe modes, doubles as --n-tasks
+			// when no mode-specific task flag was given (they have no shared
+			// problem slice). swe-bench-pro keeps its instance filter.
+			if limit > 0 {
+				cfg.Benchmark.Limit = limit
+				if len(tbTasks) == 0 && tbNTasks == 0 {
+					cfg.Benchmark.TerminalBench.Tasks = nil
+					cfg.Benchmark.TerminalBench.NTasks = limit
+				}
+				if len(deepTasks) == 0 && deepNTasks == 0 {
+					cfg.Benchmark.DeepSWE.Tasks = nil
+					cfg.Benchmark.DeepSWE.NTasks = limit
+				}
+			}
 			// swe-bench-pro per-run overrides (handy for ad-hoc / smoke runs).
 			if len(sweapInstance) > 0 {
 				cfg.Benchmark.SweBenchPro.Instances = sweapInstance
@@ -88,6 +113,17 @@ func init() {
 			}
 			if sweapPatches != "" {
 				cfg.Benchmark.SweBenchPro.PatchPath = sweapPatches
+			}
+			// deep-swe per-run overrides (handy for ad-hoc / smoke runs).
+			if len(deepTasks) > 0 {
+				cfg.Benchmark.DeepSWE.Tasks = deepTasks
+			}
+			if deepNTasks > 0 {
+				cfg.Benchmark.DeepSWE.Tasks = nil
+				cfg.Benchmark.DeepSWE.NTasks = deepNTasks
+			}
+			if deepTasksDir != "" {
+				cfg.Benchmark.DeepSWE.TasksDir = deepTasksDir
 			}
 
 			svc, release, err := bootstrapWithLock(errw, logLevel)
@@ -131,11 +167,16 @@ func init() {
 	}
 
 	cmd.Flags().StringVar(&profileID, "profile", "", "profile id to benchmark")
-	cmd.Flags().StringVar(&modeStr, "mode", "judge", "scoring mode: judge | math-bench | codegen-bench | ragas-bench | summary-bench | llama-bench | longctx | instruction-bench | mmlu-bench | terminal-bench | swe-bench-pro")
+	cmd.Flags().StringVar(&modeStr, "mode", "judge", "scoring mode: judge | math-bench | codegen-bench | ragas-bench | summary-bench | llama-bench | longctx | instruction-bench | mmlu-bench | terminal-bench | swe-bench-pro | deep-swe")
 	cmd.Flags().StringArrayVar(&tbTasks, "tb-task", nil, "terminal-bench: task id or glob to run (repeatable; overrides config.benchmark.terminalbench.tasks); only used with --mode terminal-bench")
+	cmd.Flags().IntVar(&tbNTasks, "tb-n-tasks", 0, "terminal-bench: cap number of tasks (tb --n-tasks); overrides config when >0; only used with --mode terminal-bench")
+	cmd.Flags().IntVar(&limit, "limit", 0, "reduced run: cap items per mode (dataset problems + llama-bench presets; also terminal-bench/deep-swe --n-tasks when no mode-specific task flag); 0 → full set")
 	cmd.Flags().StringArrayVar(&sweapInstance, "sweap-instance", nil, "swe-bench-pro: instance_id to evaluate (repeatable; overrides config.benchmark.swebenchpro.instances); only used with --mode swe-bench-pro")
 	cmd.Flags().StringVar(&sweapHarness, "sweap-harness", "", "swe-bench-pro: path to a cloned SWE-bench_Pro-os harness (overrides config.benchmark.swebenchpro.harness_dir)")
 	cmd.Flags().StringVar(&sweapPatches, "sweap-patches", "", "swe-bench-pro: patches JSON or preds dir to evaluate (overrides config.benchmark.swebenchpro.patch_path)")
+	cmd.Flags().StringArrayVar(&deepTasks, "deepswe-task", nil, "deep-swe: task id or glob to run (repeatable; overrides config.benchmark.deepswe.tasks); only used with --mode deep-swe")
+	cmd.Flags().IntVar(&deepNTasks, "deepswe-n-tasks", 0, "deep-swe: cap number of tasks (pier --n-tasks); overrides config when >0; only used with --mode deep-swe")
+	cmd.Flags().StringVar(&deepTasksDir, "deepswe-tasks", "", "deep-swe: path to a cloned deep-swe tasks/ dir (overrides config.benchmark.deepswe.tasks_dir)")
 	cmd.Flags().BoolVar(&list, "list", false, "list saved runs and exit")
 	cmd.Flags().BoolVar(&compare, "compare", false, "with --profile: that profile's run history; alone: latest run per profile")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emit JSON instead of text")
@@ -193,6 +234,7 @@ func buildBenchmarkEnvironment(svc *app.Services, cfg config.AppConfig, errw io.
 	mon := monitor.New(monitor.Config{NvidiaSMIPath: "nvidia-smi"})
 	runner, err := benchmark.NewRunner(svc.Store, mon, supervisor, benchmark.Config{
 		MaxTokens:         cfg.Benchmark.MaxTokens,
+		Limit:             cfg.Benchmark.Limit,
 		Temperature:       cfg.Benchmark.Temperature,
 		Timeout:           time.Duration(cfg.Benchmark.TimeoutSec) * time.Second,
 		LongContextTokens: cfg.Benchmark.LongContextTokens,
@@ -230,6 +272,19 @@ func buildBenchmarkEnvironment(svc *app.Services, cfg config.AppConfig, errw io.
 		SweBenchProAgentCmd:      cfg.Benchmark.SweBenchPro.AgentCmd,
 		SweBenchProTimeout:       time.Duration(cfg.Benchmark.SweBenchPro.TimeoutSec) * time.Second,
 		SweBenchProExtraArgs:     cfg.Benchmark.SweBenchPro.ExtraArgs,
+
+		DeepSWECmd:        cfg.Benchmark.DeepSWE.Command,
+		DeepSWETasksDir:   cfg.Benchmark.DeepSWE.TasksDir,
+		DeepSWEAgent:      cfg.Benchmark.DeepSWE.Agent,
+		DeepSWEProvider:   cfg.Benchmark.DeepSWE.Provider,
+		DeepSWEModelClass: cfg.Benchmark.DeepSWE.ModelClass,
+		DeepSWEAPIBase:    cfg.Benchmark.DeepSWE.APIBase,
+		DeepSWETasks:      cfg.Benchmark.DeepSWE.Tasks,
+		DeepSWENTasks:     cfg.Benchmark.DeepSWE.NTasks,
+		DeepSWESampleSeed: cfg.Benchmark.DeepSWE.SampleSeed,
+		DeepSWEConcurrent: cfg.Benchmark.DeepSWE.Concurrent,
+		DeepSWETimeout:    time.Duration(cfg.Benchmark.DeepSWE.TimeoutSec) * time.Second,
+		DeepSWEExtraArgs:  cfg.Benchmark.DeepSWE.ExtraArgs,
 	})
 	if err != nil {
 		svc.Logger.Error("benchmark_engine_init_failed", "err", err)
@@ -263,7 +318,7 @@ func runBenchmarkProgressListener(progress <-chan benchmark.Progress, errw io.Wr
 		case "launch":
 			fmt.Fprintln(errw, "loading profile via proxy — waiting for backend health (large models can take minutes)…")
 		case "infer", "score":
-			fmt.Fprintf(errw, "[%d/%d] %s (%s)\n", p.Index, p.Total, p.ProblemName, p.Phase)
+			fmt.Fprintln(errw, benchmark.FormatBenchProgress(p.Index, p.Total, p.ProblemName, p.Phase))
 		}
 	}
 }

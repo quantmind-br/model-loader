@@ -53,6 +53,7 @@ type Runner struct {
 	presets         []tpPreset           // parsed ModeLlamaBench configs
 	reps            int                  // ModeLlamaBench repetitions per preset
 	warmup          int                  // discarded warmup reps before measurement
+	runCtxTokens    int                  // effective context of the profile under test; set by Run before Execute (single-flight)
 }
 
 // NewRunner builds a Runner and loads the embedded dataset.
@@ -113,6 +114,17 @@ func NewRunner(store profilestore.Store, mon monitor.Manager, proxy ProxyControl
 // ProblemCount reports how many problems the default executable set contains.
 func (r *Runner) ProblemCount() int { return len(r.problems) }
 
+// capCount applies the optional reduced-run Limit to a mode's natural item
+// count: it returns min(n, Limit) when Limit > 0, else n unchanged. Reducible
+// modes call it from both Count (progress total) and Execute (loop bound) so
+// the two always agree.
+func (r *Runner) capCount(n int) int {
+	if r.cfg.Limit > 0 && r.cfg.Limit < n {
+		return r.cfg.Limit
+	}
+	return n
+}
+
 // CountForMode reports how many problems a given mode will run.
 func (r *Runner) CountForMode(mode Mode) int {
 	if h, ok := handlerFor(mode); ok {
@@ -130,6 +142,7 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 	if err != nil {
 		return Run{}, fmt.Errorf("load profile: %w", err)
 	}
+	r.runCtxTokens = effectiveCtxTokens(profile)
 
 	run := Run{
 		ID:          fmt.Sprintf("%s-%d", profile.ID, started.UnixNano()),

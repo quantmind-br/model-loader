@@ -71,6 +71,30 @@ Short ctx (≤32k) with headroom → keep KV at f16/q8_0; don't quantize what yo
   ~180 tok/s short / ~154 @25k, acceptance 71%/67%, peak ~23.4 GiB (tight; raise n-cpu-moe
   before lowering ctx).
 
+## Multi-GPU on the dual-3090 rig (no NVLink)
+
+Only when weights + KV exceed one card (≤23 GiB). A model that fits one card → **pin it** to GPU1
+instead (`launch.env`: `CUDA_DEVICE_ORDER=PCI_BUS_ID`, `CUDA_VISIBLE_DEVICES=1`) — on a 2-GPU box
+llama.cpp auto-layer-splits when both cards are visible, silently changing a fitting profile's
+behavior and its proven numbers. Full rationale + the 48 GiB model tier in **references/dual-gpu.md**.
+
+- `"split-mode": "layer"` (the default) pools the 48 GiB with minimal cross-GPU traffic. **Never
+  `"row"`** (deprecated, slower than layer even with NVLink); avoid `"tensor"` on THIS rig (a genuine
+  tensor-parallel mode, superior *with* NVLink/P2P, but no-NVLink makes it interconnect-bound and it
+  forces F16/BF16 KV + OOMs as ctx grows).
+- `"tensor-split": "0.45,0.55"` is in **device-index order** — device0 (GPU0, desktop, ~22.4 GiB)
+  gets the smaller share, device1 (GPU1, clean, ~23.2 GiB) the larger; `"main-gpu": 1` puts
+  prompt-processing / non-split tensors on the clean card. Set `launch.env`
+  `CUDA_DEVICE_ORDER=PCI_BUS_ID` so the device index matches `nvidia-smi` (deterministic for two
+  identical 3090s) — otherwise the heavier share can land on the desktop card and OOM it. Don't add a
+  `CUDA_VISIBLE_DEVICES` mask when you genuinely split — both cards must be visible.
+- **Never set `GGML_CUDA_P2P=1`** (no GeForce P2P; PCIe-speed anyway; corrupts on some boards).
+- MTP / DFlash speculation still works under layer split — confirm the draft loads in the log.
+- ⚠ Validate a **long generation**, not just startup: layer split can emit garbage above ~2k ctx on
+  a non-P2P PCIe dual-3090 with asymmetric slot widths (llama.cpp #20052).
+- Splitting a fitting model does **not** raise single-stream tok/s (−3…−6% vs one card) — it is a
+  capacity move, not a speed move.
+
 ## Measured anchors (this card; carry values, not profile names — profiles change)
 
 | Recipe | ctx | Idle / peak MiB | tok/s | Notes (2026-06-12) |
@@ -111,7 +135,8 @@ Always set `ctx-size` and KV types explicitly (schema default ctx is 4096; `fit`
 shrinks unset params). `min-p` schema default is 0.1 — override per model card.
 
 Sampling per family (server-side defaults live in args for this family): Qwen3.x thinking →
-temp 0.6, top-k 20, top-p 1, min-p 0, plus `"reasoning": "on"` (beellama),
+temp 0.6, top-k 20, top-p 1, min-p 0 (Qwen's official thinking rec is top-p 0.95; the anchors use 1
+— follow the specific model card when it differs), plus `"reasoning": "on"` (beellama),
 `"chat-template-kwargs": "{\"preserve_thinking\":true}"`; Gemma → top-k 64, top-p 0.95,
 min-p 0. Other families: check the model card.
 

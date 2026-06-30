@@ -5,7 +5,13 @@ import "time"
 // Config tunes the engine. main.go maps config.BenchmarkConfig onto it so the
 // benchmark package stays decoupled from the config package.
 type Config struct {
-	MaxTokens         int
+	MaxTokens int
+	// Limit caps how many items a reducible mode runs (problems for the dataset
+	// modes, presets for llama-bench). <=0 → no cap (full set). A uniform
+	// "reduced run" knob for fast smoke/validation; modes with their own
+	// reducers (terminal-bench --n-tasks, swe-bench-pro instance filter) and the
+	// single-probe longctx ignore it.
+	Limit             int
 	Temperature       float64
 	Timeout           time.Duration // per-problem inference timeout
 	LongContextTokens int           // target prompt size for the needle probe (0 → default)
@@ -16,8 +22,9 @@ type Config struct {
 	// instruction-consistency mode (added in a later plan).
 	EmbeddingsBaseURL string
 
-	// LlamaBenchPresets are "pp/tg" strings (prompt tokens / generation tokens)
-	// for ModeLlamaBench. Empty → default {512/128, 4096/256}.
+	// LlamaBenchPresets are "<fill>%/<tg>" strings (context fill percent /
+	// generation tokens) for ModeLlamaBench. Empty → default
+	// {5%/256, 25%/256, 50%/256, 90%/128}.
 	LlamaBenchPresets []string
 	// LlamaBenchReps is how many times each preset is measured and averaged.
 	// <=0 → default 3.
@@ -107,6 +114,54 @@ type Config struct {
 	// SweBenchProExtraArgs are passed through verbatim to swe_bench_pro_eval.py
 	// after the built flags (e.g. "--block_network", "--redo").
 	SweBenchProExtraArgs []string
+
+	// --- DeepSWE (agentic) mode (ModeDeepSWE) ---
+	// These configure the external `pier` CLI (datacurve-ai/pier) running the
+	// DeepSWE task corpus (datacurve-ai/deep-swe). The engine never installs
+	// pier, Docker, or the task corpus; it only shells out to an already-installed
+	// `pier` against an already-cloned corpus.
+
+	// DeepSWECmd overrides the pier CLI binary (name on PATH or absolute path).
+	// Empty → "pier".
+	DeepSWECmd string
+	// DeepSWETasksDir is the path to a cloned DeepSWE tasks directory (the
+	// `tasks/` subdir of datacurve-ai/deep-swe). Required for this mode.
+	DeepSWETasksDir string
+	// DeepSWEAgent is the pier agent that solves each task. Empty → "mini-swe-agent".
+	DeepSWEAgent string
+	// DeepSWEProvider is the LiteLLM provider prefix prepended to the profile id
+	// to form pier's --model arg. Empty → "openai" (→ openai/<profile-id>), which
+	// LiteLLM routes at the proxy as an OpenAI-compatible endpoint.
+	DeepSWEProvider string
+	// DeepSWEModelClass overrides mini-swe-agent's model adapter (pier
+	// --agent-kwarg model_class=…). Empty → "litellm", forcing LiteLLM chat
+	// completions; without it an openai/<id> model selects mini-swe-agent's
+	// Responses-API adapter, which llama-server does not implement.
+	DeepSWEModelClass string
+	// DeepSWEAPIBase overrides the api_base the in-sandbox agent calls. Empty →
+	// derived from the proxy root (<proxy>/v1). Because the agent runs inside a
+	// Docker container, 127.0.0.1 there is the container itself: set this to a
+	// host-reachable address (e.g. http://host.docker.internal:4321/v1) and bind
+	// the proxy accordingly. See docs/deep-swe.md.
+	DeepSWEAPIBase string
+	// DeepSWETasks limits the run to specific task ids / glob patterns (pier
+	// --include-task-name). Empty → the whole corpus.
+	DeepSWETasks []string
+	// DeepSWENTasks caps the number of tasks (pier --n-tasks); 0 → omit. Paired
+	// with DeepSWESampleSeed for a deterministic subset.
+	DeepSWENTasks int
+	// DeepSWESampleSeed is pier --sample-seed for deterministic subset selection
+	// (applied before --n-tasks). Only emitted when DeepSWENTasks > 0.
+	DeepSWESampleSeed int
+	// DeepSWEConcurrent is pier --n-concurrent. <=0 → 1 (one trial at a time,
+	// fitting the single-GPU rig: concurrent trials would hammer one backend).
+	DeepSWEConcurrent int
+	// DeepSWETimeout bounds the whole pier run from the model-loader side; 0 → no
+	// cap here (pier still enforces its own per-task timeouts from task.toml).
+	DeepSWETimeout time.Duration
+	// DeepSWEExtraArgs are passed through verbatim after the built flags (e.g.
+	// "--force-build", "--ae", "HTTP_PROXY=…").
+	DeepSWEExtraArgs []string
 }
 
 // JudgeEndpoint is the OpenAI-compatible endpoint used by ModeJudge.

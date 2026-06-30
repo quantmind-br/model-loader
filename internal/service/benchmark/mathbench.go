@@ -122,7 +122,7 @@ type mathHandler struct{}
 
 func (mathHandler) Mode() Mode                      { return ModeMathBench }
 func (mathHandler) Category() Category              { return CatQuality }
-func (mathHandler) Count(r *Runner) int             { return len(r.mathProblems) }
+func (mathHandler) Count(r *Runner) int             { return r.capCount(len(r.mathProblems)) }
 func (mathHandler) Prepare(*Runner) (Scorer, error) { return nil, nil }
 
 // Finalize sets MathAccuracy over answered problems only (request errors are
@@ -144,7 +144,7 @@ func (mathHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
 }
 
 func (mathHandler) Execute(ctx context.Context, r *Runner, base, model string, _ Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
-	return executeSerialBench(ctx, r, progress, len(r.mathProblems),
+	return executeSerialBench(ctx, r, progress, r.capCount(len(r.mathProblems)),
 		func(i int) (string, string) {
 			p := r.mathProblems[i]
 			return p.ID, truncateQuestion(p.Question)

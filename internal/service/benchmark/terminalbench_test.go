@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -40,7 +41,7 @@ func TestTerminalBench_Count(t *testing.T) {
 		{"explicit tasks", Config{TerminalBenchTasks: []string{"a", "b", "c"}}, 3},
 		{"n-tasks only", Config{TerminalBenchNTasks: 5}, 5},
 		{"tasks win over n-tasks", Config{TerminalBenchTasks: []string{"a"}, TerminalBenchNTasks: 9}, 1},
-		{"unknown (whole dataset)", Config{}, 0},
+		{"whole dataset without cache", Config{TerminalBenchDataset: "no-such-dataset==0.0.0"}, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -52,6 +53,38 @@ func TestTerminalBench_Count(t *testing.T) {
 	}
 }
 
+func TestTbDatasetNameVersion(t *testing.T) {
+	name, ver := tbDatasetNameVersion("terminal-bench-core==0.1.1")
+	if name != "terminal-bench-core" || ver != "0.1.1" {
+		t.Fatalf("parsed = %q %q", name, ver)
+	}
+	name, ver = tbDatasetNameVersion("")
+	if name != "terminal-bench-core" || ver != "0.1.1" {
+		t.Fatalf("default = %q %q", name, ver)
+	}
+}
+
+func TestTbReadAggregateResultsTotal(t *testing.T) {
+	dir := t.TempDir()
+	if got := tbReadAggregateResultsTotal(dir); got != 0 {
+		t.Fatalf("missing file = %d", got)
+	}
+	mustWrite(t, filepath.Join(dir, "results.json"), `{"results":[{"trial_name":"a"},{"trial_name":"b"}]}`)
+	if got := tbReadAggregateResultsTotal(dir); got != 2 {
+		t.Fatalf("got %d want 2", got)
+	}
+}
+
+func TestTbCachedDatasetTaskCount_DefaultDataset(t *testing.T) {
+	// When tb has downloaded the default dataset, Count should see ~80 tasks.
+	n := tbCachedDatasetTaskCount("terminal-bench-core==0.1.1")
+	if n == 0 {
+		t.Skip("tb dataset cache not present on this machine")
+	}
+	if n < 50 {
+		t.Fatalf("unexpectedly small task count: %d", n)
+	}
+}
 func TestTerminalBench_Prepare_FailFast(t *testing.T) {
 	origTB, origDocker := lookTB, lookDocker
 	defer func() { lookTB, lookDocker = origTB, origDocker }()
@@ -177,6 +210,27 @@ func TestTBEnv_PreservesExistingKey(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("expected exactly one OPENAI_API_KEY entry, got %d", count)
+	}
+}
+
+// TestTBEnv_EmptyKeyReplacedWithDummy is a regression test: a set-but-empty
+// OPENAI_API_KEY (common in shells that export OPENAI_API_KEY=) must be treated
+// as absent. Otherwise LiteLLM's openai route rejects every call with "Missing
+// credentials" before any request leaves the agent, surfacing in tb as
+// unknown_agent_error on every task.
+func TestTBEnv_EmptyKeyReplacedWithDummy(t *testing.T) {
+	env := tbEnv([]string{"OPENAI_API_KEY=", "PATH=/usr/bin"})
+	var vals []string
+	for _, e := range env {
+		if strings.HasPrefix(e, "OPENAI_API_KEY=") {
+			vals = append(vals, strings.TrimPrefix(e, "OPENAI_API_KEY="))
+		}
+	}
+	if len(vals) != 1 {
+		t.Fatalf("expected exactly one OPENAI_API_KEY entry, got %d (%v)", len(vals), vals)
+	}
+	if vals[0] == "" {
+		t.Error("empty OPENAI_API_KEY must be replaced with the dummy key, not left empty")
 	}
 }
 

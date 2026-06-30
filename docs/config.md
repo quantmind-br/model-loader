@@ -65,7 +65,7 @@ The proxy exposes both the OpenAI-compatible inference surface and dedicated adm
 | Method | Path | Purpose |
 |--------|------|---------|
 | `POST` | `/v1/chat/completions`, `/v1/completions`, … | Proxied to the loaded backend. The `"model"` field (or `?model=` query param) triggers an implicit swap when needed |
-| `GET`  | `/v1/models` | OpenAI-shaped list of registered profiles |
+| `GET`  | `/v1/models` | OpenRouter-shaped model list — each profile mirrors an OpenRouter `/api/v1/models` object (non-applicable fields empty) plus OpenAI's `object:"model"` and `owned_by` (serving backend id); envelope keeps `{"object":"list"}` |
 | `GET`  | `/_status` | Current state: `running`, `loaded_profile_id`, `loaded_pid`, `loaded_port`, `inflight_requests`, `last_swap_at`, `last_swap_dur`, `last_error` |
 | `POST` | `/_admin/load` | Explicitly load a profile. Body: `{"profile_id":"<id>"}` (alias: `{"model":"<id>"}`). Returns the same `Status` shape as `/_status` |
 | `POST` | `/_admin/unload` | Kill the loaded backend, freeing its VRAM. Query params: `?force=true` (skip drain), `?drain_timeout=10s` (cap on in-flight drain wait, defaults to the shutdown grace period). Idempotent: 200 when nothing is loaded |
@@ -105,6 +105,27 @@ Throughput-mode (`llama-bench`) settings.
 |-----|---------|-------------|
 | `presets` | `["512/128", "4096/256"]` | `pp/tg` token pairs (prompt / generation) to measure |
 | `repetitions` | `3` | Measurements per preset (`0` → 3) |
+
+#### `[benchmark.deepswe]`
+
+Agentic [DeepSWE](https://github.com/datacurve-ai/deep-swe) mode (`--mode deep-swe`),
+wrapping the external `pier` CLI + Docker. See [docs/deep-swe.md](deep-swe.md) for
+the full guide (chat-completions routing and container→host networking matter).
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `tasks_dir` | `""` | Cloned deep-swe `tasks/` dir (required for this mode) |
+| `command` | `"pier"` | Pier CLI binary (name on PATH or absolute path) |
+| `agent` | `"mini-swe-agent"` | Pier agent that solves each task |
+| `provider` | `"openai"` | LiteLLM provider prefix → `openai/<profile-id>` |
+| `model_class` | `"litellm"` | mini-swe-agent adapter; forces chat completions (not the Responses API) |
+| `api_base` | `""` | Agent-facing api_base; empty → `<proxy>/v1` with loopback rewritten to `host.docker.internal` |
+| `tasks` | `[]` | `--include-task-name` ids/globs; empty → whole corpus |
+| `n_tasks` | `0` | `--n-tasks` cap; `0` → whole corpus |
+| `sample_seed` | `0` | `--sample-seed` for a deterministic subset (with `n_tasks`) |
+| `concurrent` | `1` | `--n-concurrent` (keep at 1 on a single-GPU rig) |
+| `timeout_sec` | `0` | Whole-run cap; `0` → none |
+| `extra_args` | `[]` | Passed verbatim after the built flags |
 
 ## Example
 
@@ -149,6 +170,9 @@ samples = 3
 [benchmark.llamabench]
 presets = ["512/128", "4096/256"]
 repetitions = 3
+
+# [benchmark.deepswe]
+# tasks_dir = "~/dev/deep-swe/tasks"   # required for --mode deep-swe; see docs/deep-swe.md
 ```
 
 ## Backend Catalog

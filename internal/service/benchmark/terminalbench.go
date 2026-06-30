@@ -30,6 +30,9 @@ const (
 	// tbRunID is a fixed run id so results land at a deterministic path
 	// (<output-path>/<tbRunID>/results.json) rather than tb's timestamp default.
 	tbRunID = "model-loader"
+	// tbCacheDatasetRoot is the dataset segment under os.UserCacheDir() (tb default
+	// download layout: <UserCacheDir>/terminal-bench/<name>/<version>).
+	tbCacheDatasetRoot = "terminal-bench"
 )
 
 // lookTB / lookDocker are seams resolving the external binaries on PATH
@@ -47,8 +50,8 @@ func (terminalBenchHandler) Mode() Mode         { return ModeTerminalBench }
 func (terminalBenchHandler) Category() Category { return CatAgentic }
 
 // Count reports how many tasks the run will cover, when known up front: the
-// explicit task list wins, else --n-tasks, else 0 (the whole dataset — size is
-// only known once tb resolves it, so progress Total starts unknown).
+// explicit task list wins, else --n-tasks, else the cached tb dataset size when
+// the whole dataset is selected (no tasks / n_tasks), else 0.
 func (terminalBenchHandler) Count(r *Runner) int {
 	if n := len(r.cfg.TerminalBenchTasks); n > 0 {
 		return n
@@ -56,7 +59,7 @@ func (terminalBenchHandler) Count(r *Runner) int {
 	if r.cfg.TerminalBenchNTasks > 0 {
 		return r.cfg.TerminalBenchNTasks
 	}
-	return 0
+	return tbCachedDatasetTaskCount(r.cfg.TerminalBenchDataset)
 }
 
 // Prepare fails fast (before the expensive proxy load) when the external tool
@@ -161,6 +164,61 @@ func (h terminalBenchHandler) Execute(ctx context.Context, r *Runner, base, mode
 	return problems, transcripts, nil
 }
 
+// tbDatasetNameVersion splits tb's --dataset value ('name' or 'name==version').
+func tbDatasetNameVersion(dataset string) (name, version string) {
+	dataset = strings.TrimSpace(dataset)
+	if dataset == "" {
+		dataset = tbDefaultDataset
+	}
+	if i := strings.Index(dataset, "=="); i >= 0 {
+		return dataset[:i], dataset[i+2:]
+	}
+	return dataset, ""
+}
+
+// tbCachedDatasetTaskCount counts task directories under tb's default dataset
+// cache (~/.cache/terminal-bench/<name>/<version>). Returns 0 when the cache is
+// missing (tb will download on first run; progress may show an unknown total
+// until aggregate results.json appears).
+func tbCachedDatasetTaskCount(dataset string) int {
+	name, version := tbDatasetNameVersion(dataset)
+	if name == "" || version == "" {
+		return 0
+	}
+	root, err := os.UserCacheDir()
+	if err != nil {
+		return 0
+	}
+	dir := filepath.Join(root, tbCacheDatasetRoot, name, version)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			n++
+		}
+	}
+	return n
+}
+
+// tbReadAggregateResultsTotal reads len(results) from the run's aggregate
+// results.json when tb has started writing it (partial runs included).
+func tbReadAggregateResultsTotal(runDir string) int {
+	data, err := os.ReadFile(filepath.Join(runDir, "results.json"))
+	if err != nil {
+		return 0
+	}
+	var partial struct {
+		Results []json.RawMessage `json:"results"`
+	}
+	if err := json.Unmarshal(data, &partial); err != nil {
+		return 0
+	}
+	return len(partial.Results)
+}
+
 // resolveTBBin resolves the tb binary: an explicit path/name from config, else
 // the lookTB seam.
 func resolveTBBin(cfg Config) (string, error) {
@@ -227,6 +285,12 @@ func tbEnv(parent []string) []string {
 	hasKey := false
 	for _, e := range parent {
 		if strings.HasPrefix(e, "OPENAI_API_KEY=") {
+			// A set-but-empty key (OPENAI_API_KEY=) makes LiteLLM's openai route
+			// fail with "Missing credentials" before any request leaves the
+			// agent. Treat empty as absent and drop it so the dummy below wins.
+			if strings.TrimPrefix(e, "OPENAI_API_KEY=") == "" {
+				continue
+			}
 			hasKey = true
 		}
 		if strings.HasPrefix(e, "PYTHONUNBUFFERED=") {
@@ -336,9 +400,16 @@ func tbProgressPoller(runDir string, total int, progress chan<- Progress, stop <
 		case <-stop:
 			return
 		case <-t.C:
-			if n := countCompletedTrials(runDir); n != last {
+			n := countCompletedTrials(runDir)
+			effectiveTotal := total
+			if effectiveTotal <= 0 {
+				if agg := tbReadAggregateResultsTotal(runDir); agg > 0 {
+					effectiveTotal = agg
+				}
+			}
+			if n != last || effectiveTotal != total {
 				last = n
-				send(progress, Progress{Index: n, Total: total, ProblemID: "terminal-bench", ProblemName: tbProgressLabel(n, total), Phase: "infer"})
+				send(progress, Progress{Index: n, Total: effectiveTotal, ProblemID: "terminal-bench", ProblemName: tbProgressLabel(n, effectiveTotal), Phase: "infer"})
 			}
 		}
 	}

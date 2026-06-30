@@ -26,17 +26,12 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", s.handleForward)
 }
 
-// modelEntry is the OpenAI-shaped object emitted by /v1/models.
-type modelEntry struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	OwnedBy string `json:"owned_by"`
-}
-
+// modelsResponse is the list envelope returned by /v1/models. The envelope
+// keeps OpenAI's `object: "list"`; each entry mirrors the OpenRouter model
+// object (see models_openrouter.go).
 type modelsResponse struct {
-	Object string       `json:"object"`
-	Data   []modelEntry `json:"data"`
+	Object string    `json:"object"`
+	Data   []orModel `json:"data"`
 }
 
 func (s *Server) handleModelsList(w http.ResponseWriter, r *http.Request) {
@@ -58,15 +53,10 @@ func (s *Server) handleModelsList(w http.ResponseWriter, r *http.Request) {
 	}
 	out := modelsResponse{
 		Object: "list",
-		Data:   make([]modelEntry, 0, len(profiles)),
+		Data:   make([]orModel, 0, len(profiles)),
 	}
 	for _, p := range profiles {
-		out.Data = append(out.Data, modelEntry{
-			ID:      p.ID,
-			Object:  "model",
-			Created: p.Meta.CreatedAt.Unix(),
-			OwnedBy: "model-loader",
-		})
+		out.Data = append(out.Data, buildORModel(p))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -238,7 +228,7 @@ func (s *Server) launchNewBackend(profile domain.Profile, profileID, attemptID s
 		port:      inst.Port,
 		logPath:   inst.LogPath,
 		authToken: token,
-		proxy:     newReverseProxy(inst.Port, token),
+		proxy:     newReverseProxy(inst.Port, token, s.cfg.MaxBodyBuffer),
 	}
 	s.stateMu.Lock()
 	s.current = loaded
@@ -290,9 +280,9 @@ func (s *Server) handleAdminLoad(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	profileID := strings.TrimSpace(req.ProfileID)
+	profileID := normalizeRequestModel(strings.TrimSpace(req.ProfileID))
 	if profileID == "" {
-		profileID = strings.TrimSpace(req.Model)
+		profileID = normalizeRequestModel(strings.TrimSpace(req.Model))
 	}
 	if profileID == "" {
 		writeOpenAIError(w, http.StatusBadRequest, "invalid_request_error",

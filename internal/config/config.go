@@ -23,6 +23,7 @@ type AppConfig struct {
 // BenchmarkConfig controls the Benchmark tab's evaluation engine.
 type BenchmarkConfig struct {
 	MaxTokens         int                 `mapstructure:"max_tokens"`          // generation cap per problem
+	Limit             int                 `mapstructure:"limit"`               // cap items per reducible mode (0 → full set); a uniform reduced-run knob
 	Temperature       float64             `mapstructure:"temperature"`         // sampling temperature
 	TimeoutSec        int                 `mapstructure:"timeout_sec"`         // per-problem inference timeout
 	LongContextTokens int                 `mapstructure:"long_context_tokens"` // target prompt size for needle probe (0 → 8000)
@@ -32,6 +33,7 @@ type BenchmarkConfig struct {
 	Embeddings        EmbeddingsConfig    `mapstructure:"embeddings"`
 	TerminalBench     TerminalBenchConfig `mapstructure:"terminalbench"`
 	SweBenchPro       SweBenchProConfig   `mapstructure:"swebenchpro"`
+	DeepSWE           DeepSWEConfig       `mapstructure:"deepswe"`
 }
 
 // SweBenchProConfig configures the agentic SWE-bench Pro scoring mode, which
@@ -68,11 +70,31 @@ type TerminalBenchConfig struct {
 	ExtraArgs  []string `mapstructure:"extra_args"`  // passed through verbatim (e.g. "--no-rebuild")
 }
 
+// DeepSWEConfig configures the agentic DeepSWE scoring mode, which wraps the
+// external `pier` CLI (datacurve-ai/pier) running the DeepSWE task corpus
+// (datacurve-ai/deep-swe) + Docker. Empty scalar values fall back to the engine
+// defaults shown below. The engine never installs pier, Docker, or the corpus.
+type DeepSWEConfig struct {
+	Command    string   `mapstructure:"command"`     // pier CLI binary (name on PATH or path); empty → "pier"
+	TasksDir   string   `mapstructure:"tasks_dir"`   // cloned deep-swe tasks/ dir (required for this mode)
+	Agent      string   `mapstructure:"agent"`       // pier agent; empty → "mini-swe-agent"
+	Provider   string   `mapstructure:"provider"`    // LiteLLM provider prefix for --model; empty → "openai"
+	ModelClass string   `mapstructure:"model_class"` // mini-swe-agent model adapter; empty → "litellm" (chat completions)
+	APIBase    string   `mapstructure:"api_base"`    // agent-facing api_base; empty → derived (<proxy>/v1, loopback→host.docker.internal). See docs/deep-swe.md
+	Tasks      []string `mapstructure:"tasks"`       // --include-task-name ids/globs; empty → whole corpus
+	NTasks     int      `mapstructure:"n_tasks"`     // --n-tasks cap; 0 → omit
+	SampleSeed int      `mapstructure:"sample_seed"` // --sample-seed for deterministic subset (with n_tasks)
+	Concurrent int      `mapstructure:"concurrent"`  // --n-concurrent; <=0 → 1 (single-GPU rig)
+	TimeoutSec int      `mapstructure:"timeout_sec"` // whole-run cap (seconds); 0 → no model-loader-side cap
+	ExtraArgs  []string `mapstructure:"extra_args"`  // passed through verbatim (e.g. "--force-build")
+}
+
 // LlamaBenchConfig tunes the throughput (llama-bench) scoring mode. Empty values
-// fall back to engine defaults (presets 512/128 + 4096/256, 3 repetitions).
+// fall back to engine defaults (fill levels 5/25/50/90%, 3 repetitions).
 type LlamaBenchConfig struct {
-	// Presets are "pp/tg" pairs, e.g. ["128/512","512/128","2048/256","4096/256","8192/128","16384/64"].
-	// Keep in sync with benchmark.defaultPresets in runner.go.
+	// Presets are "<fill>%/<tg>" pairs, e.g. ["5%/256","25%/256","50%/256","90%/128"].
+	// fill = percent of the profile's effective context to prefill with real content.
+	// Keep in sync with benchmark.defaultPresets in llamabench_probe.go.
 	Presets     []string `mapstructure:"presets"`
 	Repetitions int      `mapstructure:"repetitions"` // measurements per preset; 0 → 3
 	Warmup      int      `mapstructure:"warmup"`      // discarded warmup reps before measurement; <0 → 1; 0 disables
@@ -196,6 +218,7 @@ func LoadFrom(path string) (AppConfig, error) {
 	cfg.Benchmark.SweBenchPro.RawSamplePath = expandTilde(cfg.Benchmark.SweBenchPro.RawSamplePath)
 	cfg.Benchmark.SweBenchPro.ScriptsDir = expandTilde(cfg.Benchmark.SweBenchPro.ScriptsDir)
 	cfg.Benchmark.SweBenchPro.PatchPath = expandTilde(cfg.Benchmark.SweBenchPro.PatchPath)
+	cfg.Benchmark.DeepSWE.TasksDir = expandTilde(cfg.Benchmark.DeepSWE.TasksDir)
 	return cfg, nil
 }
 
@@ -264,7 +287,7 @@ func applyDefaults(v *viper.Viper) {
 	v.SetDefault("benchmark.judge.model", "")
 	v.SetDefault("benchmark.judge.samples", 3)
 	v.SetDefault("benchmark.embeddings.base_url", "")
-	v.SetDefault("benchmark.llamabench.presets", []string{"128/512", "512/128", "2048/256", "4096/256", "8192/128", "16384/64"})
+	v.SetDefault("benchmark.llamabench.presets", []string{"5%/256", "25%/256", "50%/256", "90%/128"})
 	v.SetDefault("benchmark.llamabench.repetitions", 3)
 	v.SetDefault("benchmark.llamabench.warmup", 1)
 	v.SetDefault("benchmark.terminalbench.command", "tb")

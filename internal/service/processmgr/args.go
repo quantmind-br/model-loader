@@ -3,6 +3,7 @@ package processmgr
 import (
 	"fmt"
 	"math"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -39,6 +40,8 @@ func BuildArgsForBackend(p domain.Profile, kind domain.BackendKind, executable s
 		return buildLlamaArgs(p), nil
 	case domain.BackendKindUnsloth:
 		return buildUnslothArgs(p), nil
+	case domain.BackendKindTabby:
+		return buildTabbyArgs(p), nil
 	default:
 		return nil, fmt.Errorf("unsupported backend kind for arg building: %s", kind)
 	}
@@ -152,6 +155,99 @@ func buildDFlashArgs(p domain.Profile) []string {
 // The wrapper script forces the headless/loopback flags.
 func buildUnslothArgs(p domain.Profile) []string {
 	return buildArgs(p, argBuildOpts{skipKeys: []string{"model"}, modelFlag: "--model"})
+}
+
+// tabbyNargsFlags are TabbyAPI list-valued flags whose argparse definition uses
+// nargs="+", so each element must be emitted as its own whitespace-delimited
+// token (e.g. --gpu-split 21 23), never a single comma-joined token. A profile
+// supplies them as a string ("21,23" or "21 23") or a JSON list; both expand.
+var tabbyNargsFlags = map[string]bool{
+	"gpu-split":         true,
+	"autosplit-reserve": true,
+	"draft-gpu-split":   true,
+}
+
+// buildTabbyArgs builds args for TabbyAPI (the ExLlamaV2/V3 OpenAI server),
+// launched through backends/tabby/tabby-serve.sh. TabbyAPI loads a model by
+// directory + subfolder name, so the profile's absolute model dir is split into
+// --model-dir (parent) + --model-name (basename). --port is injected by
+// prepareLaunch; the wrapper forces --host/--disable-auth. List flags
+// (gpu-split, autosplit-reserve, draft-gpu-split) emit one token per element.
+func buildTabbyArgs(p domain.Profile) []string {
+	args := make([]string, 0, 4+2*len(p.Args)+len(p.ExtraArgs))
+	args = append(args, "--model-dir", filepath.Dir(p.Model), "--model-name", filepath.Base(p.Model))
+
+	skip := map[string]bool{"model": true, "model-dir": true, "model-name": true}
+	keys := make([]string, 0, len(p.Args))
+	for k := range p.Args {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		if skip[k] {
+			continue
+		}
+		flag := "--" + k
+		if tabbyNargsFlags[k] {
+			toks := tabbyListTokens(p.Args[k])
+			if len(toks) == 0 {
+				continue
+			}
+			args = append(args, flag)
+			args = append(args, toks...)
+			continue
+		}
+		switch v := p.Args[k].(type) {
+		case bool:
+			// TabbyAPI's argparser is generated from a Pydantic model: boolean
+			// flags take an explicit value ("--vision true"), they are NOT
+			// store_true. Always emit the value so defaults can be overridden.
+			args = append(args, flag, strconv.FormatBool(v))
+		case string:
+			args = append(args, flag, v)
+		case int:
+			args = append(args, flag, strconv.Itoa(v))
+		case int32:
+			args = append(args, flag, strconv.FormatInt(int64(v), 10))
+		case int64:
+			args = append(args, flag, strconv.FormatInt(v, 10))
+		case float64:
+			args = append(args, flag, formatFloat(v))
+		case []any:
+			args = append(args, flag)
+			for _, x := range v {
+				args = append(args, fmt.Sprint(x))
+			}
+		}
+	}
+	args = append(args, p.ExtraArgs...)
+	return args
+}
+
+// tabbyListTokens normalizes a nargs="+" flag value into separate tokens. A
+// JSON list yields one token per element; a string is split on commas and
+// whitespace so "21,23", "21 23", and "21, 23" all become ["21","23"].
+func tabbyListTokens(v any) []string {
+	switch vv := v.(type) {
+	case []any:
+		toks := make([]string, 0, len(vv))
+		for _, x := range vv {
+			toks = append(toks, fmt.Sprint(x))
+		}
+		return toks
+	case string:
+		fields := strings.FieldsFunc(vv, func(r rune) bool {
+			return r == ',' || r == ' ' || r == '\t'
+		})
+		return fields
+	default:
+		s := strings.TrimSpace(fmt.Sprint(vv))
+		if s == "" {
+			return nil
+		}
+		return []string{s}
+	}
 }
 
 func formatFloat(f float64) string {

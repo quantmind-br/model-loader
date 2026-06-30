@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 func TestModeInstBenchTitle(t *testing.T) {
@@ -102,5 +104,73 @@ func TestRun_LegacyJSONDecodesClean(t *testing.T) {
 		if strings.Contains(string(b), `"`+k+`"`) {
 			t.Errorf("zero %s should be omitted, got %s", k, b)
 		}
+	}
+}
+
+func TestParseCtxTokens(t *testing.T) {
+	cases := []struct {
+		in   string
+		want int
+	}{
+		{"", 0},
+		{"131072", 131072},
+		{"128k", 128 * 1024},
+		{"1m", 1024 * 1024},
+		{"  256K ", 256 * 1024},
+		{"262144", 262144},     // dflash max-ctx
+		{"8192", 8192},         // vllm max-model-len string
+		{"1e+06", 1000000},     // argString scientific notation (float64 ≥1e6)
+		{"1.048576e+06", 1048576}, // 1M ctx-size rendered by %v
+		{"abc", 0},
+		{"0", 0},
+		{"-5", 0},
+	}
+	for _, c := range cases {
+		if got := parseCtxTokens(c.in); got != c.want {
+			t.Errorf("parseCtxTokens(%q) = %d, want %d", c.in, got, c.want)
+		}
+	}
+}
+
+func TestEffectiveCtxTokens_Precedence(t *testing.T) {
+	// ctx-size wins over max-ctx and max-model-len.
+	p := domain.Profile{Args: map[string]any{"ctx-size": float64(204800), "max-ctx": float64(262144), "max-model-len": "8192"}}
+	if got := effectiveCtxTokens(p); got != 204800 {
+		t.Errorf("ctx-size precedence: got %d, want 204800", got)
+	}
+	// max-ctx (dflash) when ctx-size absent.
+	if got := effectiveCtxTokens(domain.Profile{Args: map[string]any{"max-ctx": float64(262144)}}); got != 262144 {
+		t.Errorf("max-ctx fallback: got %d, want 262144", got)
+	}
+	// max-model-len (vllm, stored as string) when the others are absent.
+	if got := effectiveCtxTokens(domain.Profile{Args: map[string]any{"max-model-len": "8192"}}); got != 8192 {
+		t.Errorf("max-model-len fallback: got %d, want 8192", got)
+	}
+	// none parseable → 0 (caller falls back to a conservative default).
+	if got := effectiveCtxTokens(domain.Profile{Args: map[string]any{"foo": "bar"}}); got != 0 {
+		t.Errorf("unknown ctx: got %d, want 0", got)
+	}
+}
+
+func TestBuildCodeContext(t *testing.T) {
+	// Real-corpus path: cycles the pool and reaches roughly the char budget.
+	problems := []CodeGenProblem{
+		{Prompt: "def add(a, b):\n", CanonicalSolution: "    return a + b\n"},
+		{Prompt: "def sub(a, b):\n", CanonicalSolution: "    return a - b\n"},
+	}
+	got := buildCodeContext(problems, 256) // ~1024 char budget
+	if len(got) < 256*4 {
+		t.Errorf("real-corpus context too short: %d chars, want ≥ %d", len(got), 256*4)
+	}
+	if !strings.Contains(got, "def add(a, b):") || !strings.Contains(got, "return a + b") {
+		t.Errorf("real-corpus context missing seeded code: %q", got[:min(120, len(got))])
+	}
+	// Empty pool → deterministic code-shaped fallback (still real code).
+	fb := buildCodeContext(nil, 128)
+	if len(fb) < 128*4 {
+		t.Errorf("fallback context too short: %d chars", len(fb))
+	}
+	if !strings.Contains(fb, "def func_0(x: int) -> int:") {
+		t.Errorf("fallback context missing code-shaped filler: %q", fb[:min(120, len(fb))])
 	}
 }

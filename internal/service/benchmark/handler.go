@@ -98,7 +98,7 @@ var modeOrder = []Mode{
 	// Knowledge
 	ModeMMLUBench,
 	// Agentic
-	ModeTerminalBench, ModeSweBenchPro,
+	ModeTerminalBench, ModeSweBenchPro, ModeDeepSWE,
 }
 
 // ModesInOrder returns the registered modes in canonical display order. It is

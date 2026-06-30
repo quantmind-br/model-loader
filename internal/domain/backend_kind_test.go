@@ -13,3 +13,9 @@ func TestBackendKindBeeLlamaCppValue(t *testing.T) {
 		t.Fatalf("got %q, want %q", BackendKindBeeLlamaCpp, "beellama-cpp")
 	}
 }
+
+func TestBackendKindTabbyValue(t *testing.T) {
+	if BackendKindTabby != "tabby" {
+		t.Fatalf("got %q, want %q", BackendKindTabby, "tabby")
+	}
+}

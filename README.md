@@ -146,7 +146,7 @@ The `model-loader serve` subcommand starts a headless OpenAI-shaped reverse prox
 | Method | Path | Purpose |
 |--------|------|---------|
 | `POST` | `/v1/chat/completions`, `/v1/completions`, etc. | OpenAI-compatible inference. The proxy reads the `"model"` field (or `?model=` query param) and hot-swaps the backend if needed |
-| `GET`  | `/v1/models` | OpenAI-shaped list of registered profiles (each profile shows up as a "model") |
+| `GET`  | `/v1/models` | OpenRouter-shaped model list — each profile becomes a model object mirroring OpenRouter's `/api/v1/models` (`id`, `context_length`, `architecture`, `pricing`, `top_provider`, …); fields with no meaning for a local proxy are emitted empty. Each item also carries OpenAI's `object: "model"` and `owned_by` (the profile's serving backend id). The list envelope keeps OpenAI's `{"object":"list"}` |
 | `GET`  | `/_status` | JSON snapshot: `running`, `loaded_profile_id`, `loaded_pid`, `loaded_port`, `inflight_requests`, last swap timing, last error |
 | `POST` | `/_admin/load` | Explicitly load a profile without sending an inference request. Body: `{"profile_id":"<id>"}` (or `{"model":"<id>"}` as alias). Reuses the same swap path as the catch-all forwarder |
 | `POST` | `/_admin/unload` | Kill the currently-loaded backend. Frees its VRAM (the OS reclaims memory when the process exits). Idempotent: returns 200 when nothing is loaded |

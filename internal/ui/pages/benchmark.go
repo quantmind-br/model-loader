@@ -379,7 +379,7 @@ func (p BenchmarkPage) viewRunning() string {
 	case "launch":
 		status = "launching backend / waiting for /health…"
 	case "infer", "score":
-		status = fmt.Sprintf("problem %d/%d: %s (%s)", prog.Index, prog.Total, prog.ProblemName, prog.Phase)
+		status = benchmark.FormatBenchProgress(prog.Index, prog.Total, prog.ProblemName, prog.Phase)
 	case "done":
 		status = "aggregating…"
 	}

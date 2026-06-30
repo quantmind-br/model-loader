@@ -17,7 +17,7 @@ func TestRegistry_RegistersExistingModes(t *testing.T) {
 }
 
 func TestHandlerCount_MatchesRunner(t *testing.T) {
-	r := &Runner{presets: []tpPreset{{512, 128}, {4096, 256}}, problems: make([]Problem, 7)}
+	r := &Runner{presets: []tpPreset{{FillPct: 50, GenTokens: 128}, {FillPct: 90, GenTokens: 256}}, problems: make([]Problem, 7)}
 	if h, _ := handlerFor(ModeJudge); h.Count(r) != 7 {
 		t.Errorf("judge count = %d, want 7", h.Count(r))
 	}
@@ -30,7 +30,7 @@ func TestHandlerCount_MatchesRunner(t *testing.T) {
 }
 
 func TestCountForMode_DelegatesToRegistry(t *testing.T) {
-	r := &Runner{presets: []tpPreset{{512, 128}}, problems: make([]Problem, 3)}
+	r := &Runner{presets: []tpPreset{{FillPct: 50, GenTokens: 128}}, problems: make([]Problem, 3)}
 	if got := r.CountForMode(ModeJudge); got != 3 {
 		t.Errorf("CountForMode(judge) = %d, want 3", got)
 	}
