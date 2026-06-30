@@ -22,14 +22,30 @@ type AppConfig struct {
 
 // BenchmarkConfig controls the Benchmark tab's evaluation engine.
 type BenchmarkConfig struct {
-	MaxTokens         int              `mapstructure:"max_tokens"`          // generation cap per problem
-	Temperature       float64          `mapstructure:"temperature"`         // sampling temperature
-	TimeoutSec        int              `mapstructure:"timeout_sec"`         // per-problem inference timeout
-	LongContextTokens int              `mapstructure:"long_context_tokens"` // target prompt size for needle probe (0 → 8000)
-	SaveTranscripts   bool             `mapstructure:"save_transcripts"`    // capture raw model/judge I/O per run for debugging
-	Judge             JudgeConfig      `mapstructure:"judge"`
-	LlamaBench        LlamaBenchConfig `mapstructure:"llamabench"`
-	Embeddings        EmbeddingsConfig `mapstructure:"embeddings"`
+	MaxTokens         int                 `mapstructure:"max_tokens"`          // generation cap per problem
+	Temperature       float64             `mapstructure:"temperature"`         // sampling temperature
+	TimeoutSec        int                 `mapstructure:"timeout_sec"`         // per-problem inference timeout
+	LongContextTokens int                 `mapstructure:"long_context_tokens"` // target prompt size for needle probe (0 → 8000)
+	SaveTranscripts   bool                `mapstructure:"save_transcripts"`    // capture raw model/judge I/O per run for debugging
+	Judge             JudgeConfig         `mapstructure:"judge"`
+	LlamaBench        LlamaBenchConfig    `mapstructure:"llamabench"`
+	Embeddings        EmbeddingsConfig    `mapstructure:"embeddings"`
+	TerminalBench     TerminalBenchConfig `mapstructure:"terminalbench"`
+}
+
+// TerminalBenchConfig configures the agentic terminal-bench scoring mode, which
+// wraps the external `tb` CLI (Terminal-Bench harness) + Docker. Empty scalar
+// values fall back to the engine defaults shown below.
+type TerminalBenchConfig struct {
+	Command    string   `mapstructure:"command"`     // tb CLI binary (name on PATH or path); empty → "tb"
+	Agent      string   `mapstructure:"agent"`       // tb agent; empty → "terminus"
+	Dataset    string   `mapstructure:"dataset"`     // tb dataset 'name' or 'name==version'; empty → "terminal-bench-core==0.1.1"
+	Provider   string   `mapstructure:"provider"`    // LiteLLM provider prefix for --model; empty → "openai"
+	Tasks      []string `mapstructure:"tasks"`       // --task-id ids/globs; empty → whole dataset
+	NTasks     int      `mapstructure:"n_tasks"`     // --n-tasks cap; 0 → omit
+	Concurrent int      `mapstructure:"concurrent"`  // --n-concurrent; <=0 → 1 (single-GPU rig)
+	TimeoutSec int      `mapstructure:"timeout_sec"` // whole-run cap (seconds); 0 → no model-loader-side cap
+	ExtraArgs  []string `mapstructure:"extra_args"`  // passed through verbatim (e.g. "--no-rebuild")
 }
 
 // LlamaBenchConfig tunes the throughput (llama-bench) scoring mode. Empty values
@@ -227,4 +243,11 @@ func applyDefaults(v *viper.Viper) {
 	v.SetDefault("benchmark.llamabench.presets", []string{"128/512", "512/128", "2048/256", "4096/256", "8192/128", "16384/64"})
 	v.SetDefault("benchmark.llamabench.repetitions", 3)
 	v.SetDefault("benchmark.llamabench.warmup", 1)
+	v.SetDefault("benchmark.terminalbench.command", "tb")
+	v.SetDefault("benchmark.terminalbench.agent", "terminus")
+	v.SetDefault("benchmark.terminalbench.dataset", "terminal-bench-core==0.1.1")
+	v.SetDefault("benchmark.terminalbench.provider", "openai")
+	v.SetDefault("benchmark.terminalbench.n_tasks", 0)
+	v.SetDefault("benchmark.terminalbench.concurrent", 1)
+	v.SetDefault("benchmark.terminalbench.timeout_sec", 0)
 }

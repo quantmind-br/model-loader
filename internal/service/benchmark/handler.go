@@ -41,6 +41,7 @@ const (
 	CatSpeed      Category = "Speed"
 	CatRobustness Category = "Robustness"
 	CatKnowledge  Category = "Knowledge"
+	CatAgentic    Category = "Agentic"
 )
 
 // modeHandler encapsulates one benchmark mode: its identity, how many problems
@@ -96,6 +97,8 @@ var modeOrder = []Mode{
 	ModeLongContext, ModeInstBench,
 	// Knowledge
 	ModeMMLUBench,
+	// Agentic
+	ModeTerminalBench,
 }
 
 // ModesInOrder returns the registered modes in canonical display order. It is

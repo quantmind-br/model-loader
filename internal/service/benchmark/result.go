@@ -52,6 +52,11 @@ const (
 	// summarizes ~10 short documents and must cover a known set of key facts. A
 	// grader scores coherence + fact coverage. Graded (external or self).
 	ModeSummaryBench Mode = "summary-bench"
+	// ModeTerminalBench: agentic terminal-task benchmark — wraps the external
+	// Terminal-Bench harness (`tb`), which drives a Dockerized tmux sandbox with
+	// the Terminus agent pointed at the proxy and scores each task pass/fail by
+	// running its in-container tests. Objective; requires the `tb` CLI + Docker.
+	ModeTerminalBench Mode = "terminal-bench"
 )
 
 // Title returns a short human label for the mode.
@@ -75,6 +80,8 @@ func (m Mode) Title() string {
 		return "RAG faithfulness (synthetic)"
 	case ModeSummaryBench:
 		return "Summarization coherence"
+	case ModeTerminalBench:
+		return "Agentic terminal tasks (Terminal-Bench)"
 	default:
 		return string(m)
 	}
@@ -145,6 +152,7 @@ type Aggregate struct {
 	RagasRelevancy         float64 `json:"ragasRelevancy,omitempty"`         // 0..1 answers-the-question score
 	RagasPrecision         float64 `json:"ragasPrecision,omitempty"`         // 0..1 uses-the-right-context score
 	SummaryCoherence       float64 `json:"summaryCoherence,omitempty"`       // 0..1 multi-doc coherence + fact coverage
+	TerminalBenchAccuracy  float64 `json:"terminalBenchAccuracy,omitempty"`  // 0..1 resolved-task rate from the Terminal-Bench harness
 	AvgTTFTms              float64 `json:"avgTtftMs"`
 	TotalPromptTokens      int     `json:"totalPromptTokens"`
 	TotalCompletionTokens  int     `json:"totalCompletionTokens"`
