@@ -67,6 +67,10 @@ type BenchmarkPage struct {
 	// (DESTRUCT-01).
 	deleteConfirm components.Confirm
 
+	// cancelConfirm gates the in-flight [esc] run cancellation behind a
+	// confirm so a stray esc does not throw away a long-running benchmark.
+	cancelConfirm components.Confirm
+
 	runs      []benchmark.Run
 	runCursor int
 
@@ -125,7 +129,7 @@ func (p BenchmarkPage) Reload() tea.Cmd { return p.loadRunsCmd() }
 // IsCapturingInput claims global keys whenever a modal-like view is active or
 // the user is typing a filter, so [1-5]/[q]/[tab] don't get stolen mid-flow.
 func (p BenchmarkPage) IsCapturingInput() bool {
-	return p.deleteConfirm.Active() || p.view != bvDashboard && p.view != bvWizard || p.filterMode
+	return p.deleteConfirm.Active() || p.cancelConfirm.Active() || p.view != bvDashboard && p.view != bvWizard || p.filterMode
 }
 
 // StatusMessage implements ui.StatusMessageProvider: the page's flash also
@@ -218,6 +222,10 @@ func (p BenchmarkPage) View() string {
 func (p BenchmarkPage) OverlayView() Overlay {
 	if p.deleteConfirm.Active() {
 		content := components.Modal("Delete benchmark run", p.deleteConfirm.View(), p.width, p.height)
+		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
+	}
+	if p.cancelConfirm.Active() {
+		content := components.Modal("Cancel benchmark run", p.cancelConfirm.View(), p.width, p.height)
 		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
 	}
 	return Overlay{}
@@ -404,18 +412,53 @@ func (p BenchmarkPage) viewModePick() string {
 
 func (p BenchmarkPage) viewRunning() string {
 	title := theme.Title.Render("Running benchmark")
-	line := components.LoadingLine(p.spinner, fmt.Sprintf("%s — %s", p.runningName, p.runningMode.Title()), 0)
+	head := fmt.Sprintf("%s — %s", p.runningName, p.runningMode.Title())
+	line := components.LoadingLine(p.spinner, head, 0)
 	prog := p.progress
-	status := "preparing…"
-	switch prog.Phase {
-	case "launch":
-		status = "launching backend / waiting for /health…"
-	case "infer", "score":
-		status = benchmark.FormatBenchProgress(prog.Index, prog.Total, prog.ProblemName, prog.Phase)
-	case "done":
-		status = "aggregating…"
+
+	// Phase label — keeps the engine's literal phase strings ("launch" |
+	// "infer" | "score" | "done") as the contract; only the display is nicer.
+	phaseLabel := map[string]string{
+		"launch": "Launching backend / waiting for /health…",
+		"infer":  "Inferring",
+		"score":  "Scoring",
+		"done":   "Aggregating…",
+	}[prog.Phase]
+	if phaseLabel == "" {
+		phaseLabel = "Preparing…"
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, title, line, theme.Subtitle.Render(status))
+
+	parts := []string{title, line, theme.Subtitle.Render(phaseLabel)}
+
+	// Progress bar + count. Throughput/agentic modes may report Total==0
+	// (unknown denominator); in that case show the index without a bar.
+	if prog.Total > 0 {
+		frac := float64(prog.Index) / float64(prog.Total)
+		if frac > 1 {
+			frac = 1
+		}
+		barW := 30
+		if p.width > 0 {
+			barW = p.width / 2
+			if barW < 16 {
+				barW = 16
+			}
+			if barW > 50 {
+				barW = 50
+			}
+		}
+		bar := components.MetricBar(frac, barW)
+		parts = append(parts, fmt.Sprintf("%s  %d/%d", bar, prog.Index, prog.Total))
+	} else if prog.Index > 0 {
+		parts = append(parts, fmt.Sprintf("item %d", prog.Index))
+	}
+
+	// Current problem name when inferring/scoring.
+	if (prog.Phase == "infer" || prog.Phase == "score") && prog.ProblemName != "" {
+		parts = append(parts, theme.Subtitle.Render("→ "+truncate(prog.ProblemName, 60)))
+	}
+	parts = append(parts, theme.Subtitle.Render("[esc] cancel"))
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 // --- run detail ------------------------------------------------------------

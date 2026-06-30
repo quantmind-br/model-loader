@@ -25,6 +25,8 @@ func (p BenchmarkPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, nil
 	case benchmarkDeleteConfirmedMsg:
 		return p.performDelete(m.id)
+	case benchCancelConfirmedMsg:
+		return p.performCancel()
 	case benchRunsLoadedMsg:
 		if m.err == nil {
 			p.runs = m.runs
@@ -57,22 +59,32 @@ func (p BenchmarkPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return p.handleKey(m)
 	}
-	// Forward non-key messages to the confirm so huh's async Cmd→Msg cycles
-	// (focus init, StateCompleted transition) complete (DESTRUCT-01).
+	// Forward non-key messages to the active confirm so huh's async Cmd→Msg
+	// cycles (focus init, StateCompleted transition) complete (DESTRUCT-01).
 	if p.deleteConfirm.Active() {
 		var cmd tea.Cmd
 		p.deleteConfirm, cmd = p.deleteConfirm.Update(msg)
+		return p, cmd
+	}
+	if p.cancelConfirm.Active() {
+		var cmd tea.Cmd
+		p.cancelConfirm, cmd = p.cancelConfirm.Update(msg)
 		return p, cmd
 	}
 	return p, nil
 }
 
 func (p BenchmarkPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// The confirm modal takes priority over every view so esc/←/→/enter drive
-	// the dialog instead of the run list underneath it.
+	// The confirm modals take priority over every view so esc/←/→/enter drive
+	// the dialog instead of the page underneath it.
 	if p.deleteConfirm.Active() {
 		var cmd tea.Cmd
 		p.deleteConfirm, cmd = p.deleteConfirm.Update(msg)
+		return p, cmd
+	}
+	if p.cancelConfirm.Active() {
+		var cmd tea.Cmd
+		p.cancelConfirm, cmd = p.cancelConfirm.Update(msg)
 		return p, cmd
 	}
 	switch p.view {
@@ -83,12 +95,7 @@ func (p BenchmarkPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case bvWizard:
 		return p.keyWizard(msg)
 	case bvRunning:
-		if msg.String() == "esc" {
-			if p.runCancel != nil {
-				p.runCancel()
-			}
-		}
-		return p, nil
+		return p.keyRunning(msg)
 	case bvRunDetail, bvCompare, bvHistory:
 		if msg.String() == "esc" {
 			p.view = bvDashboard

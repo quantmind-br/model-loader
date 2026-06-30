@@ -14,6 +14,11 @@ type benchRunsLoadedMsg struct {
 	err  error
 }
 
+// benchCancelConfirmedMsg is emitted by cancelConfirm.onYes once the user
+// confirms cancelling an in-flight run; performCancel runs the actual
+// runCancel in Update so the goroutine teardown stays on the page.
+type benchCancelConfirmedMsg struct{}
+
 // benchProgressMsg carries one engine progress event plus the channel for
 // re-arming the next read (mirrors the picker scan-event pattern).
 type benchProgressMsg struct {
@@ -112,4 +117,31 @@ func (p BenchmarkPage) handleRunDone(msg benchRunDoneMsg) (tea.Model, tea.Cmd) {
 	var fc tea.Cmd
 	p, fc = p.withFlash("benchmark complete")
 	return p, tea.Batch(fc, p.loadRunsCmd())
+}
+
+// keyRunning handles keys during bvRunning. Esc arms the cancelConfirm instead
+// of cancelling directly, so a stray esc does not throw away a long run. Any
+// other key is a no-op (the run owns the screen).
+func (p BenchmarkPage) keyRunning(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "esc" {
+		var cmd tea.Cmd
+		p.cancelConfirm, cmd = setupConfirm("Cancel this benchmark run?", "Cancel run", "Keep running",
+			func() tea.Cmd { return func() tea.Msg { return benchCancelConfirmedMsg{} } })
+		return p, cmd
+	}
+	return p, nil
+}
+
+// performCancel runs the in-flight run's cancellation context. It is invoked
+// from Update on benchCancelConfirmedMsg (the cancelConfirm affirmative path).
+func (p BenchmarkPage) performCancel() (tea.Model, tea.Cmd) {
+	if p.runCancel != nil {
+		p.runCancel()
+	}
+	// Leave the cancelConfirm cleared (huh completed clears it); the actual
+	// bvRunning→bvDashboard transition happens in handleRunDone when the
+	// cancelled run's partial result is processed.
+	var fc tea.Cmd
+	p, fc = p.withFlash("run cancelled")
+	return p, fc
 }

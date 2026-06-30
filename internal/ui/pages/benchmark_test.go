@@ -386,3 +386,37 @@ func TestBenchmarkPage_ProfilePickerJumpKeys(t *testing.T) {
 		t.Fatalf("profCursor moved while typing in filter mode: %d", page.profCursor)
 	}
 }
+
+// TestViewRunning_ShowsProgressBar asserts the running view renders a progress
+// bar and the index/total when a progress event with a known total arrives.
+func TestViewRunning_ShowsProgressBar(t *testing.T) {
+	page := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
+	page.view = bvRunning
+	page.runningName = "Demo"
+	page.runningMode = benchmark.ModeJudge
+	page.progress = benchmark.Progress{Phase: "infer", Index: 3, Total: 10, ProblemName: "swe-001"}
+	out := page.viewRunning()
+	for _, want := range []string{"3/10", "swe-001"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("running view missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestRunning_EscArmsCancelConfirm asserts esc in bvRunning opens the
+// cancelConfirm instead of cancelling directly.
+func TestRunning_EscArmsCancelConfirm(t *testing.T) {
+	cancelled := false
+	page := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
+	page.view = bvRunning
+	page.runCancel = func() { cancelled = true }
+
+	m, _ := page.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	page = m.(BenchmarkPage)
+	if !page.cancelConfirm.Active() {
+		t.Fatal("esc in bvRunning should arm the cancel confirm")
+	}
+	if cancelled {
+		t.Fatal("esc must NOT cancel directly — only the confirm's affirmative path does")
+	}
+}
