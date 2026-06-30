@@ -64,13 +64,16 @@ _Convention: lowercase keys are light/cheap actions (navigate, edit, view); uppe
 
 ## Benchmark tab
 
-- ` + "`b`" + ` — run a benchmark on a profile
-- ` + "`enter`" + ` — open details for the selected run
-- ` + "`c`" + ` — compare two runs
+- ` + "`b`" + ` — run a benchmark on a profile (wizard: profile → mode → review)
+- ` + "`←→`" + ` — cycle the focused mode on the dashboard leaderboard
+- ` + "`enter`" + ` — open details for the selected run (dashboard, history)
+- ` + "`c`" + ` — compare profiles side by side (ranked, with bars)
+- ` + "`m`" + ` — cycle compare/history metric (solve · tok/s · TTFT · VRAM)
+- ` + "`↑↓`" + ` — move cursor (dashboard, history)
 - ` + "`E`" + ` — export selected run to JSON
 - ` + "`X`" + ` — delete selected run (confirm)
 - ` + "`R`" + ` — reload runs from disk
-- ` + "`h`" + ` — history chart (when runs exist)
+- ` + "`h`" + ` — history timeline (when runs exist)
 - ` + "`/`" + ` — filter (in profile picker)
 - ` + "`esc`" + ` — back / cancel
 `

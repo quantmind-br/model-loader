@@ -18,7 +18,7 @@ func TestHelpMarkdownCoversAllHints(t *testing.T) {
 		{"Models", "[/] filter  [R] rescan  [s] search HF  [enter] actions  [i] info  [→/g] sizing"},
 		{"Server", "[v] cycle views  [Space] pause  [K] kill  [R] restart  [h] history  [s] start proxy  [x] stop proxy"},
 		{"Backends", "[enter/e] edit  [n] new  [X] del  [D] default  [R] refresh  [P] probe  [/] filter"},
-		{"Benchmark", "[b] run  [enter] details  [c] compare  [E] export  [X] del  [R] reload  [h] history"},
+		{"Benchmark", "[b] run  [←→] mode  [enter] details  [c] compare  [E] export  [X] del  [R] reload  [h] history"},
 	}
 	re := regexp.MustCompile(`\[([^\]]+)\]`)
 	for _, pg := range pages {
