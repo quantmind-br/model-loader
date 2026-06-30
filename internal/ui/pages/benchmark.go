@@ -343,6 +343,7 @@ func (p BenchmarkPage) viewModePick() string {
 		benchmark.ModeRagasBench:    "RAG quality (synthetic): grader scores faithfulness, answer relevancy, and context precision",
 		benchmark.ModeSummaryBench:  "multi-doc summarization: fact coverage + grader-scored coherence",
 		benchmark.ModeTerminalBench: "agentic terminal tasks via the external Terminal-Bench harness; needs the `tb` CLI + Docker (long-running)",
+		benchmark.ModeSweBenchPro:   "agentic SWE tasks via the external SWE-bench Pro harness; needs a cloned harness + Docker + python (long-running)",
 	}
 	rows := make([]string, 0, len(benchModes)+4)
 	var lastCat benchmark.Category
@@ -497,6 +498,9 @@ func modeDetailLines(r benchmark.Run) []string {
 	case benchmark.ModeTerminalBench:
 		lines = append(lines, fmt.Sprintf("terminal-bench accuracy %.0f%% (%d/%d tasks resolved)",
 			a.TerminalBenchAccuracy*100, a.Resolved, a.Total))
+	case benchmark.ModeSweBenchPro:
+		lines = append(lines, fmt.Sprintf("swe-bench-pro accuracy %.0f%% (%d/%d instances resolved)",
+			a.SweBenchProAccuracy*100, a.Resolved, a.Total))
 	}
 	return lines
 }

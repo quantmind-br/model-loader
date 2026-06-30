@@ -57,6 +57,12 @@ const (
 	// the Terminus agent pointed at the proxy and scores each task pass/fail by
 	// running its in-container tests. Objective; requires the `tb` CLI + Docker.
 	ModeTerminalBench Mode = "terminal-bench"
+	// ModeSweBenchPro: agentic software-engineering benchmark — wraps the external
+	// SWE-bench Pro harness (scaleapi/SWE-bench_Pro-os). A patch-generation agent
+	// (pointed at the proxy) produces diffs, which the harness applies and tests in
+	// per-instance Docker images, scoring each instance pass/fail by fail_to_pass +
+	// pass_to_pass. Objective; requires a cloned harness + Docker + python.
+	ModeSweBenchPro Mode = "swe-bench-pro"
 )
 
 // Title returns a short human label for the mode.
@@ -82,6 +88,8 @@ func (m Mode) Title() string {
 		return "Summarization coherence"
 	case ModeTerminalBench:
 		return "Agentic terminal tasks (Terminal-Bench)"
+	case ModeSweBenchPro:
+		return "Agentic SWE tasks (SWE-bench Pro)"
 	default:
 		return string(m)
 	}
@@ -153,6 +161,7 @@ type Aggregate struct {
 	RagasPrecision         float64 `json:"ragasPrecision,omitempty"`         // 0..1 uses-the-right-context score
 	SummaryCoherence       float64 `json:"summaryCoherence,omitempty"`       // 0..1 multi-doc coherence + fact coverage
 	TerminalBenchAccuracy  float64 `json:"terminalBenchAccuracy,omitempty"`  // 0..1 resolved-task rate from the Terminal-Bench harness
+	SweBenchProAccuracy    float64 `json:"sweBenchProAccuracy,omitempty"`    // 0..1 resolved-instance rate from the SWE-bench Pro harness
 	AvgTTFTms              float64 `json:"avgTtftMs"`
 	TotalPromptTokens      int     `json:"totalPromptTokens"`
 	TotalCompletionTokens  int     `json:"totalCompletionTokens"`

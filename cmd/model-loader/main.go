@@ -141,6 +141,19 @@ func runTUI(cliLevel string) int {
 		TerminalBenchConcurrent: svc.Cfg.Benchmark.TerminalBench.Concurrent,
 		TerminalBenchTimeout:    time.Duration(svc.Cfg.Benchmark.TerminalBench.TimeoutSec) * time.Second,
 		TerminalBenchExtraArgs:  svc.Cfg.Benchmark.TerminalBench.ExtraArgs,
+
+		SweBenchProHarnessDir:    svc.Cfg.Benchmark.SweBenchPro.HarnessDir,
+		SweBenchProRawSample:     svc.Cfg.Benchmark.SweBenchPro.RawSamplePath,
+		SweBenchProScriptsDir:    svc.Cfg.Benchmark.SweBenchPro.ScriptsDir,
+		SweBenchProDockerhubUser: svc.Cfg.Benchmark.SweBenchPro.DockerhubUser,
+		SweBenchProPython:        svc.Cfg.Benchmark.SweBenchPro.Python,
+		SweBenchProNumWorkers:    svc.Cfg.Benchmark.SweBenchPro.NumWorkers,
+		SweBenchProUseModal:      svc.Cfg.Benchmark.SweBenchPro.UseModal,
+		SweBenchProInstances:     svc.Cfg.Benchmark.SweBenchPro.Instances,
+		SweBenchProPatchPath:     svc.Cfg.Benchmark.SweBenchPro.PatchPath,
+		SweBenchProAgentCmd:      svc.Cfg.Benchmark.SweBenchPro.AgentCmd,
+		SweBenchProTimeout:       time.Duration(svc.Cfg.Benchmark.SweBenchPro.TimeoutSec) * time.Second,
+		SweBenchProExtraArgs:     svc.Cfg.Benchmark.SweBenchPro.ExtraArgs,
 	})
 	if err != nil {
 		svc.Logger.Error("benchmark_dataset_load_failed", "err", err)
