@@ -13,8 +13,8 @@ import (
 )
 
 // openWizard starts the unified run wizard at the profile-pick step. It
-// replaces the old two-screen bvProfilePick→bvModePick flow with a single
-// bvWizard view that the user can move forward AND back through.
+// replaces the old two-screen profile→mode flow with a single bvWizard view
+// that the user can move forward AND back through.
 func (p BenchmarkPage) openWizard() (tea.Model, tea.Cmd) {
 	if p.runner == nil {
 		p, _ = p.withFlashError("benchmark engine unavailable")
@@ -48,9 +48,8 @@ func (p BenchmarkPage) selectedProfile() (string, string, bool) {
 	return f[p.profCursor].ID, f[p.profCursor].Name, true
 }
 
-// viewWizard renders the current wizard step. Task 7 replaces the mode and
-// review renders with richer cards; this minimal version keeps the flow
-// usable and the page compiling.
+// viewWizard renders the current wizard step: a filterable profile list, a
+// mode grid grouped by category, or a run-review summary.
 func (p BenchmarkPage) viewWizard() string {
 	switch p.wizStep {
 	case wizProfile:
@@ -93,7 +92,6 @@ func (p BenchmarkPage) viewWizardProfile() string {
 
 func (p BenchmarkPage) viewWizardMode() string {
 	title := theme.Title.Render("Run benchmark — pick a mode")
-	name := p.runningName
 	rows := make([]string, 0, len(benchModes)+4)
 	var lastCat benchmark.Category
 	for i, m := range benchModes {
@@ -101,10 +99,16 @@ func (p BenchmarkPage) viewWizardMode() string {
 			rows = append(rows, theme.Subtitle.Render(string(c)))
 			lastCat = c
 		}
+		// Card: title + description on the first line; prerequisites (if any)
+		// on a second indented line so external dependencies are visible before
+		// committing to a run.
 		line := fmt.Sprintf("%-22s  %s", m.Title(), modeDescription(m))
+		if pr := modePrereq(m); pr != "" {
+			line += "\n    " + theme.Warn.Render("⚠ "+pr)
+		}
 		if i == p.modeCursor {
 			if theme.NoColor() {
-				line = "> " + line
+				line = "> " + strings.ReplaceAll(line, "\n", "\n> ")
 			} else {
 				line = theme.Selected.Render(line)
 			}
@@ -114,7 +118,7 @@ func (p BenchmarkPage) viewWizardMode() string {
 		rows = append(rows, line)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, title,
-		theme.Subtitle.Render("profile: "+name), strings.Join(rows, "\n"))
+		theme.Subtitle.Render("profile: "+p.runningName), strings.Join(rows, "\n"))
 }
 
 func (p BenchmarkPage) viewWizardReview() string {
@@ -125,16 +129,17 @@ func (p BenchmarkPage) viewWizardReview() string {
 		count = p.runner.CountForMode(mode)
 	}
 	lines := []string{
-		fmt.Sprintf("profile: %s", p.runningName),
+		fmt.Sprintf("profile:  %s", p.runningName),
 		fmt.Sprintf("mode:     %s (%s)", mode.Title(), modeCategoryLabel(mode)),
 	}
 	if count > 0 {
 		lines = append(lines, fmt.Sprintf("items:    %d problems", count))
 	}
 	if pr := modePrereq(mode); pr != "" {
-		lines = append(lines, theme.Warn.Render("note: "+pr))
+		lines = append(lines, theme.Warn.Render("note:     "+pr))
 	}
-	lines = append(lines, "", theme.Subtitle.Render("[enter] start run   [esc] back to mode"))
+	lines = append(lines, "", "Description:", "  "+modeDescription(mode),
+		"", theme.Subtitle.Render("[enter] start run   [esc] back to mode"))
 	return lipgloss.JoinVertical(lipgloss.Left, title, strings.Join(lines, "\n"))
 }
 
@@ -153,7 +158,7 @@ func (p BenchmarkPage) keyWizard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (p BenchmarkPage) keyWizardProfile(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if p.filterMode {
-		np, cmd, handled := p.keyProfilePickFilter(msg)
+		np, cmd, handled := p.keyProfileFilter(msg)
 		if handled {
 			return np, cmd
 		}
@@ -220,8 +225,8 @@ func (p BenchmarkPage) keyWizardReview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // modeDescription returns a short, human description of a scoring mode. It is
-// the single source for mode help text (replacing the ad-hoc map in the old
-// viewModePick). Task 7 may render this as a card; the text lives here.
+// the single source for mode help text (replacing the ad-hoc map that used to
+// live in the old mode picker).
 func modeDescription(m benchmark.Mode) string {
 	switch m {
 	case benchmark.ModeJudge:

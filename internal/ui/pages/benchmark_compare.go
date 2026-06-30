@@ -155,13 +155,14 @@ func compareMetricValue(r benchmark.Run, metric int, mode benchmark.Mode) (float
 }
 
 // normalizeCompareFrac scales a raw metric value into [0,1] for the bar:
-// rate metrics are already 0..1; throughput scales by section max; TTFT/VRAM
-// invert and scale by section max so lower fills more bar.
+// rate metrics (solve/recall) are already 0..1 so the raw value IS the fill;
+// throughput scales by section max; TTFT/VRAM invert and scale by section max
+// so lower fills more bar.
 func normalizeCompareFrac(raw float64, metric int, runs []benchmark.Run, mode benchmark.Mode) float64 {
 	if metric == 0 {
-		m := primaryMetric(runs[0])
-		if m.Frac > 0 {
-			return m.Frac // already normalized for rate modes
+		// Primary metric: rate modes are already 0..1; throughput needs scaling.
+		if primaryMetric(benchmark.Run{Mode: mode}).Rate {
+			return raw
 		}
 	}
 	// Find max for scaling.

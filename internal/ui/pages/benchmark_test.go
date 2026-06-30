@@ -30,16 +30,16 @@ func (f *fakeBStore) LoadTranscript(string) ([]benchmark.ProblemTranscript, erro
 func (f *fakeBStore) TranscriptPath(string) string { return "" }
 
 // TestBenchmarkPage_ProfileFilterAcceptsSpaceAndBurst is a regression for
-// TUI_AUDIT F-02: the profile-picker filter dropped the spacebar (it arrives as
-// tea.KeySpace, not tea.KeyRunes) and also dropped multi-rune paste bursts (the
-// old `len(Runes) == 1` guard).
+// TUI_AUDIT F-02: the wizard profile-step filter dropped the spacebar (it
+// arrives as tea.KeySpace, not tea.KeyRunes) and also dropped multi-rune paste
+// bursts (the old `len(Runes) == 1` guard).
 func TestBenchmarkPage_ProfileFilterAcceptsSpaceAndBurst(t *testing.T) {
 	page := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
 	page.filterMode = true
 
-	page, _, _ = page.keyProfilePickFilter(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Qwen")})
-	page, _, _ = page.keyProfilePickFilter(tea.KeyMsg{Type: tea.KeySpace})
-	page, _, _ = page.keyProfilePickFilter(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("27B")})
+	page, _, _ = page.keyProfileFilter(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Qwen")})
+	page, _, _ = page.keyProfileFilter(tea.KeyMsg{Type: tea.KeySpace})
+	page, _, _ = page.keyProfileFilter(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("27B")})
 
 	if page.filter != "Qwen 27B" {
 		t.Errorf("filter = %q, want %q (space and multi-rune burst must survive)", page.filter, "Qwen 27B")
@@ -158,13 +158,20 @@ func TestBenchModes_Phase3AreQuality(t *testing.T) {
 	}
 }
 
-func TestViewModePickShowsCategoryHeaders(t *testing.T) {
-	p := BenchmarkPage{view: bvModePick, runningName: "demo"}
-	out := p.viewModePick()
-	for _, h := range []string{"Quality", "Speed", "Robustness", "Knowledge"} {
-		if !strings.Contains(out, h) {
-			t.Fatalf("viewModePick output missing category header %q", h)
-		}
+// TestPrimaryMetric_PerModeText covers the per-mode headline cell: llama-bench
+// shows tok/s, long-context shows recall %, judge shows solve %.
+func TestPrimaryMetric_PerModeText(t *testing.T) {
+	needle := benchmark.Run{Mode: benchmark.ModeLongContext, Aggregate: benchmark.Aggregate{AvgScore: 0.67}}
+	if m := primaryMetric(needle); !strings.Contains(m.Text, "67%") {
+		t.Errorf("longctx text = %q, want recall 67%%", m.Text)
+	}
+	judge := benchmark.Run{Mode: benchmark.ModeJudge, Aggregate: benchmark.Aggregate{SolveRate: 0.5}}
+	if m := primaryMetric(judge); !strings.Contains(m.Text, "50%") {
+		t.Errorf("judge text = %q, want 50%%", m.Text)
+	}
+	llama := benchmark.Run{Mode: benchmark.ModeLlamaBench, Aggregate: benchmark.Aggregate{AvgTokensPerSecond: 42}}
+	if m := primaryMetric(llama); m.Label != "tok/s" || m.Text != "42.0" {
+		t.Errorf("llama-bench = %+v, want label tok/s text 42.0", m)
 	}
 }
 
@@ -251,31 +258,6 @@ func TestOpenCompare_GroupsByModeAndSkipsPartials(t *testing.T) {
 	}
 }
 
-func TestListQualityCell_PerMode(t *testing.T) {
-	llama := benchmark.Run{Mode: benchmark.ModeLlamaBench, Aggregate: benchmark.Aggregate{SolveRate: 1}}
-	if got := listQualityCell(llama); !strings.Contains(got, "—") {
-		t.Errorf("llama-bench cell = %q, want a dash", got)
-	}
-	needle := benchmark.Run{Mode: benchmark.ModeLongContext, Aggregate: benchmark.Aggregate{AvgScore: 0.67}}
-	if got := listQualityCell(needle); !strings.Contains(got, "67%") {
-		t.Errorf("longctx cell = %q, want recall 67%%", got)
-	}
-	judge := benchmark.Run{Mode: benchmark.ModeJudge, Aggregate: benchmark.Aggregate{SolveRate: 0.5}}
-	if got := listQualityCell(judge); !strings.Contains(got, "50%") {
-		t.Errorf("judge cell = %q, want 50%%", got)
-	}
-}
-
-func TestRunRow_FlagsPartialRuns(t *testing.T) {
-	page := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
-	page.runs = []benchmark.Run{{ProfileName: "p", Mode: benchmark.ModeJudge, Err: "cancelled"}}
-	page.runCursor = 1 // keep the row unselected so the marker is visible
-	row := page.runRow(0, page.runs[0], benchListCols{when: 11, profile: 10, mode: 20})
-	if !strings.Contains(row, "! ") {
-		t.Errorf("partial run row should carry the '!' marker: %q", row)
-	}
-}
-
 // UIUX-022: g/G (and home/end) jump to the top/bottom of the dashboard
 // leaderboard. The leaderboard collapses to one row per profile, so each test
 // run uses a distinct profile to get distinct rows.
@@ -337,11 +319,12 @@ func TestBenchmarkPage_DashboardModeCycleAndEnter(t *testing.T) {
 	}
 }
 
-// UIUX-022: g/G jump in the profile picker, bounded by the filtered list;
-// while filter mode is active they are text, not navigation.
-func TestBenchmarkPage_ProfilePickerJumpKeys(t *testing.T) {
+// UIUX-022: g/G jump in the wizard profile step, bounded by the filtered
+// list; while filter mode is active they are text, not navigation.
+func TestBenchmarkPage_WizardProfileJumpKeys(t *testing.T) {
 	page := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
-	page.view = bvProfilePick
+	page.view = bvWizard
+	page.wizStep = wizProfile
 	page.profiles = []domain.Profile{
 		{ID: "a", Name: "Alpha"},
 		{ID: "b", Name: "Beta"},

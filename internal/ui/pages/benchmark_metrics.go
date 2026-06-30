@@ -13,6 +13,7 @@ type benchMetric struct {
 	Raw    float64 // raw value (tok/s etc.) for series-max normalization
 	Text   string  // pre-formatted cell ("50%", "42.0")
 	Higher bool    // true = higher is better
+	Rate   bool    // true = Raw is already normalized to [0,1] (rate modes)
 }
 
 // primaryMetric picks the headline metric per mode. Quality/knowledge modes
@@ -26,9 +27,9 @@ func primaryMetric(r benchmark.Run) benchMetric {
 			Text: fmt.Sprintf("%.1f", a.AvgTokensPerSecond), Higher: true}
 	case benchmark.ModeLongContext:
 		return benchMetric{Label: "recall", Frac: a.AvgScore, Raw: a.AvgScore,
-			Text: fmt.Sprintf("%.0f%%", a.AvgScore*100), Higher: true}
+			Text: fmt.Sprintf("%.0f%%", a.AvgScore*100), Higher: true, Rate: true}
 	default:
 		return benchMetric{Label: "solve", Frac: a.SolveRate, Raw: a.SolveRate,
-			Text: fmt.Sprintf("%.0f%%", a.SolveRate*100), Higher: true}
+			Text: fmt.Sprintf("%.0f%%", a.SolveRate*100), Higher: true, Rate: true}
 	}
 }

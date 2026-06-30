@@ -77,6 +77,47 @@ func TestCompareVisual_MetricCycleReorders(t *testing.T) {
 	}
 }
 
+// TestCompareVisual_RateBarsAreProportional is a regression for the bug where
+// normalizeCompareFrac returned the Frac of runs[0] for every row in a rate
+// metric section, making all bars visually identical. With distinct SolveRates
+// the higher row must have more filled blocks than the lower row.
+func TestCompareVisual_RateBarsAreProportional(t *testing.T) {
+	page := BenchmarkPage{
+		compareSections: []benchCompareSection{{
+			Mode: benchmark.ModeJudge,
+			Runs: []benchmark.Run{
+				{ProfileID: "high", ProfileName: "High", Mode: benchmark.ModeJudge,
+					Aggregate: benchmark.Aggregate{SolveRate: 0.9}},
+				{ProfileID: "low", ProfileName: "Low", Mode: benchmark.ModeJudge,
+					Aggregate: benchmark.Aggregate{SolveRate: 0.1}},
+			},
+		}},
+	}
+	out := page.viewCompare()
+	lines := strings.Split(out, "\n")
+	var highLine, lowLine string
+	for _, l := range lines {
+		if strings.Contains(l, "High") {
+			highLine = l
+		}
+		if strings.Contains(l, "Low") {
+			lowLine = l
+		}
+	}
+	if highLine == "" || lowLine == "" {
+		t.Fatalf("missing data rows in:\n%s", out)
+	}
+	countBlocks := func(s string) int {
+		n := strings.Count(s, "█")
+		n += strings.Count(s, "#") // NO_COLOR fallback
+		return n
+	}
+	if ch, cl := countBlocks(highLine), countBlocks(lowLine); ch <= cl {
+		t.Fatalf("high (0.9) should have more filled blocks than low (0.1): high=%d low=%d\n%s\n%s",
+			ch, cl, highLine, lowLine)
+	}
+}
+
 // TestHistory_NavigationAndEnter asserts the history view cursor moves and
 // enter opens the selected run's detail.
 func TestHistory_NavigationAndEnter(t *testing.T) {

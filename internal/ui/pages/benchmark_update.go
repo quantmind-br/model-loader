@@ -30,9 +30,6 @@ func (p BenchmarkPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case benchRunsLoadedMsg:
 		if m.err == nil {
 			p.runs = m.runs
-			if p.runCursor >= len(p.runs) {
-				p.runCursor = 0
-			}
 			// Keep the dashboard cursor in range after a reload: a delete or
 			// a focus-mode change can shrink the leaderboard under it.
 			if rows := dashboardRows(p.runs, p.focusedDashboardMode()); p.dashCursor >= len(rows) {
@@ -88,10 +85,6 @@ func (p BenchmarkPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p, cmd
 	}
 	switch p.view {
-	case bvProfilePick:
-		return p.keyProfilePick(msg)
-	case bvModePick:
-		return p.keyModePick(msg)
 	case bvWizard:
 		return p.keyWizard(msg)
 	case bvRunning:
@@ -161,76 +154,11 @@ func (p BenchmarkPage) keyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return p, nil
 }
 
-func (p BenchmarkPage) openProfilePick() (tea.Model, tea.Cmd) {
-	if p.runner == nil {
-		p, _ = p.withFlashError("benchmark engine unavailable")
-		return p, nil
-	}
-	profiles, err := p.store.List()
-	if err != nil {
-		p, _ = p.withFlashError("load profiles: " + err.Error())
-		return p, nil
-	}
-	if len(profiles) == 0 {
-		p, _ = p.withFlashError("no profiles — create one in the Profiles tab")
-		return p, nil
-	}
-	p.profiles = profiles
-	p.profCursor = 0
-	p.filter = ""
-	p.filterMode = false
-	p.view = bvProfilePick
-	return p, nil
-}
-
-func (p BenchmarkPage) keyProfilePick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if p.filterMode {
-		np, cmd, handled := p.keyProfilePickFilter(msg)
-		if handled {
-			return np, cmd
-		}
-		// enter in filter mode falls through: it exits the filter (applied in
-		// np) and then lets the non-filter switch select the highlighted row.
-		p = np
-	}
-	switch msg.String() {
-	case "esc":
-		p.view = bvDashboard
-	case "/":
-		p.filterMode = true
-	case "up", "k":
-		if p.profCursor > 0 {
-			p.profCursor--
-		}
-	case "down", "j":
-		if p.profCursor < len(p.filteredProfiles())-1 {
-			p.profCursor++
-		}
-	// g/G only reach here outside filter mode: while filtering, the printable
-	// branch above appends them to the filter text instead.
-	case "g", "home":
-		p.profCursor = 0
-	case "G", "end":
-		if n := len(p.filteredProfiles()); n > 0 {
-			p.profCursor = n - 1
-		}
-	case "enter":
-		filtered := p.filteredProfiles()
-		if p.profCursor < len(filtered) {
-			p.selectedProfileID = filtered[p.profCursor].ID
-			p.runningName = filtered[p.profCursor].Name
-			p.modeCursor = 0
-			p.view = bvModePick
-		}
-	}
-	return p, nil
-}
-
-// keyProfilePickFilter handles keys while the profile picker's filter input is
-// active. handled is true when the key is fully consumed; it is false only for
-// "enter", which signals keyProfilePick to fall through to its non-filter
+// keyProfileFilter handles keys while the wizard's profile-step filter input
+// is active. handled is true when the key is fully consumed; it is false only
+// for "enter", which signals keyWizardProfile to fall through to its non-filter
 // switch so enter both closes the filter and selects the highlighted profile.
-func (p BenchmarkPage) keyProfilePickFilter(msg tea.KeyMsg) (BenchmarkPage, tea.Cmd, bool) {
+func (p BenchmarkPage) keyProfileFilter(msg tea.KeyMsg) (BenchmarkPage, tea.Cmd, bool) {
 	switch msg.String() {
 	case "esc", "/":
 		p.filterMode = false
@@ -263,24 +191,6 @@ func (p BenchmarkPage) keyProfilePickFilter(msg tea.KeyMsg) (BenchmarkPage, tea.
 		}
 		return p, nil, true
 	}
-}
-
-func (p BenchmarkPage) keyModePick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		p.view = bvProfilePick
-	case "up", "k":
-		if p.modeCursor > 0 {
-			p.modeCursor--
-		}
-	case "down", "j":
-		if p.modeCursor < len(benchModes)-1 {
-			p.modeCursor++
-		}
-	case "enter":
-		return p.startRun()
-	}
-	return p, nil
 }
 
 // askDeleteSelected arms the delete-run confirm for the highlighted run. The

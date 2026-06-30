@@ -133,3 +133,32 @@ func TestWizard_ModeCardsContainCategories(t *testing.T) {
 		}
 	}
 }
+
+// TestWizard_ModeCardsShowPrereqs asserts modes with external dependencies
+// (Docker, CLIs) surface their prerequisites inline on the mode step.
+func TestWizard_ModeCardsShowPrereqs(t *testing.T) {
+	page := NewBenchmarkPage(stubStore{}, &fakeBStore{}, nil, t.TempDir())
+	page.view = bvWizard
+	page.wizStep = wizMode
+	page.runningName = "Demo"
+	out := page.viewWizard()
+	// terminal-bench needs the tb CLI + Docker.
+	if !strings.Contains(out, "tb") || !strings.Contains(out, "Docker") {
+		t.Fatalf("wizard mode step should show terminal-bench prereqs:\n%s", out)
+	}
+}
+
+// TestWizard_ReviewShowsDescription asserts the review screen surfaces the
+// mode description so the user can confirm before launching.
+func TestWizard_ReviewShowsDescription(t *testing.T) {
+	page := NewBenchmarkPage(stubStore{}, &fakeBStore{}, nil, t.TempDir())
+	page.view = bvWizard
+	page.wizStep = wizReview
+	page.modeCursor = 0
+	page.selectedProfileID = "p1"
+	page.runningName = "Alpha"
+	out := page.viewWizardReview()
+	if !strings.Contains(out, "SWE-bench") {
+		t.Fatalf("review should show the mode description:\n%s", out)
+	}
+}

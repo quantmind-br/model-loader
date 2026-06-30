@@ -23,14 +23,12 @@ import (
 type benchView int
 
 const (
-	bvDashboard   benchView = iota // leaderboard dashboard (+ selected run insight)
-	bvProfilePick                  // choose a profile to benchmark
-	bvModePick                     // choose scoring mode
-	bvRunning                      // run in progress
-	bvRunDetail                    // full metrics for one run
-	bvCompare                      // latest run per profile, side by side
-	bvHistory                      // runs of one profile over time
-	bvWizard                       // unified profile→mode→review run wizard
+	bvDashboard benchView = iota // leaderboard dashboard (+ selected run insight)
+	bvWizard                     // unified profile→mode→review run wizard
+	bvRunning                    // run in progress
+	bvRunDetail                  // full metrics for one run
+	bvCompare                    // latest run per profile, side by side
+	bvHistory                    // runs of one profile over time
 )
 
 // benchWizardStep is the sub-step within the bvWizard view.
@@ -71,8 +69,7 @@ type BenchmarkPage struct {
 	// confirm so a stray esc does not throw away a long-running benchmark.
 	cancelConfirm components.Confirm
 
-	runs      []benchmark.Run
-	runCursor int
+	runs []benchmark.Run
 
 	profiles   []domain.Profile
 	profCursor int
@@ -164,13 +161,6 @@ func (p BenchmarkPage) Hints() string {
 		return "[←→] choose  [enter] confirm  [esc] cancel"
 	}
 	switch p.view {
-	case bvProfilePick:
-		if p.filterMode {
-			return "[type] filter  [/] exit filter  [enter] select  [esc] cancel"
-		}
-		return "[↑↓] move  [/] filter  [enter] choose  [esc] cancel"
-	case bvModePick:
-		return "[↑↓] move  [enter] run  [esc] cancel"
 	case bvWizard:
 		switch p.wizStep {
 		case wizProfile:
@@ -203,10 +193,6 @@ func (p BenchmarkPage) Hints() string {
 func (p BenchmarkPage) View() string {
 	var body string
 	switch p.view {
-	case bvProfilePick:
-		body = p.viewProfilePick()
-	case bvModePick:
-		body = p.viewModePick()
 	case bvRunning:
 		body = p.viewRunning()
 	case bvRunDetail:
@@ -238,183 +224,6 @@ func (p BenchmarkPage) OverlayView() Overlay {
 		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
 	}
 	return Overlay{}
-}
-
-// --- list view -------------------------------------------------------------
-
-func (p BenchmarkPage) viewList() string {
-	title := theme.Title.Render("Benchmark runs")
-	if p.runner == nil {
-		return lipgloss.JoinVertical(lipgloss.Left, title,
-			theme.Error.Render("benchmark dataset failed to load — see logs"))
-	}
-	if len(p.runs) == 0 {
-		return lipgloss.JoinVertical(lipgloss.Left, title,
-			components.EmptyState("No benchmark runs yet", "Press [b] to evaluate a profile"))
-	}
-	cols := benchListColumns(p.width)
-	header := theme.Subtitle.Render(fmt.Sprintf("%-*s  %-*s  %-*s  %7s  %8s  %8s",
-		cols.when, "when",
-		cols.profile, "profile",
-		cols.mode, "mode",
-		"solve", "tok/s", "vram"))
-	rows := []string{header}
-	for i, r := range p.runs {
-		rows = append(rows, p.runRow(i, r, cols))
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, title, strings.Join(rows, "\n"))
-}
-
-// benchListCols holds the flexed text widths for the variable-width
-// columns in the benchmark run table. The numeric columns (solve/tok/s/vram)
-// always reserve fixed widths so number alignment stays consistent.
-type benchListCols struct {
-	when    int
-	profile int
-	mode    int
-}
-
-// benchListColumns derives the variable-column widths from the available
-// terminal width so the table fits at ≤80 cols without wrapping (F-08
-// audit). The numeric tail (solve/tok/s/vram = 7+2+8+2+8 = 27 cols plus 4
-// inter-column separators) is always reserved; the remaining width is
-// distributed proportionally across when/profile/mode.
-func benchListColumns(width int) benchListCols {
-	const (
-		numericTail  = 7 + 2 + 8 + 2 + 8 // "solve  tok/s  vram" columns
-		interCol     = 2 * 5             // 5 inter-column "  " separators
-		cursorGutter = 2                 // "> " / "  " prefix
-	)
-	avail := width - numericTail - interCol - cursorGutter
-	if avail < 30 {
-		avail = 30
-	}
-	whenW := 11 // matches MM-DD HH:MM format width
-	flex := avail - whenW
-	if flex < 16 {
-		flex = 16
-	}
-	// 55% profile / 45% mode — mode strings ("SWE-bench Lite" etc.) are
-	// shorter on average than profile names.
-	profileW := flex * 55 / 100
-	if profileW < 8 {
-		profileW = 8
-	}
-	modeW := flex - profileW
-	if modeW < 6 {
-		modeW = 6
-	}
-	return benchListCols{when: whenW, profile: profileW, mode: modeW}
-}
-
-// listQualityCell renders the "solve" column for one run. Speed-only modes
-// have no solve concept, so they show a dash instead of a misleading 100%.
-func listQualityCell(r benchmark.Run) string {
-	switch r.Mode {
-	case benchmark.ModeLlamaBench:
-		return fmt.Sprintf("%7s", "—")
-	case benchmark.ModeLongContext:
-		// Needle recall: AvgScore is the recovered fraction.
-		return fmt.Sprintf("%6.0f%%", r.Aggregate.AvgScore*100)
-	default:
-		return fmt.Sprintf("%6.0f%%", r.Aggregate.SolveRate*100)
-	}
-}
-
-func (p BenchmarkPage) runRow(i int, r benchmark.Run, cols benchListCols) string {
-	mode := r.Mode.Title()
-	if r.Err != "" {
-		mode = "! " + mode // partial/failed run marker
-	}
-	row := fmt.Sprintf("%-*s  %-*s  %-*s  %s  %8.1f  %6dMB",
-		cols.when, r.StartedAt.Format("01-02 15:04"),
-		cols.profile, truncate(r.ProfileName, cols.profile),
-		cols.mode, truncate(mode, cols.mode),
-		listQualityCell(r),
-		r.Aggregate.AvgTokensPerSecond,
-		r.Aggregate.PeakVRAMMB,
-	)
-	if i == p.runCursor {
-		if theme.NoColor() {
-			return "> " + row
-		}
-		return theme.Selected.Render(row)
-	}
-	if r.Err != "" && !theme.NoColor() {
-		return "  " + theme.Error.Render(row)
-	}
-	return "  " + row
-}
-
-// --- profile picker --------------------------------------------------------
-
-func (p BenchmarkPage) viewProfilePick() string {
-	title := theme.Title.Render("Pick a profile to benchmark")
-	filtered := p.filteredProfiles()
-	if len(filtered) == 0 {
-		return lipgloss.JoinVertical(lipgloss.Left, title,
-			components.EmptyState("No profiles", "Create one in the Profiles tab"))
-	}
-	rows := make([]string, 0, len(filtered))
-	for i, prof := range filtered {
-		line := fmt.Sprintf("%-28s  %s", truncate(prof.Name, 28), truncate(prof.Model, 40))
-		if i == p.profCursor {
-			if theme.NoColor() {
-				line = "> " + line
-			} else {
-				line = theme.Selected.Render(line)
-			}
-		} else {
-			line = "  " + line
-		}
-		rows = append(rows, line)
-	}
-	parts := []string{title}
-	if fl := components.FilterLine(p.filterMode, p.filter); fl != "" {
-		parts = append(parts, fl)
-	}
-	parts = append(parts, strings.Join(rows, "\n"))
-	return lipgloss.JoinVertical(lipgloss.Left, parts...)
-}
-
-// --- mode picker -----------------------------------------------------------
-
-func (p BenchmarkPage) viewModePick() string {
-	title := theme.Title.Render("Scoring mode")
-	descs := map[benchmark.Mode]string{
-		benchmark.ModeJudge:         "SWE-bench Lite; reference-guided LLM judge, median of N samples (needs benchmark.judge config)",
-		benchmark.ModeLongContext:   "needle retrieval in a long prompt — objective diagnostic of KV-cache-quant decay",
-		benchmark.ModeLlamaBench:    "throughput probe (llama-bench style): TTFT + tokens/s on fixed-size prompts",
-		benchmark.ModeMathBench:     "math reasoning (GSM8K): exact numeric match, accuracy under quantization",
-		benchmark.ModeCodeGenBench:  "code generation (HumanEval): sandboxed Pass@1; needs python3 on PATH",
-		benchmark.ModeInstBench:     "instruction following: structured-format, refusal of disallowed prompts, and answer consistency",
-		benchmark.ModeMMLUBench:     "factual knowledge (MMLU): multiple-choice exact-match across STEM/humanities/social/other",
-		benchmark.ModeRagasBench:    "RAG quality (synthetic): grader scores faithfulness, answer relevancy, and context precision",
-		benchmark.ModeSummaryBench:  "multi-doc summarization: fact coverage + grader-scored coherence",
-		benchmark.ModeTerminalBench: "agentic terminal tasks via the external Terminal-Bench harness; needs the `tb` CLI + Docker (long-running)",
-		benchmark.ModeSweBenchPro:   "agentic SWE tasks via the external SWE-bench Pro harness; needs a cloned harness + Docker + python (long-running)",
-	}
-	rows := make([]string, 0, len(benchModes)+4)
-	var lastCat benchmark.Category
-	for i, m := range benchModes {
-		if c, ok := benchmark.CategoryOf(m); ok && c != lastCat {
-			rows = append(rows, theme.Subtitle.Render(string(c)))
-			lastCat = c
-		}
-		line := fmt.Sprintf("%-22s  %s", m.Title(), descs[m])
-		if i == p.modeCursor {
-			if theme.NoColor() {
-				line = "> " + line
-			} else {
-				line = theme.Selected.Render(line)
-			}
-		} else {
-			line = "  " + line
-		}
-		rows = append(rows, line)
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, title,
-		theme.Subtitle.Render("profile: "+p.runningName), strings.Join(rows, "\n"))
 }
 
 // --- running ---------------------------------------------------------------
