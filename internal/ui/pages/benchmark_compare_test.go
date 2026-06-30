@@ -1,10 +1,79 @@
 package pages
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/service/benchmark"
 )
+
+// TestCompareVisual_RanksByPrimaryMetricAndMarksBest asserts the compare view
+// sorts by the primary metric (descending) and marks the best row with ▲.
+func TestCompareVisual_RanksByPrimaryMetricAndMarksBest(t *testing.T) {
+	page := BenchmarkPage{
+		compareSections: []benchCompareSection{{
+			Mode: benchmark.ModeJudge,
+			Runs: []benchmark.Run{
+				{ProfileID: "low", ProfileName: "Low", Mode: benchmark.ModeJudge,
+					Aggregate: benchmark.Aggregate{SolveRate: 0.3, AvgTokensPerSecond: 10, AvgTTFTms: 200, PeakVRAMMB: 5000}},
+				{ProfileID: "high", ProfileName: "High", Mode: benchmark.ModeJudge,
+					Aggregate: benchmark.Aggregate{SolveRate: 0.9, AvgTokensPerSecond: 20, AvgTTFTms: 100, PeakVRAMMB: 4000}},
+			},
+		}},
+	}
+	out := page.viewCompare()
+	lines := strings.Split(out, "\n")
+	// Find the data rows (skip title/blank/header).
+	var dataRows []string
+	for _, l := range lines {
+		if strings.Contains(l, "Low") || strings.Contains(l, "High") {
+			dataRows = append(dataRows, l)
+		}
+	}
+	if len(dataRows) != 2 {
+		t.Fatalf("expected 2 data rows, got %d in:\n%s", len(dataRows), out)
+	}
+	// "High" (0.9 solve) must rank first and carry the ▲ marker.
+	if !strings.HasPrefix(strings.TrimSpace(dataRows[0]), "▲") {
+		t.Fatalf("best row should carry ▲ marker; first data row:\n%s", dataRows[0])
+	}
+	if !strings.Contains(dataRows[0], "High") {
+		t.Fatalf("best row should be High (0.9 solve); got:\n%s", dataRows[0])
+	}
+}
+
+// TestCompareVisual_MetricCycleReorders asserts pressing 'm' to switch to the
+// tok/s metric reorders the ranking.
+func TestCompareVisual_MetricCycleReorders(t *testing.T) {
+	page := BenchmarkPage{
+		compareSections: []benchCompareSection{{
+			Mode: benchmark.ModeJudge,
+			Runs: []benchmark.Run{
+				// Higher solve but lower tok/s — under metric 0 (solve) this ranks
+				// first; under metric 1 (tok/s) it should drop to second.
+				{ProfileID: "a", ProfileName: "SolveKing", Mode: benchmark.ModeJudge,
+					Aggregate: benchmark.Aggregate{SolveRate: 0.9, AvgTokensPerSecond: 5}},
+				{ProfileID: "b", ProfileName: "SpeedKing", Mode: benchmark.ModeJudge,
+					Aggregate: benchmark.Aggregate{SolveRate: 0.3, AvgTokensPerSecond: 50}},
+			},
+		}},
+	}
+	// Default metric 0 (solve): SolveKing first.
+	out0 := page.viewCompare()
+	idxSolve0 := strings.Index(out0, "SolveKing")
+	idxSpeed0 := strings.Index(out0, "SpeedKing")
+	if idxSolve0 == -1 || idxSolve0 > idxSpeed0 {
+		t.Fatalf("metric 0 should rank SolveKing first:\n%s", out0)
+	}
+	// Metric 1 (tok/s): SpeedKing first.
+	page.compareMetric = 1
+	out1 := page.viewCompare()
+	idxSolve1 := strings.Index(out1, "SolveKing")
+	idxSpeed1 := strings.Index(out1, "SpeedKing")
+	if idxSpeed1 == -1 || idxSpeed1 > idxSolve1 {
+		t.Fatalf("metric 1 (tok/s) should rank SpeedKing first:\n%s", out1)
+	}
+}
 
 // Regression: high solve rates indexed the bar string by byte length (24) into
 // a rune slice of length 8, panicking on History open. Must not panic and must

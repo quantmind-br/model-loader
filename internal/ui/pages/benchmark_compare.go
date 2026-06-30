@@ -2,12 +2,14 @@ package pages
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/service/benchmark"
+	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
@@ -84,46 +86,122 @@ func (p BenchmarkPage) viewCompare() string {
 	parts := []string{title}
 	for _, sec := range p.compareSections {
 		parts = append(parts, "", theme.Subtitle.Render(sec.Mode.Title()))
-		parts = append(parts, compareSectionRows(sec)...)
+		parts = append(parts, p.compareSectionRows(sec)...)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
-// compareSectionRows renders one mode section with columns that fit the mode:
-// speed-only modes drop solve/score; the needle probe shows recall.
-func compareSectionRows(sec benchCompareSection) []string {
-	switch sec.Mode {
-	case benchmark.ModeLlamaBench:
-		rows := []string{theme.Subtitle.Render(fmt.Sprintf("%-20s  %8s  %10s  %7s  %8s  %s",
-			"profile", "tok/s", "pp tok/s", "TTFT", "vram", "quant"))}
-		for _, r := range sec.Runs {
-			a := r.Aggregate
-			rows = append(rows, fmt.Sprintf("%-20s  %8.1f  %10.1f  %5.0fms  %6dMB  %s",
-				truncate(r.ProfileName, 20), a.AvgTokensPerSecond, a.AvgPromptProcessingTPS,
-				a.AvgTTFTms, a.PeakVRAMMB, dash(r.Profile.Quantization)))
+// compareSectionRows renders one mode section as a ranked leaderboard with
+// proportional MetricBars and a ▲ marker on the best performer. The ranking
+// metric is driven by compareMetric: 0 = the mode's primary metric (solve /
+// recall / tok/s), 1 = tok/s, 2 = TTFT (lower is better), 3 = VRAM (lower is
+// better). Columns that don't apply to the selected metric are still shown as
+// text for context.
+func (p BenchmarkPage) compareSectionRows(sec benchCompareSection) []string {
+	runs := sortedCompareRuns(sec, p.compareMetric)
+	barW := 16
+
+	header := fmt.Sprintf("%-20s  %-16s  %8s  %7s  %8s  %s",
+		"profile", p.compareMetricLabel(sec.Mode), "tok/s", "TTFT", "vram", "quant")
+	rows := []string{theme.Subtitle.Render(header)}
+
+	for i, r := range runs {
+		a := r.Aggregate
+		frac, text, higher := compareMetricValue(r, p.compareMetric, sec.Mode)
+		// Normalize frac for bar: throughput and TTFT/VRAM need scaling.
+		frac = normalizeCompareFrac(frac, p.compareMetric, runs, sec.Mode)
+		bar := components.MetricBar(frac, barW)
+		marker := "  "
+		if i == 0 && len(runs) > 1 && higher {
+			marker = theme.OK.Render("▲")
 		}
-		return rows
-	case benchmark.ModeLongContext:
-		rows := []string{theme.Subtitle.Render(fmt.Sprintf("%-20s  %6s  %8s  %7s  %8s  %s",
-			"profile", "recall", "tok/s", "TTFT", "vram", "quant"))}
-		for _, r := range sec.Runs {
-			a := r.Aggregate
-			rows = append(rows, fmt.Sprintf("%-20s  %5.0f%%  %8.1f  %5.0fms  %6dMB  %s",
-				truncate(r.ProfileName, 20), a.AvgScore*100, a.AvgTokensPerSecond,
-				a.AvgTTFTms, a.PeakVRAMMB, dash(r.Profile.Quantization)))
-		}
-		return rows
-	default:
-		rows := []string{theme.Subtitle.Render(fmt.Sprintf("%-20s  %6s  %6s  %8s  %7s  %8s  %s",
-			"profile", "solve", "score", "tok/s", "TTFT", "vram", "quant"))}
-		for _, r := range sec.Runs {
-			a := r.Aggregate
-			rows = append(rows, fmt.Sprintf("%-20s  %5.0f%%  %6.2f  %8.1f  %5.0fms  %6dMB  %s",
-				truncate(r.ProfileName, 20), a.SolveRate*100, a.AvgScore, a.AvgTokensPerSecond,
-				a.AvgTTFTms, a.PeakVRAMMB, dash(r.Profile.Quantization)))
-		}
-		return rows
+		line := fmt.Sprintf("%s%-20s  %s %6s  %8.1f  %5.0fms  %6dMB  %s",
+			marker+" ", truncate(r.ProfileName, 20), bar, text,
+			a.AvgTokensPerSecond, a.AvgTTFTms, a.PeakVRAMMB, dash(r.Profile.Quantization))
+		rows = append(rows, line)
 	}
+	return rows
+}
+
+// compareMetricLabel returns the column header for the selected compare metric.
+func (p BenchmarkPage) compareMetricLabel(mode benchmark.Mode) string {
+	switch p.compareMetric {
+	case 1:
+		return "tok/s (bar)"
+	case 2:
+		return "TTFT↓ (bar)"
+	case 3:
+		return "VRAM↓ (bar)"
+	default:
+		return primaryMetricLabel(mode) + " (bar)"
+	}
+}
+
+// compareMetricValue returns (fracHint, displayText, higherIsBetter) for the
+// selected metric. fracHint is the raw value; normalizeCompareFrac scales it.
+func compareMetricValue(r benchmark.Run, metric int, mode benchmark.Mode) (float64, string, bool) {
+	a := r.Aggregate
+	switch metric {
+	case 1:
+		return a.AvgTokensPerSecond, fmt.Sprintf("%.1f", a.AvgTokensPerSecond), true
+	case 2:
+		return a.AvgTTFTms, fmt.Sprintf("%.0fms", a.AvgTTFTms), false
+	case 3:
+		return float64(a.PeakVRAMMB), fmt.Sprintf("%dMB", a.PeakVRAMMB), false
+	default:
+		m := primaryMetric(r)
+		return m.Raw, m.Text, true
+	}
+}
+
+// normalizeCompareFrac scales a raw metric value into [0,1] for the bar:
+// rate metrics are already 0..1; throughput scales by section max; TTFT/VRAM
+// invert and scale by section max so lower fills more bar.
+func normalizeCompareFrac(raw float64, metric int, runs []benchmark.Run, mode benchmark.Mode) float64 {
+	if metric == 0 {
+		m := primaryMetric(runs[0])
+		if m.Frac > 0 {
+			return m.Frac // already normalized for rate modes
+		}
+	}
+	// Find max for scaling.
+	maxVal := 0.0
+	for _, r := range runs {
+		v, _, _ := compareMetricValue(r, metric, mode)
+		if v > maxVal {
+			maxVal = v
+		}
+	}
+	if maxVal == 0 {
+		return 0
+	}
+	if metric == 2 || metric == 3 {
+		// Lower is better: invert (min→full, max→empty).
+		return 1 - raw/maxVal
+	}
+	return raw / maxVal
+}
+
+// sortedCompareRuns returns the section's runs sorted by the selected metric
+// (best first). Lower-is-better metrics sort ascending.
+func sortedCompareRuns(sec benchCompareSection, metric int) []benchmark.Run {
+	out := make([]benchmark.Run, len(sec.Runs))
+	copy(out, sec.Runs)
+	sort.SliceStable(out, func(i, j int) bool {
+		vi, _, higher := compareMetricValue(out[i], metric, sec.Mode)
+		vj, _, _ := compareMetricValue(out[j], metric, sec.Mode)
+		if higher {
+			return vi > vj
+		}
+		return vi < vj
+	})
+	return out
+}
+
+// primaryMetricLabel returns just the label of a mode's primary metric.
+func primaryMetricLabel(mode benchmark.Mode) string {
+	r := benchmark.Run{Mode: mode}
+	return primaryMetric(r).Label
 }
 
 func (p BenchmarkPage) viewHistory() string {

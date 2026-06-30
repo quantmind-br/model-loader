@@ -101,6 +101,10 @@ type BenchmarkPage struct {
 	focusMode  benchmark.Mode
 	dashCursor int
 	catCursor  int
+
+	// compareMetric selects which metric the compare view ranks and bars on.
+	// 0 = the mode's primary metric (default); others cycle perf metrics.
+	compareMetric int
 }
 
 // NewBenchmarkPage builds the page bound to the profile store, run store, and
@@ -179,7 +183,7 @@ func (p BenchmarkPage) Hints() string {
 	case bvRunDetail:
 		return "[E] export  [esc] back"
 	case bvCompare:
-		return "[esc] back"
+		return "[m] metric  [esc] back"
 	case bvHistory:
 		return "[esc] back"
 	default:

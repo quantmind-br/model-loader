@@ -104,6 +104,11 @@ func (p BenchmarkPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if msg.String() == "E" && p.view == bvRunDetail && p.detail != nil {
 			return p.exportRunValue(*p.detail)
 		}
+		// Compare view: cycle the ranking metric.
+		if msg.String() == "m" && p.view == bvCompare {
+			p.compareMetric = (p.compareMetric + 1) % 4
+			return p, nil
+		}
 		return p, nil
 	default:
 		return p.keyDashboard(msg)
