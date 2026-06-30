@@ -30,6 +30,7 @@ func init() {
 		asJSON     bool
 		minSolve   float64
 		transcript string
+		tbTasks    []string
 	)
 
 	cmd := &cobra.Command{
@@ -55,7 +56,7 @@ func init() {
 			}
 			if profileID == "" {
 				fmt.Fprintln(errw, "usage:")
-				fmt.Fprintln(errw, "  model-loader benchmark --profile <id> [--mode judge|longctx|llama-bench] [--json] [--min-solve N]")
+				fmt.Fprintln(errw, "  model-loader benchmark --profile <id> [--mode judge|longctx|llama-bench|terminal-bench] [--tb-task <id>] [--json] [--min-solve N]")
 				fmt.Fprintln(errw, "  model-loader benchmark --list [--json]")
 				fmt.Fprintln(errw, "  model-loader benchmark --compare [--profile <id>] [--json]")
 				fmt.Fprintln(errw, "  model-loader benchmark --transcript <run-id> [--json]")
@@ -69,6 +70,11 @@ func init() {
 			if !ok {
 				fmt.Fprintf(errw, "unknown mode %q (want judge|longctx|llama-bench)\n", modeStr)
 				return &ExitError{Code: 1}
+			}
+			// --tb-task overrides the configured terminal-bench task list for this
+			// run (handy for the one-task validation flow).
+			if len(tbTasks) > 0 {
+				cfg.Benchmark.TerminalBench.Tasks = tbTasks
 			}
 
 			svc, release, err := bootstrapWithLock(errw, logLevel)
@@ -112,7 +118,8 @@ func init() {
 	}
 
 	cmd.Flags().StringVar(&profileID, "profile", "", "profile id to benchmark")
-	cmd.Flags().StringVar(&modeStr, "mode", "judge", "scoring mode: judge | math-bench | codegen-bench | ragas-bench | summary-bench | llama-bench | longctx | instruction-bench | mmlu-bench")
+	cmd.Flags().StringVar(&modeStr, "mode", "judge", "scoring mode: judge | math-bench | codegen-bench | ragas-bench | summary-bench | llama-bench | longctx | instruction-bench | mmlu-bench | terminal-bench")
+	cmd.Flags().StringArrayVar(&tbTasks, "tb-task", nil, "terminal-bench: task id or glob to run (repeatable; overrides config.benchmark.terminalbench.tasks); only used with --mode terminal-bench")
 	cmd.Flags().BoolVar(&list, "list", false, "list saved runs and exit")
 	cmd.Flags().BoolVar(&compare, "compare", false, "with --profile: that profile's run history; alone: latest run per profile")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emit JSON instead of text")
@@ -182,6 +189,18 @@ func buildBenchmarkEnvironment(svc *app.Services, cfg config.AppConfig, errw io.
 		},
 		LlamaBenchPresets: cfg.Benchmark.LlamaBench.Presets,
 		LlamaBenchReps:    cfg.Benchmark.LlamaBench.Repetitions,
+		LlamaBenchWarmup:  cfg.Benchmark.LlamaBench.Warmup,
+		EmbeddingsBaseURL: cfg.Benchmark.Embeddings.BaseURL,
+
+		TerminalBenchCmd:        cfg.Benchmark.TerminalBench.Command,
+		TerminalBenchAgent:      cfg.Benchmark.TerminalBench.Agent,
+		TerminalBenchDataset:    cfg.Benchmark.TerminalBench.Dataset,
+		TerminalBenchProvider:   cfg.Benchmark.TerminalBench.Provider,
+		TerminalBenchTasks:      cfg.Benchmark.TerminalBench.Tasks,
+		TerminalBenchNTasks:     cfg.Benchmark.TerminalBench.NTasks,
+		TerminalBenchConcurrent: cfg.Benchmark.TerminalBench.Concurrent,
+		TerminalBenchTimeout:    time.Duration(cfg.Benchmark.TerminalBench.TimeoutSec) * time.Second,
+		TerminalBenchExtraArgs:  cfg.Benchmark.TerminalBench.ExtraArgs,
 	})
 	if err != nil {
 		svc.Logger.Error("benchmark_engine_init_failed", "err", err)
@@ -384,4 +403,3 @@ func benchPrintTranscript(out io.Writer, store benchmarkstore.Store, id string, 
 	}
 	return 0
 }
-

@@ -131,6 +131,16 @@ func runTUI(cliLevel string) int {
 		LlamaBenchReps:    svc.Cfg.Benchmark.LlamaBench.Repetitions,
 		LlamaBenchWarmup:  svc.Cfg.Benchmark.LlamaBench.Warmup,
 		EmbeddingsBaseURL: svc.Cfg.Benchmark.Embeddings.BaseURL,
+
+		TerminalBenchCmd:        svc.Cfg.Benchmark.TerminalBench.Command,
+		TerminalBenchAgent:      svc.Cfg.Benchmark.TerminalBench.Agent,
+		TerminalBenchDataset:    svc.Cfg.Benchmark.TerminalBench.Dataset,
+		TerminalBenchProvider:   svc.Cfg.Benchmark.TerminalBench.Provider,
+		TerminalBenchTasks:      svc.Cfg.Benchmark.TerminalBench.Tasks,
+		TerminalBenchNTasks:     svc.Cfg.Benchmark.TerminalBench.NTasks,
+		TerminalBenchConcurrent: svc.Cfg.Benchmark.TerminalBench.Concurrent,
+		TerminalBenchTimeout:    time.Duration(svc.Cfg.Benchmark.TerminalBench.TimeoutSec) * time.Second,
+		TerminalBenchExtraArgs:  svc.Cfg.Benchmark.TerminalBench.ExtraArgs,
 	})
 	if err != nil {
 		svc.Logger.Error("benchmark_dataset_load_failed", "err", err)
