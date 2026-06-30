@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/quantmind-br/model-loader/internal/service/benchmark"
 )
 
@@ -72,6 +74,53 @@ func TestCompareVisual_MetricCycleReorders(t *testing.T) {
 	idxSpeed1 := strings.Index(out1, "SpeedKing")
 	if idxSpeed1 == -1 || idxSpeed1 > idxSolve1 {
 		t.Fatalf("metric 1 (tok/s) should rank SpeedKing first:\n%s", out1)
+	}
+}
+
+// TestHistory_NavigationAndEnter asserts the history view cursor moves and
+// enter opens the selected run's detail.
+func TestHistory_NavigationAndEnter(t *testing.T) {
+	page := BenchmarkPage{
+		view: bvHistory,
+		historyRuns: []benchmark.Run{
+			{ID: "newer", ProfileName: "P", Mode: benchmark.ModeJudge, Aggregate: benchmark.Aggregate{SolveRate: 0.6}},
+			{ID: "older", ProfileName: "P", Mode: benchmark.ModeJudge, Aggregate: benchmark.Aggregate{SolveRate: 0.3}},
+		},
+	}
+	m, _ := page.keyHistory(tea.KeyMsg{Type: tea.KeyDown})
+	page = m.(BenchmarkPage)
+	if page.histCursor != 1 {
+		t.Fatalf("histCursor after down = %d, want 1", page.histCursor)
+	}
+	m, _ = page.keyHistory(tea.KeyMsg{Type: tea.KeyEnter})
+	page = m.(BenchmarkPage)
+	if page.view != bvRunDetail || page.detail == nil || page.detail.ID != "older" {
+		t.Fatalf("enter should open older detail; view=%v detail=%+v", page.view, page.detail)
+	}
+}
+
+// TestHistory_MetricToggleAndMinmax asserts 'm' toggles the metric and the
+// sparkline renders min/max labels.
+func TestHistory_MetricToggleAndMinmax(t *testing.T) {
+	page := BenchmarkPage{
+		view: bvHistory,
+		historyRuns: []benchmark.Run{
+			{ProfileName: "P", Mode: benchmark.ModeJudge, Aggregate: benchmark.Aggregate{SolveRate: 0.6, AvgTokensPerSecond: 40}},
+			{ProfileName: "P", Mode: benchmark.ModeJudge, Aggregate: benchmark.Aggregate{SolveRate: 0.3, AvgTokensPerSecond: 20}},
+		},
+	}
+	out0 := page.viewHistory()
+	if !strings.Contains(out0, "min") || !strings.Contains(out0, "max") {
+		t.Fatalf("history sparkline should show min/max:\n%s", out0)
+	}
+	m, _ := page.keyHistory(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	page = m.(BenchmarkPage)
+	if page.histMetric != 1 {
+		t.Fatalf("histMetric after m = %d, want 1", page.histMetric)
+	}
+	out1 := page.viewHistory()
+	if !strings.Contains(out1, "tok/s trend") {
+		t.Fatalf("metric 1 should show tok/s trend:\n%s", out1)
 	}
 }
 

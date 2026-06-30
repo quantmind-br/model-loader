@@ -96,7 +96,7 @@ func (p BenchmarkPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.keyWizard(msg)
 	case bvRunning:
 		return p.keyRunning(msg)
-	case bvRunDetail, bvCompare, bvHistory:
+	case bvRunDetail, bvCompare:
 		if msg.String() == "esc" {
 			p.view = bvDashboard
 			return p, nil
@@ -110,6 +110,8 @@ func (p BenchmarkPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return p, nil
 		}
 		return p, nil
+	case bvHistory:
+		return p.keyHistory(msg)
 	default:
 		return p.keyDashboard(msg)
 	}

@@ -105,6 +105,11 @@ type BenchmarkPage struct {
 	// compareMetric selects which metric the compare view ranks and bars on.
 	// 0 = the mode's primary metric (default); others cycle perf metrics.
 	compareMetric int
+
+	// histMetric toggles the history sparkline between the mode's primary
+	// metric (0) and tok/s (1).
+	histMetric int
+	histCursor int
 }
 
 // NewBenchmarkPage builds the page bound to the profile store, run store, and
@@ -185,7 +190,7 @@ func (p BenchmarkPage) Hints() string {
 	case bvCompare:
 		return "[m] metric  [esc] back"
 	case bvHistory:
-		return "[esc] back"
+		return "[↑↓] run  [enter] details  [m] metric  [esc] back"
 	default:
 		hints := "[b] run  [←→] mode  [enter] details  [c] compare  [E] export  [X] del  [R] reload"
 		if len(p.runs) > 0 {

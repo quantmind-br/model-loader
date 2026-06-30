@@ -204,22 +204,121 @@ func primaryMetricLabel(mode benchmark.Mode) string {
 	return primaryMetric(r).Label
 }
 
+// keyHistory handles the interactive history view: up/down move the cursor,
+// enter opens the selected run's detail, m toggles the trend metric, esc goes
+// back to the dashboard.
+func (p BenchmarkPage) keyHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		p.view = bvDashboard
+	case "up", "k":
+		if p.histCursor > 0 {
+			p.histCursor--
+		}
+	case "down", "j":
+		if p.histCursor < len(p.historyRuns)-1 {
+			p.histCursor++
+		}
+	case "g", "home":
+		p.histCursor = 0
+	case "G", "end":
+		if len(p.historyRuns) > 0 {
+			p.histCursor = len(p.historyRuns) - 1
+		}
+	case "m":
+		p.histMetric = (p.histMetric + 1) % 2
+	case "enter":
+		cur := p.histCursor
+		if cur >= 0 && cur < len(p.historyRuns) {
+			r := p.historyRuns[cur]
+			p.detail = &r
+			p.view = bvRunDetail
+		}
+	}
+	return p, nil
+}
+
 func (p BenchmarkPage) viewHistory() string {
 	if len(p.historyRuns) == 0 {
 		return theme.Subtitle.Render("no history")
 	}
 	title := theme.Title.Render("History — " + p.historyRuns[0].ProfileName)
-	header := theme.Subtitle.Render(fmt.Sprintf("%-19s  %-16s  %6s  %6s  %8s  %7s  %8s",
-		"when", "mode", "solve", "score", "tok/s", "TTFT", "vram"))
-	rows := []string{header}
-	for _, r := range p.historyRuns {
-		a := r.Aggregate
-		rows = append(rows, fmt.Sprintf("%-19s  %-16s  %5.0f%%  %6.2f  %8.1f  %5.0fms  %6dMB",
-			r.StartedAt.Format("2006-01-02 15:04"), truncate(r.Mode.Title(), 16),
-			a.SolveRate*100, a.AvgScore, a.AvgTokensPerSecond, a.AvgTTFTms, a.PeakVRAMMB))
+	metricLabel := "solve"
+	if p.histMetric == 1 {
+		metricLabel = "tok/s"
 	}
-	spark := sparkTrend(p.historyRuns)
+	header := theme.Subtitle.Render(fmt.Sprintf("%-19s  %-16s  %8s  %8s  %7s  %8s",
+		"when", "mode", metricLabel, "tok/s", "TTFT", "vram"))
+	rows := []string{header}
+	// Clamp the cursor.
+	cur := p.histCursor
+	if cur >= len(p.historyRuns) {
+		cur = len(p.historyRuns) - 1
+	}
+	for i, r := range p.historyRuns {
+		a := r.Aggregate
+		m := primaryMetric(r)
+		if p.histMetric == 1 {
+			m.Text = fmt.Sprintf("%.1f", a.AvgTokensPerSecond)
+		}
+		cursor := "  "
+		if i == cur {
+			cursor = "> "
+		}
+		line := fmt.Sprintf("%s%-19s  %-16s  %8s  %8.1f  %5.0fms  %6dMB",
+			cursor, r.StartedAt.Format("2006-01-02 15:04"), truncate(r.Mode.Title(), 16),
+			m.Text, a.AvgTokensPerSecond, a.AvgTTFTms, a.PeakVRAMMB)
+		if i == cur && !theme.NoColor() {
+			line = theme.Selected.Render(line)
+		}
+		rows = append(rows, line)
+	}
+	spark := p.historySparkline()
 	return lipgloss.JoinVertical(lipgloss.Left, title, strings.Join(rows, "\n"), "", spark)
+}
+
+// historySparkline renders the oldest→newest trend with min/max labels and a
+// metric toggle (0 = primary, 1 = tok/s). Returns "" for <2 runs.
+func (p BenchmarkPage) historySparkline() string {
+	runs := p.historyRuns
+	if len(runs) < 2 {
+		return ""
+	}
+	vals := make([]float64, len(runs))
+	label := "solve trend (old→new)"
+	if p.histMetric == 1 {
+		label = "tok/s trend (old→new)"
+		for i, r := range runs {
+			vals[i] = r.Aggregate.AvgTokensPerSecond
+		}
+	} else {
+		for i, r := range runs {
+			vals[i] = primaryMetric(r).Raw
+		}
+	}
+	scale := 1.0
+	minV, maxV := vals[0], vals[0]
+	for _, v := range vals {
+		if v > scale {
+			scale = v
+		}
+		if v < minV {
+			minV = v
+		}
+		if v > maxV {
+			maxV = v
+		}
+	}
+	bars := []rune("▁▂▃▄▅▆▇█")
+	var b strings.Builder
+	// runs is newest-first; walk in reverse for chronological order.
+	for i := len(runs) - 1; i >= 0; i-- {
+		frac := vals[i] / scale
+		idx := int(frac * float64(len(bars)-1))
+		idx = max(0, min(idx, len(bars)-1))
+		b.WriteRune(bars[idx])
+	}
+	return theme.Subtitle.Render(fmt.Sprintf("%s: %s   min %.2f  max %.2f", label, b.String(), minV, maxV))
 }
 
 // sparkTrend renders an oldest→newest trend line. The metric depends on the most
