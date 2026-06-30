@@ -26,10 +26,8 @@ the score — it never installs Pier, Docker, or the task corpus.
 Per task, all inside Pier's `docker` environment:
 
 1. **Install** — Pier installs `mini-swe-agent` (via `uv`) inside the task
-   container. (DeepSWE tasks set `allow_internet = false`; Pier's per-agent
-   network allowlist opens exactly the URLs the agent needs — including the
-   `api_base` you pass — so the install + inference calls work while the task
-   stays otherwise isolated.)
+   container. This runs at **image-build time on the host network**, so it
+   succeeds regardless of the task's `allow_internet`.
 2. **Solve** — the agent is pointed at the proxy (`openai/<profile-id>` +
    `OPENAI_API_BASE`) and commits a patch.
 3. **Verify** — Pier extracts the commit as a patch, applies it in a pristine
@@ -67,19 +65,43 @@ profile id so model-name validation accepts the proxied id.
 ## Container networking (important)
 
 The agent runs **inside** the task's Docker container, so `127.0.0.1:4321` there
-is the *container*, not the host. model-loader therefore rewrites a loopback proxy
-host to `host.docker.internal` for the agent's `api_base` by default. For this to
-resolve you must:
+is the *container*, not the host. Two layers stand between the agent and a
+host-run proxy; both must be cleared.
 
-- **Bind the proxy on a host-reachable interface** (not loopback-only). Run the
-  proxy with `--host 0.0.0.0` (e.g. `model-loader serve --host 0.0.0.0 --port 4321`)
-  or set the TUI/serve host accordingly.
-- On **Linux**, ensure `host.docker.internal` resolves inside containers. Pass it
-  through Pier to Docker via `extra_args`
-  (`--ek extra_hosts='["host.docker.internal:host-gateway"]'`) or set
-  `api_base` to the Docker bridge gateway (commonly `http://172.17.0.1:4321/v1`).
-- Or set `benchmark.deepswe.api_base` explicitly to whatever address the
-  container can reach (e.g. a LAN IP of the host).
+**1. Pier's egress sandbox.** DeepSWE tasks set `allow_internet = false`. Pier
+then puts the agent on an `internal: true` network with **no host/LAN route** and
+forces all egress through a **Squid forward-proxy sidecar** whose allowlist is a
+set of **domains** (`dstdomain`) derived from the agent's URLs. Squid's
+`dstdomain` **cannot match a bare IP**, so an `api_base` of
+`http://172.17.0.1:4321/v1` is rejected (`ERR_ACCESS_DENIED`); a hostname like
+`host.docker.internal` would be allowlistable, but Pier's generated compose adds
+**no host-gateway mapping** to the Squid container, so it can't resolve/route to
+the host either. Net: a local-host proxy is impractical under `allow_internet =
+false` on Linux — which is why DeepSWE's own quickstart targets cloud APIs.
+
+**2. The host firewall.** Even with egress allowed, a default-deny `INPUT`
+(UFW/iptables) drops container→host traffic until you open the Docker bridge
+subnet to the proxy port.
+
+The reliable path on a single Linux rig is to **drop the egress sandbox** for the
+agent container so it reaches the host proxy directly over the Docker bridge:
+
+- In the task's `task.toml`, set `[environment] allow_internet = true` (leave
+  `[verifier.environment]` `false` — scoring stays isolated). Pier then omits the
+  Squid sidecar and the agent egresses over the `default` bridge.
+- **Bind the proxy on a host-reachable interface:** `model-loader serve --host
+  0.0.0.0 --port 4321` (or set the TUI/serve host).
+- Set `benchmark.deepswe.api_base = "http://172.17.0.1:4321/v1"` (the Docker
+  bridge gateway — reachable from containers; `host.docker.internal` works too on
+  Docker Desktop, or on Linux with `extra_args = ["--ek",
+  "extra_hosts=[\"host.docker.internal:host-gateway\"]"]`).
+- **Open the host firewall** for the Docker bridge subnet → proxy port, e.g.
+  `sudo ufw allow from 172.16.0.0/12 to any port 4321 proto tcp`.
+
+Verified end-to-end on a dual-3090 Linux host: with the four steps above, the
+agent's chat-completions calls reach the loaded backend and Pier writes a scored
+`reward.json`. (Whether a given local model *solves* a long-horizon task is a
+model-quality question, separate from this plumbing.)
 
 ## Configuration
 
@@ -131,7 +153,7 @@ TOML `tasks`/`n_tasks`) takes precedence over `--limit`.
 The cheapest end-to-end check is a single task with `--limit 1`. It exercises the
 whole path (Docker pull, agent install, proxy call, patch, verify) for one task.
 If the agent calls fail immediately, re-check the chat-completions routing and the
-container→host `api_base` (see the two "important" sections above). A run that
+container→host networking (see the two "important" sections above). A run that
 completes with real token counts and a genuine pass/fail — rather than an
 agent/connection error on every task — confirms the plumbing.
 
