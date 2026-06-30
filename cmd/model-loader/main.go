@@ -115,60 +115,7 @@ func runTUI(cliLevel string) int {
 	backendsPage := pages.NewBackendsPage(svc.SchemaManager).WithStores(svc.CatalogStore, svc.SchemaStore).WithProber(prober)
 
 	benchStore := benchmarkstore.New(filepath.Join(svc.Cfg.Paths.StateDir, "benchmark", "runs"))
-	benchRunner, err := benchmark.NewRunner(svc.Store, mon, supervisor, benchmark.Config{
-		MaxTokens:         svc.Cfg.Benchmark.MaxTokens,
-		Limit:             svc.Cfg.Benchmark.Limit,
-		Temperature:       svc.Cfg.Benchmark.Temperature,
-		Timeout:           time.Duration(svc.Cfg.Benchmark.TimeoutSec) * time.Second,
-		LongContextTokens: svc.Cfg.Benchmark.LongContextTokens,
-		SaveTranscripts:   svc.Cfg.Benchmark.SaveTranscripts,
-		Judge: benchmark.JudgeEndpoint{
-			BaseURL: svc.Cfg.Benchmark.Judge.BaseURL,
-			APIKey:  svc.Cfg.Benchmark.Judge.APIKey,
-			Model:   svc.Cfg.Benchmark.Judge.Model,
-			Samples: svc.Cfg.Benchmark.Judge.Samples,
-		},
-		LlamaBenchPresets: svc.Cfg.Benchmark.LlamaBench.Presets,
-		LlamaBenchReps:    svc.Cfg.Benchmark.LlamaBench.Repetitions,
-		LlamaBenchWarmup:  svc.Cfg.Benchmark.LlamaBench.Warmup,
-		EmbeddingsBaseURL: svc.Cfg.Benchmark.Embeddings.BaseURL,
-
-		TerminalBenchCmd:        svc.Cfg.Benchmark.TerminalBench.Command,
-		TerminalBenchAgent:      svc.Cfg.Benchmark.TerminalBench.Agent,
-		TerminalBenchDataset:    svc.Cfg.Benchmark.TerminalBench.Dataset,
-		TerminalBenchProvider:   svc.Cfg.Benchmark.TerminalBench.Provider,
-		TerminalBenchTasks:      svc.Cfg.Benchmark.TerminalBench.Tasks,
-		TerminalBenchNTasks:     svc.Cfg.Benchmark.TerminalBench.NTasks,
-		TerminalBenchConcurrent: svc.Cfg.Benchmark.TerminalBench.Concurrent,
-		TerminalBenchTimeout:    time.Duration(svc.Cfg.Benchmark.TerminalBench.TimeoutSec) * time.Second,
-		TerminalBenchExtraArgs:  svc.Cfg.Benchmark.TerminalBench.ExtraArgs,
-
-		SweBenchProHarnessDir:    svc.Cfg.Benchmark.SweBenchPro.HarnessDir,
-		SweBenchProRawSample:     svc.Cfg.Benchmark.SweBenchPro.RawSamplePath,
-		SweBenchProScriptsDir:    svc.Cfg.Benchmark.SweBenchPro.ScriptsDir,
-		SweBenchProDockerhubUser: svc.Cfg.Benchmark.SweBenchPro.DockerhubUser,
-		SweBenchProPython:        svc.Cfg.Benchmark.SweBenchPro.Python,
-		SweBenchProNumWorkers:    svc.Cfg.Benchmark.SweBenchPro.NumWorkers,
-		SweBenchProUseModal:      svc.Cfg.Benchmark.SweBenchPro.UseModal,
-		SweBenchProInstances:     svc.Cfg.Benchmark.SweBenchPro.Instances,
-		SweBenchProPatchPath:     svc.Cfg.Benchmark.SweBenchPro.PatchPath,
-		SweBenchProAgentCmd:      svc.Cfg.Benchmark.SweBenchPro.AgentCmd,
-		SweBenchProTimeout:       time.Duration(svc.Cfg.Benchmark.SweBenchPro.TimeoutSec) * time.Second,
-		SweBenchProExtraArgs:     svc.Cfg.Benchmark.SweBenchPro.ExtraArgs,
-
-		DeepSWECmd:        svc.Cfg.Benchmark.DeepSWE.Command,
-		DeepSWETasksDir:   svc.Cfg.Benchmark.DeepSWE.TasksDir,
-		DeepSWEAgent:      svc.Cfg.Benchmark.DeepSWE.Agent,
-		DeepSWEProvider:   svc.Cfg.Benchmark.DeepSWE.Provider,
-		DeepSWEModelClass: svc.Cfg.Benchmark.DeepSWE.ModelClass,
-		DeepSWEAPIBase:    svc.Cfg.Benchmark.DeepSWE.APIBase,
-		DeepSWETasks:      svc.Cfg.Benchmark.DeepSWE.Tasks,
-		DeepSWENTasks:     svc.Cfg.Benchmark.DeepSWE.NTasks,
-		DeepSWESampleSeed: svc.Cfg.Benchmark.DeepSWE.SampleSeed,
-		DeepSWEConcurrent: svc.Cfg.Benchmark.DeepSWE.Concurrent,
-		DeepSWETimeout:    time.Duration(svc.Cfg.Benchmark.DeepSWE.TimeoutSec) * time.Second,
-		DeepSWEExtraArgs:  svc.Cfg.Benchmark.DeepSWE.ExtraArgs,
-	})
+	benchRunner, err := benchmark.NewRunner(svc.Store, mon, supervisor, app.BenchmarkConfig(svc.Cfg))
 	if err != nil {
 		svc.Logger.Error("benchmark_dataset_load_failed", "err", err)
 		benchRunner = nil

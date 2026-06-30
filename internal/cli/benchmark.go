@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -232,60 +231,11 @@ func buildBenchmarkEnvironment(svc *app.Services, cfg config.AppConfig, errw io.
 	}
 
 	mon := monitor.New(monitor.Config{NvidiaSMIPath: "nvidia-smi"})
-	runner, err := benchmark.NewRunner(svc.Store, mon, supervisor, benchmark.Config{
-		MaxTokens:         cfg.Benchmark.MaxTokens,
-		Limit:             cfg.Benchmark.Limit,
-		Temperature:       cfg.Benchmark.Temperature,
-		Timeout:           time.Duration(cfg.Benchmark.TimeoutSec) * time.Second,
-		LongContextTokens: cfg.Benchmark.LongContextTokens,
-		SaveTranscripts:   true,
-		Judge: benchmark.JudgeEndpoint{
-			BaseURL: cfg.Benchmark.Judge.BaseURL,
-			APIKey:  cfg.Benchmark.Judge.APIKey,
-			Model:   cfg.Benchmark.Judge.Model,
-			Samples: cfg.Benchmark.Judge.Samples,
-		},
-		LlamaBenchPresets: cfg.Benchmark.LlamaBench.Presets,
-		LlamaBenchReps:    cfg.Benchmark.LlamaBench.Repetitions,
-		LlamaBenchWarmup:  cfg.Benchmark.LlamaBench.Warmup,
-		EmbeddingsBaseURL: cfg.Benchmark.Embeddings.BaseURL,
-
-		TerminalBenchCmd:        cfg.Benchmark.TerminalBench.Command,
-		TerminalBenchAgent:      cfg.Benchmark.TerminalBench.Agent,
-		TerminalBenchDataset:    cfg.Benchmark.TerminalBench.Dataset,
-		TerminalBenchProvider:   cfg.Benchmark.TerminalBench.Provider,
-		TerminalBenchTasks:      cfg.Benchmark.TerminalBench.Tasks,
-		TerminalBenchNTasks:     cfg.Benchmark.TerminalBench.NTasks,
-		TerminalBenchConcurrent: cfg.Benchmark.TerminalBench.Concurrent,
-		TerminalBenchTimeout:    time.Duration(cfg.Benchmark.TerminalBench.TimeoutSec) * time.Second,
-		TerminalBenchExtraArgs:  cfg.Benchmark.TerminalBench.ExtraArgs,
-
-		SweBenchProHarnessDir:    cfg.Benchmark.SweBenchPro.HarnessDir,
-		SweBenchProRawSample:     cfg.Benchmark.SweBenchPro.RawSamplePath,
-		SweBenchProScriptsDir:    cfg.Benchmark.SweBenchPro.ScriptsDir,
-		SweBenchProDockerhubUser: cfg.Benchmark.SweBenchPro.DockerhubUser,
-		SweBenchProPython:        cfg.Benchmark.SweBenchPro.Python,
-		SweBenchProNumWorkers:    cfg.Benchmark.SweBenchPro.NumWorkers,
-		SweBenchProUseModal:      cfg.Benchmark.SweBenchPro.UseModal,
-		SweBenchProInstances:     cfg.Benchmark.SweBenchPro.Instances,
-		SweBenchProPatchPath:     cfg.Benchmark.SweBenchPro.PatchPath,
-		SweBenchProAgentCmd:      cfg.Benchmark.SweBenchPro.AgentCmd,
-		SweBenchProTimeout:       time.Duration(cfg.Benchmark.SweBenchPro.TimeoutSec) * time.Second,
-		SweBenchProExtraArgs:     cfg.Benchmark.SweBenchPro.ExtraArgs,
-
-		DeepSWECmd:        cfg.Benchmark.DeepSWE.Command,
-		DeepSWETasksDir:   cfg.Benchmark.DeepSWE.TasksDir,
-		DeepSWEAgent:      cfg.Benchmark.DeepSWE.Agent,
-		DeepSWEProvider:   cfg.Benchmark.DeepSWE.Provider,
-		DeepSWEModelClass: cfg.Benchmark.DeepSWE.ModelClass,
-		DeepSWEAPIBase:    cfg.Benchmark.DeepSWE.APIBase,
-		DeepSWETasks:      cfg.Benchmark.DeepSWE.Tasks,
-		DeepSWENTasks:     cfg.Benchmark.DeepSWE.NTasks,
-		DeepSWESampleSeed: cfg.Benchmark.DeepSWE.SampleSeed,
-		DeepSWEConcurrent: cfg.Benchmark.DeepSWE.Concurrent,
-		DeepSWETimeout:    time.Duration(cfg.Benchmark.DeepSWE.TimeoutSec) * time.Second,
-		DeepSWEExtraArgs:  cfg.Benchmark.DeepSWE.ExtraArgs,
-	})
+	bc := app.BenchmarkConfig(cfg)
+	// The headless CLI always persists transcripts so `benchmark --transcript
+	// <run-id>` can replay a run later; the TUI shows them live and config-gates.
+	bc.SaveTranscripts = true
+	runner, err := benchmark.NewRunner(svc.Store, mon, supervisor, bc)
 	if err != nil {
 		svc.Logger.Error("benchmark_engine_init_failed", "err", err)
 		fmt.Fprintf(errw, "benchmark engine: %v\n", err)
