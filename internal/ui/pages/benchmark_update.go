@@ -80,6 +80,8 @@ func (p BenchmarkPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.keyProfilePick(msg)
 	case bvModePick:
 		return p.keyModePick(msg)
+	case bvWizard:
+		return p.keyWizard(msg)
 	case bvRunning:
 		if msg.String() == "esc" {
 			if p.runCancel != nil {
@@ -125,7 +127,7 @@ func (p BenchmarkPage) keyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		p.focusMode = p.cycleFocusMode(1)
 		p.dashCursor = 0
 	case "b":
-		return p.openProfilePick()
+		return p.openWizard()
 	case "enter":
 		if r, ok := p.selectedDashboardRun(); ok {
 			p.detail = &r

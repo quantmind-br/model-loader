@@ -30,6 +30,16 @@ const (
 	bvRunDetail                    // full metrics for one run
 	bvCompare                      // latest run per profile, side by side
 	bvHistory                      // runs of one profile over time
+	bvWizard                       // unified profile→mode→review run wizard
+)
+
+// benchWizardStep is the sub-step within the bvWizard view.
+type benchWizardStep int
+
+const (
+	wizProfile benchWizardStep = iota // pick a profile (filterable)
+	wizMode                           // pick a scoring mode (cards)
+	wizReview                         // confirm before launching
 )
 
 // benchModes is the selectable scoring-mode order in the mode picker, derived
@@ -67,6 +77,7 @@ type BenchmarkPage struct {
 
 	modeCursor        int
 	selectedProfileID string
+	wizStep           benchWizardStep // current sub-step of the bvWizard view
 
 	// running state
 	runCancel   context.CancelFunc
@@ -114,7 +125,7 @@ func (p BenchmarkPage) Reload() tea.Cmd { return p.loadRunsCmd() }
 // IsCapturingInput claims global keys whenever a modal-like view is active or
 // the user is typing a filter, so [1-5]/[q]/[tab] don't get stolen mid-flow.
 func (p BenchmarkPage) IsCapturingInput() bool {
-	return p.deleteConfirm.Active() || p.view != bvDashboard || p.filterMode
+	return p.deleteConfirm.Active() || p.view != bvDashboard && p.view != bvWizard || p.filterMode
 }
 
 // StatusMessage implements ui.StatusMessageProvider: the page's flash also
@@ -147,6 +158,18 @@ func (p BenchmarkPage) Hints() string {
 		return "[↑↓] move  [/] filter  [enter] choose  [esc] cancel"
 	case bvModePick:
 		return "[↑↓] move  [enter] run  [esc] cancel"
+	case bvWizard:
+		switch p.wizStep {
+		case wizProfile:
+			if p.filterMode {
+				return "[type] filter  [/] exit filter  [enter] select  [esc] cancel"
+			}
+			return "[↑↓] move  [/] filter  [enter] next  [esc] cancel"
+		case wizMode:
+			return "[↑↓] move  [enter] review  [esc] back"
+		default: // wizReview
+			return "[enter] run  [esc] back"
+		}
 	case bvRunning:
 		return "running… [esc] cancel"
 	case bvRunDetail:
@@ -179,6 +202,8 @@ func (p BenchmarkPage) View() string {
 		body = p.viewCompare()
 	case bvHistory:
 		body = p.viewHistory()
+	case bvWizard:
+		body = p.viewWizard()
 	default:
 		body = p.viewDashboard()
 	}
