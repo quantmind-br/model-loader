@@ -79,6 +79,13 @@ type BenchmarkPage struct {
 	detail          *benchmark.Run
 	compareSections []benchCompareSection
 	historyRuns     []benchmark.Run
+
+	// dashboard state (render uses focusMode + dashCursor; catCursor is the
+	// selected category in the category bar). All passive here; wired in a
+	// later task.
+	focusMode  benchmark.Mode
+	dashCursor int
+	catCursor  int
 }
 
 // NewBenchmarkPage builds the page bound to the profile store, run store, and

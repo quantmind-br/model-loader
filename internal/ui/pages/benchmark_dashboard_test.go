@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -57,5 +58,47 @@ func TestDashboardRows_FiltersByMode(t *testing.T) {
 	}
 	if rows := dashboardRows(runs, benchmark.ModeLlamaBench); len(rows) != 1 || rows[0].Latest.ID != "l" {
 		t.Fatalf("mode filter failed: %+v", rows)
+	}
+}
+
+func TestViewDashboard_EmptyState(t *testing.T) {
+	p := BenchmarkPage{}
+	out := p.viewDashboard()
+	if !strings.Contains(out, "No benchmark runs yet") {
+		t.Fatalf("empty dashboard missing prompt:\n%s", out)
+	}
+}
+
+func TestViewDashboard_ShowsLeaderboard(t *testing.T) {
+	p := BenchmarkPage{
+		width:     100,
+		focusMode: benchmark.ModeJudge,
+		runs: []benchmark.Run{
+			{ID: "r1", ProfileID: "p1", ProfileName: "Qwen3", Mode: benchmark.ModeJudge,
+				Aggregate: benchmark.Aggregate{SolveRate: 0.6}},
+		},
+	}
+	out := p.viewDashboard()
+	for _, want := range []string{"Benchmark dashboard", "Qwen3", "60%"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("dashboard output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestViewDashboard_DefaultsFocusModeFromRuns(t *testing.T) {
+	// focusMode unset ("") must fall back to the first mode that has runs.
+	p := BenchmarkPage{
+		width: 100,
+		runs: []benchmark.Run{
+			{ID: "r1", ProfileID: "p1", ProfileName: "Solo", Mode: benchmark.ModeMMLUBench,
+				Aggregate: benchmark.Aggregate{SolveRate: 0.5}},
+		},
+	}
+	if got := p.focusedDashboardMode(); got != benchmark.ModeMMLUBench {
+		t.Fatalf("focusedDashboardMode with empty focusMode = %q, want mmlu-bench", got)
+	}
+	if out := p.viewDashboard(); !strings.Contains(out, "Solo") {
+		t.Fatalf("dashboard should render the only run's profile:\n%s", out)
 	}
 }
