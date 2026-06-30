@@ -31,6 +31,26 @@ type BenchmarkConfig struct {
 	LlamaBench        LlamaBenchConfig    `mapstructure:"llamabench"`
 	Embeddings        EmbeddingsConfig    `mapstructure:"embeddings"`
 	TerminalBench     TerminalBenchConfig `mapstructure:"terminalbench"`
+	SweBenchPro       SweBenchProConfig   `mapstructure:"swebenchpro"`
+}
+
+// SweBenchProConfig configures the agentic SWE-bench Pro scoring mode, which
+// wraps the external harness (scaleapi/SWE-bench_Pro-os) + Docker + python. Empty
+// scalar values fall back to the engine defaults shown below. The engine never
+// installs the harness, Docker, or the patch-generation agent.
+type SweBenchProConfig struct {
+	HarnessDir    string   `mapstructure:"harness_dir"`     // cloned SWE-bench_Pro-os checkout (required for this mode)
+	RawSamplePath string   `mapstructure:"raw_sample_path"` // --raw_sample_path; required, lowercase fail_to_pass/pass_to_pass columns (see docs/swe-bench-pro.md)
+	ScriptsDir    string   `mapstructure:"scripts_dir"`     // --scripts_dir; empty → <harness>/run_scripts
+	DockerhubUser string   `mapstructure:"dockerhub_user"`  // --dockerhub_username; empty → "jefzda"
+	Python        string   `mapstructure:"python"`          // python interpreter; empty → "python3"
+	NumWorkers    int      `mapstructure:"num_workers"`     // eval --num_workers; <=0 → 4 (single workstation)
+	UseModal      bool     `mapstructure:"use_modal"`       // false → --use_local_docker; true → Modal cloud
+	Instances     []string `mapstructure:"instances"`       // subset of instance_ids to evaluate; empty → all in the patch set
+	PatchPath     string   `mapstructure:"patch_path"`      // pre-generated patches JSON or preds dir; takes precedence over agent_cmd; empty → require agent_cmd
+	AgentCmd      []string `mapstructure:"agent_cmd"`       // patch-generation command ({model}/{api_base}/{output}/{instances}/{harness}); used only when patch_path is empty
+	TimeoutSec    int      `mapstructure:"timeout_sec"`     // whole-pipeline cap (seconds); 0 → no model-loader-side cap
+	ExtraArgs     []string `mapstructure:"extra_args"`      // passed through verbatim to swe_bench_pro_eval.py
 }
 
 // TerminalBenchConfig configures the agentic terminal-bench scoring mode, which
@@ -172,6 +192,10 @@ func LoadFrom(path string) (AppConfig, error) {
 	cfg.Benchmark.Judge.BaseURL = os.ExpandEnv(cfg.Benchmark.Judge.BaseURL)
 	cfg.Benchmark.Judge.APIKey = os.ExpandEnv(cfg.Benchmark.Judge.APIKey)
 	cfg.Benchmark.Judge.Model = os.ExpandEnv(cfg.Benchmark.Judge.Model)
+	cfg.Benchmark.SweBenchPro.HarnessDir = expandTilde(cfg.Benchmark.SweBenchPro.HarnessDir)
+	cfg.Benchmark.SweBenchPro.RawSamplePath = expandTilde(cfg.Benchmark.SweBenchPro.RawSamplePath)
+	cfg.Benchmark.SweBenchPro.ScriptsDir = expandTilde(cfg.Benchmark.SweBenchPro.ScriptsDir)
+	cfg.Benchmark.SweBenchPro.PatchPath = expandTilde(cfg.Benchmark.SweBenchPro.PatchPath)
 	return cfg, nil
 }
 
@@ -250,4 +274,9 @@ func applyDefaults(v *viper.Viper) {
 	v.SetDefault("benchmark.terminalbench.n_tasks", 0)
 	v.SetDefault("benchmark.terminalbench.concurrent", 1)
 	v.SetDefault("benchmark.terminalbench.timeout_sec", 0)
+	v.SetDefault("benchmark.swebenchpro.dockerhub_user", "jefzda")
+	v.SetDefault("benchmark.swebenchpro.python", "python3")
+	v.SetDefault("benchmark.swebenchpro.num_workers", 4)
+	v.SetDefault("benchmark.swebenchpro.use_modal", false)
+	v.SetDefault("benchmark.swebenchpro.timeout_sec", 0)
 }

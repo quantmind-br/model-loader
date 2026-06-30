@@ -23,14 +23,17 @@ import (
 
 func init() {
 	var (
-		profileID  string
-		modeStr    string
-		list       bool
-		compare    bool
-		asJSON     bool
-		minSolve   float64
-		transcript string
-		tbTasks    []string
+		profileID     string
+		modeStr       string
+		list          bool
+		compare       bool
+		asJSON        bool
+		minSolve      float64
+		transcript    string
+		tbTasks       []string
+		sweapInstance []string
+		sweapHarness  string
+		sweapPatches  string
 	)
 
 	cmd := &cobra.Command{
@@ -56,7 +59,7 @@ func init() {
 			}
 			if profileID == "" {
 				fmt.Fprintln(errw, "usage:")
-				fmt.Fprintln(errw, "  model-loader benchmark --profile <id> [--mode judge|longctx|llama-bench|terminal-bench] [--tb-task <id>] [--json] [--min-solve N]")
+				fmt.Fprintln(errw, "  model-loader benchmark --profile <id> [--mode judge|longctx|llama-bench|terminal-bench|swe-bench-pro] [--tb-task <id>] [--sweap-instance <id>] [--json] [--min-solve N]")
 				fmt.Fprintln(errw, "  model-loader benchmark --list [--json]")
 				fmt.Fprintln(errw, "  model-loader benchmark --compare [--profile <id>] [--json]")
 				fmt.Fprintln(errw, "  model-loader benchmark --transcript <run-id> [--json]")
@@ -75,6 +78,16 @@ func init() {
 			// run (handy for the one-task validation flow).
 			if len(tbTasks) > 0 {
 				cfg.Benchmark.TerminalBench.Tasks = tbTasks
+			}
+			// swe-bench-pro per-run overrides (handy for ad-hoc / smoke runs).
+			if len(sweapInstance) > 0 {
+				cfg.Benchmark.SweBenchPro.Instances = sweapInstance
+			}
+			if sweapHarness != "" {
+				cfg.Benchmark.SweBenchPro.HarnessDir = sweapHarness
+			}
+			if sweapPatches != "" {
+				cfg.Benchmark.SweBenchPro.PatchPath = sweapPatches
 			}
 
 			svc, release, err := bootstrapWithLock(errw, logLevel)
@@ -118,8 +131,11 @@ func init() {
 	}
 
 	cmd.Flags().StringVar(&profileID, "profile", "", "profile id to benchmark")
-	cmd.Flags().StringVar(&modeStr, "mode", "judge", "scoring mode: judge | math-bench | codegen-bench | ragas-bench | summary-bench | llama-bench | longctx | instruction-bench | mmlu-bench | terminal-bench")
+	cmd.Flags().StringVar(&modeStr, "mode", "judge", "scoring mode: judge | math-bench | codegen-bench | ragas-bench | summary-bench | llama-bench | longctx | instruction-bench | mmlu-bench | terminal-bench | swe-bench-pro")
 	cmd.Flags().StringArrayVar(&tbTasks, "tb-task", nil, "terminal-bench: task id or glob to run (repeatable; overrides config.benchmark.terminalbench.tasks); only used with --mode terminal-bench")
+	cmd.Flags().StringArrayVar(&sweapInstance, "sweap-instance", nil, "swe-bench-pro: instance_id to evaluate (repeatable; overrides config.benchmark.swebenchpro.instances); only used with --mode swe-bench-pro")
+	cmd.Flags().StringVar(&sweapHarness, "sweap-harness", "", "swe-bench-pro: path to a cloned SWE-bench_Pro-os harness (overrides config.benchmark.swebenchpro.harness_dir)")
+	cmd.Flags().StringVar(&sweapPatches, "sweap-patches", "", "swe-bench-pro: patches JSON or preds dir to evaluate (overrides config.benchmark.swebenchpro.patch_path)")
 	cmd.Flags().BoolVar(&list, "list", false, "list saved runs and exit")
 	cmd.Flags().BoolVar(&compare, "compare", false, "with --profile: that profile's run history; alone: latest run per profile")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emit JSON instead of text")
@@ -201,6 +217,19 @@ func buildBenchmarkEnvironment(svc *app.Services, cfg config.AppConfig, errw io.
 		TerminalBenchConcurrent: cfg.Benchmark.TerminalBench.Concurrent,
 		TerminalBenchTimeout:    time.Duration(cfg.Benchmark.TerminalBench.TimeoutSec) * time.Second,
 		TerminalBenchExtraArgs:  cfg.Benchmark.TerminalBench.ExtraArgs,
+
+		SweBenchProHarnessDir:    cfg.Benchmark.SweBenchPro.HarnessDir,
+		SweBenchProRawSample:     cfg.Benchmark.SweBenchPro.RawSamplePath,
+		SweBenchProScriptsDir:    cfg.Benchmark.SweBenchPro.ScriptsDir,
+		SweBenchProDockerhubUser: cfg.Benchmark.SweBenchPro.DockerhubUser,
+		SweBenchProPython:        cfg.Benchmark.SweBenchPro.Python,
+		SweBenchProNumWorkers:    cfg.Benchmark.SweBenchPro.NumWorkers,
+		SweBenchProUseModal:      cfg.Benchmark.SweBenchPro.UseModal,
+		SweBenchProInstances:     cfg.Benchmark.SweBenchPro.Instances,
+		SweBenchProPatchPath:     cfg.Benchmark.SweBenchPro.PatchPath,
+		SweBenchProAgentCmd:      cfg.Benchmark.SweBenchPro.AgentCmd,
+		SweBenchProTimeout:       time.Duration(cfg.Benchmark.SweBenchPro.TimeoutSec) * time.Second,
+		SweBenchProExtraArgs:     cfg.Benchmark.SweBenchPro.ExtraArgs,
 	})
 	if err != nil {
 		svc.Logger.Error("benchmark_engine_init_failed", "err", err)
