@@ -98,3 +98,39 @@ func TestModeDetailLines_Summary(t *testing.T) {
 		t.Errorf("summary detail missing coherence: %v", lines)
 	}
 }
+
+// TestRunDetailScorecards asserts the detail view renders the visual scorecard
+// cards (primary metric + tok/s + TTFT + VRAM) above the summary line.
+func TestRunDetailScorecards(t *testing.T) {
+	out := detailFor(benchmark.ModeJudge,
+		benchmark.Aggregate{Total: 2, Resolved: 1, SolveRate: 0.5, AvgTokensPerSecond: 42, AvgTTFTms: 150, PeakVRAMMB: 8000},
+		nil)
+	for _, want := range []string{"solve", "tok/s", "TTFT", "VRAM"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("detail view missing scorecard %q:\n%s", want, out)
+		}
+	}
+	// The primary metric value (50%) and throughput (42.0) should appear.
+	if !strings.Contains(out, "50%") {
+		t.Fatalf("detail view missing primary metric value:\n%s", out)
+	}
+}
+
+// TestRunDetailPartialRunKeepsErrorBanner asserts a partial run (Err set) still
+// shows the visual scorecards alongside the error banner.
+func TestRunDetailPartialRunKeepsErrorBanner(t *testing.T) {
+	run := benchmark.Run{
+		ProfileName: "demo", Mode: benchmark.ModeJudge,
+		StartedAt: time.Now(), Err: "context canceled",
+		Aggregate: benchmark.Aggregate{Total: 1, Resolved: 0, SolveRate: 0},
+		Problems:  []benchmark.ProblemResult{{ProblemID: "p1"}},
+	}
+	p := BenchmarkPage{view: bvRunDetail, detail: &run}
+	out := p.viewRunDetail()
+	if !strings.Contains(out, "run incomplete") {
+		t.Fatalf("partial run missing error banner:\n%s", out)
+	}
+	if !strings.Contains(out, "solve") {
+		t.Fatalf("partial run should still render scorecards:\n%s", out)
+	}
+}

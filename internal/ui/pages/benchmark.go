@@ -510,12 +510,61 @@ func (p BenchmarkPage) viewRunDetail() string {
 	}
 
 	extra := modeDetailLines(r)
-	sections := []string{title, strings.Join(meta, "\n"), summary}
+	sections := []string{title, strings.Join(meta, "\n"), p.renderScorecards(r), summary}
 	if len(extra) > 0 {
 		sections = append(sections, strings.Join(extra, "\n"))
 	}
 	sections = append(sections, "", strings.Join(rows, "\n"))
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+// renderScorecards renders the primary metric + key performance metrics as
+// proportional bars, giving the detail view a quick-glance visual layer above
+// the dense numeric summary line. The primary metric's bar is normalized to
+// [0,1] (rate modes) or scaled by the mode's max for throughput; the perf
+// cards (tok/s, TTFT, VRAM) are scaled against representative ceilings so their
+// bars stay meaningful across hardware.
+func (p BenchmarkPage) renderScorecards(r benchmark.Run) string {
+	a := r.Aggregate
+	m := primaryMetric(r)
+	barW := 16
+
+	// Primary metric card.
+	frac := m.Frac
+	if frac == 0 && m.Raw > 0 {
+		frac = m.Raw
+	}
+	primary := fmt.Sprintf("%-7s %s %6s", m.Label, components.MetricBar(frac, barW), m.Text)
+
+	// Throughput card: scale tok/s against a 100 tok/s ceiling (clamped).
+	tps := a.AvgTokensPerSecond
+	tpsFrac := tps / 100
+	if tpsFrac > 1 {
+		tpsFrac = 1
+	}
+	throughput := fmt.Sprintf("%-7s %s %6.1f", "tok/s", components.MetricBar(tpsFrac, barW), tps)
+
+	// TTFT card: lower is better — invert so a fast (low) TTFT fills more bar.
+	// Ceiling 2000ms maps to empty; 0ms maps to full.
+	ttft := a.AvgTTFTms
+	ttftFrac := 1 - ttft/2000
+	if ttftFrac < 0 {
+		ttftFrac = 0
+	}
+	if ttft <= 0 {
+		ttftFrac = 0 // unknown — show empty bar rather than misleading full
+	}
+	latency := fmt.Sprintf("%-7s %s %5.0fms", "TTFT", components.MetricBar(ttftFrac, barW), ttft)
+
+	// VRAM card: scale against 24 GiB (reference rig ceiling), clamped.
+	vram := float64(a.PeakVRAMMB) / 1024
+	vramFrac := float64(a.PeakVRAMMB) / (24 * 1024)
+	if vramFrac > 1 {
+		vramFrac = 1
+	}
+	memory := fmt.Sprintf("%-7s %s %5.1fGB", "VRAM", components.MetricBar(vramFrac, barW), vram)
+
+	return theme.Subtitle.Render(strings.Join([]string{primary, throughput, latency, memory}, "\n"))
 }
 
 // --- mode-specific detail helpers ------------------------------------------
