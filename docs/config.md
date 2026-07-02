@@ -108,6 +108,41 @@ Throughput-mode (`llama-bench`) settings.
 | `presets` | `["512/128", "4096/256"]` | `pp/tg` token pairs (prompt / generation) to measure |
 | `repetitions` | `3` | Measurements per preset (`0` → 3) |
 
+#### `[benchmark.terminalbench]`
+
+Agentic [Terminal-Bench](https://github.com/laude-institute/terminal-bench) mode (`--mode terminal-bench`), wrapping the external `tb` CLI which drives a Dockerized tmux sandbox via the Terminus agent pointed at the proxy. Requires `tb` + Docker (fail-fast in `Prepare`).
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `command` | `"tb"` | `tb` CLI binary (name on PATH or absolute path) |
+| `agent` | `"terminus"` | `tb` agent |
+| `dataset` | `"terminal-bench-core==0.1.1"` | `tb` dataset `name` or `name==version` |
+| `provider` | `"openai"` | LiteLLM provider prefix → `openai/<profile-id>` |
+| `tasks` | `[]` | `--task-id` ids/globs; empty → whole dataset |
+| `n_tasks` | `0` | `--n-tasks` cap; `0` → omit (whole dataset) |
+| `concurrent` | `1` | `--n-concurrent` (keep at 1 on a single-GPU rig) |
+| `timeout_sec` | `0` | Whole-run cap; `0` → none (NOT the per-request `timeout`) |
+| `extra_args` | `[]` | Passed verbatim (e.g. `["--no-rebuild"]`) |
+
+#### `[benchmark.swebenchpro]`
+
+Agentic [SWE-bench Pro](https://github.com/scaleapi/SWE-bench_Pro-os) mode (`--mode swe-bench-pro`), a 3-stage subprocess coordinator over the external harness (optional agent patch-generation → `gather_patches.py` → `swe_bench_pro_eval.py`) + Docker. Requires harness + eval-script + `raw_sample_path` (no default — the bundled jsonl has UPPERCASE column names the eval misreads) + scripts-dir + python (+ Docker unless `use_modal`). Operator guide: [docs/swe-bench-pro.md](swe-bench-pro.md).
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `harness_dir` | `""` | Cloned SWE-bench_Pro-os checkout (required) |
+| `raw_sample_path` | `""` | `--raw_sample_path`; required, lowercase `fail_to_pass`/`pass_to_pass` columns |
+| `scripts_dir` | `""` | `--scripts_dir`; empty → `<harness>/run_scripts` |
+| `dockerhub_user` | `"jefzda"` | `--dockerhub_username` |
+| `python` | `"python3"` | Python interpreter |
+| `num_workers` | `4` | `eval --num_workers` (≤0 → 4, single workstation) |
+| `use_modal` | `false` | `false` → `--use_local_docker`; `true` → Modal cloud |
+| `instances` | `[]` | Subset of `instance_id`s to evaluate; empty → all in the patch set |
+| `patch_path` | `""` | Pre-generated patches JSON or preds dir; takes precedence over `agent_cmd`; empty → require `agent_cmd` |
+| `agent_cmd` | `[]` | Patch-generation command (placeholders `{model}/{api_base}/{output}/{instances}/{harness}`); used only when `patch_path` is empty |
+| `timeout_sec` | `0` | Whole-pipeline cap; `0` → none |
+| `extra_args` | `[]` | Passed verbatim to `swe_bench_pro_eval.py` |
+
 #### `[benchmark.deepswe]`
 
 Agentic [DeepSWE](https://github.com/datacurve-ai/deep-swe) mode (`--mode deep-swe`),

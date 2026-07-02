@@ -14,8 +14,8 @@ A terminal UI (TUI) for managing inference server profiles and processes across 
 - **Schema-driven Validation** — Each backend has its own validation schema (auto-generated from `--help`, editable by user)
 - **Per-Profile Backend Selection** — Each profile selects a backend from the catalog; validation uses that backend's schema exclusively
 - **Hugging Face Integration** — Search the Hub and download `.gguf` files with queued, progress-tracked downloads
-- **Benchmark** — Evaluate profiles with a built-in engine: SWE-bench Lite coding tasks, a long-context needle probe, and `llama-bench` throughput measurement (optional LLM-as-judge grading)
-- **OpenAI-compatible HTTP Proxy** — Headless `model-loader serve` exposes an OpenAI-shaped reverse proxy with implicit model swap (per-request `"model"` field) plus dedicated admin endpoints (`POST /_admin/load`, `POST /_admin/unload`) for explicit control and to free VRAM on demand
+- **Benchmark** — Evaluate profiles with a built-in engine spanning 12 modes across 5 categories: Quality (LLM-judge SWE-bench Lite, GSM8K math, HumanEval codegen, RAGAS RAG faithfulness, summarization), Speed (`llama-bench` throughput), Robustness (long-context needle, instruction-following), Knowledge (MMLU), and **Agentic** (Terminal-Bench, SWE-bench Pro, DeepSWE — each shells out to an external harness + Docker). The TUI Benchmark tab is a dashboard-centric redesign: a mode-focused leaderboard with trend sparklines, a unified run wizard (profile→mode→review), scorecard run-detail, visual compare, and history timeline
+- **Multi-API HTTP Proxy** — Headless `model-loader serve` exposes one proxy that speaks **four** client APIs: OpenAI (native reverse-proxy), **Anthropic Messages** (`/v1/messages`, translated), **OpenAI Responses** (`/v1/responses`, translated), and **Gemini** (`/v1beta/models/*`, translated) — all routed to the loaded backend's chat completions, with implicit model swap (per-request `"model"` field) plus admin endpoints (`POST /_admin/load`, `POST /_admin/unload`) for explicit control and VRAM release. Anthropic SDK clients (incl. Claude Code) can point straight at it
 
 ## Requirements
 
@@ -139,7 +139,7 @@ See [docs/config.md](docs/config.md) for detailed configuration options.
 
 ## HTTP API
 
-The `model-loader serve` subcommand starts a headless reverse proxy on `[serve].host:[serve].port` (default `127.0.0.1:4321`). It speaks both the OpenAI API (native, reverse-proxied) and the Anthropic Messages API (translated to the backend's chat completions). The same proxy can be started/stopped from the TUI Server tab (`s` / `x`).
+The `model-loader serve` subcommand starts a headless reverse proxy on `[serve].host:[serve].port` (default `127.0.0.1:4321`). It speaks **four** client APIs, all routed to the loaded backend's chat completions: the OpenAI API (native, reverse-proxied), the Anthropic Messages API, the OpenAI Responses API, and the Gemini API (the latter three translated in-proxy). The same proxy can be started/stopped from the TUI Server tab (`s` / `x`).
 
 ### Endpoints
 
@@ -148,6 +148,8 @@ The `model-loader serve` subcommand starts a headless reverse proxy on `[serve].
 | `POST` | `/v1/chat/completions`, `/v1/completions`, etc. | OpenAI-compatible inference. The proxy reads the `"model"` field (or `?model=` query param) and hot-swaps the backend if needed |
 | `POST` | `/v1/messages` | Anthropic Messages API. Translated to the loaded backend's OpenAI `/v1/chat/completions` — works with every backend kind. Full fidelity: SSE streaming (`message_start` → `content_block_*` → `message_delta` → `message_stop`), tools (`tool_use`/`tool_result`), images (base64/URL), `system`, `stop_sequences`; backend `reasoning_content` is mapped to `thinking` blocks. The `"model"` field must be a profile id and triggers the same implicit swap |
 | `POST` | `/v1/messages/count_tokens` | Local deterministic token estimate (~4 bytes/token + per-message/image overhead). Never contacts or loads a backend. Validates that `"model"` is an existing profile |
+| `POST` | `/v1/responses` | OpenAI Responses API, translated to the backend's chat completions: input string/array, `instructions`→system, function_call/function_call_output, `reasoning.effort`, full Responses event-stream. Same implicit-swap + inflight semantics as `/v1/messages` |
+| `POST` | `/v1beta/models/{model}:{generateContent\|streamGenerateContent\|countTokens}` | Gemini API, translated to chat completions: contents/parts, systemInstruction, functionCall/functionResponse (FIFO id pairing), `thinkingConfig`→reasoning, `data:`-only SSE stream; `{model}` may carry a `(level)` reasoning suffix. `GET /v1beta/models` lists profiles in Gemini shape |
 | `GET`  | `/v1/models` | OpenRouter-shaped model list — each profile becomes a model object mirroring OpenRouter's `/api/v1/models` (`id`, `context_length`, `architecture`, `pricing`, `top_provider`, …); fields with no meaning for a local proxy are emitted empty. Each item also carries OpenAI's `object: "model"` and `owned_by` (the profile's serving backend id) plus Anthropic's `type: "model"`, `display_name`, and `created_at`. The list envelope keeps OpenAI's `{"object":"list"}` and adds Anthropic's `has_more`/`first_id`/`last_id` |
 | `GET`  | `/_status` | JSON snapshot: `running`, `loaded_profile_id`, `loaded_pid`, `loaded_port`, `inflight_requests`, last swap timing, last error |
 | `POST` | `/_admin/load` | Explicitly load a profile without sending an inference request. Body: `{"profile_id":"<id>"}` (or `{"model":"<id>"}` as alias). Reuses the same swap path as the catch-all forwarder |

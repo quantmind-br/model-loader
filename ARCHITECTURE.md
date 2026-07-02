@@ -1,5 +1,7 @@
 # model-loader Architecture
 
+> ⚠ **STALE — do not trust the body of this file.** It was generated 2026-06-02 from the GitNexus graph and has not been regenerated since. Known drift vs. the live tree: it cites the embedded llama-server schema as **v9680 / 244 flags** (current **v9761**), lists **24 service packages** (current **26** — `configweb`, `unslothhelp`, `tabbyhelp` were added), and shows the old Profiles keybindings (`x`/`b`/`e` → now `X`/`K`/`E`, no background toggle). It also predates the Anthropic/Responses/Gemini proxy translation, the benchmark dashboard redesign, and dual-GPU support. For current architecture see [AGENTS.md](AGENTS.md) §2. **Regenerate this file with `npx gitnexus analyze` rather than hand-editing the generated body.**
+
 > **Generated:** 2026-06-02 from the GitNexus knowledge graph.
 > **Repo:** model-loader (468 files, 9,918 symbols, 31,837 relationships, 300 execution flows).
 

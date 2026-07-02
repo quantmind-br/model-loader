@@ -8,6 +8,8 @@ This file is the **single source of truth for known defects**. It absorbs and su
 
 **Validated & resolved:** 2026-06-23. Every entry was re-checked against the working tree on `main`, then all actionable defects were fixed in the same pass (`go build ./...` → exit 0; `go test ./...` → all ok). **No entry is `🔴 Open`** — everything is Fixed or a deliberate by-design/non-bug. See [Resolution summary](#resolution-summary).
 
+> ℹ **Scope note (2026-07-02):** this 2026-06-23 pass covered the 2026-04-29 TUI bug report, the log-streaming audit, doc drift, and test gaps — the L/B/D/T series below. It **predates** the HTTP-proxy API translation (Anthropic/Responses/Gemini routes), the benchmark dashboard redesign + the three agentic modes (terminal-bench/swe-bench-pro/deep-swe), and dual-GPU/tensor-parallel support. Those subsystems carry **no tracked defects here yet**; file new entries if a defect is confirmed in them.
+
 ---
 
 ## Resolution summary
