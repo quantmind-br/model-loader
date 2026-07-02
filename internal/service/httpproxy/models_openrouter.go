@@ -3,6 +3,7 @@ package httpproxy
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 )
@@ -19,9 +20,16 @@ import (
 // profile's serving backend id (`launch.backendId`). The list envelope keeps
 // the separate `object: "list"`.
 type orModel struct {
-	ID                  string              `json:"id"`
-	Object              string              `json:"object"`
-	OwnedBy             string              `json:"owned_by"`
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	OwnedBy string `json:"owned_by"`
+	// Anthropic model-object keys (GET /v1/models on the Anthropic API):
+	// type is always "model", display_name mirrors Name, created_at is the
+	// RFC3339 form of the profile's Meta.CreatedAt. Purely additive — OpenAI
+	// and OpenRouter clients ignore them.
+	Type                string              `json:"type"`
+	DisplayName         string              `json:"display_name"`
+	CreatedAt           string              `json:"created_at"`
 	CanonicalSlug       string              `json:"canonical_slug"`
 	HuggingFaceID       *string             `json:"hugging_face_id"`
 	Name                string              `json:"name"`
@@ -214,6 +222,9 @@ func buildORModel(p domain.Profile) orModel {
 		ID:            p.ID,
 		Object:        "model",
 		OwnedBy:       p.Launch.BackendID,
+		Type:          "model",
+		DisplayName:   p.Name,
+		CreatedAt:     p.Meta.CreatedAt.UTC().Format(time.RFC3339),
 		CanonicalSlug: p.ID,
 		HuggingFaceID: nil,
 		Name:          p.Name,

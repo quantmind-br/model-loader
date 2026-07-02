@@ -155,6 +155,11 @@ type Server struct {
 	lastSwapDur time.Duration
 	lastError   string
 	lastErrorAt time.Time
+
+	// upstream issues the hand-rolled backend calls of the Anthropic
+	// translation layer (/v1/messages). The ReverseProxy path keeps its own
+	// per-backend Transport and is unaffected.
+	upstream *http.Client
 }
 
 // New constructs a Server with sane defaults. Logger nil → no-op.
@@ -179,6 +184,17 @@ func New(cfg Config, deps Deps) *Server {
 		cfg:    cfg,
 		deps:   deps,
 		logger: logger,
+		upstream: &http.Client{
+			// No Client.Timeout: streamed completions run for minutes; the
+			// call lifetime is bound by the incoming request context.
+			Transport: &http.Transport{
+				DisableCompression:    true,
+				ResponseHeaderTimeout: 0,
+				IdleConnTimeout:       90 * time.Second,
+				MaxIdleConns:          32,
+				MaxIdleConnsPerHost:   16,
+			},
+		},
 	}
 }
 

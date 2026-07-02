@@ -60,12 +60,14 @@ Instance ports are ephemeral and internal: the process manager assigns each back
 
 #### Endpoints
 
-The proxy exposes both the OpenAI-compatible inference surface and dedicated admin endpoints. All return JSON; failures use the OpenAI `{"error":{...}}` envelope.
+The proxy exposes the OpenAI-compatible inference surface, the Anthropic Messages API (translated to the backend's chat completions), and dedicated admin endpoints. All return JSON; failures use the OpenAI `{"error":{...}}` envelope, except the two Anthropic routes, whose failures use the Anthropic `{"type":"error","error":{...}}` envelope.
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | `POST` | `/v1/chat/completions`, `/v1/completions`, … | Proxied to the loaded backend. The `"model"` field (or `?model=` query param) triggers an implicit swap when needed |
-| `GET`  | `/v1/models` | OpenRouter-shaped model list — each profile mirrors an OpenRouter `/api/v1/models` object (non-applicable fields empty) plus OpenAI's `object:"model"` and `owned_by` (serving backend id); envelope keeps `{"object":"list"}` |
+| `POST` | `/v1/messages` | Anthropic Messages API translated to the backend's `/v1/chat/completions` (streaming, tools, images, system; `reasoning_content` → `thinking` blocks). `"model"` must be a profile id (strict 404 otherwise) and triggers the same implicit swap |
+| `POST` | `/v1/messages/count_tokens` | Deterministic local token estimate; never contacts or loads a backend. Validates that `"model"` is an existing profile |
+| `GET`  | `/v1/models` | OpenRouter-shaped model list — each profile mirrors an OpenRouter `/api/v1/models` object (non-applicable fields empty) plus OpenAI's `object:"model"` and `owned_by` (serving backend id) and Anthropic's `type:"model"`/`display_name`/`created_at`; envelope keeps `{"object":"list"}` and adds `has_more`/`first_id`/`last_id` |
 | `GET`  | `/_status` | Current state: `running`, `loaded_profile_id`, `loaded_pid`, `loaded_port`, `inflight_requests`, `last_swap_at`, `last_swap_dur`, `last_error` |
 | `POST` | `/_admin/load` | Explicitly load a profile. Body: `{"profile_id":"<id>"}` (alias: `{"model":"<id>"}`). Returns the same `Status` shape as `/_status` |
 | `POST` | `/_admin/unload` | Kill the loaded backend, freeing its VRAM. Query params: `?force=true` (skip drain), `?drain_timeout=10s` (cap on in-flight drain wait, defaults to the shutdown grace period). Idempotent: 200 when nothing is loaded |

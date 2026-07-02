@@ -291,6 +291,8 @@ func TestBuildORModel_JSONShapeMatchesOpenRouter(t *testing.T) {
 		"context_length", "architecture", "pricing", "top_provider", "per_request_limits",
 		"supported_parameters", "default_parameters", "supported_voices", "knowledge_cutoff",
 		"expiration_date", "links", "reasoning",
+		// Anthropic model-object keys riding alongside the hybrid shape.
+		"type", "display_name", "created_at",
 	}
 	for _, k := range wantKeys {
 		if _, ok := top[k]; !ok {
@@ -353,5 +355,34 @@ func TestBuildORModel_JSONShapeMatchesOpenRouter(t *testing.T) {
 		if string(dp[k]) != "null" {
 			t.Errorf("default_parameters[%q] = %s, want null", k, dp[k])
 		}
+	}
+}
+
+// TestBuildORModel_AnthropicFields pins the additive Anthropic model-object
+// keys: type ("model"), display_name (the profile name), and created_at
+// (RFC3339 of Meta.CreatedAt).
+func TestBuildORModel_AnthropicFields(t *testing.T) {
+	created := time.Date(2026, 6, 1, 12, 30, 0, 0, time.UTC)
+	p := domain.Profile{
+		ID:   "m",
+		Name: "My Model",
+		Meta: domain.ProfileMeta{CreatedAt: created},
+	}
+	raw, err := json.Marshal(buildORModel(p))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var top map[string]any
+	if err := json.Unmarshal(raw, &top); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if top["type"] != "model" {
+		t.Errorf("type = %v, want \"model\"", top["type"])
+	}
+	if top["display_name"] != "My Model" {
+		t.Errorf("display_name = %v, want profile name", top["display_name"])
+	}
+	if top["created_at"] != "2026-06-01T12:30:00Z" {
+		t.Errorf("created_at = %v, want RFC3339 of Meta.CreatedAt", top["created_at"])
 	}
 }

@@ -15,11 +15,17 @@ import (
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 )
 
-// registerRoutes installs the catch-all reverse proxy plus the
-// `GET /v1/models` exception. Exact-match semantics in net/http.ServeMux
-// keep `/v1/models/anything` and every other path routed to the forwarder.
+// registerRoutes installs the catch-all reverse proxy plus the exact-path
+// exceptions. Exact-match semantics in net/http.ServeMux keep
+// `/v1/models/anything`, `/v1/messages/` (trailing slash) and every other
+// path routed to the forwarder — only the exact paths below are intercepted.
 func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/models", s.handleModelsList)
+	mux.HandleFunc("/v1/messages", s.handleAnthropicMessages)
+	mux.HandleFunc("/v1/messages/count_tokens", s.handleAnthropicCountTokens)
+	mux.HandleFunc("/v1/responses", s.handleResponses)
+	mux.HandleFunc("/v1beta/models", s.handleGeminiModels)
+	mux.HandleFunc("/v1beta/models/", s.handleGeminiAction)
 	mux.HandleFunc("/_status", s.handleStatus)
 	mux.HandleFunc("/_admin/load", s.handleAdminLoad)
 	mux.HandleFunc("/_admin/unload", s.handleAdminUnload)
@@ -28,10 +34,15 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 // modelsResponse is the list envelope returned by /v1/models. The envelope
 // keeps OpenAI's `object: "list"`; each entry mirrors the OpenRouter model
-// object (see models_openrouter.go).
+// object (see models_openrouter.go). The Anthropic pagination keys ride
+// alongside additively: has_more is always false (no pagination) and
+// first_id/last_id are the first/last item ids (null on an empty list).
 type modelsResponse struct {
-	Object string    `json:"object"`
-	Data   []orModel `json:"data"`
+	Object  string    `json:"object"`
+	Data    []orModel `json:"data"`
+	HasMore bool      `json:"has_more"`
+	FirstID *string   `json:"first_id"`
+	LastID  *string   `json:"last_id"`
 }
 
 func (s *Server) handleModelsList(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +68,10 @@ func (s *Server) handleModelsList(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, p := range profiles {
 		out.Data = append(out.Data, buildORModel(p))
+	}
+	if len(out.Data) > 0 {
+		out.FirstID = &out.Data[0].ID
+		out.LastID = &out.Data[len(out.Data)-1].ID
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

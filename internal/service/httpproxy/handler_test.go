@@ -164,7 +164,6 @@ func TestHandleForward_InvalidProfileID_400(t *testing.T) {
 	}
 }
 
-
 func TestHandleForward_LiteLLMOpenAIPrefix_RoutesToBackend(t *testing.T) {
 	hits := make(chan string, 4)
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -395,5 +394,73 @@ func TestStatus_UnmarshalJSON_BackwardCompatibility(t *testing.T) {
 	}
 	if st2.LoadedProfileID != "new" {
 		t.Errorf("LoadedProfileID = %q, want new (snake_case wins)", st2.LoadedProfileID)
+	}
+}
+
+// TestHandleModelsList_AnthropicEnvelopeFields pins the additive Anthropic
+// list-envelope keys: has_more (always false — no pagination), first_id and
+// last_id (ids of the first/last returned items, null on an empty store).
+func TestHandleModelsList_AnthropicEnvelopeFields(t *testing.T) {
+	store := newStubStore(makeProfile("alpha", 9101), makeProfile("beta", 9102))
+	srv := newTestServer(t, store, newStubManager())
+	mux := http.NewServeMux()
+	srv.registerRoutes(mux)
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest("GET", "/v1/models", nil))
+	if rr.Code != 200 {
+		t.Fatalf("status = %d", rr.Code)
+	}
+	var body struct {
+		Object  string  `json:"object"`
+		HasMore *bool   `json:"has_more"`
+		FirstID *string `json:"first_id"`
+		LastID  *string `json:"last_id"`
+		Data    []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Object != "list" {
+		t.Errorf("object = %q, want list (OpenAI envelope preserved)", body.Object)
+	}
+	if body.HasMore == nil || *body.HasMore {
+		t.Errorf("has_more = %v, want explicit false", body.HasMore)
+	}
+	if len(body.Data) != 2 {
+		t.Fatalf("data len = %d, want 2", len(body.Data))
+	}
+	// stubStore iterates a map: compare against the returned order, not ids.
+	if body.FirstID == nil || *body.FirstID != body.Data[0].ID {
+		t.Errorf("first_id = %v, want %q", body.FirstID, body.Data[0].ID)
+	}
+	if body.LastID == nil || *body.LastID != body.Data[len(body.Data)-1].ID {
+		t.Errorf("last_id = %v, want %q", body.LastID, body.Data[len(body.Data)-1].ID)
+	}
+
+	// Empty store: first_id/last_id must serialize as JSON null.
+	srvEmpty := newTestServer(t, newStubStore(), newStubManager())
+	muxEmpty := http.NewServeMux()
+	srvEmpty.registerRoutes(muxEmpty)
+	rrEmpty := httptest.NewRecorder()
+	muxEmpty.ServeHTTP(rrEmpty, httptest.NewRequest("GET", "/v1/models", nil))
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(rrEmpty.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode empty: %v", err)
+	}
+	for _, k := range []string{"first_id", "last_id"} {
+		v, ok := raw[k]
+		if !ok {
+			t.Errorf("empty list envelope missing %q", k)
+			continue
+		}
+		if string(v) != "null" {
+			t.Errorf("%s = %s, want null on empty list", k, v)
+		}
+	}
+	if string(raw["has_more"]) != "false" {
+		t.Errorf("has_more = %s, want false", raw["has_more"])
 	}
 }

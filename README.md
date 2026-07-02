@@ -139,14 +139,16 @@ See [docs/config.md](docs/config.md) for detailed configuration options.
 
 ## HTTP API
 
-The `model-loader serve` subcommand starts a headless OpenAI-shaped reverse proxy on `[serve].host:[serve].port` (default `127.0.0.1:4321`). The same proxy can be started/stopped from the TUI Server tab (`s` / `x`).
+The `model-loader serve` subcommand starts a headless reverse proxy on `[serve].host:[serve].port` (default `127.0.0.1:4321`). It speaks both the OpenAI API (native, reverse-proxied) and the Anthropic Messages API (translated to the backend's chat completions). The same proxy can be started/stopped from the TUI Server tab (`s` / `x`).
 
 ### Endpoints
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | `POST` | `/v1/chat/completions`, `/v1/completions`, etc. | OpenAI-compatible inference. The proxy reads the `"model"` field (or `?model=` query param) and hot-swaps the backend if needed |
-| `GET`  | `/v1/models` | OpenRouter-shaped model list — each profile becomes a model object mirroring OpenRouter's `/api/v1/models` (`id`, `context_length`, `architecture`, `pricing`, `top_provider`, …); fields with no meaning for a local proxy are emitted empty. Each item also carries OpenAI's `object: "model"` and `owned_by` (the profile's serving backend id). The list envelope keeps OpenAI's `{"object":"list"}` |
+| `POST` | `/v1/messages` | Anthropic Messages API. Translated to the loaded backend's OpenAI `/v1/chat/completions` — works with every backend kind. Full fidelity: SSE streaming (`message_start` → `content_block_*` → `message_delta` → `message_stop`), tools (`tool_use`/`tool_result`), images (base64/URL), `system`, `stop_sequences`; backend `reasoning_content` is mapped to `thinking` blocks. The `"model"` field must be a profile id and triggers the same implicit swap |
+| `POST` | `/v1/messages/count_tokens` | Local deterministic token estimate (~4 bytes/token + per-message/image overhead). Never contacts or loads a backend. Validates that `"model"` is an existing profile |
+| `GET`  | `/v1/models` | OpenRouter-shaped model list — each profile becomes a model object mirroring OpenRouter's `/api/v1/models` (`id`, `context_length`, `architecture`, `pricing`, `top_provider`, …); fields with no meaning for a local proxy are emitted empty. Each item also carries OpenAI's `object: "model"` and `owned_by` (the profile's serving backend id) plus Anthropic's `type: "model"`, `display_name`, and `created_at`. The list envelope keeps OpenAI's `{"object":"list"}` and adds Anthropic's `has_more`/`first_id`/`last_id` |
 | `GET`  | `/_status` | JSON snapshot: `running`, `loaded_profile_id`, `loaded_pid`, `loaded_port`, `inflight_requests`, last swap timing, last error |
 | `POST` | `/_admin/load` | Explicitly load a profile without sending an inference request. Body: `{"profile_id":"<id>"}` (or `{"model":"<id>"}` as alias). Reuses the same swap path as the catch-all forwarder |
 | `POST` | `/_admin/unload` | Kill the currently-loaded backend. Frees its VRAM (the OS reclaims memory when the process exits). Idempotent: returns 200 when nothing is loaded |
@@ -157,8 +159,9 @@ The `model-loader serve` subcommand starts a headless OpenAI-shaped reverse prox
 - `POST /_admin/unload` accepts optional query params:
   - `?force=true` — skip waiting for in-flight requests before killing.
   - `?drain_timeout=10s` — upper bound on the drain wait (defaults to `[serve]` shutdown grace, currently 10s). After the timeout, the backend is killed even if requests are still in flight.
-- All endpoints return JSON with the same `Status` shape as `GET /_status` on success and an OpenAI-style `{"error":{...}}` envelope on failure.
-- The proxy binds to loopback (`127.0.0.1`) by default and ships **no authentication**. Do not expose it to a public interface without a fronting reverse proxy that adds auth.
+- All endpoints return JSON with the same `Status` shape as `GET /_status` on success and an OpenAI-style `{"error":{...}}` envelope on failure. The two Anthropic routes (`/v1/messages`, `/v1/messages/count_tokens`) are the exception: their failures use the Anthropic envelope `{"type":"error","error":{"type":...,"message":...}}` (`invalid_request_error`, `not_found_error`, `request_too_large`, `api_error`).
+- An unknown `"model"` on the Anthropic routes is a strict `404 not_found_error` — there is no fall-through to the currently-loaded backend. Request bodies on all inference routes are capped at 8 MiB (large base64 images count against this).
+- The proxy binds to loopback (`127.0.0.1`) by default and ships **no authentication** (`x-api-key`/`anthropic-version` headers are accepted and ignored). Do not expose it to a public interface without a fronting reverse proxy that adds auth.
 
 ### Examples
 
@@ -176,6 +179,31 @@ curl -sX POST http://127.0.0.1:4321/_admin/unload | jq
 
 # Force unload (do not wait for in-flight requests)
 curl -sX POST 'http://127.0.0.1:4321/_admin/unload?force=true' | jq
+
+# Anthropic Messages API (translated to the backend's chat completions)
+curl -sX POST http://127.0.0.1:4321/v1/messages \
+  -H 'content-type: application/json' \
+  -d '{"model":"my-profile","max_tokens":128,"messages":[{"role":"user","content":"Say hi"}]}' | jq
+
+# Anthropic streaming (SSE event sequence)
+curl -NsX POST http://127.0.0.1:4321/v1/messages \
+  -H 'content-type: application/json' \
+  -d '{"model":"my-profile","max_tokens":128,"stream":true,"messages":[{"role":"user","content":"Count to 5"}]}'
+
+# Local token estimate (never loads a model)
+curl -sX POST http://127.0.0.1:4321/v1/messages/count_tokens \
+  -H 'content-type: application/json' \
+  -d '{"model":"my-profile","messages":[{"role":"user","content":"hello"}]}' | jq
+```
+
+Anthropic SDK clients (including Claude Code) can point straight at the proxy — use profile ids as model names:
+
+```bash
+ANTHROPIC_BASE_URL=http://127.0.0.1:4321 \
+ANTHROPIC_API_KEY=dummy \
+ANTHROPIC_MODEL=my-profile \
+ANTHROPIC_SMALL_FAST_MODEL=my-profile \
+claude -p "hello"
 ```
 
 ## Directory Structure
