@@ -122,6 +122,12 @@ type JudgeConfig struct {
 type ServeConfig struct {
 	Host string `mapstructure:"host"`
 	Port int    `mapstructure:"port"`
+	// HealthCheckTimeoutSec bounds how long the proxy waits for a backend's
+	// /health after a swap before giving up. 0 selects the built-in default
+	// (see cli/serve.go). Large models — e.g. a 35B int4 TP=2 multimodal MoE
+	// whose Marlin expert repack alone runs minutes — can exceed the former
+	// fixed 180s and get killed mid-boot.
+	HealthCheckTimeoutSec int `mapstructure:"health_check_timeout_sec"`
 }
 
 // LoggingConfig controls the model-loader app logger (not the per-instance

@@ -6,7 +6,7 @@
 
 This file is the **single source of truth for known defects**. It absorbs and supersedes the original `BUG_REPORT.md` (2026-04-29), which was deleted; its context is preserved in [Original report context](#original-report-context).
 
-**Validated & resolved:** 2026-06-23. Every entry was re-checked against the working tree on `main`, then all actionable defects were fixed in the same pass (`go build ./...` → exit 0; `go test ./...` → all ok). As of that pass **no entry was `🔴 Open`** — everything was Fixed or a deliberate by-design/non-bug. **Update 2026-07-02:** defect **[S1](#s1)** (curated `spec-type` enum blocked chained / `draft-dflash` speculative decoding, with no `extraArgs` override) was opened and **fixed in the same pass** (Fix #1 list-valued enum + Fix #2 `extraArgs` passthrough; `draft-dflash` added; schemas regenerated). As of now **no entry is `🔴 Open`**. See [Resolution summary](#resolution-summary).
+**Validated & resolved:** 2026-06-23. Every entry was re-checked against the working tree on `main`, then all actionable defects were fixed in the same pass (`go build ./...` → exit 0; `go test ./...` → all ok). As of that pass **no entry was `🔴 Open`** — everything was Fixed or a deliberate by-design/non-bug. **Update 2026-07-02:** defect **[S1](#s1)** (curated `spec-type` enum blocked chained / `draft-dflash` speculative decoding, with no `extraArgs` override) was opened and **fixed in the same pass** (Fix #1 list-valued enum + Fix #2 `extraArgs` passthrough; `draft-dflash` added; schemas regenerated). **Update 2026-07-03:** the **N-series** ([N1](#n1)/[N2](#n2)) was opened and fixed while materializing the `sndr-vllm` (Genesis) backend + profiles — aged-out pinned-wheel index (`SNDR_WHEEL_INDEX` override) and a missing mandatory `GENESIS_ENFORCE_VERSION_RANGE=1`. **Update 2026-07-03 (later):** the **V-series** ([V1](#v1)) opened — the stock `vllm-nightly` backend's fp8-KV profiles 500 on inference (flashinfer 0.6.13 fa2/fp8 regression from the 2026-07-02 source rebuild); `backend-build.sh` (now defaults to prebuilt nightly wheels) + the renamed-venv path are fixed, but the venv rebuild is pending, so **V1 is `🟡 Partial`**. **Update 2026-07-03 (proxy):** the **P-series** opened — [P1](#p1) (detached-proxy health-check timeout hardcoded 180s killed a slow 35B int4 TP=2 multimodal-MoE boot; fixed — configurable `[serve].health_check_timeout_sec` + default raised to 360s, **pending a proxy restart to activate**) and [P2](#p2) (a `❓` reasoning-parser-returns-empty observation, separate from the load bug). No entry is `🔴 Open`. See [Resolution summary](#resolution-summary).
 
 > ℹ **Scope note (2026-07-02):** this 2026-06-23 pass covered the 2026-04-29 TUI bug report, the log-streaming audit, doc drift, and test gaps — the L/B/D/T series below. It **predates** the HTTP-proxy API translation (Anthropic/Responses/Gemini routes), the benchmark dashboard redesign + the three agentic modes (terminal-bench/swe-bench-pro/deep-swe), and dual-GPU/tensor-parallel support. Those subsystems carry **no tracked defects here yet**; file new entries if a defect is confirmed in them.
 
@@ -80,6 +80,24 @@ Highlights of the fixes applied:
 | ID | Sev | Status | Component | One-line |
 |----|-----|--------|-----------|----------|
 | [S1](#s1) | M | 🟢 | curated enums + `validator/rules.go` | Stale/scalar curated enums rejected binary-valid values (llama `spec-type` comma-list & `draft-dflash`; sglang parsers); fixed via list-valued enum + `extraArgs` passthrough |
+
+### N-series — SNDR (Genesis) backend provisioning
+| ID | Sev | Status | Component | One-line |
+|----|-----|--------|-----------|----------|
+| [N1](#n1) | M | 🟢 | `scripts/setup-sndr-backend.sh` | Pinned vLLM install used the rotating `wheels.vllm.ai/nightly` index → aged-out `dev424` pin `No matching distribution`; fixed via `SNDR_WHEEL_INDEX` per-commit override |
+| [N2](#n2) | M | 🟢 | `docs/sndr-backend.md` + SNDR profile `launch.env` | Runbook omitted the mandatory `GENESIS_ENFORCE_VERSION_RANGE=1`; version-capped patch `PN30` (obsolete on dev424) hard-failed (`failed=1`) instead of version-gating off; fixed by adding the env to every SNDR profile |
+| [N3](#n3) | M | ⚪ | TurboQuant `P38` continuation-prefill vs 24 GiB VRAM | SNDR `-sndr` 262144 profiles OOM (util 0.84) / crawl 1.4 tok/s (0.78) on large prefills — TurboQuant continuation scratch has no headroom past the KV reservation. By-design VRAM limit; documented (short-prompt-only) not code-fixable here |
+
+### V-series — stock vLLM backends (`vllm-nightly`)
+| ID | Sev | Status | Component | One-line |
+|----|-----|--------|-----------|----------|
+| [V1](#v1) | H | 🟡 | `backends/vllm-nightly/backend-build.sh` + venv | 2026-07-02 source rebuild pulled flashinfer 0.6.13 (fa2 asserts on fp8 KV / Ampere) → all fp8-KV vLLM profiles 500. Build script fixed to default to prebuilt nightly wheels; also repaired a renamed-venv `activate` path bug. Venv itself still needs a rebuild to a good nightly |
+
+### P-series — Proxy backend-load lifecycle
+| ID | Sev | Status | Component | One-line |
+|----|-----|--------|-----------|----------|
+| [P1](#p1) | H | 🟢 | `internal/cli/serve.go` + `config.go` | Proxy health-check timeout hardcoded 180s killed a slow big-model boot (35B int4 TP=2 multimodal MoE, >3 min cold); made configurable (`[serve].health_check_timeout_sec`) + default raised to 360s (needs a proxy restart to activate) |
+| [P2](#p2) | M | ❓ | Ornith AWQ profile `reasoning-parser: qwen3` | vLLM qwen3 parser returns empty `content`+`reasoning_content` (300 tokens, both null); separate from the load fix, needs investigation |
 
 ---
 
@@ -220,6 +238,52 @@ Highlights of the fixes applied:
   - **Verification:** `TestValidator_ListEnum` (incl. spaced/trailing/double-comma/`[]string`/empty-rejection/scalar-still-strict rows) and `TestValidate_ExtraArgsKnownFlagPassthrough` (incl. bool-with-value and trailing value-less) added (`internal/service/validator/validator_test.go`); `TestFlagSpec_ListOmittedWhenFalse` pins the `omitempty` (`internal/domain/flag_schema_test.go`). End-to-end (temp `llama.cpp-stable` profiles, since deleted): `draft-mtp,ngram-mod`, `draft-mtp, ngram-mod` (spaced), `draft-dflash` in `args`, and `--spec-type draft-mtp,ngram-mod` in `extraArgs` → all exit 0; a typo `draft-mttp` → exit 2 (`spec-type: "draft-mttp" not in […]`); existing `ornith-aeon-…-256k` (`spec-type: draft-mtp`) → exit 0 (no regression). `go build ./...` → 0; `go vet` clean; `go test ./...` → 36 packages ok.
 - **Correction to the original S1 notes (adversarial re-verification):** the curated `spec-type` enum is **multi-value** (9 values), not "single-value"; the defect is that a *scalar* enum (one value per flag) cannot represent a *list-valued* flag. The sglang "same failure class" examples were partly off: `tool-call-parser`/`reasoning-parser` are genuinely stale (e.g. missing `qwen3_coder` / `qwen3-thinking`), but `qwen3_xml` is **not** a real SGLang parser and `glm47` is a *tool-call* parser, not a reasoning parser — both are now unblocked by the `extraArgs` passthrough regardless.
 
+### N3
+- **Severity:** M (Medium) · **Status:** ⚪ By-design VRAM limit — documented, not code-fixable in model-loader.
+- **Component:** `turboquant_k8v4` continuation-prefill (SNDR patch `P38`, `vllm/.../turboquant_attn.py::_prefill_attention` → `.../patches/attention/turboquant/p38_tq_continuation_memory.py::_genesis_continuation_prefill`) on the 24 GiB desktop GPU0.
+- **Finding:** Discovered running the A/B `benchmark --mode llama-bench` for [N2](#n2)'s profiles. TurboQuant's chunked continuation-prefill dequantizes a **full-precision K buffer that scales with the prompt length**. At `max-model-len 262144` the KV cache is sized to the `gpu-memory-utilization` budget, leaving no room for that scratch on a 24 GiB card that also drives the desktop:
+  - at `0.84`, **all** llama-bench prefills OOM (`torch.OutOfMemoryError` in `_genesis_continuation_prefill`, GPU0 250 MiB free), returning **502** — even `fill 5%` (~13k tokens).
+  - at `0.78`, no OOM but `fill 25%` (~65k tokens) runs at **1.4 tok/s**, peak VRAM 23.9 GiB / util 99%.
+  Short prompts are unaffected (validated ~145 tok/s single-stream, 2.47× KV @262144). The stock `fp8_e5m2` twin has no such continuation buffer.
+- **Resolution:** documented as a **short-prompt / high-concurrency** profile class (profile descriptions + `docs/sndr-backend.md` "Large-prefill trap"). For large-context (coding-agent) prompts, build a **≤131072** `-sndr` variant (smaller KV reservation → the scratch fits) or use the stock fp8 profile. Also: an OOM mid-run leaks `VLLM::Worker_TP*` processes holding VRAM (proxy shows `loaded:""`) that block the next boot — `pkill -9 -f VLLM::Worker`.
+
+---
+
+## N-series — SNDR (Genesis) backend provisioning
+
+Surfaced 2026-07-03 while materializing the `sndr-vllm` backend + its optimized
+profiles (the commit `8588b0a` scaffolding was scripted but had never been run
+end-to-end). Both fixed the same day; the backend then booted the Lorbus 27B
+flagship at 262144 ctx with Genesis `failed=0`, 2.47× KV concurrency, ~145 tok/s.
+
+### N1
+- **Severity:** M (Medium)
+- **Status:** 🟢 Fixed (2026-07-03) — added a `SNDR_WHEEL_INDEX` override (default unchanged) so an aged-out pin can be installed from its persistent per-commit wheel URL.
+- **Component:** `scripts/setup-sndr-backend.sh` (the pinned-vLLM `pip install`).
+- **Finding:** The script installed the SNDR-pinned vLLM with `--extra-index-url https://wheels.vllm.ai/nightly`. That channel is **rotating** — it keeps only the *latest* nightly. SNDR pins `0.23.1rc1.dev424+g3f5a1e173`, which has already rotated out, so a fresh run dies with `ERROR: No matching distribution found for vllm==0.23.1rc1.dev424+g3f5a1e173` (the index then only had `dev738` + `0.24.0`). The pin itself is correct and SNDR-mandated; the *index* was the bug.
+- **Fix:** vLLM also publishes **persistent per-commit** wheels at `https://wheels.vllm.ai/<full-40char-sha>/`. Added `SNDR_WHEEL_INDEX` (default the nightly channel) and routed the install through it; the header + `docs/sndr-backend.md` document the per-commit URL for `dev424` (`…/3f5a1e1733200760169ff31ebe60a271072b199e/`). The failed install now dies with an actionable message pointing at the override.
+- **Verification:** `SNDR_WHEEL_INDEX=https://wheels.vllm.ai/3f5a1e17…199e/` → `vllm 0.23.1rc1.dev424+g3f5a1e173` installed into `backends/sndr-vllm/.venv`, entry-point `genesis_v7` registered, `python -m sndr.apply` smoke test passed.
+
+### N2
+- **Severity:** M (Medium)
+- **Status:** 🟢 Fixed (2026-07-03) — `GENESIS_ENFORCE_VERSION_RANGE=1` added to every SNDR profile `launch.env` (and documented as mandatory in the runbook).
+- **Component:** `docs/sndr-backend.md` recommended profile + the generated SNDR profiles `launch.env`.
+- **Finding:** SNDR gates each patch behind its declared vLLM version range, but the range check is itself gated behind `GENESIS_ENFORCE_VERSION_RANGE=1` (`sndr/dispatcher/decision.py:461`, **default OFF**). SNDR's own launcher mandates it (*"the rig render-launcher MUST carry GENESIS_ENFORCE_VERSION_RANGE=1"*), but the model-loader runbook/example omitted it. Without it, `PN30` (declared **capped `<0.23.0`** — superseded on `dev424` by the upstream fused-postprocess kernel; confirmed at `vllm/.../mamba/mamba_utils.py:309`) tried to apply against a missing anchor and **hard-failed** → Genesis boot summary `applied=84 skipped=168 failed=1`.
+- **Fix:** Added `GENESIS_ENFORCE_VERSION_RANGE=1` to the common `launch.env` of all SNDR profiles. `PN30` (and any other out-of-range patch) now **version-gates OFF** cleanly (`SKIP … VERSION-GATE: vllm 0.23.1rc1.dev424 violates ['>=…']`), runtime behavior identical (the failed patch was already a no-op). An earlier ad-hoc `GENESIS_ENABLE_PN30_…=0` workaround was replaced by this principled, general fix.
+- **Verification:** re-boot of `qwen3.6-27b-int4-autoround-tq-mtp-sndr-tp2-256k` → Genesis `applied=83 skipped=170 **failed=0** (apply=True)`, 0 fatal errors, coherent generation, ~145 tok/s. (14→23 non-fatal *partial-apply* anchor-drift **warnings** remain across the 321-entry registry — informational, not failures; a known SNDR characteristic when a pin drifts past a patch's validated commit.)
+
+---
+
+## V-series — stock vLLM backend (`vllm-nightly`)
+
+### V1
+- **Severity:** H (High) · **Status:** 🟡 Partial — build script + venv-path fixed 2026-07-03; the venv still needs a rebuild to a good nightly to restore fp8-KV inference.
+- **Component:** `backends/vllm-nightly/backend-build.sh` (build mode) + the `vllm-nightly` `.venv`.
+- **Finding:** Surfaced closing the SNDR A/B. Two independent breakages of the stock `vllm-nightly` backend (6 fp8-KV profiles):
+  1. **flashinfer regression.** `backend-build.sh` defaulted to a **source** build (`pip install -e vllm-src`), which resolves `requirements/cuda.txt` → **`flashinfer-python==0.6.13`**. The 2026-07-02 rebuild (vllm `e24d1b24f`) thus pulled flashinfer 0.6.13, whose fa2 batch-prefill asserts `fp8 tensor core is not supported in fa2 backend` (`flashinfer/jit/attention/modules.py:521`) — and Ampere SM 8.6 has only the fa2 flashinfer path (fa3 is Hopper). Result: **500 on every fp8-KV prefill** (even short prompts). The fp8-KV profiles worked on the 2026-06-29 build. The source build also produced a bogus version (`0.1.dev1+ge24d1b24f`, shallow-clone setuptools-scm fallback).
+  2. **renamed-venv path.** `backends/vllm-nightly/.venv` had been created as `backends/vllm/.venv` then renamed — `activate` + 43 `bin/` scripts hard-coded the dead path → wrapper `exec vllm` gave `vllm: command not found`. Repaired via `sed -i 's|backends/vllm/\.venv|backends/vllm-nightly/.venv|g'`.
+- **Fix:** `backend-build.sh` now **defaults to the prebuilt nightly wheel** (`uv pip install vllm --extra-index-url https://wheels.vllm.ai/nightly` — a coherent tested artifact) with `--source` as opt-in, and accepts a positional nightly version to pin a known-good build. Venv paths repaired in place. **Remaining:** run `./backend-build.sh --recreate [good-nightly-version]` to reinstall; if the latest nightly wheel still ships flashinfer 0.6.13, pin an earlier (late-June) nightly. Not yet run (daily driver; user's call).
+
 ---
 
 ## Original report context
@@ -233,9 +297,28 @@ The original `BUG_REPORT.md` (deleted; absorbed here) recorded:
 
 ---
 
+## P-series — Proxy backend-load lifecycle
+
+### P1
+- **Severity:** H (High)
+- **Status:** 🟢 Fixed (2026-07-03) — `HealthCheckTimeout` made configurable via `[serve].health_check_timeout_sec` and its default raised 180s → 360s. **Requires a proxy restart to take effect** (the detached `serve` process must be relaunched from the reinstalled binary; the live TUI-owned proxy keeps the old bound until then).
+- **Component:** `internal/cli/serve.go:45` (was hardcoded `HealthCheckTimeout: 180 * time.Second`) + `internal/config/config.go` `ServeConfig`.
+- **Finding:** After downloading the (previously missing) weights, profile `ornith-1.0-35b-a3b-awq-vllm-tp2-256k` still failed to load via the proxy — `/_admin/load` returned `backend … not ready: … did not become healthy within timeout`. Root cause: the detached proxy passes a **hardcoded 180s** health-check bound, but this model boots slower — compressed-tensors int4 (`group_size 32`) 35B-A3B MoE, TP=2, multimodal, whose Marlin expert repack + 23 GiB shard load + mm-encoder init + CUDA-graph capture take **~1m45s isolated and >3 min via a cold swap**. At 180s the proxy killed the vLLM mid-init (`api_server.py` `_interrupt_init` → `KeyboardInterrupt("terminated")`), which reads as a crash. The engine was actually healthy: KV cache = 1,235,254 tokens allocated, MoE forward passed — the old `moe_sum`/illegal-memory crash of the 28-Jun `gptq_marlin` attempts did **not** recur on vLLM 0.24.0 + compressed-tensors (that memory is now stale).
+- **Fix:** Added `ServeConfig.HealthCheckTimeoutSec` (`mapstructure:"health_check_timeout_sec"`; 0 = built-in default). `serve.go` computes `healthCheckTimeout` = that value or **360s** default and passes it to `httpproxy.Config`. 360s = 2× the old bound, covering a 3-4 min cold boot with margin, and overridable for even larger models without a recompile.
+- **Verification:** direct vLLM launch (bypassing the proxy) reached `Application startup complete` in ~1m45s, `/health`=200, `/v1/models`=`[ornith-1.0-35b-a3b-awq-vllm-tp2-256k]`, generated 300 tokens. `go build ./...` → exit 0; `go test ./...` → all ok (incl. `internal/config`, `internal/cli`). End-to-end via the proxy is pending a proxy restart (see Status).
+
+### P2
+- **Severity:** M (Medium)
+- **Status:** ❓ Unknown / needs investigation (2026-07-03) — surfaced while smoke-testing P1; **separate from the load bug**, not yet root-caused.
+- **Component:** `ornith-1.0-35b-a3b-awq-vllm-tp2-256k` (likely its siblings too) `args.reasoning-parser: qwen3` on vLLM 0.24.0.
+- **Finding:** A healthy Ornith AWQ instance generated 300 completion tokens (`finish_reason: length`) but returned **both `content` and `reasoning_content` as `null`** — the qwen3 reasoning parser appears to swallow the whole output (consistent with the known `vllm-reasoning-parser-drops-content` behavior). A client would see empty responses.
+- **Fix:** none yet — likely drop `reasoning-parser` (let clients read `<think>` tags from `content`) or match the parser to the model's real reasoning format. Awaiting user decision (out of scope of the "won't load" request).
+
+---
+
 ## Remaining / by-design notes
 
-- **No open defects.** [S1](#s1) was fixed 2026-07-02 (list-valued enum + `extraArgs` passthrough + `draft-dflash`). L1 and L2 are deliberate behaviors (crash-visibility trade-off; covered window), not bugs. B2 is N/A; B3 is architectural (Launcher tab removed).
+- **One `🟡 Partial` defect: [V1](#v1)** — stock `vllm-nightly` fp8-KV profiles 500 on inference (flashinfer 0.6.13 fa2/fp8 regression on Ampere); `backend-build.sh` + the renamed-venv path are fixed, the venv rebuild to a good nightly is pending. **No `🔴 Open`.** [N3](#n3) is a `⚪` by-design VRAM limit (SNDR short-prompt-only). [S1](#s1) was fixed 2026-07-02 (list-valued enum + `extraArgs` passthrough + `draft-dflash`). L1 and L2 are deliberate behaviors (crash-visibility trade-off; covered window), not bugs. B2 is N/A; B3 is architectural (Launcher tab removed).
 - **Optional future polish (not bugs):** a configweb widget for `List`-valued enums (multi-select/comma-text + a `list` toggle in Customize mode) — `spec-type` is `Type:4 + list:true` now, but the web editor still renders a `Type:4` flag as a single-select, so comma-lists can only be typed via the `args` JSON / CLI today; gate the L3 tokens/s regex on `kind == llama.cpp` (~100 ns/line micro-opt); a carry-buffer for L1 fragmentation only if fragmented lines are ever observed (would regress crash-line latency — keep the current behavior unless proven necessary).
 - **Optional future polish (not bugs):** gate the L3 tokens/s regex on `kind == llama.cpp` (~100 ns/line micro-opt); a carry-buffer for L1 fragmentation only if fragmented lines are ever observed (would regress crash-line latency — keep the current behavior unless proven necessary).
 

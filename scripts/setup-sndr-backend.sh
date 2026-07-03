@@ -18,13 +18,22 @@
 #   backends/sndr-vllm/sndr-serve.sh      catalog executable (kind: vllm)
 #
 # Overrides:
-#   SNDR_VLLM_PIN  vLLM version to pin (default dev424; rollback pin: dev301
-#                  per SNDR's <=2-pin policy)
-#   SNDR_REF       git ref of sndr_core_engine to check out (default main)
-#   PYTHON_BIN     interpreter used to create the venv (default python3.12)
+#   SNDR_VLLM_PIN    vLLM version to pin (default dev424; rollback pin: dev301
+#                    per SNDR's <=2-pin policy)
+#   SNDR_WHEEL_INDEX vLLM wheel index (default the rotating nightly channel).
+#                    The rotating /nightly index keeps ONLY the latest build, so
+#                    once SNDR's pinned dev build ages out you get "No matching
+#                    distribution". vLLM also publishes PERSISTENT per-commit
+#                    wheels at https://wheels.vllm.ai/<full-git-sha>/ — set this
+#                    to that URL (full 40-char sha of the pin's +g<sha> suffix)
+#                    to install an aged-out pin. E.g. for dev424+g3f5a1e173:
+#                    SNDR_WHEEL_INDEX=https://wheels.vllm.ai/3f5a1e1733200760169ff31ebe60a271072b199e/
+#   SNDR_REF         git ref of sndr_core_engine to check out (default main)
+#   PYTHON_BIN       interpreter used to create the venv (default python3.12)
 set -euo pipefail
 
 VLLM_PIN="${SNDR_VLLM_PIN:-0.23.1rc1.dev424+g3f5a1e173}"
+SNDR_WHEEL_INDEX="${SNDR_WHEEL_INDEX:-https://wheels.vllm.ai/nightly}"
 SNDR_REPO="${SNDR_REPO:-https://github.com/Sandermage/sndr_core_engine.git}"
 SNDR_REF="${SNDR_REF:-main}"
 PYTHON_BIN="${PYTHON_BIN:-python3.12}"
@@ -67,9 +76,12 @@ fi
 PIP=("$VENV/bin/pip")
 "${PIP[@]}" install -q --upgrade pip wheel setuptools
 
-log "installing pinned vLLM $VLLM_PIN"
+log "installing pinned vLLM $VLLM_PIN (index: $SNDR_WHEEL_INDEX)"
 "${PIP[@]}" install --pre "vllm==$VLLM_PIN" \
-    --extra-index-url https://wheels.vllm.ai/nightly
+    --extra-index-url "$SNDR_WHEEL_INDEX" ||
+    die "vLLM install failed. If it was 'No matching distribution', the pin has
+aged out of the rotating nightly index — set SNDR_WHEEL_INDEX to the persistent
+per-commit wheel URL (https://wheels.vllm.ai/<full-sha>/; see header) and re-run."
 
 got="$("$VENV/bin/python" -c 'import vllm; print(vllm.__version__)')"
 [[ "$got" == "$VLLM_PIN" ]] ||

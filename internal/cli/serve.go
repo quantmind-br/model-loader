@@ -39,10 +39,20 @@ func init() {
 				syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
 
+			// Health-check bound for a backend swap. Default 360s: a large
+			// model (a 35B int4 TP=2 multimodal MoE whose Marlin expert repack
+			// alone runs minutes) can take 3+ minutes to boot, past the former
+			// fixed 180s that killed such loads mid-init. Override via the
+			// [serve].health_check_timeout_sec config key.
+			healthCheckTimeout := 360 * time.Second
+			if s := svc.Cfg.Serve.HealthCheckTimeoutSec; s > 0 {
+				healthCheckTimeout = time.Duration(s) * time.Second
+			}
+
 			srv := httpproxy.New(httpproxy.Config{
 				Host:                svc.Cfg.Serve.Host,
 				Port:                svc.Cfg.Serve.Port,
-				HealthCheckTimeout:  180 * time.Second,
+				HealthCheckTimeout:  healthCheckTimeout,
 				MaxBodyBuffer:       8 << 20,
 				ShutdownGracePeriod: 10 * time.Second,
 			}, httpproxy.Deps{
