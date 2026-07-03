@@ -229,3 +229,93 @@ func TestValidate_RequiredFlagInExtraArgs(t *testing.T) {
 		t.Fatalf("unexpected errors: %+v", rep.Errors)
 	}
 }
+
+// TestValidator_ListEnum pins BUGS.md S1 fix #1: a FlagSpec with List=true
+// models a comma-separated list of enum values (llama-server --spec-type). The
+// validator splits on "," and validates each element; a single value and a JSON
+// array are accepted too. A scalar (List=false) enum must still reject a
+// comma-list as a whole.
+func TestValidator_ListEnum(t *testing.T) {
+	schema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"spec-type":  {Long: "spec-type", Type: domain.FlagTypeEnum, List: true, EnumValues: []string{"none", "draft-mtp", "draft-dflash", "ngram-mod", "ngram-cache"}},
+		"flash-attn": {Long: "flash-attn", Type: domain.FlagTypeEnum, EnumValues: []string{"on", "off", "auto"}},
+	}}
+	cases := []struct {
+		name      string
+		args      map[string]any
+		wantErrs  int
+		wantField string
+	}{
+		{"list enum single value ok", map[string]any{"spec-type": "draft-mtp"}, 0, ""},
+		{"list enum comma pair ok", map[string]any{"spec-type": "draft-mtp,ngram-mod"}, 0, ""},
+		{"list enum spaced comma pair ok", map[string]any{"spec-type": "draft-mtp, ngram-mod"}, 0, ""},
+		{"list enum trailing space ok", map[string]any{"spec-type": "draft-mtp "}, 0, ""},
+		{"list enum double comma ok", map[string]any{"spec-type": "draft-mtp,,ngram-mod"}, 0, ""},
+		{"list enum new value draft-dflash ok", map[string]any{"spec-type": "draft-dflash"}, 0, ""},
+		{"list enum chained ok", map[string]any{"spec-type": "draft-mtp,ngram-mod,ngram-cache"}, 0, ""},
+		{"list enum array any form ok", map[string]any{"spec-type": []any{"draft-mtp", "ngram-mod"}}, 0, ""},
+		{"list enum array string form ok", map[string]any{"spec-type": []string{"draft-mtp", "ngram-mod"}}, 0, ""},
+		{"list enum rejects unknown element", map[string]any{"spec-type": "draft-mtp,bogus"}, 1, "spec-type"},
+		{"list enum rejects empty string", map[string]any{"spec-type": ""}, 1, "spec-type"},
+		{"list enum rejects only comma", map[string]any{"spec-type": ","}, 1, "spec-type"},
+		{"scalar enum still rejects comma list", map[string]any{"flash-attn": "on,off"}, 1, "flash-attn"},
+		{"scalar enum still rejects unknown", map[string]any{"flash-attn": "maybe"}, 1, "flash-attn"},
+	}
+	v := New(log.Nop())
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := domain.Profile{ID: "x", Args: tc.args}
+			rep := v.Validate(p, schema, domain.BackendKindLlamaServer)
+			if got := len(rep.Errors); got != tc.wantErrs {
+				t.Fatalf("Errors=%d (%v), want %d", got, rep.Errors, tc.wantErrs)
+			}
+			if tc.wantErrs > 0 && rep.Errors[0].Field != tc.wantField {
+				t.Errorf("Errors[0].Field=%q, want %q", rep.Errors[0].Field, tc.wantField)
+			}
+		})
+	}
+}
+
+// TestValidate_ExtraArgsKnownFlagPassthrough pins BUGS.md S1 fix #2: extraArgs is
+// a raw passthrough, so a KNOWN flag whose curated enum is stale (e.g. a newer
+// spec-type value or a comma-list) must NOT block validation. Only unknown flags
+// warn; a bare token (no --) still errors.
+func TestValidate_ExtraArgsKnownFlagPassthrough(t *testing.T) {
+	// Stale schema mirroring the S1 condition: spec-type lacks draft-dflash and
+	// is scalar (no List), yet the binary accepts the value.
+	sch := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"spec-type": {Long: "spec-type", Type: domain.FlagTypeEnum, EnumValues: []string{"none", "draft-mtp", "ngram-mod"}},
+		"mlock":     {Long: "mlock", Type: domain.FlagTypeBool},
+	}}
+	cases := []struct {
+		name      string
+		extra     []string
+		wantErrs  int
+		wantWarns int
+	}{
+		{"known stale enum value passes", []string{"--spec-type", "draft-dflash"}, 0, 0},
+		{"known comma-list value passes", []string{"--spec-type=draft-mtp,ngram-mod"}, 0, 0},
+		{"known spaced comma-list passes", []string{"--spec-type", "draft-mtp, ngram-mod"}, 0, 0},
+		{"known flag value via equals passes", []string{"--spec-type=draft-dflash"}, 0, 0},
+		{"known bool flag passes", []string{"--mlock"}, 0, 0},
+		{"known bool flag with equals value passes", []string{"--mlock=true"}, 0, 0},
+		{"known bool flag with space value passes", []string{"--mlock", "true"}, 0, 0},
+		{"known non-bool trailing value-less passes", []string{"--spec-type"}, 0, 0},
+		{"value token consumed not treated as bare", []string{"--spec-type", "draft-dflash", "--mlock"}, 0, 0},
+		{"unknown flag warns only", []string{"--totally-fake-flag", "1"}, 0, 1},
+		{"bare value still errors", []string{"bare-token"}, 1, 0},
+	}
+	v := New(log.Nop())
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := domain.Profile{ID: "x", Args: map[string]any{}, ExtraArgs: tc.extra}
+			rep := v.Validate(p, sch, domain.BackendKindLlamaServer)
+			if got := len(rep.Errors); got != tc.wantErrs {
+				t.Fatalf("Errors=%d (%v), want %d", got, rep.Errors, tc.wantErrs)
+			}
+			if got := len(rep.Warnings); got != tc.wantWarns {
+				t.Errorf("Warnings=%d (%v), want %d", got, rep.Warnings, tc.wantWarns)
+			}
+		})
+	}
+}

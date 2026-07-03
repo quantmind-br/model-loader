@@ -287,6 +287,8 @@ Also: `go test ./... -update` (regenerate golden fixtures) · `go test ./interna
 
 **Project / directory style:** per-directory knowledge bases (`AGENTS.md` and/or `CLAUDE.md`, both populated) sit beside the code they describe — read the sibling for local conventions. **Language:** all UI text and schema metadata (flag/field/JSON/TOML keys, group labels, descriptions) **MUST be English** — no localization.
 
+**Error handling:** When you find any error, record it in `BUGS.md` and ask the user whether they want it fixed.
+
 **Anti-patterns (NEVER):** call `app.Bootstrap()` twice (FS side-effects) · forget `defer svc.Close()` · import `internal/ui` from `internal/cli` · hand-edit a schema's `presentation`/`rules` JSON (use Customize mode) · extend `essentialSeed` without a request · run a managed backend manually while the TUI owns instances · assume cleanup on TUI exit (processes are orphaned) · change `domain.Profile`/profilestore JSON without mirroring `docs/profile-schema.json` · intercept global runes without `activePageCapturesInput()` · add a 6th out-of-lock `saveRegistry` callsite without updating the contract.
 
 ---

@@ -82,8 +82,18 @@ func mergeWithCurated(full domain.BackendValidationSchema, curated domain.Backen
 			if len(curatedSpec.EnumValues) > 0 {
 				fullSpec.EnumValues = curatedSpec.EnumValues
 			}
+			// Honor the curated Type for list-valued enums. The live --help parses
+			// comma-list flags (e.g. llama-server --spec-type) as a plain string
+			// (Type:3); without this overlay the validator's List per-element check
+			// never engages and typos slip through. Gated on curatedSpec.List so the
+			// parsed Type is preserved for every other flag (including beellama/buun
+			// spec-type, which is list:false).
+			if curatedSpec.List && curatedSpec.Type == domain.FlagTypeEnum {
+				fullSpec.Type = curatedSpec.Type
+			}
 			fullSpec.IsPort = curatedSpec.IsPort
 			fullSpec.Required = curatedSpec.Required
+			fullSpec.List = curatedSpec.List
 			merged.Flags[matchKey] = fullSpec
 		} else {
 			merged.Flags[key] = curatedSpec

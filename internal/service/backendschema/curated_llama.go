@@ -198,7 +198,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		strFlag("control-vector-scaled", "", nil, nil, "Control vector with scale in FILE:SCALE format.", llamaGroupLora, false),
 		strFlag("control-vector-layer-range", "", nil, nil, "Layer range applied to control vectors.", llamaGroupLora, false),
 
-		enumFlag("spec-type", "", nil, []string{"none", "draft-simple", "draft-eagle3", "draft-mtp", "ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod", "ngram-cache"}, "none", "Speculative decoding type.", llamaGroupSpeculative),
+		listEnumFlag("spec-type", "", nil, []string{"none", "draft-simple", "draft-eagle3", "draft-mtp", "draft-dflash", "ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod", "ngram-cache"}, "none", "Speculative decoding type (comma-separated list, e.g. draft-mtp,ngram-mod).", llamaGroupSpeculative),
 		strFlag("spec-draft-model", "md", []string{"model-draft"}, nil, "Draft model.", llamaGroupSpeculative, false),
 		strFlag("spec-draft-hf", "", nil, nil, "HF repo for the draft model.", llamaGroupSpeculative, false),
 		intFlag("spec-draft-n-max", "", nil, 3, "Maximum tokens proposed by the draft model.", llamaGroupSpeculative, ptrutil.Ptr(0), nil),
@@ -260,6 +260,16 @@ func strFlag(long, short string, aliases []string, def any, help, group string, 
 
 func enumFlag(long, short string, aliases []string, values []string, def any, help, group string) domain.FlagSpec {
 	return domain.FlagSpec{Long: long, Short: short, Aliases: aliases, Type: domain.FlagTypeEnum, EnumValues: values, Default: def, HelpText: help, Group: group}
+}
+
+// listEnumFlag is like enumFlag but marks the value as a comma-separated list of
+// enum values via FlagSpec.List. The validator splits the value on "," (after
+// trimming each element) and checks each against values, so e.g.
+// "draft-mtp,ngram-mod" and "draft-dflash" both validate.
+func listEnumFlag(long, short string, aliases []string, values []string, def any, help, group string) domain.FlagSpec {
+	s := enumFlag(long, short, aliases, values, def, help, group)
+	s.List = true
+	return s
 }
 
 func portFlag(long, short string, def int, help, group string) domain.FlagSpec {

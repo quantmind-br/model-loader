@@ -27,3 +27,10 @@ func TestFlagSpec_RequiredOmittedWhenFalse(t *testing.T) {
 		t.Fatalf("required should be omitted when false, got %s", b)
 	}
 }
+
+func TestFlagSpec_ListOmittedWhenFalse(t *testing.T) {
+	b, _ := json.Marshal(FlagSpec{Long: "x", Type: FlagTypeString})
+	if strings.Contains(string(b), `"list"`) {
+		t.Fatalf("list should be omitted when false, got %s", b)
+	}
+}

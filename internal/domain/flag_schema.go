@@ -18,6 +18,7 @@ type FlagSpec struct {
 	Aliases    []string // additional long aliases (without leading --)
 	Type       FlagType
 	EnumValues []string
+	List       bool `json:"list,omitempty"` // true => EnumValues is a comma-separated list (e.g. --spec-type); validator splits on "," and checks each element
 	Default    any
 	HelpText   string
 	Group      string // "common" | "sampling" | "example-specific" | "embedded"

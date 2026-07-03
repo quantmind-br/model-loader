@@ -8,6 +8,7 @@ type FlagSpecRow struct {
 	Aliases    []string
 	Type       FlagType
 	EnumValues []string
+	List       bool
 	Default    any
 	HelpText   string
 	Group      string
@@ -28,6 +29,7 @@ func BuildFlagSchema(version string, rows []FlagSpecRow) FlagSchema {
 			Aliases:    r.Aliases,
 			Type:       r.Type,
 			EnumValues: r.EnumValues,
+			List:       r.List,
 			Default:    r.Default,
 			HelpText:   r.HelpText,
 			Group:      r.Group,

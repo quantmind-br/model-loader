@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
@@ -74,18 +73,76 @@ func checkString(val any) string {
 	return fmt.Sprintf("expected string, got %T", val)
 }
 
-// checkEnum returns "" if val is a string present in spec.Choices.
+// checkEnum returns "" if val is valid for an enum flag. When spec.List is set
+// the value is a comma-separated list (or a JSON array) and each element must
+// appear in spec.EnumValues; a single value is also accepted. Otherwise the
+// whole value must equal one of spec.EnumValues.
 func checkEnum(spec domain.FlagSpec, val any) string {
-	s, ok := val.(string)
+	parts, ok := enumParts(spec, val)
 	if !ok {
 		return fmt.Sprintf("expected one of %v, got %T", spec.EnumValues, val)
 	}
-	for _, v := range spec.EnumValues {
-		if v == s {
-			return ""
+	if len(parts) == 0 {
+		return fmt.Sprintf("expected one of %v, got %q", spec.EnumValues, val)
+	}
+	for _, p := range parts {
+		if !enumContains(spec.EnumValues, p) {
+			return fmt.Sprintf("%q not in %v", p, spec.EnumValues)
 		}
 	}
-	return fmt.Sprintf("%q not in %v", s, spec.EnumValues)
+	return ""
+}
+
+// enumParts extracts the element(s) to validate from an enum arg value. A List
+// flag accepts a comma-separated string ("a,b") or a JSON array ([]any of
+// strings); a scalar enum accepts a single string.
+func enumParts(spec domain.FlagSpec, val any) ([]string, bool) {
+	if spec.List {
+		switch v := val.(type) {
+		case string:
+			return splitTrim(v, ","), true
+		case []any:
+			out := make([]string, 0, len(v))
+			for _, x := range v {
+				s, ok := x.(string)
+				if !ok {
+					return nil, false
+				}
+				out = append(out, s)
+			}
+			return out, true
+		case []string:
+			return v, true
+		}
+		return nil, false
+	}
+	s, ok := val.(string)
+	if !ok {
+		return nil, false
+	}
+	return []string{s}, true
+}
+
+func enumContains(values []string, s string) bool {
+	for _, v := range values {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// splitTrim splits s on sep, trims surrounding whitespace from each element, and
+// drops empty elements — so "a, b" and "a,,b" both behave like "a,b".
+func splitTrim(s, sep string) []string {
+	parts := strings.Split(s, sep)
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func checkType(spec domain.FlagSpec, val any) string {
@@ -187,47 +244,29 @@ func applyExtraArgsRules(p domain.Profile, schema domain.FlagSchema, rep Report)
 			continue
 		}
 
-		flag, value, hasValue := parseExtraArg(arg)
+		flag, _, hasValue := parseExtraArg(arg)
+		// Consume a value supplied as "--flag value" (rather than "--flag=value")
+		// so the next token is not misread as a bare value on the next iteration.
+		// The value itself is not validated — see the passthrough note below.
 		if !hasValue && i+1 < len(p.ExtraArgs) && !strings.HasPrefix(p.ExtraArgs[i+1], "--") {
-			value = p.ExtraArgs[i+1]
-			hasValue = true
 			i++
 		}
 
-		canonical := domain.CanonicalFlag(flag)
-		spec, ok := schema.Lookup(canonical)
-		if !ok {
+		// extraArgs is a raw passthrough to the backend binary: it is emitted
+		// verbatim by processmgr. We deliberately do NOT type/enum/range-check
+		// known flags here, because the curated schema can lag the binary (a
+		// newer enum value such as a just-added draft-dflash, or a comma-list
+		// flag) and enforcing a stale schema would block valid configurations
+		// with no override (BUGS.md S1). The only diagnostic we emit is a
+		// non-blocking warning for flags the schema does not recognize (likely
+		// typos); the args path (applyTypeRules) still fully validates typed
+		// flags, so validation is not weakened for the common case.
+		if _, ok := schema.Lookup(domain.CanonicalFlag(flag)); !ok {
 			rep = appendIssue(rep, FieldIssue{
 				Field:    flag,
 				Message:  "unknown flag in extra args (not in backend schema)",
 				Severity: SeverityWarning,
 			})
-			i++
-			continue
-		}
-
-		if spec.Type == domain.FlagTypeBool {
-			if hasValue {
-				rep = appendIssue(rep, FieldIssue{
-					Field:    flag,
-					Message:  "bool flag should not have a value",
-					Severity: SeverityError,
-				})
-			}
-		} else {
-			if !hasValue {
-				rep = appendIssue(rep, FieldIssue{
-					Field:    flag,
-					Message:  "missing value for flag",
-					Severity: SeverityError,
-				})
-			} else if msg := checkExtraArgType(spec, value); msg != "" {
-				rep = appendIssue(rep, FieldIssue{
-					Field:    flag,
-					Message:  msg,
-					Severity: SeverityError,
-				})
-			}
 		}
 		i++
 	}
@@ -240,31 +279,6 @@ func parseExtraArg(arg string) (flag string, value string, hasValue bool) {
 		return body[:eq], body[eq+1:], true
 	}
 	return body, "", false
-}
-
-func checkExtraArgType(spec domain.FlagSpec, val string) string {
-	switch spec.Type {
-	case domain.FlagTypeInt:
-		n, err := strconv.Atoi(val)
-		if err != nil {
-			return fmt.Sprintf("expected int, got %q", val)
-		}
-		return checkIntRange(spec, int64(n))
-	case domain.FlagTypeFloat:
-		f, err := strconv.ParseFloat(val, 64)
-		if err != nil {
-			return fmt.Sprintf("expected float, got %q", val)
-		}
-		return checkFloatRange(spec, f)
-	case domain.FlagTypeEnum:
-		for _, v := range spec.EnumValues {
-			if v == val {
-				return ""
-			}
-		}
-		return fmt.Sprintf("%q not in %v", val, spec.EnumValues)
-	}
-	return ""
 }
 
 func applyExistenceRules(p domain.Profile, kind domain.BackendKind, rep Report) Report {

@@ -6,7 +6,7 @@
 
 This file is the **single source of truth for known defects**. It absorbs and supersedes the original `BUG_REPORT.md` (2026-04-29), which was deleted; its context is preserved in [Original report context](#original-report-context).
 
-**Validated & resolved:** 2026-06-23. Every entry was re-checked against the working tree on `main`, then all actionable defects were fixed in the same pass (`go build ./...` → exit 0; `go test ./...` → all ok). **No entry is `🔴 Open`** — everything is Fixed or a deliberate by-design/non-bug. See [Resolution summary](#resolution-summary).
+**Validated & resolved:** 2026-06-23. Every entry was re-checked against the working tree on `main`, then all actionable defects were fixed in the same pass (`go build ./...` → exit 0; `go test ./...` → all ok). As of that pass **no entry was `🔴 Open`** — everything was Fixed or a deliberate by-design/non-bug. **Update 2026-07-02:** defect **[S1](#s1)** (curated `spec-type` enum blocked chained / `draft-dflash` speculative decoding, with no `extraArgs` override) was opened and **fixed in the same pass** (Fix #1 list-valued enum + Fix #2 `extraArgs` passthrough; `draft-dflash` added; schemas regenerated). As of now **no entry is `🔴 Open`**. See [Resolution summary](#resolution-summary).
 
 > ℹ **Scope note (2026-07-02):** this 2026-06-23 pass covered the 2026-04-29 TUI bug report, the log-streaming audit, doc drift, and test gaps — the L/B/D/T series below. It **predates** the HTTP-proxy API translation (Anthropic/Responses/Gemini routes), the benchmark dashboard redesign + the three agentic modes (terminal-bench/swe-bench-pro/deep-swe), and dual-GPU/tensor-parallel support. Those subsystems carry **no tracked defects here yet**; file new entries if a defect is confirmed in them.
 
@@ -75,6 +75,11 @@ Highlights of the fixes applied:
 | [T1](#t1) | M | 🟢 | `monitor/logs_test.go` | Regression test for partial-line flush added |
 | [T2](#t2) | M | 🟢 | `monitor/subscribe_test.go` | Backpressure-drop test added |
 | [T3](#t3) | L | 🟢 | `processmgr/manager_test.go` | `PYTHONUNBUFFERED=0` override already covered |
+
+### S-series — Curated schema & validation
+| ID | Sev | Status | Component | One-line |
+|----|-----|--------|-----------|----------|
+| [S1](#s1) | M | 🟢 | curated enums + `validator/rules.go` | Stale/scalar curated enums rejected binary-valid values (llama `spec-type` comma-list & `draft-dflash`; sglang parsers); fixed via list-valued enum + `extraArgs` passthrough |
 
 ---
 
@@ -194,6 +199,29 @@ Highlights of the fixes applied:
 
 ---
 
+## S-series — Curated schema & validation
+
+### S1
+- **Severity:** M (Medium)
+- **Status:** 🟢 Fixed (2026-07-02) — Fix #1 (list-valued enum) + Fix #2 (`extraArgs` passthrough) applied; `draft-dflash` added to the curated `spec-type` enum; llama-server schemas regenerated.
+- **Component:** curated backend schema `spec-type` FlagSpec (`~/.config/model-loader/backends/schemas/llama.cpp-stable.json`, and `llama.cpp-nightly.json`) + `internal/service/validator/rules.go` — `checkEnum` (`:78`/`:88`, the `args` path via `:105`), the extra-args enum branch (`:259-265`), and the unknown-in-extra-args warning (`:202`).
+- **Finding:** The b9847 `llama-server --help` documents `--spec-type` as a **comma-separated list**: `none,draft-simple,draft-eagle3,draft-mtp,draft-dflash,ngram-simple,ngram-map-k,ngram-map-k4v,ngram-mod,ngram-cache` ("comma-separated list of types of speculative decoding to use"). The curated schema models it as a **single-value enum** (`Type: 4` / `FlagTypeEnum`) whose `EnumValues` are the individual types **and is missing `draft-dflash`** entirely. `checkEnum` compares the whole arg string against `EnumValues`, so any comma-list (e.g. `draft-mtp,ngram-mod`) or `draft-dflash` fails as `"…" not in […]` at **Severity 1 (blocking)** → `profile validate` exits 2 and the launch path refuses it.
+- **No override path:** `extraArgs` is the documented escape hatch for "binary-real but schema-absent" flags, but it only bypasses validation for **unknown** flags (warning-only, `rules.go:202`). A **known** flag such as `--spec-type` placed in `extraArgs` is still canonicalized and enum-checked (`rules.go:259-265`) → the same blocking error. Verified on this tree:
+  - `--cache-ram 16384` / `--totally-fake-flag-xyz 1` in `extraArgs` → `warning … valid` (exit 0).
+  - `--spec-type draft-mtp` (in-enum) in `extraArgs` → valid (exit 0) — proves extra-args known flags are canonicalized, not passed through raw.
+  - `--spec-type draft-mtp,ngram-mod` in `extraArgs` **or** `args` → `error: spec-type: "draft-mtp,ngram-mod" not in […]`, exit 2.
+- **Impact:** Chained speculative decoding (`draft-mtp,ngram-mod` — the recommended default for agent/coding MTP GGUFs: draftless ngram fires on re-emitted code while MTP covers novel tokens) and upstream **DFlash** (`draft-dflash`, new in b9847) are **unreachable** through model-loader for the `llama-server` kinds, with no supported workaround (hand-editing the curated-frozen schema is banned). Plain single-value spec-type (`draft-mtp`, `ngram-mod`, …) is unaffected and works. Surfaced while optimizing the profile `ornith-aeon-35b-a3b-q4km-mtp-vision-layer2-256k` (kept plain `draft-mtp`; the ngram-mod chain cannot pass validation).
+- **Same failure class (not just `spec-type`):** any curated `FlagTypeEnum` whose `EnumValues` is stale vs the binary hits this same wall. Confirmed instances on this tree: `sglang-stable`/`sglang-nightly` `tool-call-parser` (enum `[deepseekv3,glm,gpt-oss,kimi_k2,llama3,mistral,qwen,hermes]` — lacks `qwen3_coder`/`qwen3_xml`) and `reasoning-parser` (`[deepseek-r1,deepseek-v3,glm45,gpt-oss,kimi,qwen3]` — lacks `qwen3-thinking`/`glm47`), both `Type: 4`. A model that needs one of those parsers cannot be served on sglang via model-loader either — `extraArgs` is blocked identically (vLLM's parser flags are free-form strings / `Type: 3`, so they are unaffected). The fix must be general (below), not a one-off for `spec-type`.
+- **Repro:** set `args["spec-type"] = "draft-mtp,ngram-mod"` (or `extraArgs += ["--spec-type","draft-mtp,ngram-mod"]`) on any `llama.cpp-stable` profile → `model-loader profile validate <id>` → exit 2, `spec-type: "draft-mtp,ngram-mod" not in […]`.
+- **Fix applied (2026-07-02):**
+  1. **List-valued enum (Fix #1).** Added `List bool` (`json:"list,omitempty"`) to `domain.FlagSpec`, mirrored in `FlagSpecRow` + `BuildFlagSchema` (`internal/domain/`), and propagated in `mergeWithCurated` (`backendschema/merge.go`). `validator.checkEnum` (`rules.go`) now splits a `List` enum value on `,` (trimming each element and dropping empties via `splitTrim`, so `"draft-mtp, ngram-mod"` and `"draft-mtp,,ngram-mod"` validate), accepts a JSON array (`[]any`/`[]string`), rejects an empty result, and validates each element; a scalar (`List=false`) enum still compares the whole string. Added `draft-dflash` to the curated `spec-type` `EnumValues` (`backendschema/curated_llama.go`) and marked it `List` via a new `listEnumFlag` helper.
+  2. **`extraArgs` real passthrough (Fix #2).** `applyExtraArgsRules` no longer type/enum/range-checks **known** flags supplied via `extraArgs` — it emits only the existing unknown-flag warning (plus the bare-value error). This restores the documented escape hatch generally, so any stale curated enum (llama `spec-type`, sglang `tool-call-parser`/`reasoning-parser`, etc.) is bypassable via `extraArgs`. The dead `checkExtraArgType` (and its `strconv` import) were removed; the value-token peek is kept so `--flag value` is not misread as a bare value.
+  3. **Gated `Type` overlay (engages Fix #1 on disk).** `mergeWithCurated` now honors the curated `Type` **only** for list-valued enums (`curatedSpec.List && curatedSpec.Type == FlagTypeEnum`). The live `--help` parses `--spec-type` as `Type:3` (it inlines values as a comma-list); without this overlay the `List` per-element check would never engage. The gate is safe: beellama/buun `spec-type` is `list:false`, so it keeps its parsed `Type:3` and is unaffected. Regenerated llama-server schemas now carry `spec-type` as `Type:4, list:true` (10 values incl. `draft-dflash`), so valid comma-lists/chains/`draft-dflash` pass **and** typos (e.g. `draft-mttp`) are rejected.
+  - **Verification:** `TestValidator_ListEnum` (incl. spaced/trailing/double-comma/`[]string`/empty-rejection/scalar-still-strict rows) and `TestValidate_ExtraArgsKnownFlagPassthrough` (incl. bool-with-value and trailing value-less) added (`internal/service/validator/validator_test.go`); `TestFlagSpec_ListOmittedWhenFalse` pins the `omitempty` (`internal/domain/flag_schema_test.go`). End-to-end (temp `llama.cpp-stable` profiles, since deleted): `draft-mtp,ngram-mod`, `draft-mtp, ngram-mod` (spaced), `draft-dflash` in `args`, and `--spec-type draft-mtp,ngram-mod` in `extraArgs` → all exit 0; a typo `draft-mttp` → exit 2 (`spec-type: "draft-mttp" not in […]`); existing `ornith-aeon-…-256k` (`spec-type: draft-mtp`) → exit 0 (no regression). `go build ./...` → 0; `go vet` clean; `go test ./...` → 36 packages ok.
+- **Correction to the original S1 notes (adversarial re-verification):** the curated `spec-type` enum is **multi-value** (9 values), not "single-value"; the defect is that a *scalar* enum (one value per flag) cannot represent a *list-valued* flag. The sglang "same failure class" examples were partly off: `tool-call-parser`/`reasoning-parser` are genuinely stale (e.g. missing `qwen3_coder` / `qwen3-thinking`), but `qwen3_xml` is **not** a real SGLang parser and `glm47` is a *tool-call* parser, not a reasoning parser — both are now unblocked by the `extraArgs` passthrough regardless.
+
+---
+
 ## Original report context
 
 The original `BUG_REPORT.md` (deleted; absorbed here) recorded:
@@ -207,11 +235,12 @@ The original `BUG_REPORT.md` (deleted; absorbed here) recorded:
 
 ## Remaining / by-design notes
 
-- **No open defects.** L1 and L2 are deliberate behaviors (crash-visibility trade-off; covered window), not bugs. B2 is N/A; B3 is architectural (Launcher tab removed).
+- **No open defects.** [S1](#s1) was fixed 2026-07-02 (list-valued enum + `extraArgs` passthrough + `draft-dflash`). L1 and L2 are deliberate behaviors (crash-visibility trade-off; covered window), not bugs. B2 is N/A; B3 is architectural (Launcher tab removed).
+- **Optional future polish (not bugs):** a configweb widget for `List`-valued enums (multi-select/comma-text + a `list` toggle in Customize mode) — `spec-type` is `Type:4 + list:true` now, but the web editor still renders a `Type:4` flag as a single-select, so comma-lists can only be typed via the `args` JSON / CLI today; gate the L3 tokens/s regex on `kind == llama.cpp` (~100 ns/line micro-opt); a carry-buffer for L1 fragmentation only if fragmented lines are ever observed (would regress crash-line latency — keep the current behavior unless proven necessary).
 - **Optional future polish (not bugs):** gate the L3 tokens/s regex on `kind == llama.cpp` (~100 ns/line micro-opt); a carry-buffer for L1 fragmentation only if fragmented lines are ever observed (would regress crash-line latency — keep the current behavior unless proven necessary).
 
 ## Verification
 
 - `go build ./...` → exit 0.
-- `go test ./...` → all packages ok (including the new `TestLogFollower_FlushesTrailingPartialLine`, `TestSubscribe_DropsOnBackpressure`, `TestModelsPage_RemoveBrokenPaths*`, `TestUpdateSearchPathsAt_RewritesAndPreservesOtherValues`).
-- Validation & fixes applied: 2026-06-23 on `main`.
+- `go test ./...` → all packages ok (including `TestLogFollower_FlushesTrailingPartialLine`, `TestSubscribe_DropsOnBackpressure`, `TestModelsPage_RemoveBrokenPaths*`, `TestUpdateSearchPathsAt_RewritesAndPreservesOtherValues`, and the 2026-07-02 S1 regressions `TestValidator_ListEnum`, `TestValidate_ExtraArgsKnownFlagPassthrough`).
+- Validation & fixes applied: 2026-06-23 on `main` (L/B/D/T series); **S1 fixed 2026-07-02** (list-valued enum + `extraArgs` passthrough + `draft-dflash`; end-to-end repro confirmed exit 0 for chained `spec-type`, `draft-dflash`, and `extraArgs` comma-list on a `llama.cpp-stable` profile).
