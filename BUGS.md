@@ -97,7 +97,12 @@ Highlights of the fixes applied:
 | ID | Sev | Status | Component | One-line |
 |----|-----|--------|-----------|----------|
 | [P1](#p1) | H | 🟢 | `internal/cli/serve.go` + `config.go` | Proxy health-check timeout hardcoded 180s killed a slow big-model boot (35B int4 TP=2 multimodal MoE, >3 min cold); made configurable (`[serve].health_check_timeout_sec`) + default raised to 360s (needs a proxy restart to activate) |
-| [P2](#p2) | M | ❓ | Ornith AWQ profile `reasoning-parser: qwen3` | vLLM qwen3 parser returns empty `content`+`reasoning_content` (300 tokens, both null); separate from the load fix, needs investigation |
+| [P2](#p2) | M | ⚪ | Ornith AWQ profile `reasoning-parser: qwen3` | Empty `content` only when truncated mid-`<think>` (`finish_reason: length`); clean on `stop`. Parser+low-`max_tokens`, not a load/SNDR defect — reproduced on stock & SNDR. By-design; mitigate with higher `max_tokens` or no parser |
+
+### BM-series — Benchmark harness
+| ID | Sev | Status | Component | One-line |
+|----|-----|--------|-----------|----------|
+| [BM1](#bm1) | M | 🟢 | `internal/service/benchmark/llamabench_probe.go` | llama-bench fill-90 built a prompt over `max_model_len` at ≥~200k ctx → backend `400`; fixed via ×3/4 char-budget scale + 256-tok chat-template reserve |
 
 ---
 
@@ -215,6 +220,9 @@ Highlights of the fixes applied:
 ### T3
 - **Status:** 🟢 Fixed (already present). `manager_test.go:225-243` covers both override cases for `buildLaunchEnv`: a profile `PYTHONUNBUFFERED=0` and an inherited `PYTHONUNBUFFERED=0` are preserved (never overwritten with `=1`), exercising the `envHasKey` guard (`launch.go:272`).
 
+### T4
+- **Status:** 🟢 Fixed (TUI responsive layout). Negative-width `strings.Repeat` panics in `centeredDivider` and `renderBar` (guards added). `ClampBody` truncates; `ResponsiveSplit` stacked widths floor at 1; root size notice below 20×6. Regressions: `TestClampBodyTruncatesNotWraps`, `TestRoot_TerminalTooSmallNotice`, `TestServerPage_ResponsiveLayout`, `TestProfilesPage_ResponsiveLayout`, `TestBackendsPage_ResponsiveLayout`, `TestHelpViewportSize`, `TestModelPicker_BoxWidthHonorsFloor`.
+
 ---
 
 ## S-series — Curated schema & validation
@@ -311,8 +319,21 @@ The original `BUG_REPORT.md` (deleted; absorbed here) recorded:
 - **Severity:** M (Medium)
 - **Status:** ❓ Unknown / needs investigation (2026-07-03) — surfaced while smoke-testing P1; **separate from the load bug**, not yet root-caused.
 - **Component:** `ornith-1.0-35b-a3b-awq-vllm-tp2-256k` (likely its siblings too) `args.reasoning-parser: qwen3` on vLLM 0.24.0.
-- **Finding:** A healthy Ornith AWQ instance generated 300 completion tokens (`finish_reason: length`) but returned **both `content` and `reasoning_content` as `null`** — the qwen3 reasoning parser appears to swallow the whole output (consistent with the known `vllm-reasoning-parser-drops-content` behavior). A client would see empty responses.
-- **Fix:** none yet — likely drop `reasoning-parser` (let clients read `<think>` tags from `content`) or match the parser to the model's real reasoning format. Awaiting user decision (out of scope of the "won't load" request).
+- **Finding:** With `reasoning-parser: qwen3`, `content` comes back **empty whenever the completion is truncated mid-`<think>`** (`finish_reason: length` — the model never emits `</think>`, so nothing lands in `content` and, on this build, `reasoning_content` stays `null` too). When the model **completes** the answer (`finish_reason: stop`), `content` is clean and correct — verified on the SNDR twins (128k returned a correct Python function; 256k returned `42.` for 17+25). So it is **not** a load defect and **not** SNDR-specific (reproduced on both stock `vllm-nightly` and `sndr-vllm`); it is the qwen3 parser + a `max_tokens` low enough to cut off the reasoning block (consistent with `vllm-reasoning-parser-drops-content`).
+- **Impact / mitigation:** real workloads with a sufficient `max_tokens` are unaffected (the model closes `</think>`). A client that caps `max_tokens` low on a reasoning prompt sees an empty `content`. Fix options if it bites: drop `reasoning-parser` (clients read `<think>` from `content`), or raise `max_tokens`. Left as-is pending user decision (out of scope of the "won't load" request).
+
+---
+
+## BM-series — Benchmark harness
+
+### BM1
+- **Severity:** M (Medium)
+- **Status:** 🟢 Fixed (2026-07-03) — working-tree fix built + `make install`ed; re-run of `ornith-1.0-35b-a3b-autoround-vllm-tp2-256k-test` is now **4/4** (fill-90 ~58.5 tok/s at 262144 ctx).
+- **Component:** `internal/service/benchmark/llamabench_probe.go` — `runLlamaBench` prompt sizing.
+- **Finding:** The prefill was `promptTokens := ctxTok * FillPct / 100`, capped only at `ctxTok - GenTokens - 64`. `buildCodeContext` writes `promptTokens*4` chars, but real tokenizers hit ~3.16 chars/token on the HumanEval corpus (calibrated from the 192k run: 530840 chars → 168149 tokens), so the actual request runs ~26% larger than the token budget. At fill-90 on a 262144-ctx profile that built a ~299k-token request > `max_model_len` → vLLM `400 Bad Request`. Every ≥~200k-ctx profile's fill-90 preset failed when generated by the pre-fix binary (`qwythos-9b-mtp-q4km-262k*`, the `ornith-*-256k` family); fill-50 also overshot (166103 vs the correct 124649) and its tok/s carried large variance.
+- **Proof it was the harness, not the profile:** the *same* profile `ornith-1.0-35b-a3b-awq-vllm-tp2-256k` (identical args) `400`'d at 03:47 yet passed at 04:20 / 07:05 — the only variable was which binary generated the prompt.
+- **Fix:** scale the char budget by ×3/4 (`target * 3 / 4`) and reserve `chatTemplateSlack = 256` tokens for the completion + chat template; the `Detail` string now reports the *target* fill (intent), not the clamped budget. fill-90 at 262144 now builds ~224k tokens (fits with headroom), fill-50 ~124.6k; the variance collapsed. **No profile args changed** — raising `max-num-batched-tokens` would not have helped, the request simply exceeded `max_model_len`.
+- **Verification:** `model-loader benchmark --profile ornith-1.0-35b-a3b-autoround-vllm-tp2-256k-test --mode llama-bench` → **4/4**, run `…-1783081047193309131`: 5%≈163, 25%≈125, 50%≈116, 90%≈58.5 tok/s (n=3, low variance), peak VRAM 21891MB, GPU ~97%.
 
 ---
 

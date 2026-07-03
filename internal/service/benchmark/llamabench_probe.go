@@ -63,6 +63,15 @@ func parsePresets(raw []string) ([]tpPreset, error) {
 // successful repetitions. The model field, streaming and timing all come from
 // Complete, so it works against any OpenAI-compatible backend
 // (llama-server / vLLM / SGLang).
+//
+// Prompt sizing: buildCodeContext writes promptTokens*4 chars and assumes
+// ~4 chars/token, but real tokenizers (o200k_base, llama.cpp's BPE, Qwen's
+// tiktoken) measure **~3 chars/token** on Python code — a ~25% overestimate.
+// At 90% fill on a 262144-ctx profile that pushes the actual request above
+// max_model_len and the backend rejects with 400. The cap below reserves room
+// for the chat template (system prompt + role markers, ~200 tokens across
+// Qwen/Llama/Gemma/OAI templates), the requested completion, and the
+// tokenizer underestimate.
 func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPreset) (ProblemResult, ProblemTranscript) {
 	res := ProblemResult{ProblemID: ps.id(), ProblemName: ps.name()}
 	tr := ProblemTranscript{ProblemID: ps.id(), ProblemName: ps.name()}
@@ -71,8 +80,21 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 	if ctxTok <= 0 {
 		ctxTok = 8192 // unknown context → conservative default
 	}
-	promptTokens := ctxTok * ps.FillPct / 100
-	if maxPrompt := ctxTok - ps.GenTokens - 64; maxPrompt > 0 && promptTokens > maxPrompt {
+	// Reserve room for completion + chat-template overhead (system prompt +
+	// structural tokens like `<|im_start|>user\n…<|im_end|>`). 256 covers
+	// Qwen3.5 (~120 tok), Llama 3 (~180), Gemma (~90) with margin.
+	const chatTemplateSlack = 256
+	maxPrompt := ctxTok - ps.GenTokens - chatTemplateSlack
+	if maxPrompt < 64 {
+		maxPrompt = 64
+	}
+	// buildCodeContext writes promptTokens*4 chars; real tokenizers measure
+	// ~3 chars/token on Python code, so the produced prompt is ~33% larger
+	// than this budget. Scale the budget down by 3/4 so the actual tokenized
+	// prompt fits in maxPrompt after we apply the completion+template cap below.
+	target := ctxTok * ps.FillPct / 100
+	promptTokens := target * 3 / 4
+	if promptTokens > maxPrompt {
 		promptTokens = maxPrompt
 	}
 	if promptTokens < 64 {
@@ -179,9 +201,12 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 	res.PromptProcessingTPS = ppTpsSum / n
 	res.TotalMs = int64(totalSum / n)
 	res.PromptTokens = ppSum / ok
-	res.CompletionTokens = tgSum / ok
-	res.Detail = fmt.Sprintf("fill %d%% (≈%d of %d ctx) tg=%d; tok/s %.1f ±%.1f [%.1f–%.1f]; TTFT %dms (n=%d)",
-		ps.FillPct, promptTokens, ctxTok, ps.GenTokens, mean, stddev, minTPS, maxTPS, res.TTFTms, ok)
+	// Display the *target* fill (the preset's intent), not the clamped budget —
+	// the budget shrinks by ~25% to compensate for the buildCodeContext
+	// chars/token underestimate and chat-template overhead. PromptTokens /
+	// CompletionTokens below are the **measured** server-side counts.
+	res.Detail = fmt.Sprintf("fill %d%% (≈%d of %d ctx, budget %d) tg=%d; tok/s %.1f ±%.1f [%.1f–%.1f]; TTFT %dms (n=%d)",
+		ps.FillPct, target, ctxTok, promptTokens, ps.GenTokens, mean, stddev, minTPS, maxTPS, res.TTFTms, ok)
 	if fromServer {
 		res.Detail += " (server timings)"
 	}
