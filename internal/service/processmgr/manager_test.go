@@ -3,6 +3,8 @@ package processmgr
 import (
 	"errors"
 	"net"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -309,12 +311,38 @@ func TestManager_Launch_ModelMissing(t *testing.T) {
 func TestManager_WaitHealthy_TimesOut(t *testing.T) {
 	mgr, _ := newTestManager(t)
 	port := freePort(t)
-	err := mgr.WaitHealthy(99999, port, 300*time.Millisecond, "")
+	// A real, alive-for-the-whole-test PID (the test process itself) with
+	// nothing listening on port — exercises the genuine "never became
+	// healthy" timeout path, distinct from the dead-process fast-fail path.
+	err := mgr.WaitHealthy(os.Getpid(), port, 300*time.Millisecond, "")
 	if err == nil {
 		t.Fatal("expected timeout error, got nil")
 	}
 	if !errors.Is(err, ErrHealthCheckTimeout) {
 		t.Fatalf("err = %v, want ErrHealthCheckTimeout", err)
+	}
+}
+
+func TestManager_WaitHealthy_DeadProcessFailsFast(t *testing.T) {
+	mgr, _ := newTestManager(t)
+	port := freePort(t)
+
+	cmd := exec.Command("sh", "-c", "exit 0")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start doomed process: %v", err)
+	}
+	_ = cmd.Wait()
+	deadPID := cmd.Process.Pid
+
+	start := time.Now()
+	err := mgr.WaitHealthy(deadPID, port, 5*time.Second, "")
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, ErrProcessExited) {
+		t.Fatalf("err = %v, want ErrProcessExited", err)
+	}
+	if elapsed > time.Second {
+		t.Fatalf("elapsed = %v, want fast failure (<1s)", elapsed)
 	}
 }
 

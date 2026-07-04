@@ -100,15 +100,58 @@ func TestResolveDest(t *testing.T) {
 		}
 	})
 
-	t.Run("existing snapshot dir returns ErrAlreadyExists", func(t *testing.T) {
+	t.Run("existing snapshot dir with no colliding file succeeds", func(t *testing.T) {
 		dir := t.TempDir()
 		existingDir := filepath.Join(dir, "org", "repo")
 		if err := os.MkdirAll(existingDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
+		destDir, destFile, err := ResolveDest(dir, "org/repo", "config.json", true)
+		if err != nil {
+			t.Fatalf("want no error (dir existing is expected for snapshot mode), got %v", err)
+		}
+		if destDir != existingDir {
+			t.Errorf("destDir = %q, want %q", destDir, existingDir)
+		}
+		wantFile := filepath.Join(existingDir, "config.json")
+		if destFile != wantFile {
+			t.Errorf("destFile = %q, want %q", destFile, wantFile)
+		}
+	})
+
+	t.Run("existing file within snapshot dir returns ErrAlreadyExists", func(t *testing.T) {
+		dir := t.TempDir()
+		existingDir := filepath.Join(dir, "org", "repo")
+		if err := os.MkdirAll(existingDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		existingFile := filepath.Join(existingDir, "config.json")
+		if err := os.WriteFile(existingFile, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 		_, _, err := ResolveDest(dir, "org/repo", "config.json", true)
 		if !errors.Is(err, ErrAlreadyExists) {
 			t.Errorf("want ErrAlreadyExists, got %v", err)
+		}
+	})
+
+	t.Run("second file of same snapshot repo does not collide with the first", func(t *testing.T) {
+		dir := t.TempDir()
+		existingDir := filepath.Join(dir, "org", "repo")
+		if err := os.MkdirAll(existingDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		firstFile := filepath.Join(existingDir, "config.json")
+		if err := os.WriteFile(firstFile, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, destFile, err := ResolveDest(dir, "org/repo", "model.safetensors", true)
+		if err != nil {
+			t.Fatalf("want no error for a different file in the same repo dir, got %v", err)
+		}
+		wantFile := filepath.Join(existingDir, "model.safetensors")
+		if destFile != wantFile {
+			t.Errorf("destFile = %q, want %q", destFile, wantFile)
 		}
 	})
 

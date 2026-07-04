@@ -70,4 +70,5 @@ var (
 	ErrUnknownPID         = errors.New("pid is not tracked by this manager")
 	ErrHealthCheckTimeout = errors.New("llama-server did not become healthy within timeout")
 	ErrBinaryNotFound     = errors.New("llama-server binary not found in PATH")
+	ErrProcessExited      = errors.New("backend process exited before becoming healthy")
 )

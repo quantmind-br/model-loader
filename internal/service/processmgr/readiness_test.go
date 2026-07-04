@@ -3,6 +3,7 @@ package processmgr
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"testing"
@@ -22,7 +23,7 @@ func TestWaitForLogToken_FindsKey(t *testing.T) {
 		_, _ = f.WriteString("API Key:      sk-unsloth-0123456789abcdef0123456789abcdef\n")
 		_ = f.Close()
 	}()
-	got, err := waitForLogToken(p, testKeyRe, 3*time.Second)
+	got, err := waitForLogToken(p, testKeyRe, 3*time.Second, os.Getpid())
 	if err != nil {
 		t.Fatalf("waitForLogToken: %v", err)
 	}
@@ -36,7 +37,7 @@ func TestWaitForLogToken_Timeout(t *testing.T) {
 	if err := os.WriteFile(p, []byte("no key here\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := waitForLogToken(p, testKeyRe, 300*time.Millisecond)
+	_, err := waitForLogToken(p, testKeyRe, 300*time.Millisecond, os.Getpid())
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}
@@ -44,11 +45,35 @@ func TestWaitForLogToken_Timeout(t *testing.T) {
 
 func TestWaitForLogToken_MissingFileTimesOut(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "does-not-exist.log")
-	_, err := waitForLogToken(missing, testKeyRe, 250*time.Millisecond)
+	_, err := waitForLogToken(missing, testKeyRe, 250*time.Millisecond, os.Getpid())
 	if err == nil {
 		t.Fatal("expected timeout error for missing file")
 	}
 	if !errors.Is(err, ErrReadyTimeout) {
 		t.Fatalf("expected ErrReadyTimeout, got %v", err)
+	}
+}
+
+func TestWaitForLogToken_DeadProcessFailsFast(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "x.log")
+	if err := os.WriteFile(p, []byte("no key here\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("sh", "-c", "exit 0")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start doomed process: %v", err)
+	}
+	_ = cmd.Wait()
+	deadPID := cmd.Process.Pid
+
+	start := time.Now()
+	_, err := waitForLogToken(p, testKeyRe, 5*time.Second, deadPID)
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, ErrProcessExited) {
+		t.Fatalf("err = %v, want ErrProcessExited", err)
+	}
+	if elapsed > time.Second {
+		t.Fatalf("elapsed = %v, want fast failure (<1s)", elapsed)
 	}
 }

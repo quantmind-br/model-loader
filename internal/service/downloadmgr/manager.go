@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/quantmind-br/model-loader/internal/service/internal/fsx"
 	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
 )
 
@@ -167,10 +168,35 @@ func (m *Manager) recordStartLocked(spec Spec) (ID, DownloadRecord, bool, error)
 	return id, rec, spawnNow, nil
 }
 
+// claimPath returns the path of id's exclusive spawn-claim marker: a
+// zero-byte sentinel created via fsx.WriteJSONExclusive (hard-link
+// race-free Create — os.Link fails atomically when the target already
+// exists), the same primitive profilestore/backendcatalog use elsewhere
+// for check-then-write races. Only the Manager instance that wins the
+// claim may call the spawner for id. This matters because m.active/m.mu
+// are per-process: the TUI (long-lived) and every one-shot `model
+// download`/`model downloads` CLI invocation each construct their own
+// Manager over the SAME stateDir with no cross-process lock, so without
+// this claim two of them could both observe the same still-queued
+// on-disk record and both spawn a worker for it, corrupting the download.
+// ListRecords only matches "dl-*.json" (state.go), so this ".claim"
+// suffix is invisible to it.
+func claimPath(stateDir string, id ID) string {
+	return StatePath(stateDir, id) + ".claim"
+}
+
 // spawn runs the spawner for id, updates the record with PID + active
 // status, and registers the worker in m.active. Errors during spawn
-// are recorded as terminal failures so the UI sees them.
+// are recorded as terminal failures so the UI sees them. Returns nil
+// without spawning if another Manager instance already claimed id — the
+// record will reflect whichever instance won once its spawn completes.
 func (m *Manager) spawn(id ID) error {
+	claim := claimPath(m.stateDir, id)
+	if err := fsx.WriteJSONExclusive(claim, struct{}{}); err != nil {
+		return nil
+	}
+	defer os.Remove(claim)
+
 	rec, err := LoadRecord(StatePath(m.stateDir, id))
 	if err != nil {
 		return err
@@ -329,18 +355,23 @@ func (m *Manager) Subscribe() <-chan Event {
 	return ch
 }
 
-// Reconcile is called at boot, before StartPolling. It scans the state
+// Reconcile is called at the start of every Manager's lifetime (TUI boot,
+// or each one-shot CLI invocation), before StartPolling. It scans the state
 // directory, validates that each non-terminal record's worker is still
-// alive, marks orphaned ones as StatusAbandoned, and primes the active
-// map for surviving workers.
+// alive, marks orphaned ones as StatusAbandoned, primes the active map for
+// surviving workers, and re-queues records that were left StatusQueued with
+// no PID (e.g. a prior one-shot CLI process enqueued them beyond
+// maxConcurrent and exited before spawning) — promoting as many as current
+// capacity allows instead of abandoning them, so a queued download is never
+// silently lost across process boundaries.
 func (m *Manager) Reconcile() error {
 	recs, err := ListRecords(m.stateDir)
 	if err != nil {
 		return err
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if m.closed {
+		m.mu.Unlock()
 		return ErrManagerClosed
 	}
 	for _, r := range recs {
@@ -350,20 +381,30 @@ func (m *Manager) Reconcile() error {
 		case r.PID > 0 && procutil.Alive(r.PID):
 			m.active[r.ID] = r.PID
 			m.lastSnapshot[r.ID] = r
+		case r.PID == 0:
+			// Still genuinely queued (IsTerminal already excluded above,
+			// and only spawn() ever assigns a PID) — re-queue in this
+			// Manager instance rather than abandoning; promoteQueued
+			// below spawns it if a slot is free.
+			m.queue = append(m.queue, r.ID)
+			m.lastSnapshot[r.ID] = r
 		default:
 			r.Status = StatusAbandoned
-			if r.PID == 0 {
-				// Was queued but the previous TUI exited before
-				// spawning. We mark it abandoned so the user can
-				// resume on demand.
-				r.Err = "queued worker never spawned"
-			} else {
-				r.Err = "worker process exited without writing terminal status"
-			}
+			r.Err = "worker process exited without writing terminal status"
 			_ = SaveRecord(m.stateDir, r)
 			m.lastSnapshot[r.ID] = r
 		}
 	}
+	// promoteQueued's own len(m.active) < m.maxConcurrent guard cannot bound
+	// this call: it never mutates m.active (spawn() does that later, after
+	// we unlock), so len(m.active) is constant for the whole call and the
+	// freedSlots argument is the only real limiter. Pass the actual number
+	// of free slots, not the raw cap, or this would over-spawn past
+	// maxConcurrent whenever some workers are already active.
+	freeSlots := m.maxConcurrent - len(m.active)
+	toSpawn := m.promoteQueued(freeSlots)
+	m.mu.Unlock()
+	m.emitEvents(nil, toSpawn)
 	return nil
 }
 

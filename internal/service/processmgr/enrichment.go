@@ -8,6 +8,8 @@ import (
 	"runtime/debug"
 	"syscall"
 	"time"
+
+	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
 )
 
 // WaitHealthy polls GET http://127.0.0.1:<port>/health with capped exponential
@@ -21,6 +23,10 @@ func (m *fsManager) WaitHealthy(pid int, port int, timeout time.Duration, attemp
 	url := fmt.Sprintf("http://127.0.0.1:%d/health", port)
 	client := &http.Client{Timeout: 2 * time.Second}
 	for time.Now().Before(deadline) {
+		if !procutil.Alive(pid) {
+			lg.Warn("healthcheck_process_exited")
+			return fmt.Errorf("port %d: %w", port, ErrProcessExited)
+		}
 		resp, err := client.Get(url)
 		if err == nil {
 			_ = resp.Body.Close()
