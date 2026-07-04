@@ -45,18 +45,14 @@ func ResolveDest(searchPath, repoID, rfilename string, isSnapshot bool) (destDir
 		return "", "", ErrPathTraversal
 	}
 
+	// Snapshot mode preserves any nested subdirectories in rfilename;
+	// individual mode keeps only its basename. Everything past this point
+	// (traversal + existence checks) is identical for both modes.
 	if isSnapshot {
-		if _, err := os.Stat(destDir); err == nil {
-			return "", "", ErrAlreadyExists
-		}
 		destFile = filepath.Join(destDir, rfilename)
-		if !withinRoot(destFile, cleanRoot) {
-			return "", "", ErrPathTraversal
-		}
-		return destDir, destFile, nil
+	} else {
+		destFile = filepath.Join(destDir, filepath.Base(rfilename))
 	}
-
-	destFile = filepath.Join(destDir, filepath.Base(rfilename))
 	if !withinRoot(destFile, cleanRoot) {
 		return "", "", ErrPathTraversal
 	}

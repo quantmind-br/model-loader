@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
 )
 
 // ErrReadyTimeout is returned when a backend does not signal readiness in time.
@@ -25,7 +26,7 @@ func (m *fsManager) WaitReady(inst domain.RunningInstance, timeout time.Duration
 	if inst.Kind == domain.BackendKindUnsloth {
 		lg := m.logger.With("pid", inst.PID, "port", inst.Port, "attempt_id", attemptID)
 		lg.Info("readiness_start", "mode", "unsloth_log_token", "timeout", timeout)
-		token, err := waitForLogToken(inst.LogPath, unslothKeyRe, timeout)
+		token, err := waitForLogToken(inst.LogPath, unslothKeyRe, timeout, inst.PID)
 		if err != nil {
 			lg.Warn("readiness_timeout", "err", err)
 			return "", err
@@ -38,12 +39,16 @@ func (m *fsManager) WaitReady(inst domain.RunningInstance, timeout time.Duration
 
 // waitForLogToken polls logPath until re matches (returning the first match) or
 // timeout elapses. Uses the same capped backoff as WaitHealthy. A missing file
-// is treated as "not ready yet", not an error.
-func waitForLogToken(logPath string, re *regexp.Regexp, timeout time.Duration) (string, error) {
+// is treated as "not ready yet", not an error. Returns ErrProcessExited early
+// if pid dies before the token appears.
+func waitForLogToken(logPath string, re *regexp.Regexp, timeout time.Duration, pid int) (string, error) {
 	deadline := time.Now().Add(timeout)
 	delay := 100 * time.Millisecond
 	const maxDelay = time.Second
 	for {
+		if !procutil.Alive(pid) {
+			return "", fmt.Errorf("log %q: %w", logPath, ErrProcessExited)
+		}
 		if data, err := os.ReadFile(logPath); err == nil {
 			if m := re.Find(data); m != nil {
 				return string(m), nil

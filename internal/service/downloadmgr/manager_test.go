@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/quantmind-br/model-loader/internal/service/internal/fsx"
 )
 
 // inProcessSpawner runs RunWorker in a goroutine and returns the current
@@ -194,6 +196,229 @@ func TestManager_ReconcileKeepsLiveWorkers(t *testing.T) {
 	got, _ := LoadRecord(StatePath(dir, id))
 	if got.Status != StatusActive {
 		t.Errorf("Status = %v, want StatusActive (live PID)", got.Status)
+	}
+}
+
+func TestManager_ReconcileSpawnsQueuedWhenCapacityAvailable(t *testing.T) {
+	body := "model bytes"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	id := ID("rec-queued")
+	rec := DownloadRecord{
+		ID:       id,
+		PID:      0,
+		URL:      srv.URL,
+		DestFile: filepath.Join(dir, "x"),
+		Status:   StatusQueued,
+	}
+	if err := SaveRecord(dir, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	mgr := NewManager(dir, 1).
+		WithSpawner(inProcessSpawner(t, srv.Client(), &wg)).
+		WithPollInterval(20 * time.Millisecond)
+	if err := mgr.Reconcile(); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	mgr.StartPolling()
+	defer mgr.Close()
+
+	waitForStatus(t, mgr, id, StatusCompleted)
+	wg.Wait()
+}
+
+func TestManager_ReconcileLeavesQueuedWhenAtCapacity(t *testing.T) {
+	dir := t.TempDir()
+
+	activeID := ID("rec-active")
+	active := DownloadRecord{
+		ID:       activeID,
+		PID:      syscall.Getpid(), // current process is alive, occupies the only slot
+		URL:      "http://example",
+		DestFile: filepath.Join(dir, "active"),
+		Status:   StatusActive,
+	}
+	if err := SaveRecord(dir, active); err != nil {
+		t.Fatal(err)
+	}
+
+	queuedID := ID("rec-queued")
+	queued := DownloadRecord{
+		ID:       queuedID,
+		PID:      0,
+		URL:      "http://example",
+		DestFile: filepath.Join(dir, "queued"),
+		Status:   StatusQueued,
+	}
+	if err := SaveRecord(dir, queued); err != nil {
+		t.Fatal(err)
+	}
+
+	mgr := NewManager(dir, 1)
+	if err := mgr.Reconcile(); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	got, _ := LoadRecord(StatePath(dir, queuedID))
+	if got.Status != StatusQueued {
+		t.Errorf("Status = %v, want StatusQueued (no free slot, must not be abandoned or spawned)", got.Status)
+	}
+	if got.PID != 0 {
+		t.Errorf("PID = %d, want 0 (must not have been spawned)", got.PID)
+	}
+}
+
+// TestManager_ReconcilePromotesOnlyFreeSlotsWhenPartiallyBusy pins the
+// maxConcurrent>=2-with-some-active-workers case: promoteQueued never
+// mutates m.active itself (spawn() does, after the lock is released), so
+// passing the raw cap instead of the actual free-slot count would spawn
+// every queued record regardless of how many workers are already active.
+func TestManager_ReconcilePromotesOnlyFreeSlotsWhenPartiallyBusy(t *testing.T) {
+	dir := t.TempDir()
+
+	activeID := ID("rec-active")
+	active := DownloadRecord{
+		ID:       activeID,
+		PID:      syscall.Getpid(), // alive, occupies 1 of the 2 slots
+		URL:      "http://example",
+		DestFile: filepath.Join(dir, "active"),
+		Status:   StatusActive,
+	}
+	if err := SaveRecord(dir, active); err != nil {
+		t.Fatal(err)
+	}
+
+	queuedIDs := []ID{"rec-queued-a", "rec-queued-b"}
+	for _, id := range queuedIDs {
+		rec := DownloadRecord{
+			ID:       id,
+			PID:      0,
+			URL:      "http://example",
+			DestFile: filepath.Join(dir, string(id)),
+			Status:   StatusQueued,
+		}
+		if err := SaveRecord(dir, rec); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var spawnCount int32
+	countingSpawner := func(statePath, userAgent string) (int, error) {
+		atomic.AddInt32(&spawnCount, 1)
+		return syscall.Getpid(), nil
+	}
+
+	mgr := NewManager(dir, 2).WithSpawner(countingSpawner)
+	if err := mgr.Reconcile(); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+
+	if got := atomic.LoadInt32(&spawnCount); got != 1 {
+		t.Fatalf("spawn count = %d, want 1 (maxConcurrent=2, 1 already active -> only 1 free slot)", got)
+	}
+
+	var stillQueued, nowActive int
+	for _, id := range queuedIDs {
+		rec, err := LoadRecord(StatePath(dir, id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch rec.Status {
+		case StatusQueued:
+			stillQueued++
+		case StatusActive:
+			nowActive++
+		default:
+			t.Errorf("record %s: unexpected status %v", id, rec.Status)
+		}
+	}
+	if stillQueued != 1 || nowActive != 1 {
+		t.Fatalf("queued=%d active=%d, want exactly one of each", stillQueued, nowActive)
+	}
+}
+
+// TestManager_ReconcileSkipsSpawnWhenAlreadyClaimed pins the cross-process
+// guard: two separate Manager instances (e.g. the long-lived TUI and a
+// one-shot CLI invocation) share the same stateDir with no other
+// coordination, so a still-queued record's claim marker — created by
+// whichever instance's spawn() call wins — must stop every other instance
+// from also spawning a worker for it.
+func TestManager_ReconcileSkipsSpawnWhenAlreadyClaimed(t *testing.T) {
+	dir := t.TempDir()
+	id := ID("rec-queued")
+	rec := DownloadRecord{
+		ID:       id,
+		PID:      0,
+		URL:      "http://example",
+		DestFile: filepath.Join(dir, "x"),
+		Status:   StatusQueued,
+	}
+	if err := SaveRecord(dir, rec); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate another Manager instance's spawn() already having won the
+	// claim (e.g. a concurrent CLI invocation reconciling the same id).
+	if err := fsx.WriteJSONExclusive(claimPath(dir, id), struct{}{}); err != nil {
+		t.Fatalf("seed claim: %v", err)
+	}
+
+	var spawnCount int32
+	countingSpawner := func(statePath, userAgent string) (int, error) {
+		atomic.AddInt32(&spawnCount, 1)
+		return syscall.Getpid(), nil
+	}
+
+	mgr := NewManager(dir, 1).WithSpawner(countingSpawner)
+	if err := mgr.Reconcile(); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+
+	if got := atomic.LoadInt32(&spawnCount); got != 0 {
+		t.Fatalf("spawn count = %d, want 0 (id already claimed by another instance)", got)
+	}
+	got, err := LoadRecord(StatePath(dir, id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusQueued || got.PID != 0 {
+		t.Fatalf("record = %+v, want unchanged StatusQueued/PID:0", got)
+	}
+}
+
+// TestManager_SpawnRemovesClaimAfterCompleting ensures the claim marker is
+// cleaned up once a spawn attempt finishes (success or failure) — leaving
+// it behind would permanently block any future Resume/Reconcile from ever
+// retrying that id, which would be a worse regression than the race the
+// claim itself closes.
+func TestManager_SpawnRemovesClaimAfterCompleting(t *testing.T) {
+	dir := t.TempDir()
+	id := ID("rec-queued")
+	rec := DownloadRecord{
+		ID:       id,
+		PID:      0,
+		URL:      "http://example",
+		DestFile: filepath.Join(dir, "x"),
+		Status:   StatusQueued,
+	}
+	if err := SaveRecord(dir, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	countingSpawner := func(statePath, userAgent string) (int, error) {
+		return syscall.Getpid(), nil
+	}
+	mgr := NewManager(dir, 1).WithSpawner(countingSpawner)
+	if err := mgr.Reconcile(); err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+
+	if _, err := os.Stat(claimPath(dir, id)); !os.IsNotExist(err) {
+		t.Fatalf("claim file still exists after spawn completed: err = %v", err)
 	}
 }
 
