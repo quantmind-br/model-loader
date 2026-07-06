@@ -1,6 +1,11 @@
 package theme
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 func TestBodyHeight(t *testing.T) {
 	if h := BodyHeight(24); h != 22 {
@@ -17,22 +22,6 @@ func TestBodyHeight(t *testing.T) {
 	}
 }
 
-func TestSplitTwoPanes(t *testing.T) {
-	l, r := SplitTwoPanes(100)
-	if l != 49 || r != 49 {
-		t.Errorf("SplitTwoPanes(100) = (%d, %d), want (49, 49)", l, r)
-	}
-
-	l, r = SplitTwoPanes(30)
-	if l != 20 || r != 20 {
-		t.Errorf("SplitTwoPanes(30) = (%d, %d), want (20, 20)", l, r)
-	}
-
-	l, r = SplitTwoPanes(0)
-	if l != 20 || r != 20 {
-		t.Errorf("SplitTwoPanes(0) = (%d, %d), want (20, 20)", l, r)
-	}
-}
 
 func TestResponsiveSplit(t *testing.T) {
 	tests := []struct {
@@ -43,14 +32,14 @@ func TestResponsiveSplit(t *testing.T) {
 		wantRight int
 		labelsMin int
 	}{
-		{"60col stacked", 60, LayoutStacked, 58, 58, MinPaneWidth},
-		{"80col stacked", 80, LayoutStacked, 78, 78, MinPaneWidth},
+		{"60col stacked", 60, LayoutStacked, 58, 58, 1},
+		{"80col stacked", 80, LayoutStacked, 78, 78, 1},
 		{"120col 60_40", 120, LayoutSplit6040, 70, 48, MinPaneWidth},
 		{"160col 60_40 boundary", 160, LayoutSplit6040, 94, 64, MinPaneWidth},
 		{"200col 50_50", 200, LayoutSplit5050, 99, 99, MinPaneWidth},
-		{"0col stacked min", 0, LayoutStacked, MinPaneWidth, MinPaneWidth, MinPaneWidth},
-		{"narrow tiny min", 25, LayoutStacked, 23, 23, MinPaneWidth},
-		{"narrow below min", 18, LayoutStacked, MinPaneWidth, MinPaneWidth, MinPaneWidth},
+		{"0col stacked min", 0, LayoutStacked, 1, 1, 1},
+		{"narrow tiny min", 25, LayoutStacked, 23, 23, 1},
+		{"narrow below min", 18, LayoutStacked, 16, 16, 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -68,5 +57,22 @@ func TestResponsiveSplit(t *testing.T) {
 				t.Errorf("ResponsiveSplit(%d) pane widths (%d,%d) below min %d", tt.width, l, r, tt.labelsMin)
 			}
 		})
+	}
+}
+
+
+func TestClampBodyTruncatesNotWraps(t *testing.T) {
+	long := strings.Repeat("x", 200)
+	in := long + "\nsecond"
+	out := ClampBody(in, 40, 5)
+	lines := strings.Split(out, "\n")
+	if len(lines) != 5 {
+		t.Fatalf("ClampBody lines = %d, want 5", len(lines))
+	}
+	if lipgloss.Width(lines[0]) > 40 {
+		t.Errorf("line0 width = %d, want <= 40", lipgloss.Width(lines[0]))
+	}
+	if !strings.Contains(lines[1], "second") {
+		t.Errorf("line1 = %q, want to contain second (long line must not wrap)", lines[1])
 	}
 }

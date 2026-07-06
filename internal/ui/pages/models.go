@@ -36,6 +36,10 @@ type ModelsPage struct {
 	pathColW   int // flexed Path column width, recomputed on resize (RENDER-01)
 	filter     string
 	filterMode bool
+	// pasteGuard suppresses Enter-after-filter actions for one frame so
+	// bracketed-paste newlines don't leak through the filter to the
+	// action menu (TUI_AUDIT I-04).
+	pasteGuard bool
 	flash      components.Flash
 
 	// subView selects which section the page renders: the local model
@@ -291,7 +295,7 @@ func (p ModelsPage) renderLibraryView() string {
 			if panelW > 80 {
 				panelW = 80
 			}
-			panel := p.infoPanel.Render(panelW)
+			panel := lipgloss.NewStyle().MaxHeight(max(3, p.height-6-p.table.Height())).Render(p.infoPanel.Render(panelW))
 			content = lipgloss.JoinVertical(lipgloss.Left, content, panel)
 		} else {
 			w := p.width / 3

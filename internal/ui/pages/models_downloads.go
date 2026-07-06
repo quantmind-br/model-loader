@@ -252,7 +252,7 @@ func (p ModelsPage) renderDownloadRow(st downloadmgr.State, focused bool, width 
 
 	switch st.Status {
 	case downloadmgr.StatusActive:
-		bar := renderBar(ratio, 24)
+		bar := renderBar(ratio, min(24, max(8, width-30)))
 		speed := p.rates[string(st.ID)].speed
 		eta := fmtETA(st.Bytes, st.Total, speed)
 		header := fmt.Sprintf("%s%s", cursor, theme.TruncateRuneWidth(name, width-2, "…"))
@@ -261,14 +261,14 @@ func (p ModelsPage) renderDownloadRow(st downloadmgr.State, focused bool, width 
 		return header + "\n" + stats
 	case downloadmgr.StatusQueued:
 		return fmt.Sprintf("%s%s  %s  %s", cursor,
-			theme.TruncateRuneWidth(name, width-24, "…"),
+			theme.TruncateRuneWidth(name, max(10, width-24), "…"),
 			theme.Subtitle.Render("[queued]"), fmtBytes(st.Total))
 	default:
 		status := styleDownloadStatus(st.Status)
 		line := fmt.Sprintf("%s%s  %s", cursor,
-			theme.TruncateRuneWidth(name, width-24, "…"), status)
+			theme.TruncateRuneWidth(name, max(10, width-24), "…"), status)
 		if st.Status == downloadmgr.StatusFailed && st.Err != nil {
-			line += theme.Error.Render(": " + st.Err.Error())
+			line += theme.Error.Render(": " + truncate(st.Err.Error(), max(8, width-lipgloss.Width(line)-2)))
 		}
 		return line
 	}
@@ -293,6 +293,9 @@ func styleDownloadStatus(s downloadmgr.Status) string {
 // coloured; the remainder is dim. NoColor terminals still read correctly via
 // the distinct glyphs.
 func renderBar(ratio float64, width int) string {
+	if width < 1 {
+		return ""
+	}
 	if ratio < 0 {
 		ratio = 0
 	}

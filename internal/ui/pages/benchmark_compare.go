@@ -101,22 +101,25 @@ func (p BenchmarkPage) compareSectionRows(sec benchCompareSection) []string {
 	runs := sortedCompareRuns(sec, p.compareMetric)
 	barW := 16
 
-	header := fmt.Sprintf("%-20s  %-16s  %8s  %7s  %8s  %s",
-		"profile", p.compareMetricLabel(sec.Mode), "tok/s", "TTFT", "vram", "quant")
+	nameW := 20
+	if p.width > 0 {
+		nameW = min(20, max(10, p.width-64))
+	}
+	header := fmt.Sprintf("%-*s  %-16s  %8s  %7s  %8s  %s",
+		nameW, "profile", p.compareMetricLabel(sec.Mode), "tok/s", "TTFT", "vram", "quant")
 	rows := []string{theme.Subtitle.Render(header)}
 
 	for i, r := range runs {
 		a := r.Aggregate
 		frac, text, higher := compareMetricValue(r, p.compareMetric, sec.Mode)
-		// Normalize frac for bar: throughput and TTFT/VRAM need scaling.
 		frac = normalizeCompareFrac(frac, p.compareMetric, runs, sec.Mode)
 		bar := components.MetricBar(frac, barW)
 		marker := "  "
 		if i == 0 && len(runs) > 1 && higher {
 			marker = theme.OK.Render("▲")
 		}
-		line := fmt.Sprintf("%s%-20s  %s %6s  %8.1f  %5.0fms  %6dMB  %s",
-			marker+" ", truncate(r.ProfileName, 20), bar, text,
+		line := fmt.Sprintf("%s%-*s  %s %6s  %8.1f  %5.0fms  %6dMB  %s",
+			marker+" ", nameW, truncate(r.ProfileName, nameW), bar, text,
 			a.AvgTokensPerSecond, a.AvgTTFTms, a.PeakVRAMMB, dash(r.Profile.Quantization))
 		rows = append(rows, line)
 	}
@@ -263,10 +266,13 @@ func (p BenchmarkPage) viewHistory() string {
 	if p.histMetric == 1 {
 		metricLabel = "tok/s"
 	}
-	header := theme.Subtitle.Render(fmt.Sprintf("%-19s  %-16s  %8s  %8s  %7s  %8s",
-		"when", "mode", metricLabel, "tok/s", "TTFT", "vram"))
+	modeW := 16
+	if p.width > 0 {
+		modeW = min(16, max(8, p.width-60))
+	}
+	header := theme.Subtitle.Render(fmt.Sprintf("%-19s  %-*s  %8s  %8s  %7s  %8s",
+		"when", modeW, "mode", metricLabel, "tok/s", "TTFT", "vram"))
 	rows := []string{header}
-	// Clamp the cursor.
 	cur := p.histCursor
 	if cur >= len(p.historyRuns) {
 		cur = len(p.historyRuns) - 1
@@ -281,8 +287,8 @@ func (p BenchmarkPage) viewHistory() string {
 		if i == cur {
 			cursor = "> "
 		}
-		line := fmt.Sprintf("%s%-19s  %-16s  %8s  %8.1f  %5.0fms  %6dMB",
-			cursor, r.StartedAt.Format("2006-01-02 15:04"), truncate(r.Mode.Title(), 16),
+		line := fmt.Sprintf("%s%-19s  %-*s  %8s  %8.1f  %5.0fms  %6dMB",
+			cursor, r.StartedAt.Format("2006-01-02 15:04"), modeW, truncate(r.Mode.Title(), modeW),
 			m.Text, a.AvgTokensPerSecond, a.AvgTTFTms, a.PeakVRAMMB)
 		if i == cur && !theme.NoColor() {
 			line = theme.Selected.Render(line)

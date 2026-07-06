@@ -12,6 +12,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
+	"github.com/quantmind-br/model-loader/internal/service/downloadmgr"
 )
 
 // fakeModelsStore is a minimal profilestore.Store double for ModelsPage
@@ -1062,5 +1063,98 @@ func TestModelsPage_InfoPanelCapturesInputSoEscCloses(t *testing.T) {
 	page.infoPanel = &components.InfoPanel{}
 	if !page.IsCapturingInput() {
 		t.Error("info panel must mark page as capturing input so esc reaches the page handler")
+	}
+}
+
+// TUI-RESP Step 6: resizeColumns flex floor lowered so narrow terminals (≤56 cols)
+// keep the rightmost Path column readable instead of inflating it to a hard 32-col
+// minimum. The Path column may still be clipped by ClampBody below ~56 cols —
+// that is the accepted degradation per the plan.
+func TestModelsPage_ResizeColumnsRespectsLoweredFloor(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.resizeColumns(40)
+	if page.nameColW < 8 {
+		t.Errorf("nameColW = %d, want >= 8", page.nameColW)
+	}
+	if page.pathColW < 8 {
+		t.Errorf("pathColW = %d, want >= 8", page.pathColW)
+	}
+	// Total flexed columns plus the fixed 10+10+8 = 28 plus 12 (padding) must
+	// never exceed what a 40-col terminal can hold.
+	sum := page.nameColW + page.pathColW + 28 + 12
+	if sum > 88 {
+		t.Errorf("sum = %d, want <= 88 (40 cols + slack)", sum)
+	}
+}
+
+// TUI-RESP Step 6: renderBar(0, 0) and renderBar(0.5, 0) must return ""
+// instead of panicking on a negative-width strings.Repeat. The width<1 guard
+// added by the panic-fix in renderBar keeps the Downloads section safe when
+// the terminal is too narrow to render a bar.
+func TestModelsPage_RenderBarPanicGuard(t *testing.T) {
+	if got := renderBar(0.5, 0); got != "" {
+		t.Errorf("renderBar(0.5, 0) = %q, want empty", got)
+	}
+	if got := renderBar(0.5, -1); got != "" {
+		t.Errorf("renderBar(0.5, -1) = %q, want empty", got)
+	}
+}
+
+// TUI-RESP Step 6: renderDownloadRow for a failed download with a 100-char
+// error string at a narrow width must not panic and must truncate the error
+// tail with "…" so it never blows past the right edge of the terminal.
+func TestModelsPage_RenderDownloadRowTruncatesFailedError(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	st := downloadmgr.State{
+		Status: downloadmgr.StatusFailed,
+		Spec:   downloadmgr.Spec{Filename: "big.gguf"},
+		Err:    errors.New(strings.Repeat("E", 100)),
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("renderDownloadRow panicked at width=20: %v", r)
+		}
+	}()
+	out := page.renderDownloadRow(st, false, 20)
+	if !strings.Contains(out, "…") {
+	t.Errorf("failed-download row missing ellipsis tail at width=20; got:\n%s", out)
+	}
+}
+
+// TUI-RESP Step 6: relayout() budgets the table against body height while
+// honouring the stacked info-panel state at narrow widths. With height=12 and
+// the info panel open, the body height -6 chrome halves to 3 rows so the
+// table does not push the panel off-screen.
+func TestModelsPage_RelayoutStacksInfoPanelBelowNarrow(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.files = []domain.ModelFile{{Path: "/m/a.gguf", Name: "a.gguf"}}
+	page.refreshRows()
+	page.height = 12
+	page.width = 80 // below NarrowWidthThreshold
+	page.infoPanel = &components.InfoPanel{Filename: "a.gguf", Path: "/m/a.gguf"}
+	page.relayout()
+	// h = 12 - 6 = 6; info panel open + width<100 -> h /= 2 -> 3. The bubbles
+	// table.SetHeight subtracts 1 row for the column header, so the internal
+	// viewport height is 2.
+	if got := page.table.Height(); got != 2 {
+		t.Errorf("table.Height() = %d, want 2 (stacked info panel budget minus header)", got)
+	}
+}
+
+// TUI-RESP Step 6: relayout() at the wide branch leaves the table using the
+// full body budget (height - 6); only the narrow branch halves for the
+// stacked info panel.
+func TestModelsPage_RelayoutWideKeepsFullBudget(t *testing.T) {
+	page := NewModelsPage(&fakeScanner{}, []string{"/m"})
+	page.files = []domain.ModelFile{{Path: "/m/a.gguf", Name: "a.gguf"}}
+	page.refreshRows()
+	page.height = 30
+	page.width = 160 // above NarrowWidthThreshold
+	page.infoPanel = &components.InfoPanel{Filename: "a.gguf", Path: "/m/a.gguf"}
+	page.relayout()
+	// h = 30 - 6 = 24; wide so no half. table.SetHeight subtracts 1 for the
+	// header row, so internal viewport = 23.
+	if got := page.table.Height(); got != 23 {
+	t.Errorf("table.Height() = %d, want 23 (full budget minus header)", got)
 	}
 }

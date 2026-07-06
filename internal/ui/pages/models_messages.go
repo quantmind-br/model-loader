@@ -123,8 +123,12 @@ func (p ModelsPage) handleFilterKey(msg tea.KeyMsg) (handled bool, m tea.Model, 
 		p.refreshRows()
 		return true, p, nil
 	case key.Matches(msg, p.keys.Enter):
-		// fall through to the action-menu logic in handleKey
-		return false, p, nil
+		// Exit filter and consume the Enter so bracketed-paste newlines
+		// don't leak through to the action-menu handler (TUI_AUDIT I-04).
+		p.pasteGuard = true
+		p.filterMode = false
+		p.refreshRows()
+		return true, p, nil
 	default:
 		if msg.String() == "backspace" {
 			if len(p.filter) > 0 {
@@ -164,6 +168,14 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	}
+	// Consume Enter while paste guard is armed — the filter just exited
+	// from a paste event and subsequent Enter keys must not trigger
+	// actions (TUI_AUDIT I-04).
+	if p.pasteGuard && key.Matches(msg, p.keys.Enter) {
+		p.pasteGuard = false
+		return p, nil
+	}
+	p.pasteGuard = false
 	if p.hfSearch != nil && p.hfSearch.IsActive() {
 		if key.Matches(msg, p.keys.Enter) {
 			item, ok := p.hfSearch.Selected()
@@ -220,7 +232,7 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if p.infoPanel != nil {
 			p.infoPanel = nil
 			p.infoPanelUsedBy = nil
-			p.resizeColumns(p.width)
+			p.relayout()
 			return p, nil
 		}
 		if p.filterMode || p.filter != "" {
@@ -246,7 +258,7 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if p.infoPanel != nil {
 				p.infoPanel = nil
 				p.infoPanelUsedBy = nil
-				p.resizeColumns(p.width)
+				p.relayout()
 				return p, nil
 			}
 			return p.openInfoPanel()

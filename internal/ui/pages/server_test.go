@@ -295,6 +295,11 @@ func TestServerPage_MetricsViewRendersSparkline(t *testing.T) {
 		t.Fatalf("metrics view missing 'tokens/s':\n%s", v)
 	}
 	bars := []rune{'▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
+	// Sparkline falls back to ASCII bars under NO_COLOR. Accept either so the
+	// test passes in either rendering mode.
+	if theme.NoColor() {
+		bars = []rune{'_', '.', ':', '-', '=', '+', '*', '#'}
+	}
 	found := false
 	for _, b := range bars {
 		if strings.ContainsRune(v, b) {
@@ -1367,8 +1372,9 @@ func TestServerPage_LogsShowingNofMFooter(t *testing.T) {
 	for i := range st.logs {
 		st.logs[i] = fmt.Sprintf("line %d", i)
 	}
-	if !strings.Contains(p.View(), "showing last 18 of 19") {
-		t.Errorf("overflow log view should show count footer; got:\n%s", p.View())
+	visible := 30 - (serverTableHeight(30) + 8)
+	if !strings.Contains(p.View(), fmt.Sprintf("showing last %d of 19", visible)) {
+		t.Errorf("overflow log view should show count footer (visible=%d); got:\n%s", visible, p.View())
 	}
 }
 
@@ -1900,5 +1906,28 @@ func TestServerPage_CrashEmitsTabAttentionOnce(t *testing.T) {
 	_ = p.applyInstances(nil)
 	if len(p.crashSeen) != 0 {
 		t.Fatalf("crashSeen = %v after PID left the list, want empty", p.crashSeen)
+	}
+}
+// TUI-RESP: centeredDivider guard and SetSize column budget. The table's
+// internal viewport height excludes the bubbles header row, so we assert the
+// budget is honored by adding 1 for the header line. The formula values
+// themselves stay in sync with serverTableHeight.
+func TestServerPage_ResponsiveLayout(t *testing.T) {
+	if centeredDivider("PAUSED", -4) != "" {
+		t.Fatal("centeredDivider negative width should return empty")
+	}
+	p := NewServerPage(&fakeProcMgr{}, fakeMonMgr{}, nil)
+	p.SetSize(40, 12)
+	// bubbles table.SetHeight subtracts 1 row for the column header.
+	if got, want := p.tbl.Height()+1, serverTableHeight(12); got != want {
+		t.Fatalf("table budget = %d want %d (serverTableHeight)", got, want)
+	}
+	p.SetSize(120, 30)
+	cols := p.tbl.Columns()
+	if len(cols) < 6 {
+		t.Fatalf("wide columns missing: %+v", cols)
+	}
+	if cols[2].Width != colProfile || cols[4].Width != colVRAM {
+		t.Fatalf("wide columns = %+v (want Profile=%d, VRAM=%d)", cols, colProfile, colVRAM)
 	}
 }

@@ -73,14 +73,8 @@ func (m RootModel) ensureHelpViewport() RootModel {
 // viewport, accounting for the modal box border + padding so the scroll
 // area always fits inside the terminal.
 func helpViewportSize(width, height int) (int, int) {
-	w := width - 16
-	if w < 16 {
-		w = 16
-	}
-	h := height - 8
-	if h < 5 {
-		h = 5
-	}
+	w := max(16, width-16)
+	h := max(3, height-8)
 	return w, h
 }
 

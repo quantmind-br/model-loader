@@ -59,6 +59,11 @@ type ProfilesPage struct {
 
 	killConfirm components.Confirm
 
+	// pasteGuard suppresses Enter key actions for one frame after exiting
+	// filter mode so bracketed-paste newlines don't leak to the launch
+	// handler (TUI_AUDIT I-04).
+	pasteGuard bool
+
 	// --- web editor fields ---
 	webEditing bool
 	webURL     string
@@ -144,27 +149,34 @@ func (p ProfilesPage) loadCmd() tea.Cmd {
 }
 
 func (p ProfilesPage) renderWebEditModal() string {
-	return "\n  Editing profile in browser…\n\n  " + p.webURL + "\n\n  Save or cancel on the page. (esc cancels)\n"
+	url := p.webURL
+	if p.width > 0 {
+		url = truncate(p.webURL, max(10, p.width-4))
+	}
+	return "\n  Editing profile in browser…\n\n  " + url + "\n\n  Save or cancel on the page. (esc cancels)\n"
 }
 
 func (p ProfilesPage) View() string {
 	if p.webEditing {
 		return p.renderWebEditModal()
 	}
-	leftW := p.width / 3
-	rightW := (p.width*2)/3 - 2
-	left := lipgloss.NewStyle().Width(leftW).Render(p.list.View())
-	right := lipgloss.NewStyle().Width(rightW).Render(p.detailView())
-	// Build a multi-line divider matching the tallest pane.
-	leftH := len(strings.Split(left, "\n"))
-	rightH := len(strings.Split(right, "\n"))
-	divH := leftH
-	if rightH > divH {
-		divH = rightH
+	mode, listW, detailW := theme.ResponsiveSplit(p.width)
+	left := lipgloss.NewStyle().Width(listW).Render(p.list.View())
+	right := lipgloss.NewStyle().Width(detailW).Render(p.detailView(detailW))
+	var body string
+	if mode == theme.LayoutStacked {
+		rule := theme.Subtitle.Render(strings.Repeat("─", max(1, listW)))
+		leftH := lipgloss.Height(left)
+		right = lipgloss.NewStyle().Width(detailW).MaxHeight(max(3, p.height-2-leftH-1)).Render(p.detailView(detailW))
+		body = lipgloss.JoinVertical(lipgloss.Left, left, rule, right)
+	} else {
+		leftH := len(strings.Split(left, "\n"))
+		rightH := len(strings.Split(right, "\n"))
+		divH := max(1, max(leftH, rightH))
+		divLine := lipgloss.NewStyle().Foreground(theme.ColorDim).Render("│")
+		divider := strings.Repeat(divLine+"\n", divH-1) + divLine
+		body = lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
 	}
-	divLine := lipgloss.NewStyle().Foreground(theme.ColorDim).Render("│")
-	divider := strings.Repeat(divLine+"\n", divH-1) + divLine
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
 
 	if v := p.flash.View(); v != "" {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, v)
@@ -211,7 +223,7 @@ func (p ProfilesPage) OverlayView() Overlay {
 	return Overlay{Content: placed, Width: p.width, Height: p.height, Active: true}
 }
 
-func (p ProfilesPage) detailView() string {
+func (p ProfilesPage) detailView(w int) string {
 	if len(p.list.Items()) == 0 {
 		return components.EmptyState("No profiles yet", "Press [n] to create one")
 	}
@@ -228,15 +240,23 @@ func (p ProfilesPage) detailView() string {
 	if tags == "" {
 		tags = "(none)"
 	}
+	valW := max(8, w-9)
 	argsBlock := formatArgsBlock(pr.Args)
+	if w > 0 {
+		lines := strings.Split(argsBlock, "\n")
+		for i, line := range lines {
+			lines[i] = truncate(line, max(8, w))
+		}
+		argsBlock = strings.Join(lines, "\n")
+	}
 	return fmt.Sprintf(
 		"%s\n%s\n\nID:      %s\nModel:   %s\nBackend: %s\nTags:    %s\nArgs:%s",
 		theme.Title.Render(pr.Name),
 		theme.Subtitle.Render(pr.Description),
-		pr.ID,
-		pr.Model,
-		backend,
-		tags,
+		truncate(pr.ID, valW),
+		truncate(pr.Model, valW),
+		truncate(backend, valW),
+		truncate(tags, valW),
 		argsBlock,
 	)
 }
@@ -263,7 +283,7 @@ func (p ProfilesPage) Hints() string {
 	case p.deleteConfirm.Active():
 		return "[←→] choose  [enter] confirm"
 	default:
-		return "[enter] launch  [e] edit  [n] new  [d] dup  [X] del  [K] unload  [/] filter  (more: ?)"
+		return "[enter] launch  [e] edit  [n] new  [d] dup  [X] del  [K] unload  [/] filter"
 	}
 }
 

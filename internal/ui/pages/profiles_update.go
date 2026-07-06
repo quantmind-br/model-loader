@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/quantmind-br/model-loader/internal/ui/components"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // Update is a thin dispatcher: each typed-message arm delegates to a
@@ -82,12 +83,14 @@ func (p ProfilesPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (p ProfilesPage) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	p.width, p.height = msg.Width, msg.Height
-	listWidth := p.width / 3
-	listHeight := msg.Height - 6
-	if listHeight < 3 {
-		listHeight = 3
+	mode, listW, _ := theme.ResponsiveSplit(msg.Width)
+	// 2 rows reserved for flash + launch-status lines appended below the
+	// panes; stacked mode halves the rest between list and detail.
+	listH := msg.Height - 6
+	if mode == theme.LayoutStacked {
+		listH = (msg.Height - 2) / 2
 	}
-	p.list.SetSize(listWidth, listHeight)
+	p.list.SetSize(listW, max(3, listH))
 	return p, nil
 }
 
@@ -185,8 +188,21 @@ func (p ProfilesPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if p.list.FilterState() == list.Filtering {
 		updated, cmd := p.list.Update(msg)
 		p.list = updated
+		// When Enter exits the filter, arm a guard so subsequent Enter keys
+		// from the same bracketed-paste sequence don't trigger launch
+		// (TUI_AUDIT I-04). The guard clears on the next non-Enter key or
+		// after being consumed once.
+		if p.list.FilterState() != list.Filtering && key.Matches(msg, p.listKeys.Launch) {
+			p.pasteGuard = true
+		}
 		return p, cmd
 	}
+	// Consume one Enter while the paste guard is armed.
+	if p.pasteGuard && key.Matches(msg, p.listKeys.Launch) {
+		p.pasteGuard = false
+		return p, nil
+	}
+	p.pasteGuard = false
 	switch {
 	case key.Matches(msg, p.listKeys.New):
 		return p.startNew()

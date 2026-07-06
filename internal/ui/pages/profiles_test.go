@@ -11,8 +11,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/exp/teatest"
-
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
@@ -688,9 +688,12 @@ func TestProfilesPage_HintsIncludeLaunchAndEdit(t *testing.T) {
 	}
 	// F-10 audit: [E] export moved off the inline footer into the [?] help
 	// pane to keep the footer fitting at common widths. The escape hatch
-	// "(more: ?)" tail remains so the user knows additional bindings exist.
-	if !strings.Contains(hints, "(more: ?)") {
-		t.Errorf("list-mode Hints missing (more: ?) tail; got %q", hints)
+	// List-mode Hints must contain the primary actions.
+	if !strings.Contains(hints, "enter") || !strings.Contains(hints, "launch") {
+		t.Errorf("list-mode Hints missing launch; got %q", hints)
+	}
+	if !strings.Contains(hints, "e") || !strings.Contains(hints, "edit") {
+		t.Errorf("list-mode Hints missing edit; got %q", hints)
 	}
 }
 
@@ -827,7 +830,7 @@ func TestProfilesPage_DetailViewRendersTags(t *testing.T) {
 	updated, _ = page.Update(loadedMsg{profiles: store.ps})
 	page = updated.(ProfilesPage)
 
-	view := page.detailView()
+	view := page.detailView(120)
 	if !strings.Contains(view, "Tags:") {
 		t.Fatalf("detailView missing Tags label; got:\n%s", view)
 	}
@@ -846,7 +849,7 @@ func TestProfilesPage_DetailViewRendersNoneWhenTagsEmpty(t *testing.T) {
 	updated, _ = page.Update(loadedMsg{profiles: store.ps})
 	page = updated.(ProfilesPage)
 
-	view := page.detailView()
+	view := page.detailView(120)
 	if !strings.Contains(view, "Tags:    (none)") {
 		t.Fatalf("detailView missing Tags: (none); got:\n%s", view)
 	}
@@ -1240,7 +1243,7 @@ func TestProfilesPage_DetailRendersArgsAsFlags(t *testing.T) {
 	page.width = 120
 	page.height = 30
 
-	view := page.detailView()
+	view := page.detailView(120)
 	if strings.Contains(view, "map[") {
 		t.Errorf("detail view contains Go map literal:\n%s", view)
 	}
@@ -1270,7 +1273,7 @@ func TestProfilesPage_DetailRendersEmptyArgs(t *testing.T) {
 	page.width = 120
 	page.height = 30
 
-	view := page.detailView()
+	view := page.detailView(120)
 	if strings.Contains(view, "map[") {
 		t.Errorf("detail view contains Go map literal:\n%s", view)
 	}
@@ -1303,5 +1306,96 @@ func TestProfilesPage_PinnedSortsFirst(t *testing.T) {
 	first, ok := items[0].(item)
 	if !ok || first.p.ID != "p" {
 		t.Fatalf("first item=%+v; want pinned 'p'", items[0])
+	}
+}
+// TUI-RESP: Profiles master-detail stacks below NarrowWidthThreshold and truncates wide lines.
+//
+// Three scenarios from the Step-3 plan:
+//
+//   (a) 80x20 → stacked layout.  View() must contain the horizontal ─
+//       rule between list and detail, must NOT contain a full-height │
+//       divider column, and every line must be ≤ 80 cells.
+//   (b) 120x30 → split layout.  View() must contain a │ divider column.
+//   (c) 120-cell Model path at 120x30 → rendered detail must contain
+//       "…" and no line may exceed 120 cells.
+func TestProfilesPage_ResponsiveLayout(t *testing.T) {
+	dir := t.TempDir()
+	store, err := profilestore.NewFSStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	longModel := "/" + strings.Repeat("m", 120) + ".gguf"
+	page := NewProfilesPage(store, domain.FlagSchema{})
+	updated, _ := page.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	page = updated.(ProfilesPage)
+	updated, _ = page.Update(loadedMsg{profiles: []domain.Profile{
+		{ID: "x", Name: "Demo", Model: longModel, Args: map[string]any{}},
+	}})
+	page = updated.(ProfilesPage)
+	page.list.Select(0)
+
+	// Sanity: theme gives stacked layout at 80 cols.
+	mode, _, _ := theme.ResponsiveSplit(80)
+	if mode != theme.LayoutStacked {
+		t.Fatalf("ResponsiveSplit(80) mode = %v want stacked", mode)
+	}
+
+	// --- (a) stacked at 80x20 ---
+	out := page.View()
+
+	// Stacked layout inserts a long run of ─ between the two panes.
+	// Split layout never emits such a run, so this is a stable
+	// layout-mode signal (the list delegate's per-item │ marker does
+	// not contain any ─-runs).
+	ruleToken := strings.Repeat("─", 20)
+	if !strings.Contains(out, ruleToken) {
+		t.Fatalf("80x20 stacked: View() missing horizontal ─ rule (%d cells); got:\n%s", len(ruleToken), out)
+	}
+
+	// A full-height │ divider column would yield many more │ than
+	// the list delegate alone produces (one per item, max).  Stacked
+	// mode has no divider, so the count is bounded by the list.
+	if barCount := strings.Count(out, "│"); barCount > 5 {
+		t.Fatalf("80x20 stacked: expected ≤5 │ (item markers only), got %d:\n%s", barCount, out)
+	}
+
+	for i, line := range strings.Split(out, "\n") {
+		if line == "" {
+			continue
+		}
+		if w := lipgloss.Width(line); w > 80 {
+			t.Fatalf("80x20 stacked: line %d width=%d > 80: %q", i, w, line)
+		}
+	}
+
+	// --- (b) split at 120x30 ---
+	updated, _ = page.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	page = updated.(ProfilesPage)
+	if m, _, _ := theme.ResponsiveSplit(120); m == theme.LayoutStacked {
+		t.Fatal("120 cols should not stack")
+	}
+	// Split layout builds a divider column of │ chars matching the
+	// pane height (≈ height-6 rows).  A single │ per item is the
+	// list delegate marker — present in both layouts — so we assert
+	// the divider exists by requiring many more │ than the list
+	// could produce alone.
+	if barCount := strings.Count(page.View(), "│"); barCount < 10 {
+		t.Fatalf("120x30 split: expected ≥10 │ (divider column + item markers); got %d:\n%s", barCount, page.View())
+	}
+
+	// --- (c) detail truncation: 120-cell Model path ellipsis'd to fit ---
+	// The View uses ResponsiveSplit(120) → detailW=48, so we mirror the
+	// widths the actual pane could receive.  Either way the value must
+	// be ellipsis-truncated and never exceed the supplied width.
+	for _, w := range []int{48, 120} {
+		view := page.detailView(w)
+		if !strings.Contains(view, "…") {
+			t.Fatalf("detailView(%d): long Model path missing '…' truncation; got:\n%s", w, view)
+		}
+		for i, line := range strings.Split(view, "\n") {
+			if lw := lipgloss.Width(line); lw > w {
+				t.Fatalf("detailView(%d): line %d width=%d > %d: %q", w, i, lw, w, line)
+			}
+		}
 	}
 }

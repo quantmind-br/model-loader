@@ -18,29 +18,34 @@ func (p BackendsPage) View() string {
 		return components.Modal("Backend", p.form.View(), p.width, p.height)
 	}
 
-	leftWidth, rightWidth := theme.SplitTwoPanes(p.width)
+	mode, listW, detailW := theme.ResponsiveSplit(p.width)
 	leftContent := p.list.View()
 	if len(p.list.Items()) == 0 {
 		leftContent = components.EmptyState("No backends yet", "Press [n] to add one")
 	}
-	left := lipgloss.NewStyle().Width(leftWidth).Render(leftContent)
-	rightContent := p.detailView()
+	left := lipgloss.NewStyle().Width(listW).Render(leftContent)
+	rightContent := p.detailView(detailW)
 	if p.pendingRefresh {
 		rightContent = components.LoadingLine(p.spinnerModel, "Refreshing schema", 0) + "\n" + rightContent
 	}
 	if p.pendingProbe {
 		rightContent = components.LoadingLine(p.spinnerModel, "Probing backends", 0) + "\n" + rightContent
 	}
-	right := lipgloss.NewStyle().Width(rightWidth).Render(rightContent)
-	leftH := len(strings.Split(left, "\n"))
-	rightH := len(strings.Split(right, "\n"))
-	divH := leftH
-	if rightH > divH {
-		divH = rightH
+	right := lipgloss.NewStyle().Width(detailW).Render(rightContent)
+	var body string
+	if mode == theme.LayoutStacked {
+		rule := theme.Subtitle.Render(strings.Repeat("─", max(1, listW)))
+		leftH := lipgloss.Height(left)
+		right = lipgloss.NewStyle().Width(detailW).MaxHeight(max(3, p.height-2-leftH-1)).Render(rightContent)
+		body = lipgloss.JoinVertical(lipgloss.Left, left, rule, right)
+	} else {
+		leftH := len(strings.Split(left, "\n"))
+		rightH := len(strings.Split(right, "\n"))
+		divH := max(1, max(leftH, rightH))
+		divLine := lipgloss.NewStyle().Foreground(theme.ColorDim).Render("│")
+		divider := strings.Repeat(divLine+"\n", divH-1) + divLine
+		body = lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
 	}
-	divLine := lipgloss.NewStyle().Foreground(theme.ColorDim).Render("│")
-	divider := strings.Repeat(divLine+"\n", divH-1) + divLine
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
 
 	if v := p.flash.View(); v != "" {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, v)
@@ -65,7 +70,7 @@ func (p BackendsPage) OverlayView() Overlay {
 	return Overlay{}
 }
 
-func (p BackendsPage) detailView() string {
+func (p BackendsPage) detailView(w int) string {
 	if len(p.list.Items()) == 0 {
 		return components.EmptyState("No backends yet", "Press [n] to add one")
 	}
@@ -100,9 +105,10 @@ func (p BackendsPage) detailView() string {
 		}
 	}
 	labelStyle := lipgloss.NewStyle().Width(13).Foreground(theme.ColorDim)
+	valW := max(6, w-13)
 
 	row := func(label, value string) string {
-		return lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render(label), value)
+		return lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render(label), truncate(value, valW))
 	}
 
 	var b strings.Builder

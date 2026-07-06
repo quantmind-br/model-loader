@@ -185,6 +185,9 @@ func (p BenchmarkPage) renderDashSummary() string {
 	if rows := dashboardRows(p.runs, p.focusedDashboardMode()); len(rows) > 0 {
 		line += fmt.Sprintf("   best: %s (%s %s)", rows[0].ProfileName, rows[0].Metric.Text, rows[0].Metric.Label)
 	}
+	if p.width > 0 {
+		line = truncate(line, max(10, p.width-1))
+	}
 	return theme.Subtitle.Render(line)
 }
 
@@ -248,7 +251,11 @@ func (p BenchmarkPage) renderLeaderboard(mode benchmark.Mode) string {
 		if i == p.dashCursor {
 			cursor = "> "
 		}
-		line := fmt.Sprintf("%s%-22s %s %6s %s", cursor, truncate(r.ProfileName, 22), bar, r.Metric.Text, arrow)
+		nameW := 22
+		if p.width > 0 {
+			nameW = min(22, max(10, p.width-barW-12))
+		}
+		line := fmt.Sprintf("%s%-*s %s %6s %s", cursor, nameW, truncate(r.ProfileName, nameW), bar, r.Metric.Text, arrow)
 		if i == p.dashCursor && !theme.NoColor() {
 			line = theme.Selected.Render(line)
 		}
@@ -280,10 +287,14 @@ func (p BenchmarkPage) renderInsight(mode benchmark.Mode) string {
 		return ""
 	}
 	r := rows[p.dashCursor]
-	spark := components.Sparkline(r.Trend, 24)
+	sparkW := 24
+	if p.width > 0 {
+		sparkW = min(24, max(8, p.width-30))
+	}
+	spark := components.Sparkline(r.Trend, sparkW)
 	delta := "first run"
 	if r.Previous != nil {
 		delta = fmt.Sprintf("Δ %+.2f vs previous", r.DeltaFrac)
 	}
-	return theme.Subtitle.Render(fmt.Sprintf("%s — trend %s   %s", r.ProfileName, spark, delta))
+	return theme.Subtitle.Render(fmt.Sprintf("%s — trend %s   %s", truncate(r.ProfileName, 20), spark, delta))
 }

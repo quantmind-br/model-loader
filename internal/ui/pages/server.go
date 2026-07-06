@@ -103,6 +103,30 @@ func NewServerPage(pm procMgrIface, mm monitor.Manager, ps profileStoreIface) *S
 func (p *ServerPage) SetSize(w, h int) {
 	p.width, p.height = w, h
 	p.tbl.SetWidth(w)
+	p.tbl.SetHeight(serverTableHeight(h))
+	p.resizeColumns(w)
+}
+
+// serverTableHeight budgets the instance table against the body height:
+// proxy panel (≤3 typical) + status line + sub-tabs + sub-view body share
+// the rest. min 3 rows, capped at the historical 8.
+func serverTableHeight(h int) int { return min(8, max(3, h/3)) }
+func (p *ServerPage) resizeColumns(w int) {
+	flex := w - 24 - 12
+	if flex < 0 {
+		flex = 0
+	}
+	profileW := min(colProfile, max(8, flex*45/100))
+	vramW := min(colVRAM, max(6, flex*30/100))
+	tokW := min(colTokensPerSec, max(6, flex-profileW-vramW))
+	p.tbl.SetColumns([]table.Column{
+		{Title: "PID", Width: colPID},
+		{Title: "Port", Width: colPort},
+		{Title: "Profile", Width: profileW},
+		{Title: "Uptime", Width: colUptime},
+		{Title: "VRAM", Width: vramW},
+		{Title: "Tokens/s", Width: tokW},
+	})
 }
 
 func (p *ServerPage) WithMetricsDir(dir string) *ServerPage {

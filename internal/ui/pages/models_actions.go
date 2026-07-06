@@ -159,7 +159,7 @@ func (p ModelsPage) openInfoPanel() (tea.Model, tea.Cmd) {
 	visible := p.visibleFiles()
 	idx := p.table.Cursor()
 	if idx < 0 || idx >= len(visible) {
-		return p, nil
+		return p.withFlash("Select a model first")
 	}
 	mf := visible[idx]
 	var usedBy []components.ProfileRef
@@ -185,7 +185,7 @@ func (p ModelsPage) openInfoPanel() (tea.Model, tea.Cmd) {
 	p.infoPanelUsedBy = usedBy
 	// The table now shares the row with the info panel — reflow columns so
 	// they fit the narrower pane (RENDER-01).
-	p.resizeColumns(p.width)
+	p.relayout()
 	return p, nil
 }
 

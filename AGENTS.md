@@ -107,7 +107,7 @@ Profiles select engine via `launch.backendId`; `processmgr/args.go::BuildArgsFor
 | `llama-server` | `llama.cpp-stable`, `llama.cpp-nightly` | `--model` + canonicalized flags (`ngl`→`n-gpu-layers`); schema live-parsed, falls back to embedded **v9761**; dual-GPU via `split-mode`/`tensor-split`/`main-gpu` args. Stable vs nightly point at separate `backends/llama.cpp-*/build/bin/llama-server` trees |
 | `beellama-cpp` | `beellama-rtx3090` | llama.cpp fork (`backends/beellama.cpp/bin/llama-server`); curated overlay (kv-unified, spec-draft-hf); RTX-3090 DFlash/MTP + tensor-split profiles |
 | `dflash` | `lucebox-dflash` | native C++ speculative-decoding server (`backends/lucebox-hub/server/build-rtx3090/dflash_server`, sm_86-real); positional model + `--draft`; see `build-rtx3090.sh` |
-| `vllm` | `vllm-stable`, `vllm-nightly`, `sndr-vllm` | positional model, `--max-model-len`; `PYTHONUNBUFFERED=1` injected; dual-GPU via `tensor-parallel`/`gpu-split`; stable vs nightly = separate `backends/vllm-*/vllm-serve.sh` checkouts. `sndr-vllm` = SNDR/Genesis runtime patch overlay (TurboQuant k8v4 KV, MTP K=5, GDN attention) on **pinned** vLLM nightly (`dev424`) in own `backends/sndr-vllm/` venv (`scripts/setup-sndr-backend.sh`, runbook `docs/sndr-backend.md`, 5 `-sndr` profiles §9). Rules: install pin from its **per-commit** wheel URL (`SNDR_WHEEL_INDEX`; rotating nightly ages out — [BUGS.md N1](BUGS.md)); every profile `launch.env` **must** carry `GENESIS_ENFORCE_VERSION_RANGE=1` ([N2](BUGS.md)); never install plugin into stock vllm venvs (entry point auto-patches every vLLM process of env) |
+| `vllm` | `vllm-stable`, `vllm-nightly`, `sndr-vllm` | positional model, `--max-model-len`; `PYTHONUNBUFFERED=1` injected; dual-GPU via `tensor-parallel`/`gpu-split`; stable vs nightly = separate `backends/vllm-*/vllm-serve.sh` checkouts. `sndr-vllm` = SNDR/Genesis runtime patch overlay (TurboQuant k8v4 KV, MTP K=5, GDN attention) on **pinned** vLLM nightly (`dev424`) in own `backends/sndr-vllm/` venv (`scripts/setup-sndr-backend.sh`, runbook `docs/sndr-backend.md`, the `-sndr` profiles). Rules: install pin from its **per-commit** wheel URL (`SNDR_WHEEL_INDEX`; rotating nightly ages out — [BUGS.md N1](BUGS.md)); every profile `launch.env` **must** carry `GENESIS_ENFORCE_VERSION_RANGE=1` ([N2](BUGS.md)); never install plugin into stock vllm venvs (entry point auto-patches every vLLM process of env) |
 | `sglang` | `sglang-stable`, `sglang-nightly`, `sglang-unlimited`, `sglang-dflash` | `python -m sglang.launch_server`; bundles CUDA 12.8 for flashinfer JIT; 4 variants (stable/nightly/unlimited-context/dflash) under `backends/sglang-*/sglang-serve.sh` |
 | `unsloth` | `unsloth-rtx3090` | `unsloth studio run … -H 127.0.0.1`; captures `sk-unsloth-…` auth token post-load |
 | `tabby` | `tabby` | TabbyAPI `main.py` (EXL2/EXL3, ExLlamaV2/V3); model **dir** → `--model-dir`/`--model-name`; wrapper forces `--host 127.0.0.1 --disable-auth true`; bools emit `--flag true`; `gpu-split`/`autosplit-reserve`/`draft-gpu-split` are nargs+ (whitespace-delimited per element → spans 2 cards); auto-detects exl2 vs exl3; `PYTHONUNBUFFERED=1` injected. Embedded schema: `tabbyhelp` (Pattern C) |
@@ -136,7 +136,7 @@ Dispatch: `main.go` (no args→`runTUI` / `serve` / `benchmark`) → `app.Bootst
 
 `RootModel` (`internal/ui/root.go`) = value-typed hub-and-spoke router over fixed `[5]tea.Model`. Cross-tab nav message-based (`LaunchProfileMsg`, `SwitchToServerMsg`, `NavigateToSizingMsg`, `TabAttentionMsg`).
 
-**Global chrome & feedback surfaces:** scrollable tab bar (active tab bracketed, attention badges) · status bar (`[1-5] tabs  [tab] next  [q] quit  [?] help` + per-page `Hints()` + restart badge) · glamour help overlay (`?`/`esc` toggle, `j/k/g/G` scroll) · tagged auto-clearing flash queue · centered modal/overlay compositor. Theme = GitHub-Primer adaptive palette w/ `NO_COLOR` stripping (repo's only `init()`).
+**Global chrome & feedback surfaces:** scrollable tab bar (active tab bracketed, attention badges) · status bar (`[1-5] tabs  [tab] next  [q] quit  [?] help` + per-page `Hints()` + restart badge) · glamour help overlay (`?`/`esc` toggle, `j/k/g/G` scroll) · tagged auto-clearing flash queue · centered modal/overlay compositor. Theme = GitHub-Primer adaptive palette w/ `NO_COLOR` stripping (repo's only `init()`). Layout auto-adapts (stacked below 100 cols, truncate-at-edge, “terminal too small” below 20×6).
 
 **Conventions:** every printable-rune shortcut gated by `!activePageCapturesInput()` (only `ctrl+c` unconditional); capturing pages implement `IsCapturingInput()`; pages hosting `*huh.Form` forward non-`KeyMsg` messages so focus/validation completes. **lowercase = light/navigation (`k/j/g/G` reserved for lists); UPPERCASE = destructive, always confirm** (`X` delete, `K` kill/unload, `R` refresh, `I` import, `E` export, `D` default, `P` probe, `C` clear).
 
@@ -239,7 +239,7 @@ Each profile = one JSON file (`docs/profile-schema.json` canonical, **`schemaVer
 ### Profile naming convention (curation discipline — *not* code-enforced)
 Lowercase kebab id, most-significant first: `<family><ver>-<size>[-<variant>][-<quant>][-<capability>…]-<ctx>[-<backend>][-<mode>]`.
 - **ctx label must match real context** — source of truth = `args.ctx-size` (llama.cpp) / `args.max-model-len` (vLLM), **binary-k (÷1024) floored** (`262144`→`256k`, `253952`→`248k`, `200000`→`195k`). Stale `…-262k` on 200000-ctx profile = most common drift.
-- **Capability segments mirror `args`, not intent:** `vision` only while `args.mmproj` set; `mtp`/`dflash` only while `args.spec-type` set (id/args drift exists — see §9).
+- **Capability segments mirror `args`, not intent:** `vision` only while `args.mmproj` set; `mtp`/`dflash` only while `args.spec-type` set (id/args drift exists).
 - Name **real base model** (not publisher's repackaging label); siblings differing only by serving mode carry disambiguator (`-speed`/`-throughput`/`-quality`, `parallelN-Wk`, `-cpumoe`).
 
 ---
@@ -278,7 +278,7 @@ Also: `go test ./... -update` (regenerate golden fixtures) · `go test ./interna
 
 **Error handling:** When you find any error, record in `BUGS.md` and ask user whether they want it fixed.
 
-**Anti-patterns (NEVER):** call `app.Bootstrap()` twice (FS side-effects) · forget `defer svc.Close()` · import `internal/ui` from `internal/cli` · hand-edit schema's `presentation`/`rules` JSON (use Customize mode) · extend `essentialSeed` without request · run managed backend manually while TUI owns instances · assume cleanup on TUI exit (processes orphaned) · change `domain.Profile`/profilestore JSON without mirroring `docs/profile-schema.json` · intercept global runes without `activePageCapturesInput()` · add 6th out-of-lock `saveRegistry` callsite without updating contract.
+**Anti-patterns (NEVER):** call `app.Bootstrap()` twice (FS side-effects) · forget `defer svc.Close()` · import `internal/ui` from `internal/cli` · hand-edit schema's `presentation`/`rules` JSON (use Customize mode) · extend `essentialSeed` without request · run managed backend manually while TUI owns instances · assume cleanup on TUI exit (processes orphaned) · change `domain.Profile`/profilestore JSON without mirroring `docs/profile-schema.json` · intercept global runes without `activePageCapturesInput()` · add 6th out-of-lock `saveRegistry` callsite without updating contract · **asymmetric multi-GPU `tensor-split` / layer-tensor allocation** on the dual-3090 rig (e.g. `0.45,0.55`) — use **`0.5,0.5` only** when llama.cpp `split-mode` layer/tensor spans both cards; spare GPU0 via single-GPU pin or pin-per-GPU two models (`skill://rtx3090-inference-profiles`).
 
 ---
 
@@ -292,44 +292,212 @@ Also: `go test ./... -update` (regenerate golden fixtures) · `go test ./interna
 
 ---
 
-## 9. Full Model Table (current profile library — 29 profiles)
+## 9. Profile library
 
-`~/.config/model-loader/profiles/*.json` (by `launch.backendId`: `llama.cpp-stable` 12 · `vllm-nightly` 6 · `sndr-vllm` 5 · `beellama-rtx3090` 2 · `lucebox-dflash` 2 · `sglang-unlimited` 1; all `restart_policy: none`). **Caps derived from real `args`:** `vision`=`mmproj`, `spec`=`spec-type`/draft (MTP or DFlash), `cpumoe`=`n-cpu-moe`, `tp`=`tensor-split`/`split-mode`/`tensor-parallel` (dual-GPU), `embed`=embeddings.
+Not curated here — the source of truth is `~/.config/model-loader/profiles/*.json`
+(one file per profile, `id == basename`). A hand-kept table drifts the moment a
+profile is added or removed, so this section intentionally lists nothing.
 
-| # | Profile id | Backend (kind) | Ctx | Quant | Caps | Model |
-|--:|---|---|--:|---|---|---|
-| 1 | `gemma-4-12b-agentic-fable5-vision-mtp-256k` | llama.cpp | 262144 | q8_0 | vision+spec | gemma4-v2-Q8_0.gguf |
-| 2 | `gemma-4-12b-it-mtp-256k` | llama.cpp | 262144 | q4_k_xl | spec | gemma-4-12B-it-qat-UD-Q4_K_XL.gguf |
-| 3 | `joycaption-beta-one-gptq-vllm-8k` | vllm | 8192 | gptq | vision† | llama-joycaption-beta-one-hf-llava-GPTQ-4bit |
-| 4 | `ornith-1.0-35b-a3b-q4km-256k` | llama.cpp | 262144 | q4_k_m | — | ornith-1.0-35b-Q4_K_M.gguf |
-| 5 | `ornith-1.0-35b-a3b-q4km-tensor-256k` | llama.cpp | 262144 | q4_k_m | tp | ornith-1.0-35b-Q4_K_M.gguf |
-| 6 | `ornith-aeon-35b-a3b-q4km-mtp-vision-layer2-256k` | llama.cpp | 262144 | q4_k_m | vision+spec+tp | ornith-aeon-35b-MTP-Q4_K_M.gguf |
-| 7 | `qwen3-embedding-0.6b-32k` | llama.cpp | 32768 | f16 | embed | Qwen3-Embedding-0.6B-f16.gguf |
-| 8 | `qwen3-vl-8b-awq-vllm-8k` | vllm | 8192 | awq | vision† | Qwen3-VL-8B-Instruct-AWQ-4bit |
-| 9 | `qwen3-vl-8b-nsfw-caption-v45-vllm-16k` | vllm | 16384 | — | vision† | Qwen3-VL-8B-NSFW-Caption-V4.5 |
-| 10 | `qwen3.6-27b-awq-dflash-vllm-tp2-128k` | vllm | 131072 | awq | spec+tp | Qwen3.6-27B-AWQ-MTP |
-| 11 | `qwen3.6-27b-awq-mtp-fp8-vllm-tp2-256k` | vllm | 262144 | fp8 | spec+tp | Qwen3.6-27B-AWQ-MTP |
-| 12 | `qwen3.6-27b-heretic-v2-autoround-dflash-vllm-tp2-128k` | vllm | 131072 | — | spec+tp | Qwen3.6-27B-heretic-v2-mtp-int4-AutoRound |
-| 13 | `qwen3.6-27b-heretic-v2-autoround-mtp-fp8-vllm-tp2-256k` | vllm | 262144 | — | spec+tp | Qwen3.6-27B-heretic-v2-mtp-int4-AutoRound |
-| 14 | `qwen3.6-27b-heretic-v2-mtp-228k-vision` | llama.cpp | 233472 | q4_k_m | vision+spec | Qwen3.6-27B-uncensored-heretic-v2-Native-MTP-… |
-| 15 | `qwen3.6-27b-lucebox-dflash-128k-he-turbo` | dflash | — | q4_k_m | spec | Qwen3.6-27B-Q4_K_M.gguf |
-| 16 | `qwen3.6-27b-lucebox-dflash-256k-maxperf` | dflash | — | q4_k_m | spec | Qwen3.6-27B-Q4_K_M.gguf |
-| 17 | `qwen3.6-27b-neo-code-dflash-layer-256k-vision` | beellama | 262144 | q4_k_m | vision+spec+tp | Qwen3.6-27B-NEO-CODE-HERE-2T-OT-Q4_K_M.gguf |
-| 18 | `qwen3.6-35b-a3b-q4km-mtp-192k-vision` | llama.cpp | 196608 | q4_k_m | vision+spec | Qwen3.6-35B-A3B-UD-Q4_K_M.gguf |
-| 19 | `qwen3.6-35b-a3b-q4km-mtp-256k-vision-cpumoe` | llama.cpp | 262144 | q4_k_m | vision+spec+cpumoe | Qwen3.6-35B-A3B-UD-Q4_K_M.gguf |
-| 20 | `qwen3.6-35b-a3b-q4km-vision-parallel8-8k` | llama.cpp | 65536 | q4_k_m | vision | Qwen3.6-35B-A3B-UD-Q4_K_M.gguf |
-| 21 | `qwen3.6-40b-deckard-neo-code-tensor-256k-vision` | llama.cpp | 262144 | q5_k_m | vision+tp | Qwen3.6-40B-Deck-Opus-NEO-CODE-HERE-2T-OT-Q5_K_M |
-| 22 | `qwopus3.6-27b-coder-dflash-layer-256k` | beellama | 262144 | q4_k_m | spec+tp | Qwopus3.6-27B-Coder-MTP-Q4_K_M.gguf |
-| 23 | `qwythos-9b-mtp-q8-768k` | llama.cpp | 786432 | q8_0 | spec | Qwythos-9B-Claude-Mythos-5-1M-MTP-Q8_0.gguf |
-| 24 | `unlimited-ocr-sglang-32k` | sglang | 32768 | — | — | Unlimited-OCR |
-| 25 | `qwen3.6-27b-int4-autoround-tq-mtp-sndr-tp2-256k` | sndr-vllm | 262144 | int4 | spec+tp+tq | Lorbus/Qwen3.6-27B-int4-AutoRound |
-| 26 | `qwen3.6-27b-awq-mtp-tq-sndr-tp2-256k` | sndr-vllm | 262144 | awq | spec+tp+tq | shawnw3i/Qwen3.6-27B-AWQ-MTP |
-| 27 | `qwen3.6-27b-heretic-autoround-tq-mtp-sndr-tp2-256k` | sndr-vllm | 262144 | int4 | spec+tp+tq | lyf/Qwen3.6-27B-heretic-v2-mtp-int4-AutoRound |
-| 28 | `gemma-4-31b-awq-mtp-sndr-tp2-64k` | sndr-vllm | 65536 | awq | spec+tp | cyankiwi/gemma-4-31B-it-AWQ-4bit (+ gemma-4-31B-it-assistant draft) |
-| 29 | `gemma-4-31b-awq-kvauto-sndr-tp2-32k` | sndr-vllm | 32768 | awq | tp | cyankiwi/gemma-4-31B-it-AWQ-4bit |
+- **Current set:** `model-loader profile list` (`--json` for full args/env; `profile show <id>` for one).
+- **Profile shape:** §5 + `docs/profile-schema.json`. · **Backends & arg notes:** §2.5.
 
-> `†` vLLM VL/caption models natively multimodal (no `mmproj`); "vision" cap inferred from name (`/v1/models` reports `text+image->text` via `modelLooksMultimodal`). `tp` rows set `tensor-split`/`split-mode` (llama.cpp/beellama) or `tensor-parallel:2` (vLLM `tp2`). `lucebox-dflash` rows have no `ctx-size` (server-derived). `qwythos-9b-mtp-q8-768k` (786432) = largest context.
-> **Rows 25–29** (`-sndr`, kind `sndr-vllm`, §2.5): `tq` cap = **TurboQuant k8v4** KV (`kv-cache-dtype: turboquant_k8v4`, +27% KV concurrency vs `fp8_e5m2`; 2.47× vs 1.94× @262144 on 27B); env carries per-model `GENESIS_ENABLE_*` matrix + mandatory `GENESIS_ENFORCE_VERSION_RANGE=1`. 25–27 = TurboQuant + MTP K=5, keep vision (fair A/B). 28–29 = FP16-KV gemma (`kv: auto`); 28 has external MTP draft (`gemma-4-31B-it-assistant`, K=8), 29 chat-only; both need `--language-model-only` or gemma-4's vision-encoder budget exceeds `max-num-batched-tokens` at boot. Runbook: `docs/sndr-backend.md`.
+## Bug tracker (full details)
+
+### L-series — Log-streaming audit
+#### L1
+- **Severity:** L (Low)
+- **Status:** ⚪ Won't fix / by design
+- **Component:** `internal/service/monitor/logs.go:51-72` (`emit()`)
+- **Finding:** `emit()` flushes a trailing partial line before `EOF`, so crash messages are visible. The trade-off of line fragmentation is intentional.
+
+#### L2
+- **Severity:** I (Info)
+- **Status:** ⚪ By design / non-bug
+- **Component:** `internal/service/monitor/logs.go:23-42` (`newLogFollower`)
+- **Finding:** The window between `os.Open` and `w.Add` cannot drop content; the initial `emit` covers it.
+
+#### L3
+- **Severity:** I (Info)
+- **Status:** 🟢 Fixed (documentation)
+- **Component:** `internal/service/monitor/metrics.go:53`
+- **Finding:** The regex match cost is harmless; documentation corrected.
+
+### B-series — Original TUI bug report (2026-04-29)
+#### B1
+- **Status:** 🟢 Fixed.
+- **Finding:** All input shortcuts now gated behind `activePageCapturesInput()`.
+
+#### B2
+- **Status:** ⚪ N/A. The original report flagged this as a non-bug.
+
+#### B3
+- **Status:** ⚪ Won't fix / by design.
+- **Finding:** The `Launcher` tab was removed; documentation updated.
+
+#### B4
+- **Status:** 🟢 Fixed.
+- **Finding:** `models_actions.go` adds "Use in existing profile" option.
+
+#### B5
+- **Status:** 🟢 Fixed.
+- **Finding:** Inline `actionMenu` replaces fragile `huh.Form`.
+
+#### B6
+- **Status:** 🟢 Fixed.
+- **Finding:** `statusbar.go` now shows `[?] help`.
+
+#### B7
+- **Status:** 🟢 Fixed.
+- **Finding:** Profiles hint now complete.
+
+#### B8
+- **Status:** 🟢 Fixed by design.
+- **Finding:** `port` is stripped on duplicate.
+
+#### B9
+- **Status:** 🟢 Fixed.
+- **Finding:** New `[X]` action removes broken scan paths.
+
+#### B10
+- **Status:** 🟢 Fixed.
+- **Finding:** Filtering is synchronous; no race.
+
+#### B11
+- **Status:** 🟢 Fixed.
+- **Finding:** `ProfilesPage.Reload` now called on tab focus.
+
+#### B12
+- **Status:** 🟢 Fixed.
+- **Finding:** Editor moved to web; no draft leakage.
+
+#### B13
+- **Status:** 🟢 Fixed.
+- **Finding:** Sub-view cycles on `v` key.
+
+### D-series — Documentation drift
+#### D1
+- **Status:** 🟢 Fixed.
+- **Finding:** `README.md` rewritten for multi-backend.
+
+#### D2
+- **Status:** 🟢 Fixed.
+- **Finding:** `AGENTS.md` updated to v9761.
+
+#### D3
+- **Status:** 🟢 Fixed.
+- **Finding:** Schema version documented.
+
+#### D4
+- **Status:** 🟢 Fixed.
+- **Finding:** "6 goroutines" confirmed correct.
+
+#### D5
+- **Status:** 🟢 Fixed.
+- **Finding:** Log path documented.
+
+#### D6
+- **Status:** 🟢 Fixed.
+- **Finding:** Service-layer KB updated.
+
+### T-series — Test-coverage gaps
+#### T1
+- **Status:** 🟢 Fixed.
+- **Finding:** Regression test for partial-line flush added.
+
+#### T2
+- **Status:** 🟢 Fixed.
+- **Finding:** Backpressure-drop test added.
+
+#### T3
+- **Status:** 🟢 Fixed.
+- **Finding:** `PYTHONUNBUFFERED=0` override test exists.
+
+#### T4
+- **Status:** 🟢 Fixed.
+- **Finding:** TUI responsive layout safeguards added.
+
+### S-series — Curated schema & validation
+#### S1
+- **Status:** 🟢 Fixed.
+- **Finding:** List-valued enum + extraArgs passthrough; `draft-dflash` added.
+
+### N-series — SNDR (Genesis) backend provisioning
+#### N1
+- **Status:** 🟢 Fixed.
+- **Finding:** `SNDR_WHEEL_INDEX` override added.
+
+#### N2
+- **Status:** 🟢 Fixed.
+- **Finding:** `GENESIS_ENFORCE_VERSION_RANGE=1` added to SNDR profiles.
+
+#### N3
+- **Status:** ⚪ By-design VRAM limit.
+- **Finding:** TurboQuant continuation-prefill OOM on large prompts; documented.
+
+### V-series — stock vLLM backends
+#### V1
+- **Status:** 🟢 Fixed.
+- **Finding:** Build script + venv rebuilt; vLLM 0.24.0 wheel with flashinfer 0.6.12 installed (no fp8 regression).
+
+#### V2
+- **Status:** ⚪ Won't fix / upstream.
+- **Finding:** Unlimited-OCR AWQ model incompatibility.
+
+### P-series — Proxy backend-load lifecycle
+#### P1
+- **Status:** 🟢 Fixed.
+- **Finding:** Health-check timeout configurable, default 360s.
+
+#### P2
+- **Status:** ❓ Communication limit / will not change.
+- **Finding:** With `reasoning-parser: qwen3`, content is empty on truncation; never disable.
+
+#### P3
+- **Status:** 🟢 Fixed.
+- **Finding:** Liveness check added to `WaitHealthy`/`WaitReady`.
+
+### BM-series — Benchmark harness
+#### BM1
+- **Status:** 🟢 Fixed.
+- **Finding:** Prompt sizing adjusted to avoid overflow.
+
+### DL-series — Download manager
+#### DL1
+- **Status:** 🟢 Fixed.
+- **Finding:** `--snapshot` checks file existence.
+
+#### DL2
+- **Status:** 🟢 Fixed.
+- **Finding:** Queued downloads auto-promoted.
+
+### BF-series — BeeLlama flag limitations / BugTrace profile tuning
+#### BF1
+- **Status:** ⚪ Won't fix / upstream.
+- **Finding:** `llama_params_fit` not implemented for `SPLIT_MODE_TENSOR`.
+
+#### BF2
+- **Status:** ❓ Single-model observation.
+- **Finding:** DFlash slower than tensor-split on this SFT finetune; needs calibration.
+
+### Remaining / by-design notes
+- **Comments:** No `🟡 Partial` defects remain. All entries are fixed, by-design, or observations.
+
+### Verification
+- `go build ./...` → exit 0.
+- `go test ./...` → all packages OK.
+
+---
+
+## OpenWiki
+
+This repository has documentation located in the /openwiki directory.
+
+Start here:
+- [OpenWiki quickstart](openwiki/quickstart.md)
+
+OpenWiki includes repository overview, architecture notes, workflows, domain concepts, operations, integrations, testing guidance, and source maps.
+
+When working in this repository, read the OpenWiki quickstart first, then follow its links to the relevant architecture, workflow, domain, operation, and testing notes.
 
 <!-- gitnexus:start -->
 ## GitNexus — Code Intelligence

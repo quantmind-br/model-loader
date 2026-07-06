@@ -805,3 +805,17 @@ func TestRoot_SwitchToServerMsgClearsServerBadge(t *testing.T) {
 		t.Error("Server badge still set after SwitchToServerMsg navigation")
 	}
 }
+// TUI-RESP: root renders a notice when the terminal is below MinTermWidth/Height.
+func TestRoot_TerminalTooSmallNotice(t *testing.T) {
+	r := NewRoot(TabProfiles)
+	updated, _ := r.Update(tea.WindowSizeMsg{Width: 18, Height: 5})
+	rm := updated.(RootModel)
+	if !strings.Contains(rm.View(), "Terminal too small") {
+		t.Fatalf("View() = %q, want Terminal too small", rm.View())
+	}
+	updated, _ = rm.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	rm = updated.(RootModel)
+	if strings.Contains(rm.View(), "Terminal too small") {
+		t.Fatalf("View() at 80x24 should not show too-small notice")
+	}
+}

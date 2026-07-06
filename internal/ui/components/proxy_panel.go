@@ -148,7 +148,7 @@ func (p *ProxyPanel) View() string {
 	}
 
 	w := p.width
-	if w == 0 {
+	if w <= 0 {
 		w = 80
 	}
 	trunc := lipgloss.NewStyle().MaxWidth(w)

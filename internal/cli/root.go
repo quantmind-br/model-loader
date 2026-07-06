@@ -11,6 +11,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Version is the application version string, set at build time via ldflags.
+// Defaults to "dev" when not overridden (e.g. -ldflags "-X github.com/quantmind-br/model-loader/internal/cli.Version=v1.0.0").
+var Version = "dev"
+
+// BuildDate is the UTC build timestamp, set at build time via ldflags.
+var BuildDate = ""
+
 // TUIRunner is set by package main to the interactive TUI entrypoint. It runs
 // when model-loader is invoked with no subcommand. The string argument is the
 // resolved --log-level (empty means "use config/env default").
@@ -28,10 +35,10 @@ type ExitError struct{ Code int }
 func (e *ExitError) Error() string { return fmt.Sprintf("exit code %d", e.Code) }
 
 var rootCmd = &cobra.Command{
-	Use:   "model-loader",
-	Short: "Manage llama.cpp profiles and llama-server processes",
-	Long: "model-loader manages LLM server profiles and processes.\n" +
-		"Run with no subcommand to launch the interactive TUI.",
+	Use:     "model-loader",
+	Short:   "Manage LLM inference server profiles and processes",
+	Long:    "model-loader manages LLM server profiles and processes.\n" + "Run with no subcommand to launch the interactive TUI.",
+	Version: Version,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {

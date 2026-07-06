@@ -134,9 +134,9 @@ func (p *ServerPage) renderLogs(st *subState) string {
 	if st.subErr != "" {
 		return theme.Error.Render("Logs unavailable: " + st.subErr)
 	}
-	visible := p.height - 12 // header + table + sub-tabs + status + flash + margins
-	if visible < 5 {
-		visible = 5
+	visible := p.height - (serverTableHeight(p.height) + 8)
+	if visible < 3 {
+		visible = 3
 	}
 	start := len(st.logs) - visible
 	if start < 0 {
@@ -188,8 +188,12 @@ func (p *ServerPage) renderMetrics(st *subState) string {
 		tokens = []float64{0}
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "tokens/s: %s\n", theme.OK.Render(components.Sparkline(tokens, 40)))
-	fmt.Fprintf(&b, "req/s   : %s\n", theme.Warn.Render(components.Sparkline(st.mets.RequestsPerSec, 40)))
+	sparkW := 40
+	if p.width > 0 {
+		sparkW = min(40, max(8, p.width-12))
+	}
+	fmt.Fprintf(&b, "tokens/s: %s\n", theme.OK.Render(components.Sparkline(tokens, sparkW)))
+	fmt.Fprintf(&b, "req/s   : %s\n", theme.Warn.Render(components.Sparkline(st.mets.RequestsPerSec, sparkW)))
 	if st.gpu.VRAMTotalMB > 0 {
 		fmt.Fprintf(&b, "VRAM    : %d/%d MB  util %.0f%%\n", st.gpu.VRAMUsedMB, st.gpu.VRAMTotalMB, st.gpu.Utilization)
 	}
@@ -318,6 +322,9 @@ func humanRelative(t, now time.Time) string {
 }
 
 func centeredDivider(label string, width int) string {
+	if width <= 0 {
+		return ""
+	}
 	lw := len(label)
 	if width < lw+6 {
 		return strings.Repeat("─", width)

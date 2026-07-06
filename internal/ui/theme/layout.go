@@ -15,6 +15,11 @@ const (
 	PanePaddingY    = 0
 	MinPaneWidth    = 20
 
+	// MinTermWidth / MinTermHeight is the smallest window the TUI lays out
+	// for. Below it the root renders a centered "terminal too small" notice.
+	MinTermWidth  = 20
+	MinTermHeight = 6
+
 	// Responsive breakpoints (in columns) for two-pane page layouts.
 	// Below NarrowWidthThreshold the right pane stacks below the left.
 	// Between Narrow and Wide a 60/40 split favors the master list.
@@ -45,52 +50,37 @@ func BodyHeight(totalHeight int) int {
 	return totalHeight - TabBarHeight - StatusBarHeight
 }
 
-// ClampBody truncates/restricts the rendered string to the given width and height.
+// ClampBody fits the rendered string into width×height: lines wider than
+// width are hard-truncated at the right edge (soft-wrap inflated the row
+// count and pushed the status bar off-screen at narrow widths), and the
+// block is padded/truncated to exactly height rows so the status bar
+// stays pinned to the bottom.
 func ClampBody(s string, width, height int) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
 	return lipgloss.NewStyle().
-		Width(width).
 		Height(height).
-		MaxWidth(width).
 		MaxHeight(height).
+		MaxWidth(width).
 		Render(s)
 }
 
-// SplitTwoPanes returns left/right widths for a two-pane layout with gutter.
-func SplitTwoPanes(totalWidth int) (leftWidth int, rightWidth int) {
-	if totalWidth <= PageGutter {
-		return MinPaneWidth, MinPaneWidth
-	}
-	available := totalWidth - PageGutter
-	leftWidth = available / 2
-	rightWidth = available - leftWidth
-	if leftWidth < MinPaneWidth {
-		leftWidth = MinPaneWidth
-	}
-	if rightWidth < MinPaneWidth {
-		rightWidth = MinPaneWidth
-	}
-	return leftWidth, rightWidth
-}
 
 // ResponsiveSplit returns the layout mode and pane widths for a master-detail
 // page given the available terminal width. Callers should consult mode to decide
 // whether to stack the detail pane below the master list (LayoutStacked) or to
 // join them horizontally (LayoutSplit6040, LayoutSplit5050). In stacked mode
 // both returned widths span (totalWidth - PageGutter) so each pane can render
-// using the full row independently.
+// using the full row independently; widths floor at 1 so they never exceed the
+// terminal. Split modes floor at MinPaneWidth (only used at ≥100 cols).
 func ResponsiveSplit(totalWidth int) (mode LayoutMode, leftWidth int, rightWidth int) {
 	if totalWidth <= PageGutter {
-		return LayoutStacked, MinPaneWidth, MinPaneWidth
+		return LayoutStacked, 1, 1
 	}
 	available := totalWidth - PageGutter
 	if totalWidth < NarrowWidthThreshold {
-		w := available
-		if w < MinPaneWidth {
-			w = MinPaneWidth
-		}
+		w := max(1, available)
 		return LayoutStacked, w, w
 	}
 	if totalWidth <= WideWidthThreshold {

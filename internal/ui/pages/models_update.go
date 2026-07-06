@@ -5,6 +5,7 @@ import (
 
 	"github.com/quantmind-br/model-loader/internal/service/downloadmgr"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 func (p ModelsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -114,10 +115,23 @@ func (p ModelsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// relayout re-budgets the table against the body height and current
+// info-panel state. Chrome inside the body: header 1 + sub-tabs 1 +
+// status 1 + filter 1 + flash 1 + spare 1 = 6 rows; a stacked info
+// panel (narrow widths) halves the remainder.
+func (p *ModelsPage) relayout() {
+	h := p.height - 6
+	if p.infoPanel != nil && p.width > 0 && p.width < theme.NarrowWidthThreshold {
+		h /= 2
+	}
+	p.table.SetHeight(max(3, h))
+	p.resizeColumns(p.width)
+}
+
+
 func (p ModelsPage) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	p.width, p.height = msg.Width, msg.Height
-	p.table.SetHeight(msg.Height - 8)
-	p.resizeColumns(msg.Width)
+	p.relayout()
 	if p.hfSearch != nil {
 		p.hfSearch.SetSize(msg.Width, msg.Height)
 	}

@@ -128,11 +128,13 @@ func (s StatusBar) Render(width int) string {
 		} else {
 			msgText = ""
 		}
-		// Step 2: if the hints alone still don't fit, truncate the page hints.
+		// Step 2: if the hints alone still don't fit, truncate the page
+		// hints at the last complete action boundary so the visible
+		// portion is always actionable (TUI_AUDIT R-08).
 		gap = width - gw - separatorWidth - pw - lipgloss.Width(s.styledMessageText(msgText)) - bw
 		if gap < 1 {
 			if avail := width - gw - separatorWidth - bw - lipgloss.Width(s.styledMessageText(msgText)) - 1; avail > 0 {
-				pagePart = truncateString(pagePart, avail)
+				pagePart = truncateAtActionBoundary(pagePart, avail)
 			} else {
 				pagePart = ""
 			}
@@ -144,6 +146,44 @@ func (s StatusBar) Render(width int) string {
 		hints += theme.Subtitle.Render(" | " + pagePart)
 	}
 	return hints + strings.Repeat(" ", gap) + badge + s.styledMessageText(msgText)
+}
+
+// truncateAtActionBoundary truncates s to fit max visual cells while
+// landing on a complete action token (delimited by "] " or end of string)
+// so visible hints are always fully readable.
+func truncateAtActionBoundary(s string, max int) string {
+	if lipgloss.Width(s) <= max {
+		return s
+	}
+	runes := []rune(s)
+	if max <= 1 {
+		return "…"
+	}
+	// Walk back from max to find the last "] " boundary.
+	cut := max - 1
+	if cut > len(runes) {
+		cut = len(runes)
+	}
+	for cut > 0 {
+		// Found a boundary: character before current position is ']'
+		if cut >= 2 && runes[cut-1] == ']' && runes[cut] == ' ' {
+			// Include the closing bracket, drop the trailing space
+			result := string(runes[:cut])
+			if lipgloss.Width(result) <= max {
+				return result + "…"
+			}
+		}
+		// Also accept end of a token like "]" at string boundary
+		if cut >= 1 && runes[cut-1] == ']' {
+			result := string(runes[:cut])
+			if lipgloss.Width(result) <= max {
+				return result + "…"
+			}
+		}
+		cut--
+	}
+	// Fallback: simple truncation
+	return string(runes[:max-1]) + "…"
 }
 
 // renderMode draws a compact footer when the page has declared a mode.

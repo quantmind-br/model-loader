@@ -2,6 +2,8 @@
 package ui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -325,6 +327,13 @@ func (m RootModel) broadcast(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m RootModel) View() string {
+	if m.width > 0 && m.height > 0 &&
+		(m.width < theme.MinTermWidth || m.height < theme.MinTermHeight) {
+		notice := fmt.Sprintf("Terminal too small\nmin %d×%d — now %d×%d",
+			theme.MinTermWidth, theme.MinTermHeight, m.width, m.height)
+		return lipgloss.NewStyle().MaxWidth(m.width).MaxHeight(m.height).Render(
+			lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, notice))
+	}
 	if m.bootBlocker != nil {
 		return components.Modal(m.bootBlocker.title, m.bootBlocker.body+"\n\nPress q to quit.", m.width, m.height)
 	}

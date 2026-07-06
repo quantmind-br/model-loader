@@ -60,6 +60,7 @@ func drainScan(t *testing.T, p ModelPicker) ModelPicker {
 func TestModelPicker_SurfacesScanError(t *testing.T) {
 	scanner := &errorScanner{err: errors.New("permission denied: /models")}
 	p := NewModelPicker(scanner, []string{"/models"})
+	p.width = 120
 	p = drainScan(t, p)
 
 	out := p.View()
@@ -86,15 +87,13 @@ func TestModelPicker_BoxWidthClampedToCeiling(t *testing.T) {
 	}
 }
 
+// TUI-RESP: picker box width floor lowered for narrow terminals.
 func TestModelPicker_BoxWidthHonorsFloor(t *testing.T) {
-	if got := pickerBoxWidth(40); got != 60 {
-		t.Errorf("pickerBoxWidth(40) = %d, want 60 (floor)", got)
+	if got := pickerBoxWidth(40); got != 36 {
+		t.Errorf("pickerBoxWidth(40) = %d, want 36", got)
 	}
-}
-
-func TestModelPicker_BoxWidthScalesWithTerminal(t *testing.T) {
-	if got := pickerBoxWidth(100); got != 96 {
-		t.Errorf("pickerBoxWidth(100) = %d, want 96 (width-4)", got)
+	if got := pickerBoxWidth(20); got != 24 {
+		t.Errorf("pickerBoxWidth(20) = %d, want 24 (floor)", got)
 	}
 }
 

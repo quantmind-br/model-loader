@@ -318,19 +318,16 @@ func (m ModelPicker) View() string {
 }
 
 // pickerBoxWidth picks the picker overlay width from the terminal width.
-// Targets min(width-4, 120) with a 60-column floor so narrow terminals
+// Targets min(width-4, 120) with a 24-column floor so narrow terminals
 // still produce a usable layout.
 func pickerBoxWidth(termWidth int) int {
-	const (
-		floor = 60
-		ceil  = 120
-	)
+	const ceil = 120
 	w := termWidth - 4
 	if w > ceil {
 		w = ceil
 	}
-	if w < floor {
-		w = floor
+	if w < 24 {
+		w = 24
 	}
 	return w
 }

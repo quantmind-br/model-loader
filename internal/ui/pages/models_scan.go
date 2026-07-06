@@ -174,16 +174,16 @@ func (p *ModelsPage) resizeColumns(width int) {
 	// cell style adds Padding(0,1) = 2 cols per column (5 cols = 10); reserve
 	// that plus a small safety margin so a truncated Path never wraps (RENDER-01).
 	flex := avail - (sizeW + quantW + paramsW) - 12
-	if flex < 32 {
-		flex = 32
+	if flex < 16 {
+		flex = 16
 	}
 	nameW := flex * 9 / 20 // ~45% to Name
-	if nameW < 12 {
-		nameW = 12
+	if nameW < 8 {
+		nameW = 8
 	}
 	pathW := flex - nameW
-	if pathW < 12 {
-		pathW = 12
+	if pathW < 8 {
+		pathW = 8
 	}
 	p.nameColW, p.pathColW = nameW, pathW
 	p.table.SetColumns([]table.Column{

@@ -273,7 +273,7 @@ func (p BenchmarkPage) viewRunning() string {
 
 	// Current problem name when inferring/scoring.
 	if (prog.Phase == "infer" || prog.Phase == "score") && prog.ProblemName != "" {
-		parts = append(parts, theme.Subtitle.Render("→ "+truncate(prog.ProblemName, 60)))
+		parts = append(parts, theme.Subtitle.Render("→ "+truncate(prog.ProblemName, min(60, max(16, p.width-4)))))
 	}
 	parts = append(parts, theme.Subtitle.Render("[esc] cancel"))
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
@@ -311,8 +311,14 @@ func (p BenchmarkPage) viewRunDetail() string {
 		summary = theme.Error.Render("run incomplete: "+r.Err) + "\n" + summary
 	}
 
-	header := theme.Subtitle.Render(fmt.Sprintf("%-24s  %-8s  %6s  %7s  %7s  %s",
-		"problem", "result", "score", "tok/s", "TTFT", "detail"))
+	probW := 24
+	detW := 40
+	if p.width > 0 {
+		probW = min(24, max(10, (p.width-36)*2/5))
+		detW = min(40, max(10, p.width-36-probW))
+	}
+	header := theme.Subtitle.Render(fmt.Sprintf("%-*s  %-8s  %6s  %7s  %7s  %s",
+		probW, "problem", "result", "score", "tok/s", "TTFT", "detail"))
 	rows := []string{header}
 	for _, pr := range r.Problems {
 		result := theme.Error.Render("fail")
@@ -323,8 +329,8 @@ func (p BenchmarkPage) viewRunDetail() string {
 		if pr.Err != "" {
 			detail = "err: " + pr.Err
 		}
-		rows = append(rows, fmt.Sprintf("%-24s  %-8s  %5.2f  %7.1f  %5dms  %s",
-			truncate(pr.ProblemName, 24), result, pr.Score, pr.TokensPerSecond, pr.TTFTms, truncate(detail, 40)))
+		rows = append(rows, fmt.Sprintf("%-*s  %-8s  %5.2f  %7.1f  %5dms  %s",
+			probW, truncate(pr.ProblemName, probW), result, pr.Score, pr.TokensPerSecond, pr.TTFTms, truncate(detail, detW)))
 	}
 
 	extra := modeDetailLines(r)

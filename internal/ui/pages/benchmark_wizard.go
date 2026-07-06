@@ -70,7 +70,13 @@ func (p BenchmarkPage) viewWizardProfile() string {
 	}
 	rows := make([]string, 0, len(filtered))
 	for i, prof := range filtered {
-		line := fmt.Sprintf("%-28s  %s", truncate(prof.Name, 28), truncate(prof.Model, 40))
+		nameW := 28
+		modelW := 40
+		if p.width > 0 {
+			nameW = min(28, max(12, (p.width-4)*2/5))
+			modelW = min(40, max(12, p.width-4-nameW))
+		}
+		line := fmt.Sprintf("%-*s  %s", nameW, truncate(prof.Name, nameW), truncate(prof.Model, modelW))
 		if i == p.profCursor {
 			if theme.NoColor() {
 				line = "> " + line
@@ -102,9 +108,17 @@ func (p BenchmarkPage) viewWizardMode() string {
 		// Card: title + description on the first line; prerequisites (if any)
 		// on a second indented line so external dependencies are visible before
 		// committing to a run.
-		line := fmt.Sprintf("%-22s  %s", m.Title(), modeDescription(m))
+		desc := modeDescription(m)
+		if p.width > 0 {
+			desc = truncate(modeDescription(m), max(12, p.width-26))
+		}
+		line := fmt.Sprintf("%-22s  %s", m.Title(), desc)
 		if pr := modePrereq(m); pr != "" {
-			line += "\n    " + theme.Warn.Render("⚠ "+pr)
+			prLine := pr
+			if p.width > 0 {
+				prLine = truncate(pr, max(12, p.width-8))
+			}
+			line += "\n    " + theme.Warn.Render("⚠ "+prLine)
 		}
 		if i == p.modeCursor {
 			if theme.NoColor() {
@@ -138,7 +152,7 @@ func (p BenchmarkPage) viewWizardReview() string {
 	if pr := modePrereq(mode); pr != "" {
 		lines = append(lines, theme.Warn.Render("note:     "+pr))
 	}
-	lines = append(lines, "", "Description:", "  "+modeDescription(mode),
+	lines = append(lines, "", "Description:", "  "+truncate(modeDescription(mode), max(12, p.width-4)),
 		"", theme.Subtitle.Render("[enter] start run   [esc] back to mode"))
 	return lipgloss.JoinVertical(lipgloss.Left, title, strings.Join(lines, "\n"))
 }

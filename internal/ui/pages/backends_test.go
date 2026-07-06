@@ -7,10 +7,12 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/backendcatalog"
 	"github.com/quantmind-br/model-loader/internal/service/backendschema"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 type pageFakeGenerator struct {
@@ -592,8 +594,8 @@ func TestBackendsPage_ReloadClearsStaleProbeResults(t *testing.T) {
 	p.probeResults = map[string]backendProbeResult{
 		b.ID: {status: backendcatalog.ProbeStatusOK, detail: "v1.0.0"},
 	}
-	if !strings.Contains(p.detailView(), "Probe:") {
-		t.Fatalf("detail view missing probe line before reload:\n%s", p.detailView())
+	if !strings.Contains(p.detailView(120), "Probe:") {
+		t.Fatalf("detail view missing probe line before reload:\n%s", p.detailView(120))
 	}
 
 	cmd := p.Reload()
@@ -610,13 +612,45 @@ func TestBackendsPage_ReloadClearsStaleProbeResults(t *testing.T) {
 	if len(p.probeResults) != 0 {
 		t.Fatalf("probeResults = %d entries after reload, want 0", len(p.probeResults))
 	}
-	if strings.Contains(p.detailView(), "Probe:") {
-		t.Fatalf("detail view still shows probe line after reload:\n%s", p.detailView())
+	if strings.Contains(p.detailView(120), "Probe:") {
+		t.Fatalf("detail view still shows probe line after reload:\n%s", p.detailView(120))
 	}
 	if loadCmd == nil {
 		t.Fatal("handling backendsReloadMsg returned nil cmd; expected loadCmd")
 	}
 	if _, ok := loadCmd().(backendsLoadedMsg); !ok {
 		t.Fatal("reload did not chain into loadCmd")
+	}
+}
+
+// TUI-RESP: Backends responsive stacked layout and truncation.
+func TestBackendsPage_ResponsiveLayout(t *testing.T) {
+	p, mgr, _ := newBackendsPageHarness(t)
+	b := addBackendForPage(t, mgr, "long", strings.Repeat("x", 100))
+	p = loadBackendsPage(t, p)
+	for i, it := range p.list.Items() {
+		if it.(backendItem).backend.ID == b.ID {
+			p.list.Select(i)
+			break
+		}
+	}
+	updated, _ := p.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	p = updated.(BackendsPage)
+	if mode, _, _ := theme.ResponsiveSplit(80); mode != theme.LayoutStacked {
+		t.Fatalf("want stacked at 80 cols")
+	}
+	for _, line := range strings.Split(p.View(), "\n") {
+		if line == "" {
+			continue
+		}
+		if lipgloss.Width(line) > 80 {
+			t.Fatalf("line > 80 cols: %q", line)
+		}
+	}
+	updated, _ = p.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
+	p = updated.(BackendsPage)
+	detail := p.detailView(47)
+	if !strings.Contains(detail, "…") {
+		t.Fatalf("executable should truncate at narrow width; got:\n%s", detail)
 	}
 }

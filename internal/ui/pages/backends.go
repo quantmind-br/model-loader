@@ -150,8 +150,12 @@ func (p BackendsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
 		p.width, p.height = m.Width, m.Height
-		leftWidth, _ := theme.SplitTwoPanes(p.width)
-		p.list.SetSize(leftWidth, m.Height)
+		mode, listW, _ := theme.ResponsiveSplit(p.width)
+		listH := m.Height - 2
+		if mode == theme.LayoutStacked {
+			listH = (m.Height - 2) / 2
+		}
+		p.list.SetSize(listW, max(3, listH))
 		return p, nil
 	case components.FlashClearMsg:
 		p.flash, _ = p.flash.Update(m)
