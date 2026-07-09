@@ -749,6 +749,7 @@ func TestRoot_NumberFiveSwitchesToBenchmark(t *testing.T) {
 // UIUX-021: a TabAttentionMsg for a background tab badges it in the tab
 // strip; visiting the tab clears the badge.
 func TestRoot_TabAttentionBadgesInactiveTabUntilVisited(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(pages.Placeholder{TabName: "P"}).
 		WithServerPage(pages.Placeholder{TabName: "S"}).

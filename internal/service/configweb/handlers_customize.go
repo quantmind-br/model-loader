@@ -121,7 +121,10 @@ func (s *Session) handleCustomizeAddFlag(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.ExecuteTemplate(w, "customize-flags", ViewModel{BackendID: schema.BackendID, AllFlags: allFlagEdits(schema)}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // handleCustomizeRemoveFlag deletes a flag and any presentation reference to it.

@@ -18,12 +18,9 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 			"method "+r.Method+" not allowed on /v1/responses")
 		return
 	}
+	// In-flight gauge only; serving counter covers the backend-use phase below.
 	s.inflight.Add(1)
-	s.inflightWG.Add(1)
-	defer func() {
-		s.inflight.Add(-1)
-		s.inflightWG.Done()
-	}()
+	defer s.inflight.Add(-1)
 
 	if r.Body == nil || r.Body == http.NoBody {
 		writeOpenAIError(w, http.StatusBadRequest, "invalid_request_error", "missing_body", "request body required")
@@ -67,6 +64,8 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 		writeSwapError(w, err)
 		return
 	}
+	s.serving.Add(1)
+	defer s.serving.Add(-1)
 	oaiReq, terr := translateResponsesRequest(&req, loaded.profileID)
 	if terr != nil {
 		writeOpenAIError(w, http.StatusBadRequest, "invalid_request_error", "translate_error", terr.Error())

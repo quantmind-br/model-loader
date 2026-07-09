@@ -15,12 +15,13 @@ import (
 
 // fakeProxy implements proxyClient for CLI tests.
 type fakeProxy struct {
-	ensured   int
-	calls     []string // ordered: "load:<id>", "unload"
-	unloads   []bool   // force flag per Unload call
-	status    httpproxy.Status
-	statusSeq []httpproxy.Status // optional: consumed per Status() call before falling back to status
-	loadErr   error
+	ensured    int
+	calls      []string // ordered: "load:<id>", "unload"
+	unloads    []bool   // force flag per Unload call
+	status     httpproxy.Status
+	statusSeq  []httpproxy.Status // optional: consumed per Status() call before falling back to status
+	loadErr    error
+	forceStops int
 }
 
 func (f *fakeProxy) EnsureRunning(ctx context.Context) error { f.ensured++; return nil }
@@ -50,7 +51,8 @@ func (f *fakeProxy) Status() httpproxy.Status {
 	}
 	return f.status
 }
-func (f *fakeProxy) BaseURL() string          { return "http://127.0.0.1:9099" }
+func (f *fakeProxy) BaseURL() string  { return "http://127.0.0.1:9099" }
+func (f *fakeProxy) ForceStop() error { f.forceStops++; return nil }
 
 func TestStartInstance_LoadsResolvedProfileViaProxy(t *testing.T) {
 	store := newTempStore(t)
@@ -85,7 +87,7 @@ func TestStopInstance_UnloadsLoadedPID(t *testing.T) {
 	p := &fakeProxy{status: httpproxy.Status{Running: true, LoadedProfileID: "alpha", LoadedPID: 100}}
 	m := &fakeManager{}
 	var out strings.Builder
-	if err := stopInstance(context.Background(), &out, p, m, "100"); err != nil {
+	if err := stopInstance(context.Background(), &out, p, m, "100", false); err != nil {
 		t.Fatalf("stop: %v", err)
 	}
 	if len(p.calls) != 1 || p.calls[0] != "unload" {
@@ -103,7 +105,7 @@ func TestStopInstance_UnloadsByLoadedProfileID(t *testing.T) {
 	p := &fakeProxy{status: httpproxy.Status{Running: true, LoadedProfileID: "alpha", LoadedPID: 100}}
 	m := &fakeManager{}
 	var out strings.Builder
-	if err := stopInstance(context.Background(), &out, p, m, "alpha"); err != nil {
+	if err := stopInstance(context.Background(), &out, p, m, "alpha", false); err != nil {
 		t.Fatalf("stop: %v", err)
 	}
 	if len(p.calls) != 1 || p.calls[0] != "unload" {
@@ -115,7 +117,7 @@ func TestStopInstance_KillsOrphanPID(t *testing.T) {
 	p := &fakeProxy{} // proxy has nothing loaded
 	m := &fakeManager{running: []domain.RunningInstance{{ProfileID: "alpha", PID: 100}}}
 	var out strings.Builder
-	if err := stopInstance(context.Background(), &out, p, m, "100"); err != nil {
+	if err := stopInstance(context.Background(), &out, p, m, "100", false); err != nil {
 		t.Fatalf("stop: %v", err)
 	}
 	if len(m.killed) != 1 || m.killed[0] != 100 {
@@ -132,7 +134,7 @@ func TestStopInstance_UnloadsResolvedProfilePrefix(t *testing.T) {
 	p := &fakeProxy{status: httpproxy.Status{Running: true, LoadedProfileID: "alpha", LoadedPID: 100}}
 	m := &fakeManager{running: []domain.RunningInstance{{ProfileID: "alpha", PID: 100}}}
 	var out strings.Builder
-	if err := stopInstance(context.Background(), &out, p, m, "alp"); err != nil {
+	if err := stopInstance(context.Background(), &out, p, m, "alp", false); err != nil {
 		t.Fatalf("stop: %v", err)
 	}
 	if len(p.calls) != 1 || p.calls[0] != "unload" {
@@ -152,7 +154,7 @@ func TestStopInstance_UnloadsResolvedProfilePrefix_JSON(t *testing.T) {
 	p := &fakeProxy{status: httpproxy.Status{Running: true, LoadedProfileID: "alpha", LoadedPID: 100}}
 	m := &fakeManager{running: []domain.RunningInstance{{ProfileID: "alpha", PID: 100}}}
 	var out strings.Builder
-	if err := stopInstance(context.Background(), &out, p, m, "alp"); err != nil {
+	if err := stopInstance(context.Background(), &out, p, m, "alp", false); err != nil {
 		t.Fatalf("stop: %v", err)
 	}
 	if len(p.calls) != 1 || p.calls[0] != "unload" {
@@ -174,7 +176,7 @@ func TestStopInstance_OrphanAlreadyExited(t *testing.T) {
 		killErr: processmgr.ErrUnknownPID,
 	}
 	var out strings.Builder
-	if err := stopInstance(context.Background(), &out, p, m, "100"); err != nil {
+	if err := stopInstance(context.Background(), &out, p, m, "100", false); err != nil {
 		t.Fatalf("stop should tolerate ErrUnknownPID: %v", err)
 	}
 	if !strings.Contains(out.String(), "already exited") {
@@ -187,7 +189,7 @@ func TestStopInstance_RefusesKillWhenProxyStatusDegraded(t *testing.T) {
 	p := &fakeProxy{status: degraded}
 	m := &fakeManager{running: []domain.RunningInstance{{ProfileID: "alpha", PID: 100}}}
 	var out strings.Builder
-	err := stopInstance(context.Background(), &out, p, m, "100")
+	err := stopInstance(context.Background(), &out, p, m, "100", false)
 	if err == nil || !strings.Contains(err.Error(), "refusing to kill pid 100") {
 		t.Fatalf("expected refusal on degraded proxy status, got: %v", err)
 	}
@@ -199,13 +201,35 @@ func TestStopInstance_RefusesKillWhenProxyStatusDegraded(t *testing.T) {
 	}
 }
 
+// TestStopInstance_ForceStopsDegradedProxyThenKills — audit A13: with --force a
+// persistently degraded proxy is force-stopped, then the stranded backend is
+// killed directly.
+func TestStopInstance_ForceStopsDegradedProxyThenKills(t *testing.T) {
+	degraded := httpproxy.Status{Running: true, LastError: "status_probe_failed: connection refused"}
+	p := &fakeProxy{statusSeq: []httpproxy.Status{degraded, degraded}}
+	m := &fakeManager{running: []domain.RunningInstance{{ProfileID: "alpha", PID: 100}}}
+	var out strings.Builder
+	if err := stopInstance(context.Background(), &out, p, m, "100", true); err != nil {
+		t.Fatalf("force stop: %v", err)
+	}
+	if p.forceStops != 1 {
+		t.Fatalf("expected exactly 1 ForceStop, got %d", p.forceStops)
+	}
+	if len(m.killed) != 1 || m.killed[0] != 100 {
+		t.Fatalf("expected pid 100 killed after force-stop, got %+v", m.killed)
+	}
+	if !strings.Contains(out.String(), "force-stopped proxy") {
+		t.Fatalf("expected force-stop note, got %q", out.String())
+	}
+}
+
 func TestStopInstance_TransientProbeFailureRecovers(t *testing.T) {
 	degraded := httpproxy.Status{Running: true, LastError: "status_probe_failed: connection refused"}
 	healthy := httpproxy.Status{Running: true} // nothing loaded
 	p := &fakeProxy{statusSeq: []httpproxy.Status{degraded, healthy}}
 	m := &fakeManager{running: []domain.RunningInstance{{ProfileID: "alpha", PID: 100}}}
 	var out strings.Builder
-	if err := stopInstance(context.Background(), &out, p, m, "100"); err != nil {
+	if err := stopInstance(context.Background(), &out, p, m, "100", false); err != nil {
 		t.Fatalf("stop after transient probe failure: %v", err)
 	}
 	if len(m.killed) != 1 || m.killed[0] != 100 {

@@ -117,3 +117,29 @@ func TestBenchmarkConfig_MapsJudgeAndScalars(t *testing.T) {
 		t.Errorf("Judge = %+v", bc.Judge)
 	}
 }
+
+// TestBenchmarkConfig_MapsStallTimeoutsAndUnload guards the agentic hang-watchdog
+// wiring: the generalized watchdog (shared by terminal-bench and deep-swe) reads
+// its no-progress kill threshold from these per-mode *StallTimeout fields, and
+// UnloadAfterRun frees the model when the run ends. If any stops propagating the
+// safety net silently reverts to the built-in default (or, for unload, leaves
+// VRAM pinned). Not covered by MapsSecondsToDuration, which only checks *Timeout.
+// UIUX-012.
+func TestBenchmarkConfig_MapsStallTimeoutsAndUnload(t *testing.T) {
+	cfg := config.AppConfig{}
+	cfg.Benchmark.UnloadAfterRun = true
+	cfg.Benchmark.TerminalBench.StallTimeoutSec = 2700
+	cfg.Benchmark.DeepSWE.StallTimeoutSec = 1800
+
+	bc := BenchmarkConfig(cfg)
+
+	if !bc.UnloadAfterRun {
+		t.Errorf("UnloadAfterRun = %v, want true", bc.UnloadAfterRun)
+	}
+	if bc.TerminalBenchStallTimeout != 2700*time.Second {
+		t.Errorf("TerminalBenchStallTimeout = %v, want 2700s", bc.TerminalBenchStallTimeout)
+	}
+	if bc.DeepSWEStallTimeout != 1800*time.Second {
+		t.Errorf("DeepSWEStallTimeout = %v, want 1800s", bc.DeepSWEStallTimeout)
+	}
+}

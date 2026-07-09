@@ -12,12 +12,18 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
+	"github.com/quantmind-br/model-loader/internal/service/proxysupervisor"
 )
 
 // monitorKillConfirmedMsg is emitted by killConfirm.onYes when the user
 // confirms a kill. The page handles it in Update so the kill/unload dispatch
 // stays on the UI thread.
 type monitorKillConfirmedMsg struct{ pid int }
+
+// monitorForceKillConfirmedMsg is emitted by forceKillConfirm.onYes when the
+// user accepts force-stopping a degraded proxy so a stranded backend can be
+// killed directly (audit A13).
+type monitorForceKillConfirmedMsg struct{ pid int }
 
 // monitorRestartConfirmedMsg is emitted by restartConfirm.onYes when the user
 // confirms a restart. Carries the captured profile so the async unload+load
@@ -64,11 +70,52 @@ func (p *ServerPage) handleUnloadResult(m unloadResultMsg) (tea.Model, tea.Cmd) 
 }
 
 func (p *ServerPage) handleKillResult(m killResultMsg) (tea.Model, tea.Cmd) {
+	// A degraded-proxy refusal is recoverable: offer the ForceStop escape
+	// hatch instead of only flashing (audit A13).
+	if m.err != nil && errors.Is(m.err, proxysupervisor.ErrProxyDegraded) {
+		return p, tea.Batch(p.refreshInstancesCmd(), p.askConfirmForceKill(m.pid))
+	}
 	var cmd tea.Cmd
 	if m.err != nil {
 		p.flash, cmd = p.flash.SetError(fmt.Sprintf("kill: pid %d: %v", m.pid, m.err))
 	}
 	return p, tea.Batch(p.refreshInstancesCmd(), p.forwardToConfirms(m), cmd)
+}
+
+// askConfirmForceKill arms the force-stop confirmation. onYes emits
+// monitorForceKillConfirmedMsg; the ForceStop + Kill happen off the UI thread.
+func (p *ServerPage) askConfirmForceKill(pid int) tea.Cmd {
+	var cmd tea.Cmd
+	p.forceKillConfirm, cmd = setupConfirm(
+		fmt.Sprintf("Proxy degraded — force-stop proxy and kill pid %d?", pid),
+		"Force", "Cancel",
+		func() tea.Cmd { return func() tea.Msg { return monitorForceKillConfirmedMsg{pid: pid} } })
+	return cmd
+}
+
+func (p *ServerPage) handleConfirmForceKillKey(msg tea.KeyMsg) tea.Cmd {
+	var cmd tea.Cmd
+	p.forceKillConfirm, cmd = p.forceKillConfirm.Update(msg)
+	return cmd
+}
+
+func (p *ServerPage) handleForceKillConfirmed(m monitorForceKillConfirmedMsg) (tea.Model, tea.Cmd) {
+	p.dropInstanceRow(m.pid)
+	pc := p.proxyCtl
+	pm := p.pm
+	pid := m.pid
+	forceCmd := func() tea.Msg {
+		if pc != nil {
+			if err := pc.ForceStop(); err != nil {
+				return killResultMsg{pid: pid, err: fmt.Errorf("force-stop proxy: %w", err)}
+			}
+		}
+		if err := pm.Kill(pid); err != nil && !errors.Is(err, processmgr.ErrUnknownPID) {
+			return killResultMsg{pid: pid, err: err}
+		}
+		return killResultMsg{pid: pid}
+	}
+	return p, tea.Batch(forceCmd, p.forwardToConfirms(m))
 }
 
 func (p *ServerPage) handleKillConfirmed(m monitorKillConfirmedMsg) (tea.Model, tea.Cmd) {
@@ -219,7 +266,7 @@ func refuseKillOnDegradedProxyStatus(pc serverProxyController, st httpproxy.Stat
 	}
 	st = pc.Status()
 	if st.Running && strings.HasPrefix(st.LastError, "status_probe_failed") {
-		return fmt.Errorf("proxy status unavailable — retry or stop the proxy first (refusing to kill pid %d directly)", pid)
+		return fmt.Errorf("%w — retry, or force-stop the proxy first (refusing to kill pid %d directly)", proxysupervisor.ErrProxyDegraded, pid)
 	}
 	if st.LoadedPID == pid {
 		// The refreshed status reveals the pid is the proxy-loaded backend.

@@ -7,11 +7,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/log"
+	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
 )
 
 // fsManager is the default Manager implementation backed by os/exec.
@@ -29,6 +29,25 @@ type fsManager struct {
 	tracked   map[int]domain.RunningInstance
 	exitInfos map[int]ExitInfo
 	fgPID     int
+	// killRequested marks PIDs an operator asked to stop, set under m.mu
+	// BEFORE signaling so the reaper/liveness restart path skips them
+	// (audit A4: intentional kills must not resurrect).
+	killRequested map[int]struct{}
+	// restartScheduled is a set-once guard so reaper and liveness cannot both
+	// fire a restart for the same dead PID (audit A10).
+	restartScheduled map[int]struct{}
+	// pendingRestarts carries a profile's restart generation count across the
+	// death→relaunch boundary so MaxRestarts actually bounds a crash loop
+	// (audit A5). Keyed by profile id; consumed by the next Launch.
+	pendingRestarts map[string]int
+	// hasReaper marks PIDs that have a live waitEnrichment (cmd.Wait) reaper.
+	// Adopted instances (post-Reconcile, no cmd handle) are absent, so liveness
+	// drives their restart policy instead (audit A10).
+	hasReaper map[int]struct{}
+	// regStat{Mtime,Size} cache the last-seen instances.json stat so List can
+	// skip re-reading an unchanged file (audit C3). Guarded by m.mu.
+	regStatMtime time.Time
+	regStatSize  int64
 
 	livenessStop func()
 
@@ -78,17 +97,21 @@ func New(cfg Config) *fsManager {
 		cfg.WaitFunc = (*exec.Cmd).Wait
 	}
 	m := &fsManager{
-		resolver:        cfg.Resolver,
-		defaultBinary:   cfg.DefaultBinary,
-		logDir:          cfg.LogDir,
-		registryPath:    cfg.RegistryPath,
-		sink:            cfg.LastUsedSink,
-		logger:          cfg.Logger,
-		waitFunc:        cfg.WaitFunc,
-		restartFunc:     cfg.RestartFunc,
-		tracked:         map[int]domain.RunningInstance{},
-		exitInfos:       map[int]ExitInfo{},
-		historyRecorded: map[int]struct{}{},
+		resolver:         cfg.Resolver,
+		defaultBinary:    cfg.DefaultBinary,
+		logDir:           cfg.LogDir,
+		registryPath:     cfg.RegistryPath,
+		sink:             cfg.LastUsedSink,
+		logger:           cfg.Logger,
+		waitFunc:         cfg.WaitFunc,
+		restartFunc:      cfg.RestartFunc,
+		tracked:          map[int]domain.RunningInstance{},
+		exitInfos:        map[int]ExitInfo{},
+		historyRecorded:  map[int]struct{}{},
+		killRequested:    map[int]struct{}{},
+		restartScheduled: map[int]struct{}{},
+		pendingRestarts:  map[string]int{},
+		hasReaper:        map[int]struct{}{},
 	}
 	if m.defaultBinary == "" {
 		m.defaultBinary = "llama-server"
@@ -140,35 +163,57 @@ func (m *fsManager) Close() error {
 	return nil
 }
 
-// Kill sends SIGTERM to pid (10s grace) then SIGKILL if still alive. Removes
-// the entry from the tracking table and rewrites the registry file.
+// Kill terminates pid and its process group (SIGTERM, 10s grace, then SIGKILL),
+// removes the entry from tracking, and deletes it from the registry via a
+// flock-guarded delta. It is identity-checked (audit A11): a recycled PID is
+// never signaled. A kill-intent flag is set BEFORE signaling so the restart
+// path does not resurrect an intentionally stopped backend (audit A4).
 func (m *fsManager) Kill(pid int) error {
 	m.mu.Lock()
-	_, ok := m.tracked[pid]
-	m.mu.Unlock()
+	inst, ok := m.tracked[pid]
 	if !ok {
+		m.mu.Unlock()
 		return ErrUnknownPID
 	}
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return fmt.Errorf("find process: %w", err)
-	}
-	if err := proc.Signal(syscall.SIGTERM); err != nil && err != os.ErrProcessDone {
-		return fmt.Errorf("sigterm: %w", err)
-	}
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		if proc.Signal(syscall.Signal(0)) != nil {
-			break
+	// PID recycled: the process we recorded already exited (reaper/liveness
+	// records it). Drop tracking and registry entry without signaling the
+	// innocent occupant. Idempotent-stop semantics: return nil.
+	if inst.StartTicks != 0 && !procutil.SameProcess(pid, inst.StartTicks) {
+		delete(m.tracked, pid)
+		delete(m.exitInfos, pid)
+		delete(m.killRequested, pid)
+		delete(m.restartScheduled, pid)
+		delete(m.hasReaper, pid)
+		if m.fgPID == pid {
+			m.fgPID = 0
 		}
-		time.Sleep(100 * time.Millisecond)
+		m.mu.Unlock()
+		m.logger.Info("kill_skipped_pid_recycled", "pid", pid, "profile_id", inst.ProfileID)
+		_ = mutateRegistry(m.registryPath, func(reg map[int]domain.RunningInstance) {
+			delete(reg, pid)
+		})
+		return nil
 	}
-	if proc.Signal(syscall.Signal(0)) == nil {
-		_ = proc.Signal(syscall.SIGKILL)
+	// Mark intent BEFORE signaling so a fast reaper/liveness wakeup skips the
+	// restart policy for this stop (audit A4).
+	m.killRequested[pid] = struct{}{}
+	m.mu.Unlock()
+
+	// Group kill (audit A3): Setsid launches lead their own group, so the whole
+	// backend tree (EngineCore/Worker_TP) is swept, not just the leader.
+	if termErr := procutil.TerminateTree(pid, 10*time.Second); termErr != nil {
+		// The backend survived SIGTERM+SIGKILL confirmation: still alive and
+		// (for a GPU backend) still holding VRAM. Do NOT drop it from tracking
+		// or the registry — an "alive but unregistered" orphan is exactly the
+		// P4/DF11 leak that OOMs the next load. Keep it visible so the caller
+		// aborts the swap and the operator/liveness can retry. killRequested
+		// stays set so the eventual death is not restarted as a crash.
+		m.logger.Error("kill_failed_process_alive", "pid", pid, "profile_id", inst.ProfileID, "err", termErr)
+		return fmt.Errorf("terminate pid %d: %w", pid, termErr)
 	}
 
 	m.mu.Lock()
-	inst, ok := m.tracked[pid]
+	inst, ok = m.tracked[pid]
 	if ok {
 		now := time.Now().UTC()
 		inst.ExitedAt = &now
@@ -180,12 +225,16 @@ func (m *fsManager) Kill(pid int) error {
 	}
 	delete(m.tracked, pid)
 	delete(m.exitInfos, pid) // drop stale enrichment so GetExitInfo returns ok=false
+	delete(m.killRequested, pid)
+	delete(m.restartScheduled, pid)
+	delete(m.hasReaper, pid)
 	if m.fgPID == pid {
 		m.fgPID = 0
 	}
-	all := snapshotLocked(m.tracked)
 	m.mu.Unlock()
-	if err := saveRegistry(m.registryPath, all); err != nil {
+	if err := mutateRegistry(m.registryPath, func(reg map[int]domain.RunningInstance) {
+		delete(reg, pid)
+	}); err != nil {
 		return err
 	}
 	if ok {
@@ -195,17 +244,37 @@ func (m *fsManager) Kill(pid int) error {
 }
 
 // List returns a snapshot of the tracked instances. Order is not guaranteed.
+// Disk IO happens outside m.mu, and instances.json is re-read only when its
+// (mtime, size) changed since the last call (audit C3). Disk entries merge
+// only when they still refer to the live, non-recycled process they recorded
+// (audit A1/A11), so observer output never surfaces a dead or recycled PID.
 func (m *fsManager) List() []domain.RunningInstance {
+	// Stat outside the lock; a matching cached (mtime,size) skips the read.
+	fi, statErr := os.Stat(m.registryPath)
+	m.mu.Lock()
+	changed := statErr != nil || fi.ModTime() != m.regStatMtime || fi.Size() != m.regStatSize
+	m.mu.Unlock()
+
+	var loaded []domain.RunningInstance
+	if changed {
+		loaded, _ = loadRegistry(m.registryPath) // read outside the lock
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// Merge newly-launched instances from the on-disk registry. The HTTP
-	// proxy runs in a separate OS process with its own fsManager; both
-	// share the same registry file. Without this refresh the TUI never
-	// discovers proxy-spawned backends after boot.
-	loaded, _ := loadRegistry(m.registryPath)
-	for _, ri := range loaded {
-		if _, ok := m.tracked[ri.PID]; !ok {
+	if changed {
+		for _, ri := range loaded {
+			if _, ok := m.tracked[ri.PID]; ok {
+				continue
+			}
+			if !procutil.SameProcess(ri.PID, ri.StartTicks) {
+				continue // never surface a dead/recycled disk entry
+			}
 			m.tracked[ri.PID] = ri
+		}
+		if statErr == nil {
+			m.regStatMtime = fi.ModTime()
+			m.regStatSize = fi.Size()
 		}
 	}
 	return snapshotLocked(m.tracked)

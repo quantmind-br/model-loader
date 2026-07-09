@@ -25,8 +25,8 @@ type NavigateToSizingMsg struct {
 
 func defaultModelsKeys() modelsKeyMap {
 	return modelsKeyMap{
-		Filter: key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
-		Rescan: key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "rescan")),
+		Filter:     key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
+		Rescan:     key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "rescan")),
 		Enter:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "actions")),
 		Cancel:     key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "clear filter")),
 		RemovePath: key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "remove broken path")),

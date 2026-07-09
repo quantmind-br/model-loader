@@ -1,8 +1,10 @@
 package fsx
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -74,9 +76,10 @@ func TestWriteJSONAtomic(t *testing.T) {
 			t.Fatal("expected error, got nil")
 		}
 
-		tmp := path + ".tmp"
-		if _, err := os.Stat(tmp); err == nil {
-			t.Fatal("expected tmp file to be removed")
+		// Unique-named temp must be cleaned up: no leftover temp files remain.
+		leftovers, _ := filepath.Glob(filepath.Join(dir, ".file.json.tmp-*"))
+		if len(leftovers) != 0 {
+			t.Fatalf("expected temp files removed, found %v", leftovers)
 		}
 	})
 
@@ -98,4 +101,40 @@ func TestWriteJSONAtomic(t *testing.T) {
 			t.Fatalf("got permissions %o, want %o", mode, 0o644)
 		}
 	})
+}
+
+// TestWriteJSONAtomic_ConcurrentWritersNeverCorrupt guards audit P-C9: unique
+// temp names let concurrent writers to the same path never rename each other's
+// half-written temp, so the final file is always one whole payload.
+func TestWriteJSONAtomic_ConcurrentWritersNeverCorrupt(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "shared.json")
+
+	payloads := []map[string]string{{"writer": "A"}, {"writer": "B"}}
+	var wg sync.WaitGroup
+	for _, p := range payloads {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 50 {
+				if err := WriteJSONAtomic(path, p); err != nil {
+					t.Errorf("write: %v", err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	var got map[string]string
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("file is corrupt (not valid JSON): %v\n%s", err, data)
+	}
+	if got["writer"] != "A" && got["writer"] != "B" {
+		t.Fatalf("file = %v, want one whole payload", got)
+	}
 }

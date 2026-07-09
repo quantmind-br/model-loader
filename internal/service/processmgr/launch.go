@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
+	"github.com/quantmind-br/model-loader/internal/service/internal/shellsplit"
 )
 
 type launchPlan struct {
@@ -119,6 +121,7 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 	}
 	_ = logF.Close() // child inherited its own fd; drop ours
 
+	ticks, _ := procutil.StartTicks(cmd.Process.Pid) // 0 on failure → identity disabled
 	inst := domain.RunningInstance{
 		ProfileID:      p.ID,
 		PID:            cmd.Process.Pid,
@@ -127,6 +130,7 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 		BinaryPath:     plan.binary,
 		Kind:           plan.kind,
 		StartedAt:      time.Now().UTC(),
+		StartTicks:     ticks,
 		Background:     true,
 		RestartPolicy:  string(p.Launch.RestartPolicy),
 		MaxRestarts:    p.Launch.MaxRestarts,
@@ -134,11 +138,18 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 	}
 
 	m.mu.Lock()
+	// Carry the restart generation across the death→relaunch boundary so
+	// MaxRestarts bounds a crash loop (audit A5).
+	if n, ok := m.pendingRestarts[p.ID]; ok {
+		inst.RestartCount = n
+		delete(m.pendingRestarts, p.ID)
+	}
 	m.tracked[inst.PID] = inst
+	m.hasReaper[inst.PID] = struct{}{}
+	delete(m.restartScheduled, inst.PID)
 	delete(m.exitInfos, inst.PID) // see comment above
 	delete(m.historyRecorded, inst.PID)
 	m.fgPID = 0 // background launch does not claim fg
-	all := snapshotLocked(m.tracked)
 	m.mu.Unlock()
 
 	m.logger.Info("launch_started",
@@ -146,13 +157,30 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 		"profile_id", p.ID, "attempt_id", attemptID,
 		"mode", "background", "binary", plan.binary)
 
-	// MOVED from pre-Start to here (post-insert) so the waitEnrichment
-	// body's re-read of m.tracked[inst.PID] sees a populated entry.
-	go m.waitEnrichment(cmd, inst.PID, logPath, attemptID)
-
-	if err := saveRegistry(m.registryPath, all); err != nil {
-		return inst, fmt.Errorf("instance started (pid %d) but registry save failed: %w", inst.PID, err)
+	// Flock-guarded delta upsert (audit A7). On save failure the child is live
+	// but unregistered — kill it so it cannot leak as an orphan (audit A12);
+	// return the zero instance so no caller uses a half-registered process.
+	if err := mutateRegistry(m.registryPath, func(reg map[int]domain.RunningInstance) {
+		reg[inst.PID] = inst
+	}); err != nil {
+		// Reap the child we are about to kill so it cannot linger as a zombie
+		// and so TerminateTree's aliveness poll can observe the exit.
+		go func() { _ = cmd.Wait() }()
+		_ = procutil.TerminateTree(inst.PID, 2*time.Second)
+		m.mu.Lock()
+		delete(m.tracked, inst.PID)
+		delete(m.hasReaper, inst.PID)
+		m.mu.Unlock()
+		m.logger.Error("launch_rolled_back_registry_error",
+			"pid", inst.PID, "profile_id", p.ID, "err", err)
+		return domain.RunningInstance{}, fmt.Errorf("registry save failed, instance killed: %w", err)
 	}
+	// Start the reaper only AFTER the registry upsert commits: a fast-crash's
+	// Crashed delta (written by waitEnrichment, enrichment.go) must never be
+	// clobbered by this launch's running-state delta above (audit P-C4). The
+	// in-memory m.tracked insert already happened, so waitEnrichment's re-read
+	// of m.tracked[inst.PID] still sees a populated entry.
+	go m.waitEnrichment(cmd, inst.PID, logPath, attemptID)
 	return inst, nil
 }
 
@@ -184,11 +212,17 @@ func (m *fsManager) launchForeground(p domain.Profile, plan launchPlan, attemptI
 	m.mu.Unlock()
 
 	if err := os.MkdirAll(m.logDir, 0o755); err != nil {
+		m.mu.Lock()
+		m.fgPID = 0 // reset sentinel so future launches can proceed (audit N-C8)
+		m.mu.Unlock()
 		return domain.RunningInstance{}, fmt.Errorf("mkdir log dir: %w", err)
 	}
 	logPath := filepath.Join(m.logDir, fmt.Sprintf("%s-%d.log", p.ID, plan.port))
 	logF, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
+		m.mu.Lock()
+		m.fgPID = 0 // reset sentinel so future launches can proceed (audit N-C8)
+		m.mu.Unlock()
 		return domain.RunningInstance{}, fmt.Errorf("open log: %w", err)
 	}
 
@@ -208,6 +242,7 @@ func (m *fsManager) launchForeground(p domain.Profile, plan launchPlan, attemptI
 	}
 	_ = logF.Close() // child inherited its own fd; drop ours
 
+	ticks, _ := procutil.StartTicks(cmd.Process.Pid) // 0 on failure → identity disabled
 	inst := domain.RunningInstance{
 		ProfileID:  p.ID,
 		PID:        cmd.Process.Pid,
@@ -216,15 +251,22 @@ func (m *fsManager) launchForeground(p domain.Profile, plan launchPlan, attemptI
 		BinaryPath: plan.binary,
 		Kind:       plan.kind,
 		StartedAt:  time.Now().UTC(),
+		StartTicks: ticks,
 		Background: false,
 	}
 
 	m.mu.Lock()
+	// Carry the restart generation across the death→relaunch boundary (A5).
+	if n, ok := m.pendingRestarts[p.ID]; ok {
+		inst.RestartCount = n
+		delete(m.pendingRestarts, p.ID)
+	}
 	m.tracked[inst.PID] = inst
+	m.hasReaper[inst.PID] = struct{}{}
+	delete(m.restartScheduled, inst.PID)
 	delete(m.exitInfos, inst.PID) // see Launch background comment above
 	delete(m.historyRecorded, inst.PID)
 	m.fgPID = inst.PID // replaces -1 sentinel
-	all := snapshotLocked(m.tracked)
 	m.mu.Unlock()
 
 	m.logger.Info("launch_started",
@@ -232,13 +274,28 @@ func (m *fsManager) launchForeground(p domain.Profile, plan launchPlan, attemptI
 		"profile_id", p.ID, "attempt_id", attemptID,
 		"mode", "foreground", "binary", plan.binary)
 
-	// MOVED from pre-Start to here (post-insert) so the waitEnrichment
-	// body's re-read of m.tracked[inst.PID] sees a populated entry.
-	go m.waitEnrichment(cmd, inst.PID, logPath, attemptID)
-
-	if err := saveRegistry(m.registryPath, all); err != nil {
-		return inst, fmt.Errorf("fg started but registry save failed: %w", err)
+	// Flock-guarded delta upsert (audit A7). On save failure kill the live but
+	// unregistered child (audit A12) and return the zero instance.
+	if err := mutateRegistry(m.registryPath, func(reg map[int]domain.RunningInstance) {
+		reg[inst.PID] = inst
+	}); err != nil {
+		// Reap the child we are about to kill so it cannot linger as a zombie
+		// and so TerminateTree's aliveness poll can observe the exit.
+		go func() { _ = cmd.Wait() }()
+		_ = procutil.TerminateTree(inst.PID, 2*time.Second)
+		m.mu.Lock()
+		delete(m.tracked, inst.PID)
+		delete(m.hasReaper, inst.PID)
+		m.fgPID = 0
+		m.mu.Unlock()
+		m.logger.Error("launch_rolled_back_registry_error",
+			"pid", inst.PID, "profile_id", p.ID, "err", err)
+		return domain.RunningInstance{}, fmt.Errorf("registry save failed, instance killed: %w", err)
 	}
+	// Start the reaper only AFTER the registry upsert commits so a fast-crash's
+	// Crashed delta can never be clobbered by this launch's running delta
+	// (audit P-C4). m.tracked[inst.PID] is already populated for waitEnrichment.
+	go m.waitEnrichment(cmd, inst.PID, logPath, attemptID)
 	return inst, nil
 }
 
@@ -323,7 +380,7 @@ func applyProfileEnv(envs []domain.EnvVar) []string {
 // makeCommand builds an exec.Command from a possibly compound command string
 // (e.g. "python -m sglang.launch_server") and the profile args.
 func makeCommand(resolvedBinary string, profileArgs []string) *exec.Cmd {
-	fields, err := splitCommandLine(resolvedBinary)
+	fields, err := shellsplit.Split(resolvedBinary)
 	if err != nil || len(fields) == 0 {
 		return exec.Command("")
 	}

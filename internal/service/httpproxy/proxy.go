@@ -47,9 +47,20 @@ func newReverseProxy(port int, authToken string, maxBodyBuffer int64) *httputil.
 		}
 		ct := strings.ToLower(resp.Header.Get("Content-Type"))
 		if strings.Contains(ct, "text/event-stream") {
+			// Streaming chat completions: mirror a reasoning-only stream into a
+			// content delta so OpenAI clients that ignore reasoning fields still
+			// see a message. Frames otherwise pass through untouched.
+			if resp.StatusCode == http.StatusOK {
+				resp.Body = mirrorReasoningStream(resp.Body)
+			}
 			return nil
 		}
 		if !shouldNormalizeChatResponse(resp) {
+			return nil
+		}
+		// Fast path: upstream already declares an oversized body — pass it
+		// through without buffering 8 MiB just to stream it back (N-P7).
+		if resp.ContentLength > maxBodyBuffer {
 			return nil
 		}
 		newBody, n, err := wrapChatCompletionResponseBody(resp.Body, maxBodyBuffer)
@@ -57,8 +68,14 @@ func newReverseProxy(port int, authToken string, maxBodyBuffer int64) *httputil.
 			return err
 		}
 		resp.Body = newBody
-		resp.ContentLength = n
-		resp.Header.Set("Content-Length", fmt.Sprintf("%d", n))
+		if n < 0 {
+			// Oversized body streamed through untruncated; length unknown.
+			resp.ContentLength = -1
+			resp.Header.Del("Content-Length")
+		} else {
+			resp.ContentLength = n
+			resp.Header.Set("Content-Length", fmt.Sprintf("%d", n))
+		}
 		resp.Header.Del("Content-Encoding")
 		return nil
 	}

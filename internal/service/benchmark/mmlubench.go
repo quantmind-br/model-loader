@@ -86,7 +86,7 @@ func (r *Runner) runMMLUBench(ctx context.Context, base, model string, p MMLUPro
 	res := ProblemResult{ProblemID: p.ID, ProblemName: name}
 	tr := ProblemTranscript{ProblemID: p.ID, ProblemName: name}
 
-	reqCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout)
+	reqCtx, cancel := context.WithTimeout(ctx, r.inferTimeout())
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
 		Model:       model,
@@ -99,6 +99,7 @@ func (r *Runner) runMMLUBench(ctx context.Context, base, model string, p MMLUPro
 	})
 	if err != nil {
 		res.Err = err.Error()
+		res.FailPhase = phaseInfer
 		tr.Error = err.Error()
 		return res, tr
 	}

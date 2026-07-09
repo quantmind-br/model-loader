@@ -11,8 +11,9 @@
          the form (htmx resolves hx-disabled-elt/hx-indicator from the
          requesting element upward, never from child buttons). */}}
     <form class="flag-card flag-card-new" hx-post="/customize/flag/add"
+      hx-target="#customize-flags" hx-swap="outerHTML"
       hx-disabled-elt="find button[type='submit']" hx-indicator="find .spinner"
-      hx-on::after-request="if(event.detail.successful){window.dispatchEvent(new CustomEvent('toast',{detail:{msg:'Flag added — reload to edit it',type:'ok'}}))}">
+      hx-on::after-request="if(event.detail.successful){this.reset();window.dispatchEvent(new CustomEvent('toast',{detail:{msg:'Flag added',type:'ok'}}))}">
       <input type="hidden" name="backendId" value="{{.BackendID}}">
       <div class="flag-card-body">
         <div class="flag-fields-grid">
@@ -43,77 +44,7 @@
   </div>
 
   {{/* ── Existing flags ── */}}
-  <div class="customize-section">
-    <div class="section-header">
-      <h2>Flags <span class="badge">{{len .AllFlags}}</span></h2>
-      <span class="muted">Edit properties for each backend parameter</span>
-    </div>
-    <div class="flags-grid">
-      {{range .AllFlags}}
-      <form class="flag-card" hx-post="/customize/flag" hx-target="#issues"
-        hx-disabled-elt="find button[type='submit']" hx-indicator="find .spinner"
-        hx-on::after-request='if(event.detail.successful) window.dispatchEvent(new CustomEvent("toast",{detail:{msg:"Flag {{.Flag}} saved",type:"ok"}}))'>
-        <input type="hidden" name="backendId" value="{{$.BackendID}}">
-        <input type="hidden" name="flag" value="{{.Flag}}">
-
-        <div class="flag-card-header">
-          <div class="flag-name">{{.Flag}}</div>
-          <div class="flag-meta">
-            <span class="type-badge type-{{.Type}}">{{.Type}}</span>
-            {{if .Required}}<span class="req-badge">required</span>{{end}}
-            {{if .Default}}<span class="default-badge">default: {{.Default}}</span>{{end}}
-          </div>
-        </div>
-
-        <div class="flag-card-body">
-          <div class="flag-fields-grid">
-            <div class="field">
-              <label for="cust-{{.Flag}}-type">Type</label>
-              <select id="cust-{{.Flag}}-type" name="type">
-                <option value="int"{{if eq .Type "int"}} selected{{end}}>int</option>
-                <option value="float"{{if eq .Type "float"}} selected{{end}}>float</option>
-                <option value="bool"{{if eq .Type "bool"}} selected{{end}}>bool</option>
-                <option value="enum"{{if eq .Type "enum"}} selected{{end}}>enum</option>
-                <option value="string"{{if eq .Type "string"}} selected{{end}}>string</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="cust-{{.Flag}}-min">Min</label>
-              <input id="cust-{{.Flag}}-min" name="min" placeholder="min" value="{{.Min}}">
-            </div>
-            <div class="field">
-              <label for="cust-{{.Flag}}-max">Max</label>
-              <input id="cust-{{.Flag}}-max" name="max" placeholder="max" value="{{.Max}}">
-            </div>
-            <div class="field">
-              <label for="cust-{{.Flag}}-default">Default</label>
-              <input id="cust-{{.Flag}}-default" name="default" placeholder="default" value="{{.Default}}">
-            </div>
-            <div class="field full-width">
-              <label for="cust-{{.Flag}}-enum">Enum values (csv)</label>
-              <input id="cust-{{.Flag}}-enum" name="enumValues" placeholder="e.g. f16, q4_0, q8_0" value="{{.Enum}}">
-            </div>
-            <div class="field full-width">
-              <label class="toggle-label">
-                <input type="checkbox" name="required"{{if .Required}} checked{{end}}>
-                <span>Required</span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div class="flag-card-footer">
-          <button class="primary" type="submit"><span class="spinner htmx-indicator" aria-hidden="true"></span>Save</button>
-          <button class="ghost danger" type="button"
-            hx-post="/customize/flag/remove" hx-vals='{"backendId":"{{$.BackendID}}","flag":"{{.Flag}}"}'
-            hx-target="closest .flag-card" hx-swap="outerHTML swap:0.15s"
-            hx-disabled-elt="this" hx-indicator="this"
-            hx-on::after-request='if(event.detail.successful) window.dispatchEvent(new CustomEvent("toast",{detail:{msg:"Flag {{.Flag}} removed",type:"ok"}}))'><span class="spinner htmx-indicator" aria-hidden="true"></span>Remove</button>
-        </div>
-      </form>
-      {{end}}
-    </div>
-  </div>
+  {{template "customize-flags" .}}
 
   {{/* ── Rules ── */}}
   <div class="customize-section">
@@ -201,5 +132,79 @@
       }
     }}
   </script>
+</div>
+{{end}}
+
+{{define "customize-flags"}}
+<div class="customize-section" id="customize-flags">
+  <div class="section-header">
+    <h2>Flags <span class="badge">{{len .AllFlags}}</span></h2>
+    <span class="muted">Edit properties for each backend parameter</span>
+  </div>
+  <div class="flags-grid">
+    {{range .AllFlags}}
+    <form class="flag-card" hx-post="/customize/flag" hx-target="#issues"
+      hx-disabled-elt="find button[type='submit']" hx-indicator="find .spinner"
+      hx-on::after-request='if(event.detail.successful) window.dispatchEvent(new CustomEvent("toast",{detail:{msg:"Flag {{.Flag}} saved",type:"ok"}}))'>
+      <input type="hidden" name="backendId" value="{{$.BackendID}}">
+      <input type="hidden" name="flag" value="{{.Flag}}">
+
+      <div class="flag-card-header">
+        <div class="flag-name">{{.Flag}}</div>
+        <div class="flag-meta">
+          <span class="type-badge type-{{.Type}}">{{.Type}}</span>
+          {{if .Required}}<span class="req-badge">required</span>{{end}}
+          {{if .Default}}<span class="default-badge">default: {{.Default}}</span>{{end}}
+        </div>
+      </div>
+
+      <div class="flag-card-body">
+        <div class="flag-fields-grid">
+          <div class="field">
+            <label for="cust-{{.Flag}}-type">Type</label>
+            <select id="cust-{{.Flag}}-type" name="type">
+              <option value="int"{{if eq .Type "int"}} selected{{end}}>int</option>
+              <option value="float"{{if eq .Type "float"}} selected{{end}}>float</option>
+              <option value="bool"{{if eq .Type "bool"}} selected{{end}}>bool</option>
+              <option value="enum"{{if eq .Type "enum"}} selected{{end}}>enum</option>
+              <option value="string"{{if eq .Type "string"}} selected{{end}}>string</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="cust-{{.Flag}}-min">Min</label>
+            <input id="cust-{{.Flag}}-min" name="min" placeholder="min" value="{{.Min}}">
+          </div>
+          <div class="field">
+            <label for="cust-{{.Flag}}-max">Max</label>
+            <input id="cust-{{.Flag}}-max" name="max" placeholder="max" value="{{.Max}}">
+          </div>
+          <div class="field">
+            <label for="cust-{{.Flag}}-default">Default</label>
+            <input id="cust-{{.Flag}}-default" name="default" placeholder="default" value="{{.Default}}">
+          </div>
+          <div class="field full-width">
+            <label for="cust-{{.Flag}}-enum">Enum values (csv)</label>
+            <input id="cust-{{.Flag}}-enum" name="enumValues" placeholder="e.g. f16, q4_0, q8_0" value="{{.Enum}}">
+          </div>
+          <div class="field full-width">
+            <label class="toggle-label">
+              <input type="checkbox" name="required"{{if .Required}} checked{{end}}>
+              <span>Required</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="flag-card-footer">
+        <button class="primary" type="submit"><span class="spinner htmx-indicator" aria-hidden="true"></span>Save</button>
+        <button class="ghost danger" type="button"
+          hx-post="/customize/flag/remove" hx-vals='{"backendId":"{{$.BackendID}}","flag":"{{.Flag}}"}'
+          hx-target="closest .flag-card" hx-swap="outerHTML swap:0.15s"
+          hx-disabled-elt="this" hx-indicator="this"
+          hx-on::after-request='if(event.detail.successful) window.dispatchEvent(new CustomEvent("toast",{detail:{msg:"Flag {{.Flag}} removed",type:"ok"}}))'><span class="spinner htmx-indicator" aria-hidden="true"></span>Remove</button>
+      </div>
+    </form>
+    {{end}}
+  </div>
 </div>
 {{end}}

@@ -1,6 +1,6 @@
 # Architecture
 
-> **Note:** `ARCHITECTURE.md` at the repo root is auto-generated from a knowledge graph and is stale (cites embedded llama-server schema v9680/244 flags, 24 service packages). This page reflects the **current** tree at HEAD (`348433a`).
+> **Note:** `ARCHITECTURE.md` at the repo root is auto-generated from a knowledge graph and is stale (cites embedded llama-server schema v9680/244 flags, 24 service packages). This page reflects the **current** tree at HEAD with working-tree changes.
 
 ## Module map
 
@@ -13,15 +13,15 @@
 | CLI | `internal/cli/` | Cobra tree; never imports `internal/ui` |
 | TUI | `internal/ui/` | Bubble Tea 5-tab `RootModel`, pages, components, theme |
 | Domain | `internal/domain/` | `Profile`, `Instance`, `Backend`, `FlagSchema`, `BackendValidationSchema`, `Presentation`, `BackendKind` — zero external deps |
-| Services | `internal/service/*` | 26 self-contained packages, one concern each |
-| Logging | `internal/log/` | File-only `slog`, rotate-by-session, `log.Nop()` fallback |
-| Leaf utils | `internal/service/internal/{fsx,procutil,ptrutil}` | `WriteJSONAtomic` / `WriteJSONExclusive` / `ReadJSON[T]`; `Alive(pid)`; generic `Ptr[T]` |
+| Services | `internal/service/*` | 25 self-contained packages, one concern each |
+| Logging | `internal/log/` | File-only `slog`, conditional rotation (state owners only), `log.Nop()` fallback |
+| Leaf utils | `internal/service/internal/{fsx,procutil,ptrutil,shellsplit}` | `WriteJSONAtomic` / `WriteJSONExclusive` / `ReadJSON[T]`; `Alive(pid)`; generic `Ptr[T]`; `Split` (quote-aware command tokenizer) |
 
 The full inventory of services is in §2.2 below.
 
 ## Bootstrap order
 
-`app.Bootstrap(cliLevel)` (`internal/app/bootstrap.go:73`) is the single entry point used by the TUI, CLI, and headless `serve`. Order:
+`app.Bootstrap(cliLevel, opts...)` (`internal/app/bootstrap.go:73`) is the single entry point used by the TUI, CLI, and headless `serve`. It accepts functional options; the main one is `app.AsStateOwner()`, which marks the caller as an owner of shared mutable state (TUI / `serve`). One-shot CLI commands (e.g. `profile list`) are observers and must NOT pass `AsStateOwner()`. Order:
 
 1. `config.Load()` — Viper TOML, expand `~`, default fallback
 2. `log.New()` — file-only `slog` to `log_dir`, `log.Nop()` fallback when nil
@@ -31,18 +31,19 @@ The full inventory of services is in §2.2 below.
 6. `migration.NewService(...).Run(ctx)` — one-time legacy-binary-path → backend-ID migration
 7. `backendcatalog.NewResolver(...)` — profile → (binary, kind) resolver
 8. `ensureDefaultCatalog(...)` — create default catalog if empty, save default schema for first backend
-9. `processmgr.New(...).Reconcile()` — validate `instances.json` against `/proc/<pid>/comm` + cmdline, drop recycled PIDs
+9. `processmgr.New(...).Reconcile()` (only when `stateOwner=true`) — validate `instances.json` against `/proc/<pid>/comm` + cmdline, drop recycled PIDs. Observers skip this to avoid rewriting the registry while the owner is live (audit A2)
 10. `validator.New(logger)`
+11. Owner-only boot hygiene (async goroutine): (a) `processmgr.PruneBackendLogs(...)` — removes stale backend log files, (b) `metricsstore.Compact(...)` — compacts per-profile metrics time-series beyond 7-day window
 
 The returned `*app.Services` is closed via `defer svc.Close()` — it stops the process manager and flushes the log file in that order. **Do not call `app.Bootstrap()` twice** in the same process.
 
-## Service layer (26 packages)
+## Service layer (25 packages)
 
 Each owns one concern, exports its own interface, takes `Config` with functional options, falls back to `log.Nop()` for nil loggers.
 
 | Service | Purpose |
 |---------|---------|
-| `processmgr` | Process lifecycle, recovery, history, watchdog, liveness — largest service (~25 files) |
+| `processmgr` | Process lifecycle, recovery, history, liveness — largest service (~25 files) |
 | `httpproxy` | OpenAI-shaped reverse proxy with implicit model swap; multi-API translation (Anthropic, Responses, Gemini) |
 | `proxysupervisor` | Detached proxy state machine (idle→starting→running→stopping); `proxy-state.json` |
 | `backendcatalog` | Multi-backend catalog (`catalog.json`) + profile→exe/schema resolver + prober |
@@ -59,7 +60,6 @@ Each owns one concern, exports its own interface, takes `Config` with functional
 | `benchmark` / `benchmarkstore` | Eval engine (judge, math/codegen/ragas/summary/instruction/mmlu, llama-bench, longctx, swe-bench-pro, terminal-bench, deep-swe) + per-run JSON |
 | `validator` | Flag + cross-field validation, `Report` aggregation |
 | `migration` | One-time legacy-binary-path → backend-ID migration |
-| `playground` | OpenAI chat SSE client (UI modal currently inert) |
 | `sizing` | GPU-memory fit calc (`Suggest`, `Fit` Green/Yellow/Red) |
 | `configweb` | On-demand in-process web profile/backend editor (HTMX/Alpine) |
 
@@ -93,7 +93,7 @@ Anthropic/Responses/Gemini go through a translation layer (`anthropic_*.go`, `re
 
 ~/.local/state/model-loader/
   model-loader.lock                 # single-instance flock target
-  instances.json                    # running instances registry
+  instances.json                    # running instances registry (now includes `startTicks` for PID recycling detection)
   instances-history.json            # exited instances
   proxy-state.json                  # proxy supervisor state
   logs/<profile-id>-<port>.log      # merged backend stdout+stderr
@@ -117,10 +117,10 @@ Anthropic/Responses/Gemini go through a translation layer (`anthropic_*.go`, `re
 
 ## Concurrency contracts
 
-- **`processmgr` registry writes outside `m.mu`** — there are exactly 5 documented `saveRegistry` callsites and the count is a contract. Adding a 6th without updating it is a bug.
+- **`processmgr` registry writes** — uses flock-guarded delta upsert (`mutateRegistry` via `internal/service/internal/fsx/flock.go`), replacing the old `saveRegistry` full-rewrite pattern. `Reconcile` is the 6th `mutateRegistry` callsite (validation inside the lock).
 - **`httpproxy.swapMu`** serializes load/unload across concurrent requests.
-- **`httpproxy.inflightWG`** is incremented only by the catch-all forwarder and `/v1/messages`. `count_tokens` and admin endpoints skip it.
-- **Boot `Reconcile`** validates `instances.json` against `/proc/<pid>/comm` + cmdline to detect recycled PIDs (handles compound commands like `python -m sglang.launch_server`).
+- **`httpproxy.serving`** (atomic) tracks requests proxied through the loaded backend; `drainServing()` polls it for graceful unload. `count_tokens` and admin endpoints skip it.
+- **Boot `Reconcile`** validates `instances.json` entries via `entryAlive()`: new entries carry `StartTicks` (proc start time, `/proc/<pid>/stat` field 22) for authoritative `SameProcess` PID-recycling detection; legacy entries fall back to `/proc/<pid>/comm` + cmdline heuristics with kind-specific fallback tokens (e.g. `"vllm"` for vLLM).
 - **Long-lived goroutines** install `defer recover()` outside Bubble Tea's net (so the TUI doesn't panic-restart from background work).
 
 ## Conventions

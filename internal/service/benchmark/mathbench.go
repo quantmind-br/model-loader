@@ -83,7 +83,7 @@ func (r *Runner) runMathBench(ctx context.Context, base, model string, p MathPro
 	res := ProblemResult{ProblemID: p.ID, ProblemName: truncateQuestion(p.Question)}
 	tr := ProblemTranscript{ProblemID: p.ID, ProblemName: res.ProblemName}
 
-	reqCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout)
+	reqCtx, cancel := context.WithTimeout(ctx, r.inferTimeout())
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
 		Model:       model,
@@ -96,6 +96,7 @@ func (r *Runner) runMathBench(ctx context.Context, base, model string, p MathPro
 	})
 	if err != nil {
 		res.Err = err.Error()
+		res.FailPhase = phaseInfer
 		tr.Error = err.Error()
 		return res, tr
 	}

@@ -115,16 +115,11 @@ func (s *Server) handleAnthropicMessages(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Same in-flight accounting as handleForward — the only other
-	// inflightWG increment site, so /_admin/unload drains and Stop() cover
-	// translated requests too. This handler never waits on the WaitGroup,
-	// so it cannot deadlock the drain.
+	// In-flight gauge (Status only). The serving counter (below, after the
+	// backend loads) counts only the backend-use phase, so /_admin/unload's
+	// drain and Stop() never wait on a request parked at swapMu.
 	s.inflight.Add(1)
-	s.inflightWG.Add(1)
-	defer func() {
-		s.inflight.Add(-1)
-		s.inflightWG.Done()
-	}()
+	defer s.inflight.Add(-1)
 
 	req, aerr := s.decodeAnthropicBody(r)
 	if aerr != nil {
@@ -148,6 +143,8 @@ func (s *Server) handleAnthropicMessages(w http.ResponseWriter, r *http.Request)
 		writeAnthropicAPIError(w, anthropicErrorFromSwap(err))
 		return
 	}
+	s.serving.Add(1)
+	defer s.serving.Add(-1)
 
 	oaiReq, aerr := translateAnthropicRequest(req, loaded.profileID)
 	if aerr != nil {
@@ -179,8 +176,9 @@ func (s *Server) handleAnthropicMessages(w http.ResponseWriter, r *http.Request)
 
 // postUpstreamChat issues the translated chat-completions call directly to
 // the loaded backend. Deliberately NOT routed through loaded.proxy: its
-// ModifyResponse (mirrorReasoningIntoEmptyContent) rewrites reasoning_content
-// into content, which would destroy the reasoning→thinking mapping here.
+// ModifyResponse (mirrorReasoningIntoEmptyContent) may duplicate reasoning
+// into content for direct non-streaming OpenAI clients, which would destroy
+// the reasoning→thinking mapping here.
 func (s *Server) postUpstreamChat(ctx context.Context, loaded *loadedBackend, oaiReq *oaiChatRequest) (*http.Response, *anthropicAPIError) {
 	payload, err := json.Marshal(oaiReq)
 	if err != nil {
@@ -292,8 +290,9 @@ func (s *Server) serveAnthropicStream(w http.ResponseWriter, r *http.Request, re
 
 // handleAnthropicCountTokens implements POST /v1/messages/count_tokens with a
 // deterministic local estimate. It never contacts, loads, or swaps a backend,
-// and — like the admin endpoints — must not touch inflight/inflightWG (it
-// never occupies a backend, and staying out preserves unload drain semantics).
+// and — like the admin endpoints — must not touch the inflight gauge or the
+// serving counter (it never occupies a backend, and staying out preserves
+// unload drain semantics).
 func (s *Server) handleAnthropicCountTokens(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)

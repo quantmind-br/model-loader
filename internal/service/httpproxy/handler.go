@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 )
@@ -92,11 +93,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleForward(w http.ResponseWriter, r *http.Request) {
 	s.inflight.Add(1)
-	s.inflightWG.Add(1)
-	defer func() {
-		s.inflight.Add(-1)
-		s.inflightWG.Done()
-	}()
+	defer s.inflight.Add(-1)
 
 	requested := extractProfileID(r, s.cfg.MaxBodyBuffer)
 
@@ -105,13 +102,20 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request) {
 		s.stateMu.RLock()
 		cur := s.current
 		s.stateMu.RUnlock()
+		if cur != nil && !procutil.SameProcess(cur.pid, cur.startTicks) {
+			// Loaded backend died out-of-band — don't proxy to a corpse (A6).
+			s.handleBackendCrash(cur)
+			cur = nil
+		}
 		if cur == nil {
 			writeOpenAIError(w, http.StatusServiceUnavailable, "model_not_loaded",
 				"no_model_loaded",
 				"no model loaded; specify one via the JSON \"model\" field or ?model= query param")
 			return
 		}
+		s.serving.Add(1)
 		cur.proxy.ServeHTTP(w, r)
+		s.serving.Add(-1)
 		return
 	}
 
@@ -128,7 +132,9 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.serving.Add(1)
 	loaded.proxy.ServeHTTP(w, r)
+	s.serving.Add(-1)
 }
 
 // ensureLoaded returns the snapshot of the loaded backend for profileID,
@@ -141,7 +147,12 @@ func (s *Server) ensureLoaded(ctx context.Context, profileID string) (*loadedBac
 	cur := s.current
 	s.stateMu.RUnlock()
 	if cur != nil && cur.profileID == profileID {
-		return cur, nil
+		if procutil.SameProcess(cur.pid, cur.startTicks) {
+			return cur, nil
+		}
+		// Loaded backend for our target died out-of-band; relaunch (audit A6).
+		s.handleBackendCrash(cur)
+		cur = nil
 	}
 
 	// Serialize swaps.
@@ -153,12 +164,19 @@ func (s *Server) ensureLoaded(ctx context.Context, profileID string) (*loadedBac
 	cur = s.current
 	s.stateMu.RUnlock()
 	if cur != nil && cur.profileID == profileID {
-		return cur, nil
+		if procutil.SameProcess(cur.pid, cur.startTicks) {
+			return cur, nil
+		}
+		s.handleBackendCrash(cur)
+		cur = nil
 	}
 
 	// Respect upstream cancellation before doing real work.
 	if err := ctx.Err(); err != nil {
-		return nil, &SwapError{http.StatusGatewayTimeout, "backend_error", "backend_unhealthy",
+		// Client closed the request before the swap — this is a client-side
+		// cancellation, not a backend failure (audit B5). 499 = de-facto
+		// client-closed-request; skip recordError (kept from prior behavior).
+		return nil, &SwapError{499, "invalid_request_error", "request_canceled",
 			fmt.Sprintf("request canceled before swap: %v", err)}
 	}
 
@@ -170,7 +188,9 @@ func (s *Server) ensureLoaded(ctx context.Context, profileID string) (*loadedBac
 	swapStart := time.Now()
 	attemptID := fmt.Sprintf("proxy-%d", swapStart.UnixNano())
 
-	s.killOldBackend(cur, attemptID)
+	if err := s.killOldBackend(cur, attemptID); err != nil {
+		return nil, err
+	}
 
 	loaded, err := s.launchNewBackend(profile, profileID, attemptID)
 	if err != nil {
@@ -179,6 +199,21 @@ func (s *Server) ensureLoaded(ctx context.Context, profileID string) (*loadedBac
 
 	s.recordSwapMetrics(loaded, swapStart, attemptID)
 	return loaded, nil
+}
+
+// handleBackendCrash records that the loaded backend died out-of-band and
+// clears s.current (only when unchanged) so the swap path relaunches instead
+// of proxying to a dead PID (audit A6). Never routed through killOldBackend —
+// the dead PID's registry entry is handled by its own reaper/liveness.
+func (s *Server) handleBackendCrash(cur *loadedBackend) {
+	s.recordError(fmt.Sprintf("backend_crashed: profile %s pid %d exited", cur.profileID, cur.pid))
+	s.logger.Warn("proxy_backend_crash_detected",
+		"profile_id", cur.profileID, "pid", cur.pid, "port", cur.port)
+	s.stateMu.Lock()
+	if s.current == cur {
+		s.current = nil
+	}
+	s.stateMu.Unlock()
 }
 
 // resolveProfile loads the requested profile, translating store errors into the
@@ -199,20 +234,30 @@ func (s *Server) resolveProfile(profileID string) (domain.Profile, error) {
 }
 
 // killOldBackend terminates the previously-loaded backend (if any) and clears
-// s.current so a failed launch below can never leave a stale pointer. Kill
-// failures are non-fatal (logged), preserving the prior inline behavior.
-func (s *Server) killOldBackend(cur *loadedBackend, attemptID string) {
+// s.current so a failed launch below can never leave a stale pointer. A kill
+// that fails to confirm death (ErrStillAlive → the backend still holds VRAM)
+// aborts the swap with a retriable 503 and leaves s.current pointing at the
+// still-live backend, so a launch never contends for VRAM (P4/DF11).
+func (s *Server) killOldBackend(cur *loadedBackend, attemptID string) error {
 	if cur == nil {
-		return
+		return nil
 	}
 	s.logger.Info("proxy_swap_killing",
 		"from_profile", cur.profileID, "pid", cur.pid, "attempt_id", attemptID)
 	if killErr := s.deps.ProcessMgr.Kill(cur.pid); killErr != nil && !errors.Is(killErr, processmgr.ErrUnknownPID) {
-		s.logger.Warn("proxy_swap_kill_warning", "err", killErr, "attempt_id", attemptID)
+		// The previous backend did not die (still holds VRAM). Do NOT clear
+		// s.current or launch a new backend into contended VRAM — that is the
+		// P4/DF11 OOM cascade. Surface a retriable 503; s.current stays pointed
+		// at the still-live backend so a same-target request still hot-paths.
+		s.logger.Error("proxy_swap_kill_failed", "err", killErr, "pid", cur.pid, "attempt_id", attemptID)
+		s.recordError(fmt.Sprintf("kill %s: %v", cur.profileID, killErr))
+		return &SwapError{http.StatusServiceUnavailable, "backend_error", "backend_busy",
+			fmt.Sprintf("could not free previous backend (pid %d): %v; GPU/VRAM may still be in use — retry shortly", cur.pid, killErr)}
 	}
 	s.stateMu.Lock()
 	s.current = nil
 	s.stateMu.Unlock()
+	return nil
 }
 
 // launchNewBackend launches profile, waits for it to become healthy, and on
@@ -238,12 +283,13 @@ func (s *Server) launchNewBackend(profile domain.Profile, profileID, attemptID s
 	}
 
 	loaded := &loadedBackend{
-		profileID: profileID,
-		pid:       inst.PID,
-		port:      inst.Port,
-		logPath:   inst.LogPath,
-		authToken: token,
-		proxy:     newReverseProxy(inst.Port, token, s.cfg.MaxBodyBuffer),
+		profileID:  profileID,
+		pid:        inst.PID,
+		port:       inst.Port,
+		logPath:    inst.LogPath,
+		authToken:  token,
+		startTicks: inst.StartTicks,
+		proxy:      newReverseProxy(inst.Port, token, s.cfg.MaxBodyBuffer),
 	}
 	s.stateMu.Lock()
 	s.current = loaded
@@ -354,15 +400,11 @@ func (s *Server) handleAdminUnload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Still under swapMu — now safe, because drainServing counts only the
+	// backend-use phase, so requests parked on swapMu (about to swap) aren't
+	// waited on (audit C6).
 	if !force && drainTimeout > 0 {
-		drained := make(chan struct{})
-		go func() {
-			s.inflightWG.Wait()
-			close(drained)
-		}()
-		select {
-		case <-drained:
-		case <-time.After(drainTimeout):
+		if !s.drainServing(r.Context(), drainTimeout) {
 			s.logger.Warn("proxy_admin_unload_drain_timeout",
 				"timeout_ms", drainTimeout.Milliseconds())
 		}

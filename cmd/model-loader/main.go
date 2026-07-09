@@ -53,7 +53,7 @@ func runTUI(cliLevel string) int {
 		}
 	}
 
-	svc, err := app.Bootstrap(cliLevel)
+	svc, err := app.Bootstrap(cliLevel, app.AsStateOwner())
 	if err != nil {
 		return 1
 	}
@@ -95,7 +95,15 @@ func runTUI(cliLevel string) int {
 	profilesPage := pages.NewProfilesPage(svc.Store, svc.DefaultSchema).
 		WithModelScanner(scanner, svc.Cfg.Models.SearchPaths).
 		WithBackendCatalog(svc.CatalogStore, svc.SchemaStore).
-		WithExportDir(exportDir)
+		WithExportDir(exportDir).
+		WithInstanceChecker(func(id string) bool {
+			for _, ri := range svc.Mgr.List() {
+				if ri.ProfileID == id && !ri.Crashed {
+					return true
+				}
+			}
+			return false
+		})
 	modelsPage := pages.NewModelsPage(scanner, svc.Cfg.Models.SearchPaths).
 		WithProfileStore(svc.Store).
 		WithSearchPathPersister(config.UpdateSearchPaths).
@@ -115,7 +123,9 @@ func runTUI(cliLevel string) int {
 	backendsPage := pages.NewBackendsPage(svc.SchemaManager).WithStores(svc.CatalogStore, svc.SchemaStore).WithProber(prober)
 
 	benchStore := benchmarkstore.New(filepath.Join(svc.Cfg.Paths.StateDir, "benchmark", "runs"))
-	benchRunner, err := benchmark.NewRunner(svc.Store, mon, supervisor, app.BenchmarkConfig(svc.Cfg))
+	benchCfg := app.BenchmarkConfig(svc.Cfg)
+	benchCfg.Logger = svc.Logger
+	benchRunner, err := benchmark.NewRunner(svc.Store, mon, supervisor, benchCfg)
 	if err != nil {
 		svc.Logger.Error("benchmark_dataset_load_failed", "err", err)
 		benchRunner = nil
@@ -138,8 +148,18 @@ func runTUI(cliLevel string) int {
 		return 1
 	}
 
-	svc.Logger.Info("app_exit", "residual_instances", len(svc.Mgr.List()))
-	if running := svc.Mgr.List(); len(running) > 0 {
+	// Count only live (non-crashed) instances as orphans (audit B3). List
+	// already drops dead disk entries; tracked-but-crashed entries kept for UI
+	// display are the remaining noise.
+	all := svc.Mgr.List()
+	running := all[:0:0]
+	for _, ri := range all {
+		if !ri.Crashed {
+			running = append(running, ri)
+		}
+	}
+	svc.Logger.Info("app_exit", "residual_instances", len(running))
+	if len(running) > 0 {
 		fmt.Fprintf(os.Stderr, "%d background instance(s) still running:\n", len(running))
 		svc.Logger.Warn("orphan_background_instances", "count", len(running))
 		for _, ri := range running {

@@ -10,9 +10,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/downloadmgr"
 	"github.com/quantmind-br/model-loader/internal/service/profilestore"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
-	"github.com/quantmind-br/model-loader/internal/service/downloadmgr"
 )
 
 // fakeModelsStore is a minimal profilestore.Store double for ModelsPage
@@ -261,6 +261,7 @@ func TestModelsPage_EmptyStateWhenScanErrored(t *testing.T) {
 // UIUX-012: the filter prompt with its block cursor must appear the moment
 // filter mode is entered, before the first character is typed.
 func TestModelsPage_FilterPromptShowsCursorImmediately(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
 	page := NewModelsPage(&fakeScanner{}, []string{"/models"})
 	page.statusMap["/models"] = pathStatus{state: "scanned"}
 	updated, _ := page.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
@@ -1117,7 +1118,7 @@ func TestModelsPage_RenderDownloadRowTruncatesFailedError(t *testing.T) {
 	}()
 	out := page.renderDownloadRow(st, false, 20)
 	if !strings.Contains(out, "…") {
-	t.Errorf("failed-download row missing ellipsis tail at width=20; got:\n%s", out)
+		t.Errorf("failed-download row missing ellipsis tail at width=20; got:\n%s", out)
 	}
 }
 
@@ -1155,6 +1156,6 @@ func TestModelsPage_RelayoutWideKeepsFullBudget(t *testing.T) {
 	// h = 30 - 6 = 24; wide so no half. table.SetHeight subtracts 1 for the
 	// header row, so internal viewport = 23.
 	if got := page.table.Height(); got != 23 {
-	t.Errorf("table.Height() = %d, want 23 (full budget minus header)", got)
+		t.Errorf("table.Height() = %d, want 23 (full budget minus header)", got)
 	}
 }

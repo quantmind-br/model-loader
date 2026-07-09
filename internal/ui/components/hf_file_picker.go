@@ -103,14 +103,22 @@ func (p *HFFilePicker) Update(msg tea.Msg) tea.Cmd {
 		switch msg.String() {
 		case "esc":
 			p.active = false
-		case "up":
+		case "up", "k":
 			if p.cursor > 0 {
 				p.cursor--
 			}
-		case "down":
+		case "down", "j":
 			if p.cursor < len(p.files)-1 {
 				p.cursor++
 			}
+		case "pgup":
+			p.cursor = max(0, p.cursor-10)
+		case "pgdown":
+			p.cursor = min(len(p.files)-1, p.cursor+10)
+		case "home", "g":
+			p.cursor = 0
+		case "end", "G":
+			p.cursor = max(0, len(p.files)-1)
 		case " ":
 			if !p.isSnapshot && p.cursor >= 0 && p.cursor < len(p.files) {
 				p.files[p.cursor].Selected = !p.files[p.cursor].Selected

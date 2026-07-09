@@ -82,6 +82,7 @@ type BenchmarkPage struct {
 
 	// running state
 	runCancel   context.CancelFunc
+	runDone     chan struct{}
 	progressCh  chan benchmark.Progress
 	progress    benchmark.Progress
 	runningMode benchmark.Mode
@@ -158,7 +159,7 @@ func (p BenchmarkPage) withFlashError(msg string) (BenchmarkPage, tea.Cmd) {
 
 func (p BenchmarkPage) Hints() string {
 	if p.deleteConfirm.Active() {
-		return "[←→] choose  [enter] confirm  [esc] cancel"
+		return components.ConfirmHints
 	}
 	switch p.view {
 	case bvWizard:

@@ -119,13 +119,20 @@ Sentinels: `ErrModelNotFound`, `ErrForegroundBusy`, `ErrUnknownPID`, `ErrHealthC
 
 ### Liveness & recovery
 
-A 5 s ticker (`procutil.Alive`) marks dead PIDs as `Crashed` and rewrites the registry **outside `m.mu`** (5 documented `saveRegistry` callsites — the count is a contract). Long-lived goroutines install `defer recover()` outside Bubble Tea's net.
+A 5 s ticker calls `procutil.Alive` on each tracked PID. Dead PIDs are marked `Crashed` and written to the registry via flock-guarded delta upsert (`mutateRegistry`), replacing the old full-rewrite `saveRegistry` pattern. Long-lived goroutines install `defer recover()` outside Bubble Tea's net.
 
-Boot `Reconcile` validates `instances.json` against `/proc/<pid>/comm` + cmdline to drop recycled PIDs (handles compound commands like `python -m sglang.launch_server`).
+Boot `Reconcile` validates `instances.json` entries via `entryAlive()`: new entries carry `StartTicks` (proc start time, `/proc/<pid>/stat` field 22) for authoritative PID-recycling detection; legacy entries fall back to `/proc/<pid>/comm` + cmdline heuristics with kind-specific fallback tokens (e.g. `"vllm"` for vLLM). Adopted instances (no reaper) that crash on the liveness ticker get their restart policy applied inline as a goroutine.
 
-### Watchdog
+### Restart policy
 
-Policy-driven restart (`none` / `on-failure` / `always`) with `BackoffSeconds` × count capped at 30 s, `MaxRestarts`. Emits `tea.Cmd`s on the Bubble Tea loop.
+`maybeScheduleRestart` (`processmgr/restart.go`) applies the restart policy for a dead instance:
+
+- **Policy**: `none`, `on-failure` (non-zero exit or signal death), `always`
+- **Deduplication**: intentional `Kill` requests and already-scheduled restarts are skipped
+- **Backoff**: `BackoffSeconds × count`, floored at 1 s, capped at 30 s
+- **MaxRestarts**: bounds consecutive failed starts; a successful `/health` resets the count
+
+Two entry points feed into it: (1) the **reaper** (`waitEnrichment`) for owned instances with a running `cmd.Wait` goroutine, and (2) the **liveness ticker** for adopted instances. The restart generation (`RestartCount`) is carried across the death→relaunch boundary via `pendingRestarts[ProfileID]` so `MaxRestarts` correctly bounds a crash loop that spans PIDs.
 
 ### Model swap
 

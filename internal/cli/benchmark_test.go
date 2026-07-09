@@ -20,6 +20,17 @@ func TestBenchmarkCommand_Registered(t *testing.T) {
 	}
 }
 
+// BR8: the CLI mode list is derived from the registry, so a newly added mode
+// can never drift out of the usage / unknown-mode messages.
+func TestBenchModeList_CoversEveryRegisteredMode(t *testing.T) {
+	list := benchModeList()
+	for _, m := range benchmark.ModesInOrder() {
+		if !strings.Contains(list, string(m)) {
+			t.Errorf("benchModeList() = %q, missing registered mode %q", list, m)
+		}
+	}
+}
+
 func TestParseBenchMode(t *testing.T) {
 	// Every registered mode id parses, plus legacy aliases.
 	for _, m := range benchmark.ModesInOrder() {

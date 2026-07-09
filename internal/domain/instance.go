@@ -13,16 +13,20 @@ type RunningInstance struct {
 	// reconcile/recovery, so a recovered-but-not-relaunched instance may carry
 	// an empty Kind. The proxy re-derives readiness/auth by relaunching
 	// (WaitReady), so this field is for launch-time use only.
-	Kind           BackendKind `json:"kind,omitempty"`
-	StartedAt      time.Time   `json:"startedAt"`
-	Background     bool        `json:"background"`
-	Crashed        bool        `json:"crashed,omitempty"`
-	ExitedAt       *time.Time  `json:"exitedAt,omitempty"`
-	RestartCount   int         `json:"restartCount,omitempty"`
-	LastRestartAt  *time.Time  `json:"lastRestartAt,omitempty"`
-	RestartPolicy  string      `json:"restartPolicy,omitempty"`
-	MaxRestarts    int         `json:"maxRestarts,omitempty"`
-	BackoffSeconds int         `json:"backoffSeconds,omitempty"`
+	Kind      BackendKind `json:"kind,omitempty"`
+	StartedAt time.Time   `json:"startedAt"`
+	// StartTicks is /proc/<pid>/stat field 22 captured at launch. Combined
+	// with PID it detects PID recycling (audit A1/A11). 0 = unknown (legacy
+	// entry or /proc read failure) — identity checks then degrade to Alive.
+	StartTicks     uint64     `json:"startTicks,omitempty"`
+	Background     bool       `json:"background"`
+	Crashed        bool       `json:"crashed,omitempty"`
+	ExitedAt       *time.Time `json:"exitedAt,omitempty"`
+	RestartCount   int        `json:"restartCount,omitempty"`
+	LastRestartAt  *time.Time `json:"lastRestartAt,omitempty"`
+	RestartPolicy  string     `json:"restartPolicy,omitempty"`
+	MaxRestarts    int        `json:"maxRestarts,omitempty"`
+	BackoffSeconds int        `json:"backoffSeconds,omitempty"`
 	// ExitCode is the process exit status when known. Set by processmgr's
 	// cmd.Wait goroutine; nil for processes that are still alive or whose
 	// exit was signal-only.

@@ -143,14 +143,39 @@ func TestExtractProfileID_BodyAboveCap(t *testing.T) {
 	}
 }
 
+func TestExtractFromBody_UnknownLengthOverCapForwardsUntruncated(t *testing.T) {
+	// Chunked/streamed request (ContentLength == -1) whose body exceeds the
+	// buffer cap must be forwarded UNTRUNCATED, with model extraction skipped.
+	const cap = 1 << 10 // 1 KiB cap
+	body := []byte(`{"model":"m",` + strings.Repeat("x", cap+100) + `}`)
+	r := httptest.NewRequest("POST", "/v1/chat/completions", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.ContentLength = -1 // unknown length (chunked)
+
+	got := extractFromBody(r, cap)
+	if got != "" {
+		t.Errorf("got %q, want empty (extraction skipped for oversized body)", got)
+	}
+	if r.ContentLength != -1 {
+		t.Errorf("ContentLength = %d, want -1 (pass-through)", r.ContentLength)
+	}
+	forwarded, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Fatalf("read forwarded body: %v", err)
+	}
+	if !bytes.Equal(forwarded, body) {
+		t.Errorf("forwarded body len %d, want original len %d (untruncated)", len(forwarded), len(body))
+	}
+}
+
 func TestNormalizeRequestModel(t *testing.T) {
 	cases := map[string]string{
-		"":                              "",
-		"  qwen-7b  ":                   "qwen-7b",
-		"openai/qwen-7b":                "qwen-7b",
+		"":               "",
+		"  qwen-7b  ":    "qwen-7b",
+		"openai/qwen-7b": "qwen-7b",
 		"openai/ornith-aeon-35b-a3b-q4km-mtp-vision-layer2-256k": "ornith-aeon-35b-a3b-q4km-mtp-vision-layer2-256k",
-		"hosted_vllm/my-profile":        "my-profile",
-		"no-slash-id":                   "no-slash-id",
+		"hosted_vllm/my-profile":                                 "my-profile",
+		"no-slash-id":                                            "no-slash-id",
 	}
 	for in, want := range cases {
 		if got := normalizeRequestModel(in); got != want {
@@ -161,13 +186,13 @@ func TestNormalizeRequestModel(t *testing.T) {
 
 func TestValidProfileID(t *testing.T) {
 	cases := map[string]bool{
-		"":                  false,
-		"qwen-7b":           true,
-		"qwen_7b.gguf":      true,
-		"../etc/passwd":     false,
-		"abc/def":           false,
-		"abc def":           false,
-		"a":                 true,
+		"":                       false,
+		"qwen-7b":                true,
+		"qwen_7b.gguf":           true,
+		"../etc/passwd":          false,
+		"abc/def":                false,
+		"abc def":                false,
+		"a":                      true,
 		strings.Repeat("a", 257): false,
 	}
 	for id, want := range cases {

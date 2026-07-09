@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/quantmind-br/model-loader/internal/service/internal/shellsplit"
 )
 
 const DefaultName = "llama-server"
@@ -69,7 +71,7 @@ func Resolve(raw string) (string, error) {
 // command string. Used for backends whose executable is not a single binary
 // (e.g. "python -m sglang.launch_server").
 func splitCommand(raw string) (string, string) {
-	tokens, err := splitCommandLine(raw)
+	tokens, err := shellsplit.Split(raw)
 	if err != nil || len(tokens) == 0 {
 		return raw, ""
 	}
@@ -77,61 +79,6 @@ func splitCommand(raw string) (string, string) {
 		return tokens[0], ""
 	}
 	return tokens[0], strings.Join(tokens[1:], " ")
-}
-
-// splitCommandLine performs basic shell-like tokenization.
-// Supports double quotes, single quotes, and backslash escapes.
-func splitCommandLine(raw string) ([]string, error) {
-	var tokens []string
-	var current strings.Builder
-	inDouble := false
-	inSingle := false
-	escaped := false
-
-	flush := func() {
-		if current.Len() > 0 {
-			tokens = append(tokens, current.String())
-			current.Reset()
-		}
-	}
-
-	for _, r := range raw {
-		if escaped {
-			current.WriteRune(r)
-			escaped = false
-			continue
-		}
-		if r == '\\' {
-			if inSingle {
-				current.WriteRune(r)
-			} else {
-				escaped = true
-			}
-			continue
-		}
-		if r == '"' && !inSingle {
-			inDouble = !inDouble
-			continue
-		}
-		if r == '\'' && !inDouble {
-			inSingle = !inSingle
-			continue
-		}
-		if (r == ' ' || r == '\t' || r == '\n' || r == '\r') && !inDouble && !inSingle {
-			flush()
-			continue
-		}
-		current.WriteRune(r)
-	}
-
-	if inDouble || inSingle {
-		return nil, fmt.Errorf("unbalanced quote in command: %q", raw)
-	}
-	if escaped {
-		return nil, fmt.Errorf("trailing backslash in command: %q", raw)
-	}
-	flush()
-	return tokens, nil
 }
 
 // ResolveCommandWithPythonFallback resolves the raw command string.

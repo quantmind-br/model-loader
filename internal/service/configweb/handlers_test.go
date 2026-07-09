@@ -50,7 +50,10 @@ func (c stubCatalog) Save(domain.BackendCatalog) error { return nil }
 
 // --- memProfileStore ---
 
-type memProfileStore struct{ m map[string]domain.Profile }
+type memProfileStore struct {
+	m       map[string]domain.Profile
+	renames int
+}
 
 func newMemProfileStore() *memProfileStore { return &memProfileStore{m: map[string]domain.Profile{}} }
 
@@ -84,6 +87,7 @@ func (s *memProfileStore) Duplicate(srcID, newID string) (domain.Profile, error)
 	return domain.Profile{}, nil
 }
 func (s *memProfileStore) Rename(oldID string, p domain.Profile) error {
+	s.renames++
 	if oldID != p.ID {
 		if _, ok := s.m[p.ID]; ok {
 			return profilestore.ErrDuplicateID
@@ -155,6 +159,100 @@ func TestSaveHandler_RenamesProfileOnIDChange(t *testing.T) {
 
 	if !res.Saved || res.ProfileID != "new-id" {
 		t.Fatalf("expected save under new-id, got: %+v", res)
+	}
+	if _, err := ps.Get("new-id"); err != nil {
+		t.Fatalf("renamed profile not persisted under new id: %v", err)
+	}
+	if _, err := ps.Get("old-id"); err == nil {
+		t.Fatal("old id should no longer exist after rename")
+	}
+}
+
+func TestSaveHandler_RefusesRenameWhenInstanceInUse(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	ps := newMemProfileStore()
+	ps.m["old-id"] = domain.Profile{
+		ID: "old-id", Name: "Old", Model: "/m.gguf",
+		Launch: domain.LaunchConfig{BackendID: "llama"},
+	}
+	s := &Session{
+		deps: Deps{
+			Profiles: ps, Schemas: stubSchemaStore{schema: schema},
+			Catalog:       stubCatalog{id: "llama", ref: "llama.json"},
+			InstanceInUse: func(string) bool { return true },
+		},
+		done: make(chan Result, 1),
+	}
+	form := url.Values{
+		"isNew": {"false"}, "id": {"new-id"}, "origId": {"old-id"},
+		"name": {"Old"}, "backendId": {"llama"}, "model": {"/m.gguf"},
+	}
+	req := httptest.NewRequest("POST", "/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleSave(rec, req)
+
+	if ps.renames != 0 {
+		t.Fatalf("Rename must not be called when instance is in use, got %d calls", ps.renames)
+	}
+	if got := rec.Header().Get("HX-Redirect"); got != "" {
+		t.Fatalf("refused rename must not redirect, got HX-Redirect=%q", got)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `class="issue error"`) {
+		t.Fatalf("expected issue error in body, got: %s", body)
+	}
+	if !strings.Contains(body, "old-id") {
+		t.Fatalf("issue error should name the offending id, got: %s", body)
+	}
+	if _, err := ps.Get("old-id"); err != nil {
+		t.Fatalf("old-id must remain after refused rename: %v", err)
+	}
+	if _, err := ps.Get("new-id"); err == nil {
+		t.Fatal("new-id must not exist after refused rename")
+	}
+	select {
+	case <-s.Done():
+		t.Fatal("session should not complete on a refused rename")
+	default:
+	}
+}
+
+func TestSaveHandler_AllowsRenameWhenNotInUse(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	ps := newMemProfileStore()
+	ps.m["old-id"] = domain.Profile{
+		ID: "old-id", Name: "Old", Model: "/m.gguf",
+		Launch: domain.LaunchConfig{BackendID: "llama"},
+	}
+	s := &Session{
+		deps: Deps{
+			Profiles: ps, Schemas: stubSchemaStore{schema: schema},
+			Catalog:       stubCatalog{id: "llama", ref: "llama.json"},
+			InstanceInUse: func(string) bool { return false },
+		},
+		done: make(chan Result, 1),
+	}
+	form := url.Values{
+		"isNew": {"false"}, "id": {"new-id"}, "origId": {"old-id"},
+		"name": {"Old"}, "backendId": {"llama"}, "model": {"/m.gguf"},
+	}
+	req := httptest.NewRequest("POST", "/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleSave(rec, req)
+
+	if ps.renames != 1 {
+		t.Fatalf("Rename must be called once when not in use, got %d calls", ps.renames)
+	}
+	if got := rec.Header().Get("HX-Redirect"); got != "/closed" {
+		t.Fatalf("allowed rename must redirect to /closed, got HX-Redirect=%q", got)
 	}
 	if _, err := ps.Get("new-id"); err != nil {
 		t.Fatalf("renamed profile not persisted under new id: %v", err)
@@ -782,5 +880,85 @@ func TestDraftFromForm_SkipsWhitespaceKeys(t *testing.T) {
 	d := draftFromForm(req)
 	if len(d.Env) != 0 {
 		t.Fatalf("expected no env vars for whitespace key, got %d", len(d.Env))
+	}
+}
+
+// TestBackendValidateHandler_TagsInvalidFields verifies UIUX-001: an invalid
+// backend draft renders each error as a class="issue error" div carrying the
+// offending field's data-field attribute so editor.js decorates the right input.
+func TestBackendValidateHandler_TagsInvalidFields(t *testing.T) {
+	s := &Session{deps: Deps{}}
+	form := url.Values{"name": {""}, "executable": {""}}
+	req := httptest.NewRequest("POST", "/backend/validate", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleBackendValidate(rec, req)
+	body := rec.Body.String()
+	for _, want := range []string{
+		`class="issue error" data-field="name"`,
+		`class="issue error" data-field="executable"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected %s in validate output, got: %s", want, body)
+		}
+	}
+}
+
+// TestBackendSaveHandler_BlocksOnInvalidDraft verifies UIUX-001: saving an
+// invalid backend draft (empty executable) renders the field-tagged issues,
+// emits no HX-Redirect, and never completes the session — the validation guard
+// returns before touching the nil Manager.
+func TestBackendSaveHandler_BlocksOnInvalidDraft(t *testing.T) {
+	s := &Session{deps: Deps{}, done: make(chan Result, 1)}
+	form := url.Values{
+		"isNew": {"true"}, "name": {"X"}, "kind": {"llama-server"}, "executable": {""},
+	}
+	req := httptest.NewRequest("POST", "/backend/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleBackendSave(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-field="executable"`) {
+		t.Fatalf("expected executable issue in save output, got: %s", body)
+	}
+	if got := rec.Header().Get("HX-Redirect"); got != "" {
+		t.Fatalf("invalid save must not redirect, got HX-Redirect=%q", got)
+	}
+	select {
+	case <-s.Done():
+		t.Fatal("save must not complete on invalid draft")
+	default:
+	}
+}
+
+// TestCustomizeAddFlag_ReturnsLiveFlagsPartial verifies UIUX-002: adding a flag
+// saves it to the schema (marked editable) and returns the re-rendered
+// customize-flags partial containing the new flag, so the grid updates live.
+func TestCustomizeAddFlag_ReturnsLiveFlagsPartial(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	store := &captureSchemaStore{schema: schema}
+	s := &Session{deps: Deps{Schemas: store, Catalog: stubCatalog{id: "llama", ref: "llama.json"}}, done: make(chan Result, 1)}
+	form := url.Values{"backendId": {"llama"}, "flag": {"max-tokens"}, "type": {"int"}}
+	req := httptest.NewRequest("POST", "/customize/flag/add", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleCustomizeAddFlag(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `id="customize-flags"`) {
+		t.Fatalf("expected re-rendered flags partial, got: %s", body)
+	}
+	if !strings.Contains(body, `class="flag-name">max-tokens`) {
+		t.Fatalf("expected new flag in rendered partial, got: %s", body)
+	}
+	if _, ok := store.saved.Flags["max-tokens"]; !ok {
+		t.Fatalf("added flag not persisted: %+v", store.saved.Flags)
+	}
+	if !store.saved.Source.Editable {
+		t.Fatalf("schema must be marked Editable after adding a flag")
 	}
 }

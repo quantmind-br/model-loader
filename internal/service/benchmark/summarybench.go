@@ -92,7 +92,7 @@ func (r *Runner) runSummary(ctx context.Context, base, model string, g grader, p
 	res := ProblemResult{ProblemID: p.ID, ProblemName: name}
 	tr := ProblemTranscript{ProblemID: p.ID, ProblemName: name}
 
-	reqCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout)
+	reqCtx, cancel := context.WithTimeout(ctx, r.inferTimeout())
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
 		Model:       model,
 		Temperature: 0,
@@ -105,6 +105,7 @@ func (r *Runner) runSummary(ctx context.Context, base, model string, g grader, p
 	cancel()
 	if err != nil {
 		res.Err = err.Error()
+		res.FailPhase = phaseInfer
 		tr.Error = err.Error()
 		return res, tr
 	}
@@ -128,17 +129,26 @@ func (r *Runner) runSummary(ctx context.Context, base, model string, g grader, p
 		Answer:    comp.Content,
 	})
 	gCancel()
-	coherence := 0.0
-	judgedBy := "self"
 	if gErr != nil {
 		tr.JudgeRaw = append(tr.JudgeRaw, "coherence: "+gErr.Error())
-	} else {
-		coherence = gr.Score
-		if gr.JudgedBy != "" {
-			judgedBy = gr.JudgedBy
+		// Run cancelled mid-grading: keep the inference result without a fake
+		// grade or a per-problem error (mirrors Runner.scoreProblem).
+		if ctx.Err() != nil {
+			return res, tr
 		}
-		tr.JudgeRaw = append(tr.JudgeRaw, gr.Raw)
+		// A grading failure surfaces as a per-problem error (BR1), never a
+		// silent zero coherence blended into the aggregate.
+		res.Err = "grade coherence: " + gErr.Error()
+		res.FailPhase = phaseScore
+		tr.Error = res.Err
+		return res, tr
 	}
+	coherence := gr.Score
+	judgedBy := "self"
+	if gr.JudgedBy != "" {
+		judgedBy = gr.JudgedBy
+	}
+	tr.JudgeRaw = append(tr.JudgeRaw, gr.Raw)
 
 	res.Score = (coverage + coherence) / 2
 	res.Resolved = res.Score >= summaryPassThreshold

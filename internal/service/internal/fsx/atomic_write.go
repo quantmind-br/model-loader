@@ -17,15 +17,27 @@ func WriteJSONAtomic(path string, v any) error {
 	if err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	// Unique temp name: concurrent writers to the same path exist (the download
+	// worker process and the Manager both rewrite dl-<id>.json). A fixed temp
+	// name would let one writer rename the other's half-written temp (audit
+	// P-C9). defer os.Remove after a successful rename fails harmlessly (ENOENT).
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
 		return err
 	}
-	return nil
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 // WriteJSONExclusive marshals v as indented JSON and writes it to path only if

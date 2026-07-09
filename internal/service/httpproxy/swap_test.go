@@ -128,3 +128,70 @@ func swapStatus(t *testing.T, err error) int {
 	}
 	return se.StatusCode
 }
+
+// TestEnsureLoaded_KillFailureAbortsSwap — P4/DF11: when the previous backend
+// cannot be confirmed dead (Kill returns a non-ErrUnknownPID error, i.e. it
+// still holds VRAM), the swap MUST abort with a retriable 503 backend_busy
+// BEFORE launching the next backend, and must leave s.current pointed at the
+// still-live backend. Launching into contended VRAM is the OOM cascade the fix
+// prevents.
+func TestEnsureLoaded_KillFailureAbortsSwap(t *testing.T) {
+	store := newStubStore(makeProfile("alpha", 9101), makeProfile("beta", 9102))
+	mgr := newStubManager()
+	srv := newTestServer(t, store, mgr)
+
+	if _, err := srv.ensureLoaded(context.Background(), "alpha"); err != nil {
+		t.Fatalf("alpha load: err=%v", err)
+	}
+	if mgr.launchCount() != 1 {
+		t.Fatalf("after alpha: launches=%d, want 1", mgr.launchCount())
+	}
+
+	// The old backend refuses to die (confirmed-alive after SIGKILL).
+	mgr.killFn = func(int) error {
+		return errors.New("terminate pid: process still alive after SIGKILL")
+	}
+
+	_, err := srv.ensureLoaded(context.Background(), "beta")
+	if err == nil {
+		t.Fatal("expected swap to abort with an error, got nil")
+	}
+	if code := swapStatus(t, err); code != 503 {
+		t.Errorf("swap error status = %d, want 503 (backend_busy)", code)
+	}
+
+	// beta must never have launched — the swap aborted before launchNewBackend.
+	if mgr.launchCount() != 1 {
+		t.Errorf("launches=%d, want 1 (beta must not launch into contended VRAM)", mgr.launchCount())
+	}
+	// s.current stays on the still-live backend.
+	if got := srv.Status().LoadedProfileID; got != "alpha" {
+		t.Errorf("Status.LoadedProfileID = %q, want alpha (s.current preserved)", got)
+	}
+}
+
+// TestEnsureLoaded_RelaunchesCrashedBackend — audit A6: when the loaded backend
+// has died out-of-band, a request for the same model must relaunch instead of
+// proxying to the dead PID, and last_error must record the crash.
+func TestEnsureLoaded_RelaunchesCrashedBackend(t *testing.T) {
+	store := newStubStore(makeProfile("alpha", 9101))
+	mgr := newStubManager()
+	srv := newTestServer(t, store, mgr)
+
+	// Install a "loaded" alpha whose PID is certainly dead (identity check
+	// via startTicks fails).
+	srv.stateMu.Lock()
+	srv.current = &loadedBackend{profileID: "alpha", pid: 1 << 22, port: 9101, startTicks: 1}
+	srv.stateMu.Unlock()
+
+	loaded, err := srv.ensureLoaded(context.Background(), "alpha")
+	if err != nil {
+		t.Fatalf("ensureLoaded: %v", err)
+	}
+	if mgr.launchCount() != 1 {
+		t.Fatalf("crashed backend must relaunch; launches=%d want 1", mgr.launchCount())
+	}
+	if loaded == nil || loaded.pid == 1<<22 {
+		t.Fatalf("ensureLoaded returned the dead backend: %+v", loaded)
+	}
+}

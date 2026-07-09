@@ -210,8 +210,9 @@ func (p BenchmarkPage) askDeleteSelected() (tea.Model, tea.Cmd) {
 
 func (p BenchmarkPage) performDelete(id string) (tea.Model, tea.Cmd) {
 	if err := p.bstore.Delete(id); err != nil {
-		p, _ = p.withFlashError("delete: " + err.Error())
-		return p, nil
+		var cmd tea.Cmd
+		p, cmd = p.withFlashError("delete: " + err.Error())
+		return p, cmd
 	}
 	var fc tea.Cmd
 	p, fc = p.withFlash("deleted run")
@@ -231,8 +232,9 @@ func (p BenchmarkPage) exportSelected() (tea.Model, tea.Cmd) {
 func (p BenchmarkPage) exportRunValue(r benchmark.Run) (tea.Model, tea.Cmd) {
 	jsonPath, _, err := exportRun(p.exportDir, r)
 	if err != nil {
-		p, _ = p.withFlashError("export: " + err.Error())
-		return p, nil
+		var cmd tea.Cmd
+		p, cmd = p.withFlashError("export: " + err.Error())
+		return p, cmd
 	}
 	var fc tea.Cmd
 	p, fc = p.withFlash("exported to " + filepath.Dir(jsonPath))

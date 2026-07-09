@@ -102,7 +102,9 @@ func (s *FSStore) Get(id string) (domain.Profile, error) {
 	// version, or a reserved arg was stripped, so the divergence/old
 	// version/stale arg doesn't resurface.
 	if idChanged || p.SchemaVersion != oldVersion || stripped {
-		_ = s.Save(p)
+		// saveIfPresent, not Save: a concurrent rename/delete between the read
+		// above and this write must not resurrect the just-removed file.
+		_ = s.saveIfPresent(p)
 	}
 	return p, nil
 }
@@ -178,6 +180,24 @@ func (s *FSStore) MarkLastUsed(id string, at time.Time) error {
 		return err
 	}
 	p.Meta.LastUsedAt = &at
+	// saveIfPresent, not Save: MarkLastUsed fires on the first healthy /health
+	// (e.g. mid-benchmark) and must never resurrect a profile that was renamed
+	// or deleted between the Get above and this write.
+	return s.saveIfPresent(p)
+}
+
+// saveIfPresent persists p only when its file still exists on disk, so a
+// read-modify-write (MarkLastUsed, Get's self-heal) cannot recreate a profile
+// that was renamed or deleted concurrently between the read and this write.
+// A narrow stat→rename TOCTOU remains; the intent is to shrink the whole-RMW
+// resurrection window down to that gap rather than close it absolutely.
+func (s *FSStore) saveIfPresent(p domain.Profile) error {
+	if _, err := os.Stat(s.path(p.ID)); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
 	return s.Save(p)
 }
 

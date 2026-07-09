@@ -27,6 +27,8 @@ type geminiStreamer struct {
 	finishReason string
 	emittedBytes int
 	sawFinal     bool
+	reasoningBuf strings.Builder
+	textSeen     bool
 }
 
 func (st *geminiStreamer) emitParts(parts []geminiOutPart, finishReason string) error {
@@ -43,12 +45,14 @@ func (st *geminiStreamer) onChunk(c *oaiStreamChunk) error {
 	}
 	ch := c.Choices[0]
 	if rc := ch.Delta.ReasoningContent; rc != "" {
+		st.reasoningBuf.WriteString(rc)
 		st.emittedBytes += len(rc)
 		if err := st.emitParts([]geminiOutPart{{Thought: true, Text: rc}}, ""); err != nil {
 			return err
 		}
 	}
 	if tx := ch.Delta.Content; tx != "" {
+		st.textSeen = true
 		st.emittedBytes += len(tx)
 		if err := st.emitParts([]geminiOutPart{{Text: tx}}, ""); err != nil {
 			return err
@@ -96,6 +100,9 @@ func (st *geminiStreamer) emitFinal() error {
 	}
 	st.sawFinal = true
 	var parts []geminiOutPart
+	if !st.textSeen && st.reasoningBuf.Len() > 0 && len(st.toolOrder) == 0 {
+		parts = append(parts, geminiOutPart{Text: st.reasoningBuf.String()})
+	}
 	for _, ix := range st.toolOrder {
 		acc := st.tools[ix]
 		parts = append(parts, geminiOutPart{FunctionCall: &geminiOutFuncCall{Name: acc.name, Args: parseArgsRaw(acc.args.String())}})

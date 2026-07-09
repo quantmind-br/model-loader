@@ -65,6 +65,8 @@ func (p *ServerPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p.handlePeriodicTick()
 	case monitorKillConfirmedMsg:
 		return p.handleKillConfirmed(m)
+	case monitorForceKillConfirmedMsg:
+		return p.handleForceKillConfirmed(m)
 	case monitorRestartConfirmedMsg:
 		return p.handleRestartConfirmed(m)
 	case monitorEventMsg:
@@ -100,6 +102,9 @@ func (p *ServerPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (p *ServerPage) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if p.killConfirm.Active() {
 		return p, p.handleConfirmKillKey(m)
+	}
+	if p.forceKillConfirm.Active() {
+		return p, p.handleConfirmForceKillKey(m)
 	}
 	if p.restartConfirm.Active() {
 		return p, p.handleConfirmRestartKey(m)
@@ -146,6 +151,13 @@ func (p *ServerPage) forwardToConfirms(msg tea.Msg) tea.Cmd {
 	if p.killConfirm.Active() {
 		var cmd tea.Cmd
 		p.killConfirm, cmd = p.killConfirm.Update(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+	if p.forceKillConfirm.Active() {
+		var cmd tea.Cmd
+		p.forceKillConfirm, cmd = p.forceKillConfirm.Update(msg)
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}

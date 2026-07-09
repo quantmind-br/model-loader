@@ -25,6 +25,7 @@ func TestTabBar_AllFit(t *testing.T) {
 }
 
 func TestTabBar_OverflowActiveLeftmost(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
 	labels := []string{"FirstTab", "SecondTab", "ThirdTab", "FourthTab", "FifthTab"}
 	out := TabBar(TabBarOptions{
 		Labels:         labels,
@@ -43,6 +44,7 @@ func TestTabBar_OverflowActiveLeftmost(t *testing.T) {
 }
 
 func TestTabBar_OverflowActiveRightmost(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
 	labels := []string{"FirstTab", "SecondTab", "ThirdTab", "FourthTab", "FifthTab"}
 	out := TabBar(TabBarOptions{
 		Labels:         labels,
@@ -61,6 +63,7 @@ func TestTabBar_OverflowActiveRightmost(t *testing.T) {
 }
 
 func TestTabBar_OverflowActiveMiddle(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
 	labels := []string{"FirstTab", "SecondTab", "ThirdTab", "FourthTab", "FifthTab"}
 	out := TabBar(TabBarOptions{
 		Labels:         labels,
@@ -79,6 +82,7 @@ func TestTabBar_OverflowActiveMiddle(t *testing.T) {
 }
 
 func TestTabBar_SingleTabWiderThanViewport(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
 	labels := []string{"VeryLongTabNameIndeed"}
 	out := TabBar(TabBarOptions{
 		Labels:         labels,

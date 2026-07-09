@@ -27,10 +27,11 @@ type webEditFailedMsg struct{ err error }
 func (p ProfilesPage) startWebEdit(draft configweb.Draft) tea.Cmd {
 	return func() tea.Msg {
 		sess := configweb.NewSession(configweb.Deps{
-			Profiles:     p.store,
-			Catalog:      p.catalogStore,
-			Schemas:      p.schemaStore,
-			InitialDraft: draft,
+			Profiles:      p.store,
+			Catalog:       p.catalogStore,
+			Schemas:       p.schemaStore,
+			InitialDraft:  draft,
+			InstanceInUse: p.instanceInUse,
 		})
 		url, err := sess.Start()
 		if err != nil {

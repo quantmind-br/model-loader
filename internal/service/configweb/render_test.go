@@ -291,3 +291,46 @@ func TestIndexRendersGroupedFields(t *testing.T) {
 		t.Fatalf("group title missing")
 	}
 }
+
+// TestBackendPageRendersInlineValidationAndEditorJS verifies UIUX-001/006: the
+// backend editor page carries the per-field data-field/field-error slots, the
+// Escape-cancel path, and the shared editor.js so inline validation and the
+// keyboard shortcuts are wired.
+func TestBackendPageRendersInlineValidationAndEditorJS(t *testing.T) {
+	s := &Session{deps: Deps{InitialBackendDraft: BackendDraft{IsNew: true, Name: "X"}}}
+	rec := httptest.NewRecorder()
+	s.handleBackendIndex(rec, httptest.NewRequest("GET", "/backend", nil))
+	body := rec.Body.String()
+	for _, want := range []string{
+		`data-field="executable"`,
+		`class="field-error"`,
+		`data-cancel-path="/backend/cancel"`,
+		`src="/static/editor.js"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("backend page missing %s", want)
+		}
+	}
+}
+
+// TestBasePageRendersSavePathAndEditorJS verifies UIUX-006: the profile editor
+// page exposes its save path to editor.js and loads the shared script.
+func TestBasePageRendersSavePathAndEditorJS(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer, BackendID: "llama",
+		Flags: map[string]domain.FlagSpec{"ctx-size": {Long: "ctx-size", Type: domain.FlagTypeInt}},
+	}
+	s := &Session{deps: Deps{
+		Schemas:      stubSchemaStore{schema: schema},
+		Catalog:      stubCatalog{id: "llama", ref: "llama.json"},
+		InitialDraft: Draft{BackendID: "llama"},
+	}}
+	rec := httptest.NewRecorder()
+	s.handleIndex(rec, httptest.NewRequest("GET", "/", nil))
+	body := rec.Body.String()
+	for _, want := range []string{`data-save-path="/save"`, `src="/static/editor.js"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("base page missing %s", want)
+		}
+	}
+}

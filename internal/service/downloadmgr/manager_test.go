@@ -342,6 +342,73 @@ func TestManager_ReconcilePromotesOnlyFreeSlotsWhenPartiallyBusy(t *testing.T) {
 	}
 }
 
+// TestManager_ResumeDedupesQueue guards audit N-C10: two Resume calls for the
+// same id while the slot is busy must queue it exactly once, so promotion
+// spawns exactly one worker (a duplicate would respawn over the same partial).
+func TestManager_ResumeDedupesQueue(t *testing.T) {
+	dir := t.TempDir()
+
+	activeID := ID("rec-active")
+	if err := SaveRecord(dir, DownloadRecord{
+		ID: activeID, PID: syscall.Getpid(), URL: "http://example",
+		DestFile: filepath.Join(dir, "active"), Status: StatusActive,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	failedID := ID("rec-failed")
+	if err := SaveRecord(dir, DownloadRecord{
+		ID: failedID, PID: 0, URL: "http://example",
+		DestFile: filepath.Join(dir, "failed"), Status: StatusFailed,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var spawnCount int32
+	countingSpawner := func(statePath, userAgent string) (int, error) {
+		atomic.AddInt32(&spawnCount, 1)
+		return syscall.Getpid(), nil
+	}
+
+	mgr := NewManager(dir, 1).WithSpawner(countingSpawner)
+	if err := mgr.Reconcile(); err != nil { // populates m.active with rec-active
+		t.Fatalf("Reconcile: %v", err)
+	}
+
+	// Slot is full: both Resume calls must queue failedID, but only once.
+	if err := mgr.Resume(failedID); err != nil {
+		t.Fatalf("Resume #1: %v", err)
+	}
+	if err := mgr.Resume(failedID); err != nil {
+		t.Fatalf("Resume #2: %v", err)
+	}
+	mgr.mu.Lock()
+	queued := 0
+	for _, q := range mgr.queue {
+		if q == failedID {
+			queued++
+		}
+	}
+	mgr.mu.Unlock()
+	if queued != 1 {
+		t.Fatalf("queue contains failedID %d times, want 1 (dedup)", queued)
+	}
+
+	// Free the slot and drive a poll: exactly one worker spawns for failedID.
+	active, err := LoadRecord(StatePath(dir, activeID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	active.Status = StatusCompleted
+	if err := SaveRecord(dir, active); err != nil {
+		t.Fatal(err)
+	}
+	mgr.tick()
+
+	if got := atomic.LoadInt32(&spawnCount); got != 1 {
+		t.Fatalf("spawn count = %d, want 1 (deduped resume spawns once)", got)
+	}
+}
+
 // TestManager_ReconcileSkipsSpawnWhenAlreadyClaimed pins the cross-process
 // guard: two separate Manager instances (e.g. the long-lived TUI and a
 // one-shot CLI invocation) share the same stateDir with no other

@@ -127,7 +127,11 @@ type loadedBackend struct {
 	port      int
 	logPath   string
 	authToken string
-	proxy     *httputil.ReverseProxy
+	// startTicks is the backend PID's /proc start time, captured at launch.
+	// ensureLoaded uses it (via procutil.SameProcess) to detect a crashed or
+	// PID-recycled backend and relaunch instead of proxying to a corpse (A6).
+	startTicks uint64
+	proxy      *httputil.ReverseProxy
 }
 
 // Server is the HTTP proxy. Construct with New; drive via Start/Stop;
@@ -147,8 +151,8 @@ type Server struct {
 
 	swapMu sync.Mutex // serializes load/unload across concurrent requests
 
-	inflight   atomic.Int64
-	inflightWG sync.WaitGroup
+	inflight atomic.Int64
+	serving  atomic.Int64
 
 	statusMu    sync.Mutex
 	lastSwapAt  time.Time
@@ -265,17 +269,10 @@ func (s *Server) Stop(ctx context.Context) error {
 		s.logger.Warn("proxy_shutdown_warning", "err", shutdownErr)
 	}
 
-	// Best-effort drain. Shutdown already waits for active connections,
-	// but in-flight ServeHTTP handlers that haven't returned yet still
-	// hold the inflightWG counter. Bounded by ctx.
-	drained := make(chan struct{})
-	go func() {
-		s.inflightWG.Wait()
-		close(drained)
-	}()
-	select {
-	case <-drained:
-	case <-ctx.Done():
+	// Best-effort drain. Shutdown already waits for active connections, but
+	// in-flight handlers still using the backend hold the serving counter.
+	// Bounded by ctx.
+	if !s.drainServing(ctx, 0) {
 		s.logger.Warn("proxy_shutdown_drain_deadline")
 	}
 
@@ -291,6 +288,27 @@ func (s *Server) Stop(ctx context.Context) error {
 	}
 	s.logger.Info("proxy_stopped")
 	return nil
+}
+
+// drainServing waits until no request is actively using the loaded backend,
+// bounded by timeout (when > 0) and ctx. Polling is deliberate: a WaitGroup
+// cannot legally take Adds concurrent with Wait at counter zero (audit C5),
+// and drain is already best-effort + timeout-bounded. It counts only the
+// backend-use phase, so requests parked on swapMu (about to swap/kill the
+// backend themselves) never stall the drain (audit C6). Returns true when the
+// counter reached zero, false on timeout/ctx cancellation.
+func (s *Server) drainServing(ctx context.Context, timeout time.Duration) bool {
+	var deadline time.Time
+	if timeout > 0 {
+		deadline = time.Now().Add(timeout)
+	}
+	for s.serving.Load() != 0 {
+		if ctx.Err() != nil || (!deadline.IsZero() && time.Now().After(deadline)) {
+			return false
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return true
 }
 
 // killCurrentBackend stops the backend the proxy launched (if any) and

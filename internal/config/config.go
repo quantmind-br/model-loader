@@ -28,6 +28,7 @@ type BenchmarkConfig struct {
 	TimeoutSec        int                 `mapstructure:"timeout_sec"`         // per-problem inference timeout
 	LongContextTokens int                 `mapstructure:"long_context_tokens"` // target prompt size for needle probe (0 → 8000)
 	SaveTranscripts   bool                `mapstructure:"save_transcripts"`    // capture raw model/judge I/O per run for debugging
+	UnloadAfterRun    bool                `mapstructure:"unload_after_run"`    // free the model (proxy /_admin/unload) when a run ends; default false keeps warm-model behavior
 	Judge             JudgeConfig         `mapstructure:"judge"`
 	LlamaBench        LlamaBenchConfig    `mapstructure:"llamabench"`
 	Embeddings        EmbeddingsConfig    `mapstructure:"embeddings"`
@@ -59,15 +60,16 @@ type SweBenchProConfig struct {
 // wraps the external `tb` CLI (Terminal-Bench harness) + Docker. Empty scalar
 // values fall back to the engine defaults shown below.
 type TerminalBenchConfig struct {
-	Command    string   `mapstructure:"command"`     // tb CLI binary (name on PATH or path); empty → "tb"
-	Agent      string   `mapstructure:"agent"`       // tb agent; empty → "terminus"
-	Dataset    string   `mapstructure:"dataset"`     // tb dataset 'name' or 'name==version'; empty → "terminal-bench-core==0.1.1"
-	Provider   string   `mapstructure:"provider"`    // LiteLLM provider prefix for --model; empty → "openai"
-	Tasks      []string `mapstructure:"tasks"`       // --task-id ids/globs; empty → whole dataset
-	NTasks     int      `mapstructure:"n_tasks"`     // --n-tasks cap; 0 → omit
-	Concurrent int      `mapstructure:"concurrent"`  // --n-concurrent; <=0 → 1 (single-GPU rig)
-	TimeoutSec int      `mapstructure:"timeout_sec"` // whole-run cap (seconds); 0 → no model-loader-side cap
-	ExtraArgs  []string `mapstructure:"extra_args"`  // passed through verbatim (e.g. "--no-rebuild")
+	Command         string   `mapstructure:"command"`           // tb CLI binary (name on PATH or path); empty → "tb"
+	Agent           string   `mapstructure:"agent"`             // tb agent; empty → "terminus"
+	Dataset         string   `mapstructure:"dataset"`           // tb dataset 'name' or 'name==version'; empty → "terminal-bench-core==0.1.1"
+	Provider        string   `mapstructure:"provider"`          // LiteLLM provider prefix for --model; empty → "openai"
+	Tasks           []string `mapstructure:"tasks"`             // --task-id ids/globs; empty → whole dataset
+	NTasks          int      `mapstructure:"n_tasks"`           // --n-tasks cap; 0 → omit
+	Concurrent      int      `mapstructure:"concurrent"`        // --n-concurrent; <=0 → 1 (single-GPU rig)
+	TimeoutSec      int      `mapstructure:"timeout_sec"`       // whole-run cap (seconds); 0 → no model-loader-side cap
+	StallTimeoutSec int      `mapstructure:"stall_timeout_sec"` // group-kill tb when no new task is scored for this long (wedged agent/Docker); 0 → built-in default
+	ExtraArgs       []string `mapstructure:"extra_args"`        // passed through verbatim (e.g. "--no-rebuild")
 }
 
 // DeepSWEConfig configures the agentic DeepSWE scoring mode, which wraps the
@@ -75,18 +77,19 @@ type TerminalBenchConfig struct {
 // (datacurve-ai/deep-swe) + Docker. Empty scalar values fall back to the engine
 // defaults shown below. The engine never installs pier, Docker, or the corpus.
 type DeepSWEConfig struct {
-	Command    string   `mapstructure:"command"`     // pier CLI binary (name on PATH or path); empty → "pier"
-	TasksDir   string   `mapstructure:"tasks_dir"`   // cloned deep-swe tasks/ dir (required for this mode)
-	Agent      string   `mapstructure:"agent"`       // pier agent; empty → "mini-swe-agent"
-	Provider   string   `mapstructure:"provider"`    // LiteLLM provider prefix for --model; empty → "openai"
-	ModelClass string   `mapstructure:"model_class"` // mini-swe-agent model adapter; empty → "litellm" (chat completions)
-	APIBase    string   `mapstructure:"api_base"`    // agent-facing api_base; empty → derived (<proxy>/v1, loopback→host.docker.internal). See docs/deep-swe.md
-	Tasks      []string `mapstructure:"tasks"`       // --include-task-name ids/globs; empty → whole corpus
-	NTasks     int      `mapstructure:"n_tasks"`     // --n-tasks cap; 0 → omit
-	SampleSeed int      `mapstructure:"sample_seed"` // --sample-seed for deterministic subset (with n_tasks)
-	Concurrent int      `mapstructure:"concurrent"`  // --n-concurrent; <=0 → 1 (single-GPU rig)
-	TimeoutSec int      `mapstructure:"timeout_sec"` // whole-run cap (seconds); 0 → no model-loader-side cap
-	ExtraArgs  []string `mapstructure:"extra_args"`  // passed through verbatim (e.g. "--force-build")
+	Command         string   `mapstructure:"command"`           // pier CLI binary (name on PATH or path); empty → "pier"
+	TasksDir        string   `mapstructure:"tasks_dir"`         // cloned deep-swe tasks/ dir (required for this mode)
+	Agent           string   `mapstructure:"agent"`             // pier agent; empty → "mini-swe-agent"
+	Provider        string   `mapstructure:"provider"`          // LiteLLM provider prefix for --model; empty → "openai"
+	ModelClass      string   `mapstructure:"model_class"`       // mini-swe-agent model adapter; empty → "litellm" (chat completions)
+	APIBase         string   `mapstructure:"api_base"`          // agent-facing api_base; empty → derived (<proxy>/v1, loopback→host.docker.internal). See docs/deep-swe.md
+	Tasks           []string `mapstructure:"tasks"`             // --include-task-name ids/globs; empty → whole corpus
+	NTasks          int      `mapstructure:"n_tasks"`           // --n-tasks cap; 0 → omit
+	SampleSeed      int      `mapstructure:"sample_seed"`       // --sample-seed for deterministic subset (with n_tasks)
+	Concurrent      int      `mapstructure:"concurrent"`        // --n-concurrent; <=0 → 1 (single-GPU rig)
+	TimeoutSec      int      `mapstructure:"timeout_sec"`       // whole-run cap (seconds); 0 → no model-loader-side cap
+	StallTimeoutSec int      `mapstructure:"stall_timeout_sec"` // group-kill pier when no new task is scored for this long (wedged agent/Docker); 0 → built-in default
+	ExtraArgs       []string `mapstructure:"extra_args"`        // passed through verbatim (e.g. "--force-build")
 }
 
 // LlamaBenchConfig tunes the throughput (llama-bench) scoring mode. Empty values

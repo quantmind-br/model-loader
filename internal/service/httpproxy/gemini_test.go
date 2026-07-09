@@ -235,3 +235,126 @@ func TestHandleGeminiModels_List(t *testing.T) {
 		t.Errorf("supportedGenerationMethods empty")
 	}
 }
+
+func TestBuildGeminiResponse_AcceptsVLLMReasoningFieldFromJSON(t *testing.T) {
+	var oai oaiChatResponse
+	if err := json.Unmarshal([]byte(`{"choices":[{"finish_reason":"stop","message":{"reasoning":"think","content":"answer"}}]}`), &oai); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	resp := buildGeminiResponse(&oai, "m")
+	if len(resp.Candidates) != 1 {
+		t.Fatalf("candidates = %#v", resp.Candidates)
+	}
+	parts := resp.Candidates[0].Content.Parts
+	if len(parts) != 2 {
+		t.Fatalf("parts = %#v, want thought+text", parts)
+	}
+	if !parts[0].Thought || parts[0].Text != "think" {
+		t.Errorf("part0 = %#v, want thought think", parts[0])
+	}
+	if parts[1].Thought || parts[1].Text != "answer" {
+		t.Errorf("part1 = %#v, want text answer", parts[1])
+	}
+}
+
+func TestGeminiStream_AcceptsVLLMReasoningField(t *testing.T) {
+	rec := httptest.NewRecorder()
+	script := sseScript(
+		`{"choices":[{"delta":{"reasoning":"think"}}]}`,
+		`{"choices":[{"delta":{"content":"answer"}}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	)
+	if err := runGeminiStream(context.Background(), rec, strings.NewReader(script), "alpha", mllog.Nop()); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	frames := parseGeminiFrames(t, rec.Body.String())
+	var sawThought, sawText bool
+	for _, f := range frames {
+		cands, _ := f["candidates"].([]any)
+		if len(cands) == 0 {
+			continue
+		}
+		c0, _ := cands[0].(map[string]any)
+		content, _ := c0["content"].(map[string]any)
+		parts, _ := content["parts"].([]any)
+		for _, p := range parts {
+			pm, _ := p.(map[string]any)
+			thought, _ := pm["thought"].(bool)
+			text, _ := pm["text"].(string)
+			if thought && text == "think" {
+				sawThought = true
+			}
+			if !thought && text == "answer" {
+				sawText = true
+			}
+		}
+	}
+	if !sawThought {
+		t.Errorf("no thought:true/text:think part in frames: %#v", frames)
+	}
+	if !sawText {
+		t.Errorf("no text:answer (non-thought) part in frames: %#v", frames)
+	}
+}
+
+func TestBuildGeminiResponse_MirrorsReasoningOnlyAsText(t *testing.T) {
+	var oai oaiChatResponse
+	if err := json.Unmarshal([]byte(`{"choices":[{"finish_reason":"length","message":{"reasoning":"think"}}]}`), &oai); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	resp := buildGeminiResponse(&oai, "m")
+	if len(resp.Candidates) != 1 {
+		t.Fatalf("candidates = %#v", resp.Candidates)
+	}
+	cand := resp.Candidates[0]
+	parts := cand.Content.Parts
+	if len(parts) != 2 {
+		t.Fatalf("parts = %#v, want thought+text fallback", parts)
+	}
+	if !parts[0].Thought || parts[0].Text != "think" {
+		t.Fatalf("part0 = %#v, want thought", parts[0])
+	}
+	if parts[1].Thought || parts[1].Text != "think" {
+		t.Fatalf("part1 = %#v, want mirrored text", parts[1])
+	}
+	if cand.FinishReason != "MAX_TOKENS" {
+		t.Fatalf("finishReason = %q, want MAX_TOKENS", cand.FinishReason)
+	}
+}
+
+func TestGeminiStream_MirrorsReasoningOnlyAsText(t *testing.T) {
+	rec := httptest.NewRecorder()
+	script := sseScript(
+		`{"choices":[{"delta":{"reasoning":"think"}}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"length"}]}`,
+		`[DONE]`,
+	)
+	if err := runGeminiStream(context.Background(), rec, strings.NewReader(script), "alpha", mllog.Nop()); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	frames := parseGeminiFrames(t, rec.Body.String())
+	var sawThought, sawText bool
+	for _, f := range frames {
+		cands, _ := f["candidates"].([]any)
+		for _, c := range cands {
+			c0, _ := c.(map[string]any)
+			content, _ := c0["content"].(map[string]any)
+			parts, _ := content["parts"].([]any)
+			for _, p := range parts {
+				pm, _ := p.(map[string]any)
+				thought, _ := pm["thought"].(bool)
+				text, _ := pm["text"].(string)
+				if thought && text == "think" {
+					sawThought = true
+				}
+				if !thought && text == "think" {
+					sawText = true
+				}
+			}
+		}
+	}
+	if !sawThought || !sawText {
+		t.Fatalf("frames = %#v, want thought and mirrored text", frames)
+	}
+}

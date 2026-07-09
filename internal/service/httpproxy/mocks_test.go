@@ -3,6 +3,7 @@ package httpproxy
 import (
 	"errors"
 	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -95,6 +96,7 @@ type stubManager struct {
 	launches []domain.Profile
 	kills    []int
 	healthFn func(pid, port int) error
+	killFn   func(pid int) error // optional: when set, Kill records the attempt then returns this error without untracking (mirrors the real manager keeping the entry on a failed kill)
 
 	swapDelay  time.Duration // optional: delay inside Launch to widen swap race
 	readyToken string        // token WaitReady returns when healthFn passes
@@ -117,8 +119,12 @@ func (m *stubManager) Launch(p domain.Profile, mode processmgr.LaunchMode, attem
 	m.nextPID++
 	port, _ := portFromArgs(p.Args)
 	inst := domain.RunningInstance{
-		ProfileID:  p.ID,
-		PID:        m.nextPID,
+		ProfileID: p.ID,
+		// Use the always-live test process PID so the proxy's liveness guard
+		// (procutil.SameProcess, audit A6) treats a stubbed backend as alive.
+		// StartTicks stays 0 → SameProcess degrades to Alive(pid). Tests that
+		// need a "crashed" backend install s.current with a dead pid directly.
+		PID:        os.Getpid(),
 		Port:       port,
 		LogPath:    "/tmp/x.log",
 		StartedAt:  time.Now(),
@@ -130,6 +136,12 @@ func (m *stubManager) Launch(p domain.Profile, mode processmgr.LaunchMode, attem
 }
 
 func (m *stubManager) Kill(pid int) error {
+	if m.killFn != nil {
+		m.mu.Lock()
+		m.kills = append(m.kills, pid)
+		m.mu.Unlock()
+		return m.killFn(pid)
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.tracked[pid]; !ok {

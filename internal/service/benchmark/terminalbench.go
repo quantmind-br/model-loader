@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -109,11 +110,14 @@ func (h terminalBenchHandler) Execute(ctx context.Context, r *Runner, base, mode
 
 	args := buildTBArgs(r.cfg, tbRunID, tbAPIBase(base), model, outDir)
 
-	runCtx := ctx
+	// runCtx bounds the run: the optional whole-run timeout, plus a cancel the
+	// hang watchdog trips to group-kill a wedged harness.
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	if r.cfg.TerminalBenchTimeout > 0 {
-		var cancel context.CancelFunc
-		runCtx, cancel = context.WithTimeout(ctx, r.cfg.TerminalBenchTimeout)
-		defer cancel()
+		var tcancel context.CancelFunc
+		runCtx, tcancel = context.WithTimeout(runCtx, r.cfg.TerminalBenchTimeout)
+		defer tcancel()
 	}
 
 	total := h.Count(r)
@@ -121,30 +125,59 @@ func (h terminalBenchHandler) Execute(ctx context.Context, r *Runner, base, mode
 
 	runDir := filepath.Join(outDir, tbRunID)
 	stopPoll := make(chan struct{})
-	go tbProgressPoller(runDir, total, progress, stopPoll)
+	pollDone := make(chan struct{})
+	go func() {
+		defer close(pollDone)
+		tbProgressPoller(runDir, total, progress, stopPoll)
+	}()
 
 	cmd := exec.CommandContext(runCtx, bin, args...)
 	cmd.Env = tbEnv(os.Environ())
-	// Own process group so a cancel/timeout group-kills tb and its children;
-	// WaitDelay forces the kill if it ignores the signal.
+	// Own process group so a cancel/timeout/watchdog group-kills tb and its
+	// children; WaitDelay forces the kill if it ignores the signal.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 10 * time.Second
-	var out strings.Builder
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-	runErr := cmd.Run()
+	hlog := newHarnessLog(r.cfg.HarnessLogDir, "terminal-bench")
+	defer hlog.Close()
+	cmd.Stdout = hlog
+	cmd.Stderr = hlog
+
+	if err := cmd.Start(); err != nil {
+		close(stopPoll)
+		<-pollDone
+		return nil, nil, fmt.Errorf("start tb: %w", err)
+	}
+	r.logger().Info("benchmark_harness_start", "run_id", r.runID, "mode", ModeTerminalBench, "bin", bin, "total", total, "log", hlog.path)
+
+	// Watchdog: a tb that finished every task but won't exit, or stalled
+	// mid-run, keeps hammering the proxy for hours and pins the GPU
+	// (BUGS UIUX-012). It records why it fired, SIGTERMs the tb process group
+	// (a chance for --cleanup), then escalates to the run-context SIGKILL.
+	var reason atomic.Int32
+	wdStop := make(chan struct{})
+	wdDone := make(chan struct{})
+	go func() {
+		defer close(wdDone)
+		tbHangWatchdog(r.cfg, runDir, total, cmd.Process.Pid, cancel, progress, &reason, wdStop)
+	}()
+
+	runErr := cmd.Wait()
+	r.logger().Info("benchmark_harness_exit", "run_id", r.runID, "mode", ModeTerminalBench, "err", runErr, "scored", countCompletedTrials(runDir))
+	close(wdStop)
+	<-wdDone
 	close(stopPoll)
+	<-pollDone // join before deferred os.RemoveAll(outDir) races the poller (audit N-C16)
 
 	resultsPath := filepath.Join(runDir, "results.json")
 	data, readErr := os.ReadFile(resultsPath)
 	if readErr != nil {
 		return nil, nil, fmt.Errorf("terminal-bench produced no results at %s (tb exited: %v)\n--- tb output (tail) ---\n%s",
-			resultsPath, runErr, tbTail(out.String()))
+			resultsPath, runErr, hlog.diagTail())
 	}
 	res, perr := parseTBResults(data)
 	if perr != nil {
-		return nil, nil, fmt.Errorf("%w\n--- tb output (tail) ---\n%s", perr, tbTail(out.String()))
+		return nil, nil, fmt.Errorf("%w\n--- tb output (tail) ---\n%s", perr, hlog.diagTail())
 	}
 	problems := tbResultsToProblems(res)
 
@@ -153,15 +186,147 @@ func (h terminalBenchHandler) Execute(ctx context.Context, r *Runner, base, mode
 		transcripts = append(transcripts, ProblemTranscript{
 			ProblemID:     "terminal-bench",
 			ProblemName:   "tb harness output",
-			ModelResponse: out.String(),
+			ModelResponse: hlog.transcript(),
 		})
 	}
 
-	// Propagate cancellation so Run records a partial run with the work done.
+	switch tbWatchReason(reason.Load()) {
+	case tbWatchStalled:
+		// A wedge mid-run: some tasks never completed. Surface it as a partial
+		// run so the operator sees why, keeping the tasks that did finish.
+		return problems, transcripts, fmt.Errorf("terminal-bench stalled: no task scored for %s; harness killed", tbStallTimeout(r.cfg))
+	case tbWatchCompleted:
+		// Every task was scored before we killed the lingering harness — the
+		// results are whole, so this is a normal completion, not a failure.
+		return problems, transcripts, nil
+	}
+
+	// Operator cancellation → partial run carrying its cause.
 	if ctx.Err() != nil {
 		return problems, transcripts, ctx.Err()
 	}
+	// The whole-run TerminalBenchTimeout fired (runCtx done, parent ctx not):
+	// the run is truncated even if partial results parsed, so surface it as an
+	// error (a partial run, excluded from the leaderboard) — never a clean
+	// completion.
+	if runCtx.Err() != nil {
+		return problems, transcripts, fmt.Errorf("terminal-bench exceeded run timeout %s; harness killed", r.cfg.TerminalBenchTimeout)
+	}
+	// A non-zero tb exit with an incomplete task set means the harness died
+	// mid-run: surface it as a partial run (BR3). Exit-code semantics of a
+	// *complete* result set are the harness's business (a completed-but-
+	// imperfect run may exit non-zero), so completeness gates the check —
+	// mirroring the watchdog's completed-kill-is-success rule. An unknown
+	// total can't gate; the exit error is still traced in the harness log.
+	if runErr != nil {
+		if total > 0 && len(problems) < total {
+			return problems, transcripts, fmt.Errorf("tb exited with error after %d/%d tasks: %v\n--- tb output (tail) ---\n%s",
+				len(problems), total, runErr, hlog.diagTail())
+		}
+		fmt.Fprintf(hlog, "\n[model-loader] tb exited non-zero with a complete result set: %v\n", runErr)
+	}
 	return problems, transcripts, nil
+}
+
+type tbWatchReason int32
+
+const (
+	tbWatchNone tbWatchReason = iota
+	tbWatchCompleted
+	tbWatchStalled
+)
+
+// Watchdog timing — vars, not consts, so tests can shrink them. Defaults are
+// generous so the safety nets only fire on a genuine hang.
+var (
+	// tbWatchInterval is how often the watchdog samples run progress.
+	tbWatchInterval = 5 * time.Second
+	// tbPostCompleteGrace is how long a fully-scored tb run may keep running
+	// before the watchdog kills it — enough for --cleanup Docker teardown.
+	tbPostCompleteGrace = 2 * time.Minute
+	// tbDefaultStallTimeout is the built-in no-progress kill threshold used when
+	// TerminalBenchStallTimeout is unset. Well above any single task's agent
+	// budget, so it only fires on a genuine wedge, not a slow task.
+	tbDefaultStallTimeout = 45 * time.Minute
+	// tbTermGrace is how long the watchdog waits after SIGTERM before escalating
+	// to the run-context SIGKILL.
+	tbTermGrace = 20 * time.Second
+)
+
+func tbStallTimeout(cfg Config) time.Duration {
+	if cfg.TerminalBenchStallTimeout > 0 {
+		return cfg.TerminalBenchStallTimeout
+	}
+	return tbDefaultStallTimeout
+}
+
+// runHangWatchdog group-kills an external agentic harness that either scored
+// every task but won't exit, or stalled mid-run (no new task scored for the
+// stall timeout). Both otherwise leave the harness hammering the proxy for
+// hours, pinning the GPU (BUGS UIUX-012). completed returns tasks scored so
+// far; total is the expected count (<=0 disables completion detection — the
+// stall check still applies). label tags the progress announcement. Shared by
+// every agentic mode (terminal-bench, deep-swe).
+func runHangWatchdog(label string, completed func() int, total, pid int, stall time.Duration, cancel context.CancelFunc, progress chan<- Progress, reason *atomic.Int32, stop <-chan struct{}) {
+	t := time.NewTicker(tbWatchInterval)
+	defer t.Stop()
+	lastDone := -1
+	lastProgress := time.Now()
+	completedAt := time.Time{}
+	for {
+		select {
+		case <-stop:
+			return
+		case now := <-t.C:
+			done := completed()
+			if done != lastDone {
+				lastDone = done
+				lastProgress = now
+			}
+			if total > 0 && done >= total {
+				if completedAt.IsZero() {
+					completedAt = now
+					send(progress, Progress{Index: total, Total: total, ProblemID: label, ProblemName: "all tasks scored — waiting for harness to exit…", Phase: "infer"})
+				}
+				if now.Sub(completedAt) >= tbPostCompleteGrace {
+					tbKillGroup(pid, cancel, reason, tbWatchCompleted, stop)
+					return
+				}
+				continue
+			}
+			if now.Sub(lastProgress) >= stall {
+				tbKillGroup(pid, cancel, reason, tbWatchStalled, stop)
+				return
+			}
+		}
+	}
+}
+
+// tbHangWatchdog is the terminal-bench wiring of runHangWatchdog: it counts
+// scored trials from the tb run directory (per-trial files plus the aggregate
+// results.json) and applies the tb stall timeout.
+func tbHangWatchdog(cfg Config, runDir string, total, pid int, cancel context.CancelFunc, progress chan<- Progress, reason *atomic.Int32, stop <-chan struct{}) {
+	completed := func() int {
+		done := countCompletedTrials(runDir)
+		if agg := tbReadAggregateResultsTotal(runDir); agg > done {
+			done = agg
+		}
+		return done
+	}
+	runHangWatchdog("terminal-bench", completed, total, pid, tbStallTimeout(cfg), cancel, progress, reason, stop)
+}
+
+// tbKillGroup records why the watchdog fired, SIGTERMs the tb process group
+// (letting --cleanup run), and escalates to the run-context SIGKILL if tb has
+// not exited within tbTermGrace.
+func tbKillGroup(pid int, cancel context.CancelFunc, reason *atomic.Int32, why tbWatchReason, stop <-chan struct{}) {
+	reason.Store(int32(why))
+	_ = syscall.Kill(-pid, syscall.SIGTERM)
+	select {
+	case <-stop: // tb exited after SIGTERM (cmd.Wait returned → Execute closed stop)
+	case <-time.After(tbTermGrace):
+		cancel() // escalate: the exec runtime SIGKILLs the group via cmd.Cancel
+	}
 }
 
 // tbDatasetNameVersion splits tb's --dataset value ('name' or 'name==version').

@@ -36,6 +36,9 @@ type serverProxyController interface {
 	Unload(ctx context.Context, force bool) (httpproxy.Status, error)
 	BaseURL() string
 	EnsureRunning(context.Context) error
+	// ForceStop SIGKILLs a wedged/degraded proxy so a stranded backend can be
+	// killed directly (audit A13).
+	ForceStop() error
 }
 
 // profileStoreIface is the subset of profilestore.Store used by ServerPage
@@ -62,6 +65,9 @@ type ServerPage struct {
 	flash              components.Flash
 	restartConfirm     components.Confirm
 	killConfirm        components.Confirm
+	// forceKillConfirm arms when an orphan kill is refused because the proxy is
+	// degraded — it offers ForceStop-proxy + kill (audit A13).
+	forceKillConfirm components.Confirm
 
 	historyChart *components.HistoryChart
 	metricsDir   string
@@ -156,6 +162,7 @@ func (p *ServerPage) IsCapturingInput() bool {
 	return CaptureAny(
 		func() bool { return p.killConfirm.Active() },
 		func() bool { return p.restartConfirm.Active() },
+		func() bool { return p.forceKillConfirm.Active() },
 		func() bool { return p.historyChart != nil },
 	)
 }
@@ -193,6 +200,10 @@ func (p *ServerPage) OverlayView() Overlay {
 		content := components.Modal("Kill instance", p.killConfirm.View(), p.width, p.height)
 		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
 	}
+	if p.forceKillConfirm.Active() {
+		content := components.Modal("Force-stop proxy", p.forceKillConfirm.View(), p.width, p.height)
+		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
+	}
 	if p.restartConfirm.Active() {
 		content := components.Modal("Restart instance", p.restartConfirm.View(), p.width, p.height)
 		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
@@ -211,8 +222,8 @@ func (p *ServerPage) StatusMessage() (string, components.StatusLevel) {
 // Hints implements ui.HintProvider for the Server tab.
 func (p *ServerPage) Hints() string {
 	var hints string
-	if p.killConfirm.Active() || p.restartConfirm.Active() {
-		hints = "[←→] choose  [enter] confirm  [esc] cancel"
+	if p.killConfirm.Active() || p.restartConfirm.Active() || p.forceKillConfirm.Active() {
+		hints = components.ConfirmHints
 	} else if p.historyChart != nil {
 		hints = "[1] 1h  [2] 6h  [3] 24h  [4] 7d  [esc] close"
 	} else {

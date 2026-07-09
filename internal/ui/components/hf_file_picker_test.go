@@ -265,3 +265,58 @@ func TestHFFilePicker_SetSizeUpdatesDimensions(t *testing.T) {
 		t.Errorf("size = (%d,%d), want (120,40)", p.width, p.height)
 	}
 }
+
+// UIUX-004: the HF file picker navigation must honor vim keys (j/k), half-page
+// paging (pgup/pgdown) that clamps at both ends, and jump-to-edge (g/G). A
+// flipped bound or a wrong clamp would silently strand the cursor, so each key
+// is exercised against a 5-item list where the clamp behavior is observable.
+func TestHFFilePicker_VimPagingAndJumpKeys(t *testing.T) {
+	newPicker := func() *HFFilePicker {
+		p := NewHFFilePicker(&fakeFileLister{info: &RepoInfo{}}, "user/repo", false, 80, 24)
+		p.files = []FileItem{
+			{RFilename: "a.gguf"}, {RFilename: "b.gguf"}, {RFilename: "c.gguf"},
+			{RFilename: "d.gguf"}, {RFilename: "e.gguf"},
+		}
+		return p
+	}
+
+	t.Run("vim j/k move cursor", func(t *testing.T) {
+		p := newPicker()
+		p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+		if p.cursor != 1 {
+			t.Fatalf("cursor after first j = %d, want 1", p.cursor)
+		}
+		p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+		if p.cursor != 2 {
+			t.Fatalf("cursor after second j = %d, want 2", p.cursor)
+		}
+		p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+		if p.cursor != 1 {
+			t.Fatalf("cursor after k = %d, want 1", p.cursor)
+		}
+	})
+
+	t.Run("paging clamps at both ends", func(t *testing.T) {
+		p := newPicker()
+		p.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+		if p.cursor != 4 {
+			t.Fatalf("cursor after PgDown = %d, want 4 (last index, +10 past end)", p.cursor)
+		}
+		p.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+		if p.cursor != 0 {
+			t.Fatalf("cursor after PgUp = %d, want 0 (-10 past start)", p.cursor)
+		}
+	})
+
+	t.Run("g/G jump to edges", func(t *testing.T) {
+		p := newPicker()
+		p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
+		if p.cursor != 4 {
+			t.Fatalf("cursor after G = %d, want 4 (last index)", p.cursor)
+		}
+		p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
+		if p.cursor != 0 {
+			t.Fatalf("cursor after g = %d, want 0 (first index)", p.cursor)
+		}
+	})
+}

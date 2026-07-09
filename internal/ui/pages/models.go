@@ -318,13 +318,13 @@ func (p ModelsPage) Hints() string {
 		return "[↑↓] move  [enter] select  [esc] cancel"
 	}
 	if p.deleteConfirm.Active() {
-		return "[enter] confirm  [esc] cancel"
+		return components.ConfirmHints
 	}
 	if p.clearDoneConfirm.Active() {
-		return "[←→] choose  [enter] confirm  [esc] cancel"
+		return components.ConfirmHints
 	}
 	if p.removePathConfirm.Active() {
-		return "[←→] choose  [enter] confirm  [esc] cancel"
+		return components.ConfirmHints
 	}
 	if p.action != nil {
 		return "[↑↓] move  [enter] select  [esc] cancel"

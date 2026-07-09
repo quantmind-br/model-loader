@@ -22,7 +22,7 @@ func init() {
 		Use:   "serve",
 		Short: "Run the headless HTTP proxy in the foreground",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			svc, err := app.Bootstrap(logLevel)
+			svc, err := app.Bootstrap(logLevel, app.AsStateOwner())
 			if err != nil {
 				return &ExitError{Code: 1}
 			}

@@ -29,6 +29,12 @@ func executeSerialBench(
 		if r.cfg.SaveTranscripts {
 			transcripts = append(transcripts, tr)
 		}
+		if pr.Err != "" {
+			r.logger().Warn("benchmark_item_failed", "run_id", r.runID, "problem_id", pr.ProblemID, "phase", pr.FailPhase, "err", pr.Err)
+		}
+		if r.checkpoint != nil {
+			r.checkpoint(results)
+		}
 	}
 	return results, transcripts, nil
 }

@@ -97,3 +97,47 @@ func TestSlotsPoller_ServerErrorEmitsHealthDown(t *testing.T) {
 		}
 	}
 }
+
+// TestSlotsPoller_DefaultClientTimesOut guards audit N-P3: the default poller
+// client must carry a timeout so a backend that accepts the connection but
+// never answers cannot wedge the poller for the subscription's lifetime.
+func TestSlotsPoller_DefaultClientTimesOut(t *testing.T) {
+	block := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-block // never responds while the test runs
+	}))
+	defer srv.Close()
+	defer close(block)
+
+	out := make(chan MonitorEvent, 8)
+	p := newSlotsPoller(srv.URL, nil, time.Second, out) // nil client → 5s timeout
+
+	start := time.Now()
+	done := make(chan struct{})
+	go func() {
+		p.fetchHealth(context.Background())
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("fetchHealth did not return; default client has no timeout")
+	}
+	if elapsed := time.Since(start); elapsed > 8*time.Second {
+		t.Fatalf("fetchHealth took %v; expected ~5s client timeout", elapsed)
+	}
+
+	select {
+	case ev := <-out:
+		if ev.Source != SourceHealth {
+			t.Fatalf("event source = %v, want SourceHealth", ev.Source)
+		}
+		h := ev.Data.(HealthStatus)
+		if h.OK || h.Status != "unreachable" {
+			t.Fatalf("health = %+v, want unreachable", h)
+		}
+	default:
+		t.Fatal("no health event emitted after timeout")
+	}
+}

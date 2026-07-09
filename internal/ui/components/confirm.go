@@ -7,6 +7,11 @@ import (
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
+// ConfirmHints is the canonical status-bar hint line shown while any Confirm
+// dialog is active. Pages must return this constant instead of hand-rolled
+// copies so the advertised keys can never drift from what Confirm handles.
+const ConfirmHints = "[←→] choose  [enter] confirm  [esc] cancel"
+
 // confirmFocusStyle styles the focus-hint footer beneath a Confirm so it
 // reads as auxiliary text rather than competing with the button row.
 var confirmFocusStyle = theme.Subtitle.Bold(true)

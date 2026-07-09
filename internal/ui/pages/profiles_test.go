@@ -1308,16 +1308,17 @@ func TestProfilesPage_PinnedSortsFirst(t *testing.T) {
 		t.Fatalf("first item=%+v; want pinned 'p'", items[0])
 	}
 }
+
 // TUI-RESP: Profiles master-detail stacks below NarrowWidthThreshold and truncates wide lines.
 //
 // Three scenarios from the Step-3 plan:
 //
-//   (a) 80x20 → stacked layout.  View() must contain the horizontal ─
-//       rule between list and detail, must NOT contain a full-height │
-//       divider column, and every line must be ≤ 80 cells.
-//   (b) 120x30 → split layout.  View() must contain a │ divider column.
-//   (c) 120-cell Model path at 120x30 → rendered detail must contain
-//       "…" and no line may exceed 120 cells.
+//	(a) 80x20 → stacked layout.  View() must contain the horizontal ─
+//	    rule between list and detail, must NOT contain a full-height │
+//	    divider column, and every line must be ≤ 80 cells.
+//	(b) 120x30 → split layout.  View() must contain a │ divider column.
+//	(c) 120-cell Model path at 120x30 → rendered detail must contain
+//	    "…" and no line may exceed 120 cells.
 func TestProfilesPage_ResponsiveLayout(t *testing.T) {
 	dir := t.TempDir()
 	store, err := profilestore.NewFSStore(dir)

@@ -183,16 +183,21 @@ func buildResponsesResponse(oai *oaiChatResponse, model string, createdAt int64)
 	}
 	if len(oai.Choices) > 0 {
 		ch := oai.Choices[0]
-		if ch.Message.ReasoningContent != "" {
+		reasoning := ch.Message.ReasoningContent
+		content := ch.Message.Content
+		if reasoning != "" {
 			resp.Output = append(resp.Output, responsesReasoningItem{
 				Type: "reasoning", ID: newResponsesID("rs_"),
-				Summary: []any{responsesSummaryText{Type: "summary_text", Text: ch.Message.ReasoningContent}},
+				Summary: []any{responsesSummaryText{Type: "summary_text", Text: reasoning}},
 			})
 		}
-		if ch.Message.Content != "" {
+		if mirrorReasoningAsText(content, reasoning, len(ch.Message.ToolCalls)) {
+			content = reasoning
+		}
+		if content != "" {
 			resp.Output = append(resp.Output, responsesMessageItem{
 				Type: "message", ID: newResponsesID("msg_"), Status: "completed", Role: "assistant",
-				Content: []any{responsesOutputText{Type: "output_text", Text: ch.Message.Content, Annotations: []any{}}},
+				Content: []any{responsesOutputText{Type: "output_text", Text: content, Annotations: []any{}}},
 			})
 		}
 		for _, tc := range ch.Message.ToolCalls {

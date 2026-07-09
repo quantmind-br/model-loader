@@ -16,7 +16,11 @@ type slotsPoller struct {
 
 func newSlotsPoller(baseURL string, client HTTPDoer, interval time.Duration, out chan<- MonitorEvent) *slotsPoller {
 	if client == nil {
-		client = http.DefaultClient
+		// A backend that accepts the TCP connection but never answers (/health
+		// mid-model-load) must not wedge the poller for the subscription's
+		// lifetime; 5s ≫ the 1s poll tick, so a slow backend degrades to
+		// skipped ticks, never a hang (audit N-P3).
+		client = &http.Client{Timeout: 5 * time.Second}
 	}
 	return &slotsPoller{baseURL: baseURL, client: client, interval: interval, out: out}
 }

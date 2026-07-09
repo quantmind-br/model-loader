@@ -77,12 +77,9 @@ func (s *Server) handleGeminiGenerate(w http.ResponseWriter, r *http.Request, mo
 		writeGeminiError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	// In-flight gauge only; serving counter covers the backend-use phase below.
 	s.inflight.Add(1)
-	s.inflightWG.Add(1)
-	defer func() {
-		s.inflight.Add(-1)
-		s.inflightWG.Done()
-	}()
+	defer s.inflight.Add(-1)
 
 	req, profileID, suffix, hasSuffix, gerr := s.decodeGeminiRequest(r, modelSpec)
 	if gerr != nil {
@@ -95,6 +92,8 @@ func (s *Server) handleGeminiGenerate(w http.ResponseWriter, r *http.Request, mo
 		writeGeminiError(w, gerr.Status, gerr.Message)
 		return
 	}
+	s.serving.Add(1)
+	defer s.serving.Add(-1)
 	oaiReq, terr := translateGeminiRequest(req, loaded.profileID, stream)
 	if terr != nil {
 		writeGeminiError(w, http.StatusBadRequest, terr.Error())

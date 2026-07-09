@@ -19,11 +19,20 @@ The proxy is the **only** communication channel between any client and the backe
 | `POST` | `/_admin/load` | Explicit load; body `{"profile_id":"…"}` (alias `{"model":"…"}`) |
 | `POST` | `/_admin/unload` | Kill backend / free VRAM. `?force=true&drain_timeout=10s`; idempotent 200 |
 
+## Degraded proxy handling
+
+When the proxy's `/_status` reports `"status_probe_failed"` as `last_error`, the proxy is running but its health endpoint is unreachable. In this state the proxy refuses to kill a stranded backend directly, because it cannot distinguish a proxy-owned PID from an orphan. Two escape hatches exist:
+
+- **TUI Server tab** — kill is refused and a "Force-stop proxy" confirmation dialog appears. Accepting it calls `ForceStop()` (SIGKILL) on the proxy process, then kills the backend directly.
+- **CLI** — `instance stop <pid|id> --force` does the same thing inline.
+
+`ForceStop()` is part of the proxy client interface (`internal/service/httpproxy`). It bypasses the normal graceful shutdown and should only be used when `/_status` is persistently failing.
+
 ## Request translation
 
 | Source API | Translation file | Notes |
 |------------|------------------|-------|
-| OpenAI (native) | `handler.go` | Reverse-proxied with `httputil.ReverseProxy`; reads `model` field for implicit swap |
+| OpenAI (native) | `handler.go` | Reverse-proxied with `httputil.ReverseProxy`; reads `model` field for implicit swap. SSE streaming mirrors `reasoning_content` into content deltas so clients that ignore reasoning fields receive a usable assistant turn |
 | Anthropic Messages | `anthropic_*.go` (8 files) | Full SSE event sequence (`message_start` → `content_block_*` → `message_delta` → `message_stop`), tools, images, system. `reasoning_content` ↔ `thinking` blocks. **Strict 404** for unknown model — never falls through to the loaded backend |
 | OpenAI Responses | `responses_*.go` (4 files) | `instructions`→system, `function_call`/`function_call_output`, `reasoning.effort`, full Responses event-stream |
 | Gemini | `gemini_*.go` (5 files) | `contents`/`parts`, `systemInstruction`, `functionCall`/`functionResponse` (FIFO id pairing), `thinkingConfig`→reasoning, `data:`-only SSE. `{model}` may carry a `(level)` reasoning suffix |
@@ -46,14 +55,22 @@ The Anthropic translation **does not go through the `httputil.ReverseProxy`** �
 
 For unsloth, `WaitReady` additionally scans the log for the `sk-unsloth-…` auth token and the proxy injects it as `Authorization: Bearer …` on every request.
 
+### Backend crash detection
+
+Every `handleForward` and `ensureLoaded` call checks `procutil.SameProcess(cur.pid, cur.startTicks)` before proxying to the loaded backend. If the backend died out-of-band (e.g. segfault, OOM kill), `handleBackendCrash()` clears `s.current` and the swap path relaunches instead of returning a success status from a dead PID. The dead PID's registry entry is cleaned up by processmgr's own reaper — `handleBackendCrash` never calls `killOldBackend`.
+
+### Streaming reasoning mirroring
+
+The OpenAI `/v1/chat/completions` SSE streaming path (`newReverseProxy` `ModifyResponse`) mirrors reasoning-only responses into usable content on-the-wire. When a streaming choice finishes with only `reasoning`/`reasoning_content` and no content/tool-call deltas, `mirrorReasoningStream()` injects synthetic `data: {...}\n\n` frames with the accumulated reasoning text as the content delta. This lets OpenAI clients that ignore `reasoning` fields (e.g. via `LLMWIKI_PROVIDER=openai`) still receive an assistant message. The same check in `mirrorReasoningAsText()` gates both streaming and non-streaming paths.
+
 ## Inflight tracking
 
-`inflight` (atomic) + `inflightWG` (sync.WaitGroup) track in-flight requests so unload can drain:
+`inflight` (atomic) tracks concurrent request count. A separate `serving` (atomic) tracks requests actively proxied through the loaded backend. The old `inflightWG` (sync.WaitGroup) was replaced by `drainServing()`, which polls `serving` with a timeout:
 
-- **Only the catch-all forwarder and `/v1/messages` increment `inflightWG`**
+- **Only the catch-all forwarder increments `serving`** (wraps `cur.proxy.ServeHTTP`)
 - `count_tokens` and admin endpoints **must not** touch it (drain self-deadlocks)
-- `/v1/responses` increments because the path goes through the same swap; Gemini routes are tracked via the catch-all path
-- `POST /_admin/unload?drain_timeout=10s` waits up to the timeout for `inflightWG` to reach zero, then kills regardless
+- `/v1/messages` and `/v1/responses` flow through the translation path and do **not** increment `serving` — they are tracked by `inflight` only
+- `POST /_admin/unload?drain_timeout=10s` calls `drainServing()` which polls `serving == 0` up to the timeout, then kills regardless
 
 ## Status wire contract
 
@@ -75,6 +92,7 @@ Image modality is inferred from the `mmproj` flag **or** a VL name marker (flag-
 - **Most routes** — OpenAI-style `{"error":{...}}`
 - **Anthropic routes** (`/v1/messages`, `/v1/messages/count_tokens`) — `{"type":"error","error":{"type":..., "message":...}}` with `invalid_request_error` / `not_found_error` / `request_too_large` / `api_error`
 - Unknown `"model"` on Anthropic routes is a strict `404 not_found_error` (no fall-through to the loaded backend)
+- Client cancellation before a swap completes returns HTTP **499** (`invalid_request_error` `request_canceled`) instead of 504 — distinct from backend failures
 - Request bodies on all inference routes are capped at 8 MiB (large base64 images count against this)
 
 ## What vLLM / SGLang must do

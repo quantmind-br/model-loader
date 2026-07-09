@@ -194,12 +194,17 @@ func buildGeminiResponse(oai *oaiChatResponse, model string) *geminiResponse {
 	resp := &geminiResponse{Candidates: []geminiCandidate{}, ModelVersion: model}
 	if len(oai.Choices) > 0 {
 		ch := oai.Choices[0]
+		reasoning := ch.Message.ReasoningContent
+		content := ch.Message.Content
 		cand := geminiCandidate{Index: 0, Content: geminiOutContent{Role: "model", Parts: []geminiOutPart{}}}
-		if ch.Message.ReasoningContent != "" {
-			cand.Content.Parts = append(cand.Content.Parts, geminiOutPart{Thought: true, Text: ch.Message.ReasoningContent})
+		if reasoning != "" {
+			cand.Content.Parts = append(cand.Content.Parts, geminiOutPart{Thought: true, Text: reasoning})
 		}
-		if ch.Message.Content != "" {
-			cand.Content.Parts = append(cand.Content.Parts, geminiOutPart{Text: ch.Message.Content})
+		if mirrorReasoningAsText(content, reasoning, len(ch.Message.ToolCalls)) {
+			content = reasoning
+		}
+		if content != "" {
+			cand.Content.Parts = append(cand.Content.Parts, geminiOutPart{Text: content})
 		}
 		for _, tc := range ch.Message.ToolCalls {
 			cand.Content.Parts = append(cand.Content.Parts, geminiOutPart{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -144,8 +145,10 @@ func (h sweBenchProHandler) Execute(ctx context.Context, r *Runner, base, model 
 		defer cancel()
 	}
 
-	var out strings.Builder
+	hlog := newHarnessLog(cfg.HarnessLogDir, "swe-bench-pro")
+	defer hlog.Close()
 	total := h.Count(r)
+	r.logger().Info("benchmark_harness_start", "run_id", r.runID, "mode", ModeSweBenchPro, "harness", harness, "total", total, "log", hlog.path)
 
 	// --- Stage 1: obtain patches -------------------------------------------
 	// Supplied patches (patch_path) take precedence over the agent: a consolidated
@@ -172,8 +175,8 @@ func (h sweBenchProHandler) Execute(ctx context.Context, r *Runner, base, model 
 			"{instances}": strings.Join(cfg.SweBenchProInstances, ","),
 			"{harness}":   harness,
 		})
-		if err := h.runStep(runCtx, "agent", harness, agentArgs[0], agentArgs[1:], &out); err != nil {
-			return nil, nil, fmt.Errorf("%w\n--- harness output (tail) ---\n%s", err, tbTail(out.String()))
+		if err := h.runStep(runCtx, "agent", harness, agentArgs[0], agentArgs[1:], hlog); err != nil {
+			return nil, nil, fmt.Errorf("%w\n--- harness output (tail) ---\n%s", err, hlog.diagTail())
 		}
 		gatherDir = predsDir
 	}
@@ -183,8 +186,8 @@ func (h sweBenchProHandler) Execute(ctx context.Context, r *Runner, base, model 
 		send(progress, Progress{Index: 0, Total: total, ProblemID: "swe-bench-pro", ProblemName: "SWE-bench Pro: consolidating patches…", Phase: "infer"})
 		gathered := filepath.Join(outDir, "patches.json")
 		gargs := buildSWEAPGatherArgs(sweapGatherScript(harness), gatherDir, sweapPrefix, gathered)
-		if err := h.runStep(runCtx, "gather", harness, sweapPython(cfg), gargs, &out); err != nil {
-			return nil, nil, fmt.Errorf("%w\n--- harness output (tail) ---\n%s", err, tbTail(out.String()))
+		if err := h.runStep(runCtx, "gather", harness, sweapPython(cfg), gargs, hlog); err != nil {
+			return nil, nil, fmt.Errorf("%w\n--- harness output (tail) ---\n%s", err, hlog.diagTail())
 		}
 		patchesPath = gathered
 	}
@@ -209,21 +212,27 @@ func (h sweBenchProHandler) Execute(ctx context.Context, r *Runner, base, model 
 	}
 	send(progress, Progress{Index: 0, Total: total, ProblemID: "swe-bench-pro", ProblemName: "SWE-bench Pro harness (Docker) evaluating…", Phase: "infer"})
 	stopPoll := make(chan struct{})
-	go sweapProgressPoller(evalOut, total, progress, stopPoll)
+	pollDone := make(chan struct{})
+	go func() {
+		defer close(pollDone)
+		sweapProgressPoller(evalOut, total, progress, stopPoll)
+	}()
 
 	eargs := buildSWEAPEvalArgs(cfg, sweapEvalScript(harness), sweapResolve(harness, cfg.SweBenchProRawSample), patchesPath, evalOut, sweapResolve(harness, sweapScriptsDir(cfg)))
-	evalErr := h.runStep(runCtx, "eval", harness, sweapPython(cfg), eargs, &out)
+	evalErr := h.runStep(runCtx, "eval", harness, sweapPython(cfg), eargs, hlog)
+	r.logger().Info("benchmark_harness_exit", "run_id", r.runID, "mode", ModeSweBenchPro, "err", evalErr)
 	close(stopPoll)
+	<-pollDone // join before deferred os.RemoveAll(outDir) races the poller (audit N-C16)
 
 	resultsPath := filepath.Join(evalOut, "eval_results.json")
 	data, readErr := os.ReadFile(resultsPath)
 	if readErr != nil {
 		return nil, nil, fmt.Errorf("swe-bench-pro produced no results at %s (eval exited: %v)\n--- harness output (tail) ---\n%s",
-			resultsPath, evalErr, tbTail(out.String()))
+			resultsPath, evalErr, hlog.diagTail())
 	}
 	res, perr := parseSWEAPResults(data)
 	if perr != nil {
-		return nil, nil, fmt.Errorf("%w\n--- harness output (tail) ---\n%s", perr, tbTail(out.String()))
+		return nil, nil, fmt.Errorf("%w\n--- harness output (tail) ---\n%s", perr, hlog.diagTail())
 	}
 	// An empty verdict map means the eval evaluated nothing — typically because no
 	// supplied patch matched an instance_id in the raw sample (the harness writes
@@ -231,7 +240,7 @@ func (h sweBenchProHandler) Execute(ctx context.Context, r *Runner, base, model 
 	// a hollow zero-instance run.
 	if len(res) == 0 {
 		return nil, nil, fmt.Errorf("swe-bench-pro evaluated zero instances — no supplied patch matched an instance_id in %s (eval exited: %v)\n--- harness output (tail) ---\n%s",
-			cfg.SweBenchProRawSample, evalErr, tbTail(out.String()))
+			cfg.SweBenchProRawSample, evalErr, hlog.diagTail())
 	}
 	problems := sweapResultsToProblems(res)
 
@@ -240,7 +249,7 @@ func (h sweBenchProHandler) Execute(ctx context.Context, r *Runner, base, model 
 		transcripts = append(transcripts, ProblemTranscript{
 			ProblemID:     "swe-bench-pro",
 			ProblemName:   "SWE-bench Pro harness output",
-			ModelResponse: out.String(),
+			ModelResponse: hlog.transcript(),
 		})
 	}
 
@@ -255,7 +264,7 @@ func (h sweBenchProHandler) Execute(ctx context.Context, r *Runner, base, model 
 // owns a process group so a cancel/timeout group-kills the child and its
 // descendants; WaitDelay forces the kill if the signal is ignored. Output is
 // appended to out for diagnostics.
-func (sweBenchProHandler) runStep(ctx context.Context, name, dir, bin string, args []string, out *strings.Builder) error {
+func (sweBenchProHandler) runStep(ctx context.Context, name, dir, bin string, args []string, out io.Writer) error {
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = dir
 	cmd.Env = tbEnv(os.Environ())

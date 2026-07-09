@@ -656,3 +656,97 @@ func names(ps []domain.Profile) []string {
 	}
 	return out
 }
+
+// TestFSStore_saveIfPresent_PersistsWhenPresent defends the "file present" arm
+// of the resurrection guard: when the profile file still exists, saveIfPresent
+// must behave exactly like Save and persist the mutated field to disk.
+func TestFSStore_saveIfPresent_PersistsWhenPresent(t *testing.T) {
+	s, dir := newStore(t)
+	if err := s.Save(sampleProfile("present", "Present")); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	p, err := s.Get("present")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	want := time.Date(2026, 4, 28, 10, 0, 0, 0, time.UTC)
+	p.Meta.LastUsedAt = &want
+
+	if err := s.saveIfPresent(p); err != nil {
+		t.Fatalf("saveIfPresent: %v", err)
+	}
+
+	got, err := s.Get("present")
+	if err != nil {
+		t.Fatalf("Get after saveIfPresent: %v", err)
+	}
+	if got.Meta.LastUsedAt == nil || !got.Meta.LastUsedAt.Equal(want) {
+		t.Errorf("LastUsedAt = %v, want %v", got.Meta.LastUsedAt, want)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "present.json")); err != nil {
+		t.Errorf("present.json should still exist: %v", err)
+	}
+}
+
+// TestFSStore_saveIfPresent_AbsentIsNoop defends the "file absent" arm: a profile
+// whose file was never written must not be created by saveIfPresent, which must
+// return nil and leave nothing on disk.
+//
+// Regression guard: if saveIfPresent dropped its os.Stat existence check and
+// always called Save (the PV1 bug), this test would FAIL because ghost.json
+// would materialize on disk.
+func TestFSStore_saveIfPresent_AbsentIsNoop(t *testing.T) {
+	s, dir := newStore(t)
+	p := sampleProfile("ghost", "Ghost")
+
+	if err := s.saveIfPresent(p); err != nil {
+		t.Fatalf("saveIfPresent on absent profile should return nil, got %v", err)
+	}
+
+	ghost := filepath.Join(dir, "ghost.json")
+	if _, err := os.Stat(ghost); !os.IsNotExist(err) {
+		t.Errorf("saveIfPresent resurrected an absent profile: os.Stat(%q) err = %v, want not-exist", ghost, err)
+	}
+}
+
+// TestFSStore_saveIfPresent_DoesNotResurrectDeleted is the core PV1 regression:
+// a read-modify-write value held in memory (as MarkLastUsed / Get's self-heal
+// hold one) must not recreate a profile whose file was deleted concurrently
+// between the read and the write.
+//
+// Regression guard: if saveIfPresent dropped its os.Stat existence check and
+// always called Save, this test would FAIL because racer.json would be rewritten
+// after the simulated concurrent delete.
+func TestFSStore_saveIfPresent_DoesNotResurrectDeleted(t *testing.T) {
+	s, dir := newStore(t)
+	if err := s.Save(sampleProfile("racer", "Racer")); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// Read-modify-write value in hand, exactly like MarkLastUsed does.
+	p, err := s.Get("racer")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	at := time.Date(2026, 4, 28, 10, 0, 0, 0, time.UTC)
+	p.Meta.LastUsedAt = &at
+
+	// Simulate a concurrent delete/rename landing between the read above and
+	// the write below.
+	racer := filepath.Join(dir, "racer.json")
+	if err := os.Remove(racer); err != nil {
+		t.Fatalf("remove racer.json: %v", err)
+	}
+
+	if err := s.saveIfPresent(p); err != nil {
+		t.Fatalf("saveIfPresent after delete should return nil, got %v", err)
+	}
+
+	if _, err := os.Stat(racer); !os.IsNotExist(err) {
+		t.Errorf("saveIfPresent resurrected a deleted profile: os.Stat(%q) err = %v, want not-exist", racer, err)
+	}
+	if _, err := s.Get("racer"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Get after resurrection attempt: err = %v, want ErrNotFound", err)
+	}
+}

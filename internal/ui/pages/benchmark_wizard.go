@@ -17,17 +17,20 @@ import (
 // that the user can move forward AND back through.
 func (p BenchmarkPage) openWizard() (tea.Model, tea.Cmd) {
 	if p.runner == nil {
-		p, _ = p.withFlashError("benchmark engine unavailable")
-		return p, nil
+		var cmd tea.Cmd
+		p, cmd = p.withFlashError("benchmark engine unavailable")
+		return p, cmd
 	}
 	profiles, err := p.store.List()
 	if err != nil {
-		p, _ = p.withFlashError("load profiles: " + err.Error())
-		return p, nil
+		var cmd tea.Cmd
+		p, cmd = p.withFlashError("load profiles: " + err.Error())
+		return p, cmd
 	}
 	if len(profiles) == 0 {
-		p, _ = p.withFlashError("no profiles — create one in the Profiles tab")
-		return p, nil
+		var cmd tea.Cmd
+		p, cmd = p.withFlashError("no profiles — create one in the Profiles tab")
+		return p, cmd
 	}
 	p.profiles = profiles
 	p.profCursor = 0
@@ -62,7 +65,7 @@ func (p BenchmarkPage) viewWizard() string {
 }
 
 func (p BenchmarkPage) viewWizardProfile() string {
-	title := theme.Title.Render("Run benchmark — pick a profile")
+	title := theme.Title.Render("Run benchmark — pick a profile") + "  " + theme.Subtitle.Render("(1/3)")
 	filtered := p.filteredProfiles()
 	if len(filtered) == 0 {
 		return lipgloss.JoinVertical(lipgloss.Left, title,
@@ -97,7 +100,7 @@ func (p BenchmarkPage) viewWizardProfile() string {
 }
 
 func (p BenchmarkPage) viewWizardMode() string {
-	title := theme.Title.Render("Run benchmark — pick a mode")
+	title := theme.Title.Render("Run benchmark — pick a mode") + "  " + theme.Subtitle.Render("(2/3)")
 	rows := make([]string, 0, len(benchModes)+4)
 	var lastCat benchmark.Category
 	for i, m := range benchModes {
@@ -136,7 +139,7 @@ func (p BenchmarkPage) viewWizardMode() string {
 }
 
 func (p BenchmarkPage) viewWizardReview() string {
-	title := theme.Title.Render("Run benchmark — review")
+	title := theme.Title.Render("Run benchmark — review") + "  " + theme.Subtitle.Render("(3/3)")
 	mode := benchModes[p.modeCursor]
 	count := 0
 	if p.runner != nil {

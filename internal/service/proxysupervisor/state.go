@@ -26,6 +26,10 @@ type State struct {
 	Host      string    `json:"host"`
 	Port      int       `json:"port"`
 	StartedAt time.Time `json:"started_at"`
+	// StartTicks is /proc/<pid>/stat field 22 captured at Start. Combined
+	// with PID it detects PID recycling (audit A9/A11). 0 = unknown (legacy
+	// state) — identity checks then degrade to Alive.
+	StartTicks uint64 `json:"start_ticks,omitempty"`
 }
 
 // loadState reads path and returns the stored state. A missing file yields

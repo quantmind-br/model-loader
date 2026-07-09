@@ -2,11 +2,11 @@ package configweb
 
 import (
 	"context"
-	"html"
 	"net/http"
 	"strings"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/validator"
 )
 
 type BackendViewModel struct {
@@ -41,6 +41,11 @@ func (s *Session) handleBackendSave(w http.ResponseWriter, r *http.Request) {
 	d := backendDraftFromForm(r)
 	if d.ID == "" {
 		d.ID = domain.Slugify(d.Name)
+	}
+
+	if rep := backendDraftReport(d); len(rep.Errors) > 0 {
+		renderIssues(w, rep)
+		return
 	}
 
 	var berr error
@@ -93,27 +98,24 @@ func (s *Session) handleBackendClosed(w http.ResponseWriter, r *http.Request) {
 	s.requestShutdown()
 }
 
-func (s *Session) handleBackendValidate(w http.ResponseWriter, r *http.Request) {
-	d := backendDraftFromForm(r)
-	var issues []string
+// backendDraftReport mirrors handleBackendValidate's checks as a
+// validator.Report so issues render with data-field attributes and the
+// save path can reuse them.
+func backendDraftReport(d BackendDraft) validator.Report {
+	var rep validator.Report
 	if strings.TrimSpace(d.Name) == "" {
-		issues = append(issues, "Name is required")
-	}
-	if strings.TrimSpace(d.Executable) == "" {
-		issues = append(issues, "Executable is required")
+		rep.Errors = append(rep.Errors, validator.FieldIssue{Field: "name", Message: "required"})
 	}
 	if d.Kind == "" {
-		issues = append(issues, "Kind is required")
+		rep.Errors = append(rep.Errors, validator.FieldIssue{Field: "kind", Message: "required"})
 	}
-	// Inner content only: the page's persistent #issues element carries the
-	// aria-live attributes and must never be replaced wholesale.
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	var b strings.Builder
-	if len(issues) == 0 {
-		b.WriteString(`<span class="ok">✓ valid</span>`)
+	if strings.TrimSpace(d.Executable) == "" {
+		rep.Errors = append(rep.Errors, validator.FieldIssue{Field: "executable", Message: "required"})
 	}
-	for _, e := range issues {
-		b.WriteString(`<div class="issue error">` + html.EscapeString(e) + `</div>`)
-	}
-	_, _ = w.Write([]byte(b.String()))
+	return rep
+}
+
+func (s *Session) handleBackendValidate(w http.ResponseWriter, r *http.Request) {
+	d := backendDraftFromForm(r)
+	renderIssues(w, backendDraftReport(d))
 }

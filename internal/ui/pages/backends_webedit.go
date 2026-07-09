@@ -144,6 +144,9 @@ func (p BackendsPage) Cleanup() {
 	if p.webSession != nil {
 		p.webSession.Cancel()
 	}
+	if p.probeCancel != nil {
+		p.probeCancel() // stop any in-flight probe producer on quit (audit N-C14)
+	}
 }
 
 func (p BackendsPage) cleanupBackendWebEdit() {

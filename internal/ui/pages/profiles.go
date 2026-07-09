@@ -65,9 +65,10 @@ type ProfilesPage struct {
 	pasteGuard bool
 
 	// --- web editor fields ---
-	webEditing bool
-	webURL     string
-	webSession *configweb.Session
+	webEditing    bool
+	webURL        string
+	webSession    *configweb.Session
+	instanceInUse func(string) bool
 }
 
 // NewProfilesPage constructs the page wired to a Store and FlagSchema.
@@ -110,6 +111,13 @@ func (p ProfilesPage) WithLogger(lg *slog.Logger) ProfilesPage {
 	if lg != nil {
 		p.logger = lg
 	}
+	return p
+}
+
+// WithInstanceChecker injects a predicate the web editor uses to refuse a
+// profile-id rename while a live backend is registered under the old id (PN1).
+func (p ProfilesPage) WithInstanceChecker(fn func(string) bool) ProfilesPage {
+	p.instanceInUse = fn
 	return p
 }
 
@@ -281,7 +289,7 @@ func (p ProfilesPage) Hints() string {
 	case p.picker.active:
 		return "[↑↓] move  [enter] pick  [esc] cancel"
 	case p.deleteConfirm.Active():
-		return "[←→] choose  [enter] confirm"
+		return components.ConfirmHints
 	default:
 		return "[enter] launch  [e] edit  [n] new  [d] dup  [X] del  [K] unload  [/] filter"
 	}

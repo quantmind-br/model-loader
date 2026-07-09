@@ -49,7 +49,7 @@
 | `instance show <pid\|id>` | One instance | — |
 | `instance history` | Exited instances | — |
 | `instance start <profile>` | Load via proxy (5-min health wait) | `--json` |
-| `instance stop <pid\|id>` | Unload (if proxy-owned) else kill | `--json` |
+| `instance stop <pid\|id>` | Unload (if proxy-owned) else kill; `--force` force-stops a degraded proxy first | `--json`, `--force` |
 | `instance restart <pid\|id>` | Unload+reload / kill+reload | `--json` |
 | `instance logs <pid\|id>` | Print captured log | `-f/--follow` |
 | `instance metrics <pid\|id>` | Recent metrics window | `-w/--watch`, `--interval` |

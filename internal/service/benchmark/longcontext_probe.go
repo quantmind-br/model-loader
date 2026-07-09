@@ -153,7 +153,11 @@ func (r *Runner) runLongContext(ctx context.Context, base, model string) (Proble
 		"\n\nQuestion: three files define a constant named MAGIC_<NAME>_NUMBER. " +
 		"List all three literal values, one per line, no explanation."
 
-	reqCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout)
+	// Deep prefill costs minutes on large contexts; extend the deadline by the
+	// same ~100 tok/s prefill floor runLlamaBench uses so a high
+	// long_context_tokens setting doesn't guarantee a timeout (BR5).
+	reqTimeout := r.cfg.Timeout + time.Duration(targetTokens/100)*time.Second
+	reqCtx, cancel := context.WithTimeout(ctx, reqTimeout)
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
 		Model:       model,
@@ -166,6 +170,7 @@ func (r *Runner) runLongContext(ctx context.Context, base, model string) (Proble
 	})
 	if err != nil {
 		res.Err = err.Error()
+		res.FailPhase = phaseInfer
 		tr.Error = err.Error()
 		return res, tr
 	}

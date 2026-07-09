@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/internal/shellsplit"
 )
 
 // ProbeStatus is the health result of probing a single backend.
@@ -112,9 +113,12 @@ func (p *Prober) probeOne(ctx context.Context, backend domain.Backend) ProbeEven
 }
 
 func runProbe(ctx context.Context, resolvedCmd string, flag string) (ProbeStatus, string, error) {
-	fields := strings.Fields(resolvedCmd)
-	if len(fields) == 0 {
-		return ProbeStatusErr, "", fmt.Errorf("empty command")
+	fields, err := shellsplit.Split(resolvedCmd)
+	if err != nil || len(fields) == 0 {
+		if err == nil {
+			err = fmt.Errorf("empty command")
+		}
+		return ProbeStatusErr, "", fmt.Errorf("parse command %q: %w", resolvedCmd, err)
 	}
 	args := append(fields[1:], flag)
 	cmd := exec.CommandContext(ctx, fields[0], args...)

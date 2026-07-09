@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -63,7 +64,7 @@ func init() {
 			}
 			if profileID == "" {
 				fmt.Fprintln(errw, "usage:")
-				fmt.Fprintln(errw, "  model-loader benchmark --profile <id> [--mode judge|longctx|llama-bench|terminal-bench|swe-bench-pro|deep-swe] [--limit N] [--tb-task <id>] [--tb-n-tasks N] [--sweap-instance <id>] [--deepswe-task <id>] [--deepswe-n-tasks N] [--json] [--min-solve N]")
+				fmt.Fprintf(errw, "  model-loader benchmark --profile <id> [--mode %s] [--limit N] [--tb-task <id>] [--tb-n-tasks N] [--sweap-instance <id>] [--deepswe-task <id>] [--deepswe-n-tasks N] [--json] [--min-solve N]\n", benchModeList())
 				fmt.Fprintln(errw, "  model-loader benchmark --list [--json]")
 				fmt.Fprintln(errw, "  model-loader benchmark --compare [--profile <id>] [--json]")
 				fmt.Fprintln(errw, "  model-loader benchmark --transcript <run-id> [--json]")
@@ -75,7 +76,7 @@ func init() {
 
 			mode, ok := parseBenchMode(modeStr)
 			if !ok {
-				fmt.Fprintf(errw, "unknown mode %q (want judge|longctx|llama-bench)\n", modeStr)
+				fmt.Fprintf(errw, "unknown mode %q (want %s)\n", modeStr, benchModeList())
 				return &ExitError{Code: 1}
 			}
 			// --tb-task overrides the configured terminal-bench task list for this
@@ -147,7 +148,13 @@ func init() {
 				return &ExitError{Code: 1}
 			}
 
-			run, err := runBenchmark(ctx, env.runner, benchmark.RunConfig{ProfileID: profileID, Mode: mode}, errw)
+			run, err := runBenchmark(ctx, env.runner, benchmark.RunConfig{
+				ProfileID: profileID,
+				Mode:      mode,
+				// T7: persist partial progress during the run (flagged in
+				// progress); the final save below overwrites it.
+				Checkpoint: func(partial benchmark.Run) { _ = store.Save(partial) },
+			}, errw)
 			if err != nil {
 				// Persist whatever completed before the failure/SIGINT so the
 				// partial data shows up (flagged) in the TUI and --list.
@@ -208,6 +215,17 @@ func parseBenchMode(s string) (benchmark.Mode, bool) {
 	return "", false
 }
 
+// benchModeList renders every registered mode as a "a|b|c" list, derived from
+// benchmark.ModesInOrder() so CLI messages never drift from the registry (BR8).
+func benchModeList() string {
+	modes := benchmark.ModesInOrder()
+	parts := make([]string, len(modes))
+	for i, m := range modes {
+		parts[i] = string(m)
+	}
+	return strings.Join(parts, "|")
+}
+
 // benchmarkEnv bundles the proxy supervisor and runner wired for a benchmark run.
 type benchmarkEnv struct {
 	supervisor *proxysupervisor.Supervisor
@@ -235,6 +253,7 @@ func buildBenchmarkEnvironment(svc *app.Services, cfg config.AppConfig, errw io.
 	// The headless CLI always persists transcripts so `benchmark --transcript
 	// <run-id>` can replay a run later; the TUI shows them live and config-gates.
 	bc.SaveTranscripts = true
+	bc.Logger = svc.Logger
 	runner, err := benchmark.NewRunner(svc.Store, mon, supervisor, bc)
 	if err != nil {
 		svc.Logger.Error("benchmark_engine_init_failed", "err", err)
@@ -289,11 +308,29 @@ func persistAndRenderBenchmarkRun(out, errw io.Writer, store benchmarkstore.Stor
 	} else {
 		printRun(out, run)
 	}
-	if minSolve >= 0 && run.Aggregate.SolveRate < minSolve {
-		fmt.Fprintf(errw, "FAIL: solve rate %.2f below --min-solve %.2f\n", run.Aggregate.SolveRate, minSolve)
-		return &ExitError{Code: 2}
+	if minSolve >= 0 {
+		if errored := countErroredProblems(run.Problems); errored > 0 {
+			fmt.Fprintf(errw, "note: %d/%d items errored and are excluded from the solve rate\n", errored, len(run.Problems))
+		}
+		if run.Aggregate.SolveRate < minSolve {
+			fmt.Fprintf(errw, "FAIL: solve rate %.2f below --min-solve %.2f\n", run.Aggregate.SolveRate, minSolve)
+			return &ExitError{Code: 2}
+		}
 	}
 	return nil
+}
+
+// countErroredProblems counts items that failed with a per-problem error
+// (excluded from aggregate denominators — surfaced so a --min-solve pass over
+// a thin scored subset is visible, BR2).
+func countErroredProblems(problems []benchmark.ProblemResult) int {
+	n := 0
+	for _, p := range problems {
+		if p.Err != "" {
+			n++
+		}
+	}
+	return n
 }
 
 func printRun(out io.Writer, run benchmark.Run) {

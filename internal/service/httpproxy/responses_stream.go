@@ -242,11 +242,30 @@ func (st *responsesStreamer) emitToolItems() ([]any, error) {
 	return items, nil
 }
 
+func (st *responsesStreamer) mirrorReasoningOnlyAsMessage() error {
+	if st.rsnID == "" || st.rsnBuf.Len() == 0 || st.msgOpen || st.textBuf.Len() > 0 || len(st.toolOrder) > 0 {
+		return nil
+	}
+	if err := st.ensureMessage(); err != nil {
+		return err
+	}
+	text := st.rsnBuf.String()
+	st.textBuf.WriteString(text)
+	return st.emit("response.output_text.delta", map[string]any{"item_id": st.msgID, "output_index": st.outIndex, "content_index": 0, "delta": text})
+}
+
 func (st *responsesStreamer) finish() error {
+	if err := st.mirrorReasoningOnlyAsMessage(); err != nil {
+		return err
+	}
 	if err := st.closeReasoning(); err != nil {
 		return err
 	}
 	var output []any
+	if st.rsnID != "" {
+		output = append(output, map[string]any{"type": "reasoning", "id": st.rsnID,
+			"summary": []any{map[string]any{"type": "summary_text", "text": st.rsnBuf.String()}}})
+	}
 	if st.msgOpen {
 		text := st.textBuf.String()
 		msgItem := map[string]any{"type": "message", "id": st.msgID, "status": "completed", "role": "assistant",

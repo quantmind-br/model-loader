@@ -70,10 +70,16 @@ func (s *fsScanner) scanRoot(ctx context.Context, root string, ch chan<- domain.
 		return nil
 	})
 	if walkErr != nil && ctx.Err() == nil {
-		ch <- domain.ScanEvent{Type: domain.ScanEventError, Root: root, Error: walkErr}
+		select {
+		case ch <- domain.ScanEvent{Type: domain.ScanEventError, Root: root, Error: walkErr}:
+		case <-ctx.Done():
+		}
 		return
 	}
-	ch <- domain.ScanEvent{Type: domain.ScanEventProgress, Root: root, Count: count}
+	select {
+	case ch <- domain.ScanEvent{Type: domain.ScanEventProgress, Root: root, Count: count}:
+	case <-ctx.Done():
+	}
 }
 
 func buildModelFile(path string, d fs.DirEntry) domain.ModelFile {

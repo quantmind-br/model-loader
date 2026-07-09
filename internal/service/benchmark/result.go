@@ -134,6 +134,10 @@ type ProblemResult struct {
 	CompletionTokens    int     `json:"completionTokens"`
 	Detail              string  `json:"detail,omitempty"`
 	Err                 string  `json:"err,omitempty"`
+	// FailPhase attributes a failed item to a stage (T5): "infer" (model under
+	// test), "score" (judge/grader), or "harness" (external agentic harness).
+	// Empty when Err is empty. Additive/optional so old runs decode cleanly.
+	FailPhase string `json:"failPhase,omitempty"`
 
 	// Structured per-mode fields. All optional and additive so persisted runs
 	// from older versions decode cleanly; Detail keeps the human-readable text.

@@ -111,18 +111,24 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 		{Role: "user", Content: prompt},
 	}
 
+	var warmupFailed int
 	for range r.warmup {
 		select {
 		case <-ctx.Done():
 			res.Err = ctx.Err().Error()
+			res.FailPhase = phaseInfer
 			tr.Error = res.Err
 			return res, tr
 		default:
 		}
 		warmCtx, warmCancel := context.WithTimeout(ctx, repTimeout)
-		_, _ = Complete(warmCtx, nil, base, "", ChatRequest{
+		if _, err := Complete(warmCtx, nil, base, "", ChatRequest{
 			Model: model, Temperature: 0, MaxTokens: ps.GenTokens, IgnoreEOS: true, Messages: msgs,
-		})
+		}); err != nil {
+			// A failing warmup predicts failing reps; keep a trace instead of
+			// discarding it (BR6) — it lands in Detail below.
+			warmupFailed++
+		}
 		warmCancel()
 	}
 
@@ -140,10 +146,13 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 	var tpsSamples []float64
 	var fromServer bool
 	var lastContent string
+	var repErrs int
+	var lastRepErr string
 	for range r.reps {
 		select {
 		case <-ctx.Done():
 			res.Err = ctx.Err().Error()
+			res.FailPhase = phaseInfer
 			tr.Error = res.Err
 			return res, tr
 		default:
@@ -158,9 +167,18 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 		})
 		cancel()
 		if err != nil {
-			res.Err = err.Error()
-			tr.Error = err.Error()
-			return res, tr
+			// A cancelled run still aborts; any other rep failure degrades to
+			// the remaining samples instead of voiding reps already measured
+			// (BR6). The preset only errors when nothing was measured.
+			if ctx.Err() != nil {
+				res.Err = ctx.Err().Error()
+				res.FailPhase = phaseInfer
+				tr.Error = res.Err
+				return res, tr
+			}
+			repErrs++
+			lastRepErr = err.Error()
+			continue
 		}
 		lastContent = comp.Content
 		// Average samples that reached tg tokens OR generated enough for a stable
@@ -184,6 +202,14 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 	tr.ModelResponse = lastContent
 	ok := len(tpsSamples)
 	if ok == 0 {
+		if repErrs > 0 {
+			// Nothing measured and at least one rep failed outright: the
+			// preset is an error, not a zero measurement (BR6).
+			res.Err = fmt.Sprintf("%d/%d reps failed (last: %s)", repErrs, r.reps, firstLine(lastRepErr))
+			res.FailPhase = phaseInfer
+			tr.Error = res.Err
+			return res, tr
+		}
 		// Every sample was too short to measure (empty / near-empty generation).
 		res.Detail = fmt.Sprintf("fill %d%%: no measurable sample: all %d generated < %d tokens", ps.FillPct, short, minSample)
 		return res, tr
@@ -212,6 +238,12 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 	}
 	if short > 0 {
 		res.Detail += fmt.Sprintf("; %d short dropped", short)
+	}
+	if repErrs > 0 {
+		res.Detail += fmt.Sprintf("; %d reps failed (last: %s)", repErrs, firstLine(lastRepErr))
+	}
+	if warmupFailed > 0 {
+		res.Detail += fmt.Sprintf("; %d warmup failures", warmupFailed)
 	}
 	return res, tr
 }

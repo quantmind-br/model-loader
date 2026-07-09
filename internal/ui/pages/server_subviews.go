@@ -113,7 +113,7 @@ func (p *ServerPage) renderSubViewBody() string {
 	pid := p.selectedPID()
 	st := p.subs[pid]
 	if st == nil {
-		return "no subscription"
+		return components.EmptyState("Waiting for monitor data", "Monitor attaches a moment after launch — [R] restarts the instance if this persists")
 	}
 	switch p.subView {
 	case SubViewLogs:
@@ -125,7 +125,7 @@ func (p *ServerPage) renderSubViewBody() string {
 	case SubViewHistory:
 		return p.renderHistory()
 	}
-	return "no subscription"
+	return components.EmptyState("Waiting for monitor data", "Monitor attaches a moment after launch — [R] restarts the instance if this persists")
 }
 
 // renderLogs renders the tail of the selected instance's log buffer, sized to
@@ -177,7 +177,7 @@ func (p *ServerPage) renderMetrics(st *subState) string {
 		return theme.Subtitle.Render("GPU metrics unavailable — check nvidia-smi or monitoring service")
 	}
 	if len(st.mets.TokensPerSec) == 0 && len(st.mets.RequestsPerSec) == 0 {
-		return "(no metrics yet — first sample arrives after the slots tick)"
+		return "(no metrics yet — first sample arrives within a few seconds)"
 	}
 	// tokens/s is only sampled while the model is actively decoding, but
 	// req/s gets a 0-rate sample every slot tick. Inject an idle baseline

@@ -23,6 +23,10 @@
   --input-bg:#0a0e18;
   --input-bd:#253050;
   --hover-bg:rgba(255,255,255,0.04);
+  --muted-dim:rgba(138,146,173,0.15);
+  --on-accent:#04122e;
+  --bg-glow:rgba(110,168,254,0.06);
+  --accent-tint:rgba(110,168,254,0.03);
   /* Type scale */
   --text-xs:0.75rem;
   --text-sm:0.875rem;
@@ -53,6 +57,29 @@
   --dur:0.18s;
 }
 
+@media (prefers-color-scheme: light){
+  :root{
+    --bg:#f6f8fa; --panel:#ffffff; --panel-2:#eaeef2; --elevated:#ffffff;
+    --ink:#1f2328; --ink-dim:#59636e;
+    --muted:#57606a; /* ≈5.9:1 on --panel (#fff); WCAG AA ≥4.5:1 */
+    --accent:#0969da; --accent-hover:#0550ae;
+    --accent-dim:rgba(9,105,218,0.10); --accent-glow:rgba(9,105,218,0.25);
+    --err:#cf222e; --err-dim:rgba(207,34,46,0.12);
+    --warn:#9a6700; --warn-dim:rgba(154,103,0,0.14);
+    --ok:#1a7f37; --ok-dim:rgba(26,127,55,0.12);
+    --border:#d1d9e0; --border-strong:#afb8c1;
+    --input-bg:#ffffff; --input-bd:#d1d9e0;
+    --hover-bg:rgba(0,0,0,0.04);
+    --muted-dim:rgba(87,96,106,0.12);
+    --on-accent:#ffffff;
+    --bg-glow:rgba(9,105,218,0.05);
+    --accent-tint:rgba(9,105,218,0.04);
+    --shadow:0 4px 16px rgba(140,149,159,0.25);
+    --shadow-sm:0 1px 3px rgba(140,149,159,0.20);
+    --shadow-lg:0 12px 32px rgba(140,149,159,0.30);
+  }
+}
+
 *{box-sizing:border-box}
 [x-cloak]{display:none!important}
 
@@ -61,7 +88,7 @@ html,body{margin:0;padding:0;height:100%}
 body{
   font:var(--text-base)/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
   background:
-    radial-gradient(1200px 600px at 80% -10%, rgba(110,168,254,0.06), transparent 60%),
+    radial-gradient(1200px 600px at 80% -10%, var(--bg-glow), transparent 60%),
     var(--bg);
   background-attachment:fixed;
   color:var(--ink);
@@ -100,7 +127,7 @@ body{
   display:flex;
   align-items:center;
   gap:3px;
-  background:#161d33;
+  background:var(--panel-2);
   padding:3px;
   border-radius:var(--radius-md);
 }
@@ -126,7 +153,7 @@ body{
   background:var(--panel);
   color:var(--ink);
   font-weight:600;
-  box-shadow:0 1px 4px rgba(0,0,0,0.5);
+  box-shadow:var(--shadow-sm);
 }
 
 .actions{
@@ -137,7 +164,7 @@ body{
 
 button.primary{
   background:var(--accent);
-  color:#04122e;
+  color:var(--on-accent);
   border:0;
   padding:0.55rem 1.2rem;
   border-radius:var(--radius-md);
@@ -154,7 +181,7 @@ button.primary:hover{
 
 button.ghost{
   background:transparent;
-  border:1px solid #2d3a5c;
+  border:1px solid var(--border-strong);
   color:var(--muted);
   padding:0.55rem 1.2rem;
   border-radius:var(--radius-md);
@@ -387,7 +414,7 @@ form{
 .field select.error,
 .field textarea.error{
   border-color:var(--err);
-  box-shadow:0 0 0 3px rgba(255,107,107,0.15);
+  box-shadow:0 0 0 3px var(--err-dim);
 }
 
 .field small.muted{
@@ -587,7 +614,7 @@ form{
 .flag-card-new{
   border-style:dashed;
   border-color:var(--accent);
-  background:rgba(110,168,254,0.03);
+  background:var(--accent-tint);
 }
 
 .flag-card-new:hover{
@@ -629,18 +656,18 @@ form{
   letter-spacing:0.04em;
 }
 
-.type-int{background:rgba(110,168,254,0.15);color:#6ea8fe}
-.type-float{background:rgba(110,168,254,0.15);color:#6ea8fe}
-.type-bool{background:rgba(95,211,138,0.15);color:#5fd38a}
-.type-enum{background:rgba(255,207,102,0.15);color:#ffcf66}
-.type-string{background:rgba(138,146,173,0.15);color:#8b95ad}
+.type-int{background:var(--accent-dim);color:var(--accent)}
+.type-float{background:var(--accent-dim);color:var(--accent)}
+.type-bool{background:var(--ok-dim);color:var(--ok)}
+.type-enum{background:var(--warn-dim);color:var(--warn)}
+.type-string{background:var(--muted-dim);color:var(--muted)}
 
 .req-badge{
   font-size:var(--text-xs);
   font-weight:600;
   padding:2px 8px;
   border-radius:var(--radius-sm);
-  background:rgba(255,107,107,0.15);
+  background:var(--err-dim);
   color:var(--err);
 }
 
@@ -700,7 +727,7 @@ button.danger{
 }
 
 button.danger:hover{
-  background:rgba(255,107,107,0.1);
+  background:var(--err-dim);
   color:var(--err);
 }
 
@@ -1029,7 +1056,7 @@ button.secondary:active,
    written out from the corresponding base rule above). */
 @media (hover:none){
   button.primary:hover{filter:none;transform:none}
-  button.ghost:hover{color:var(--muted);border-color:#2d3a5c;background:transparent}
+  button.ghost:hover{color:var(--muted);border-color:var(--border-strong);background:transparent}
   button.danger:hover{background:transparent;color:var(--err)}
   button.secondary:hover{background:var(--accent-dim);color:var(--accent)}
   .modes button:hover{color:var(--muted);background:transparent}
@@ -1038,7 +1065,7 @@ button.secondary:active,
   .tab-btn.active:hover{background:var(--accent-dim);color:var(--accent)}
   .clear-btn:hover{color:var(--muted);background:transparent}
   .flag-card:hover{border-color:var(--input-bd)}
-  .flag-card-new:hover{border-color:var(--accent);background:rgba(110,168,254,0.03)}
+  .flag-card-new:hover{border-color:var(--accent);background:var(--accent-tint)}
 }
 
 /* ── Keyboard focus ── */

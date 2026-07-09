@@ -7,8 +7,8 @@ A profile is one JSON file at `~/.config/model-loader/profiles/<id>.json`. The b
 ```json
 {
   "schemaVersion": 3,
-  "id": "qwen3.6-27b-mtp-dflash-q4km-262k-quality",
-  "name": "Qwen3.6-27B MTP+DFlash (Quality, 262k ctx)",
+  "id": "qwen3.6-27b-mtp-dflash-q4km-quality-256k",
+  "name": "Qwen3.6-27B MTP+DFlash (Quality, 256k ctx)",
   "description": "Single-stream, highest quality. MTP + DFlash speculative decoding.",
   "tags": ["qwen", "dflash", "mtp"],
   "model": "/mnt/models/qwen2.5-27b-q4_k_m.gguf",
@@ -68,19 +68,19 @@ Curated enums can be list-valued (`internal/domain/flag_schema.go`); the validat
 
 ## Naming convention (curation discipline — not code-enforced)
 
-Lowercase kebab id, most-significant first:
+Profile IDs are lowercase kebab/slash-safe slugs and the filename basename equals `id`.
+
+Canonical pattern:
 
 ```
-<family><ver>-<size>[-<variant>][-<quant>][-<capability>…]-<ctx>[-<backend>][-<mode>]
+<model-family-and-version>-<size>[-<variant>][-<quant>][-<capability/backend/mode>...]-<ctx>
 ```
 
-- **ctx label must match real context.** Source of truth = `args.ctx-size` (llama.cpp) / `args.max-model-len` (vLLM), **binary-k (÷1024) floored** (`262144`→`256k`, `253952`→`248k`, `200000`→`195k`). Stale `…-262k` on a 200000-ctx profile is the most common drift.
-- **Capability segments mirror `args`, not intent:**
-  - `vision` only while `args.mmproj` is set
-  - `mtp` / `dflash` only while `args.spec-type` is set
-  - Id/args drift exists — keep them in sync
-- **Name the real base model** (not the publisher's repackaging label)
-- **Siblings differing only by serving mode** carry a disambiguator: `-speed` / `-throughput` / `-quality`, `parallelN-Wk`, `-cpumoe`
+- **Start with the real base model/family + version when available.** Do not start with backend, task, quant, or local nickname unless that is the model family itself.
+- **End with the context window.** Source of truth = `args.ctx-size` (llama.cpp), `args.max-model-len` (vLLM), or `args.context-length` (SGLang). Use **binary-k floored** (`262144`→`256k`, `233472`→`228k`, `1048576`→`1024k`). No suffix may appear after the context label.
+- **Capability segments mirror `args`, not intent:** `vision` only while `args.mmproj` or a vision-native backend config is active; `mtp` / `dflash` only while speculative args/config are active; backend/mode qualifiers (`vllm`, `tp2`, `beellama`, `textonly`, `tensor`, `layer`) sit before final `<ctx>`.
+- **Name the real base model** (not the publisher's repackaging label).
+- **Siblings differing only by serving mode** carry a disambiguator before `<ctx>`: `speed` / `throughput` / `quality`, `parallelN-Wk`, `cpumoe`, backend/mode.
 
 ## Authoring flow
 

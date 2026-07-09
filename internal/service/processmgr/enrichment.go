@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
 )
 
@@ -31,14 +32,19 @@ func (m *fsManager) WaitHealthy(pid int, port int, timeout time.Duration, attemp
 		if err == nil {
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
-				if m.sink != nil {
-					m.mu.Lock()
-					inst, ok := m.tracked[pid]
-					m.mu.Unlock()
-					if ok {
-						// best-effort; bookkeeping failure must not abort a healthy launch
-						_ = m.sink.MarkLastUsed(inst.ProfileID, time.Now().UTC())
-					}
+				m.mu.Lock()
+				inst, ok := m.tracked[pid]
+				if ok {
+					// A healthy check resets the restart budget: MaxRestarts
+					// bounds consecutive FAILED starts, not lifetime restarts
+					// (audit A5).
+					inst.RestartCount = 0
+					m.tracked[pid] = inst
+				}
+				m.mu.Unlock()
+				if ok && m.sink != nil {
+					// best-effort; bookkeeping failure must not abort a healthy launch
+					_ = m.sink.MarkLastUsed(inst.ProfileID, time.Now().UTC())
 				}
 				lg.Info("healthcheck_ok")
 				return nil
@@ -100,13 +106,17 @@ func (m *fsManager) waitEnrichment(cmd *exec.Cmd, pid int, logPath string, attem
 	if m.fgPID == pid {
 		m.fgPID = 0
 	}
+	// The reaper produced this exit's enrichment; hand restart duty back so a
+	// late liveness tick cannot double-fire (audit A10).
+	delete(m.hasReaper, pid)
 	now := time.Now().UTC()
 	appended := m.appendHistoryLocked(cur, reason, now)
-	snap := snapshotLocked(m.tracked)
 	m.mu.Unlock()
 
-	// 5th out-of-lock saveRegistry callsite. See AGENTS.md.
-	_ = saveRegistry(m.registryPath, snap)
+	// out-of-m.mu mutateRegistry callsite (flock-guarded delta). See AGENTS.md.
+	_ = mutateRegistry(m.registryPath, func(reg map[int]domain.RunningInstance) {
+		reg[pid] = cur
+	})
 	if appended {
 		_ = m.persistHistory()
 	}
@@ -116,35 +126,9 @@ func (m *fsManager) waitEnrichment(cmd *exec.Cmd, pid int, logPath string, attem
 		"exit_reason", reason,
 		"stderr_tail_lines", len(tail))
 
-	if cur.RestartPolicy != "" && cur.RestartPolicy != "none" {
-		shouldRestart := cur.RestartPolicy == "always" ||
-			(cur.RestartPolicy == "on-failure" && exitCode != nil && *exitCode != 0)
-		if shouldRestart && (cur.MaxRestarts <= 0 || cur.RestartCount < cur.MaxRestarts) {
-			cur.RestartCount++
-			now := time.Now().UTC()
-			cur.LastRestartAt = &now
-			m.mu.Lock()
-			m.tracked[pid] = cur
-			m.mu.Unlock()
-			backoff := time.Duration(cur.BackoffSeconds) * time.Second
-			if cur.RestartCount > 1 {
-				backoff = time.Duration(cur.BackoffSeconds*cur.RestartCount) * time.Second
-			}
-			if backoff > 30*time.Second {
-				backoff = 30 * time.Second
-			}
-			m.logger.Info("watchdog_restart",
-				"pid", pid, "profile_id", cur.ProfileID,
-				"restart_count", cur.RestartCount,
-				"backoff", backoff.String())
-			if backoff > 0 {
-				time.Sleep(backoff)
-			}
-			if m.restartFunc != nil {
-				m.restartFunc(cur.ProfileID)
-			}
-		}
-	}
+	// Reaper-driven restart decision (audit A4/A5). The kill-intent guard,
+	// set-once dedupe, MaxRestarts cap, and backoff live in maybeScheduleRestart.
+	m.maybeScheduleRestart(cur, exitCode)
 }
 
 // extractExit interprets the *exec.Cmd.Wait error + ProcessState into a

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"sort"
 	"sync"
 	"syscall"
@@ -287,6 +288,13 @@ func (m *Manager) Resume(id ID) error {
 	}
 
 	m.mu.Lock()
+	// Dedup: the .claim marker (spawn) is released after each spawn, so a
+	// duplicate queue entry promoted on a later tick would respawn a second
+	// worker over the same state/partial file (audit N-C10).
+	if slices.Contains(m.queue, id) {
+		m.mu.Unlock()
+		return nil // already queued; promotion will spawn it exactly once
+	}
 	canSpawn := len(m.active) < m.maxConcurrent
 	if !canSpawn {
 		m.queue = append(m.queue, id)

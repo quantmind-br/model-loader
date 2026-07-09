@@ -1,10 +1,12 @@
 package httpproxy
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -46,5 +48,62 @@ func TestNewReverseProxy_NoTokenNoHeader(t *testing.T) {
 
 	if gotAuth != "" {
 		t.Fatalf("expected no Authorization header, got %q", gotAuth)
+	}
+}
+
+func TestReverseProxy_OversizedResponseNotTruncated(t *testing.T) {
+	const bodyLen = 1024
+	payload := `{"choices":[{"message":{"content":"` + strings.Repeat("y", bodyLen) + `"}}]}`
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush() // force chunked transfer (no Content-Length)
+		}
+		_, _ = io.WriteString(w, payload)
+	}))
+	defer upstream.Close()
+
+	// maxBodyBuffer = 64 < payload: the normalizer must NOT truncate; the
+	// oversized body streams through untouched.
+	rp := newReverseProxy(backendPort(t, upstream), "", 64)
+	rec := httptest.NewRecorder()
+	rp.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if got := rec.Body.String(); got != payload {
+		t.Errorf("body len %d, want %d (untruncated)", len(got), len(payload))
+	}
+}
+
+func TestReverseProxy_StreamMirrorsReasoningOnly(t *testing.T) {
+	sse := `data: {"id":"x","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"reasoning":"why"}}]}` + "\n\n" +
+		`data: {"id":"x","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{},"finish_reason":"length"}]}` + "\n\n" +
+		"data: [DONE]\n\n"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		_, _ = io.WriteString(w, sse)
+	}))
+	defer upstream.Close()
+
+	rp := newReverseProxy(backendPort(t, upstream), "", defaultMaxBodyBuffer)
+	rec := httptest.NewRecorder()
+	rp.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"content":"why"`) {
+		t.Fatalf("stream missing mirrored content: %s", body)
+	}
+	if !strings.Contains(body, `"finish_reason":"length"`) {
+		t.Fatalf("stream lost original finish reason: %s", body)
 	}
 }

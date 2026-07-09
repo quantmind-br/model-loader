@@ -103,13 +103,21 @@ func Compact(dataDir, profileID string, retention time.Duration, maxBytes int64)
 		return nil
 	}
 
-	for estimateSize(keep) > maxBytes && len(keep) > 1 {
-		drop := len(keep) / 10
-		if drop < 1 {
-			drop = 1
-		}
-		keep = keep[drop:]
+	// Single-pass byte-bound trim (audit C2): marshal each kept record once,
+	// then drop from the FRONT (oldest) until the running total fits maxBytes.
+	sizes := make([]int64, len(keep))
+	var total int64
+	for i, r := range keep {
+		line, _ := json.Marshal(r)
+		sizes[i] = int64(len(line)) + 1
+		total += sizes[i]
 	}
+	start := 0
+	for start < len(keep)-1 && total > maxBytes {
+		total -= sizes[start]
+		start++
+	}
+	keep = keep[start:]
 
 	tmp := p + ".tmp"
 	f, err := createWriter(tmp)
@@ -151,13 +159,4 @@ func writeRecords(w io.Writer, recs []Record) error {
 		}
 	}
 	return nil
-}
-
-func estimateSize(recs []Record) int64 {
-	var n int64
-	for _, r := range recs {
-		line, _ := json.Marshal(r)
-		n += int64(len(line)) + 1
-	}
-	return n
 }

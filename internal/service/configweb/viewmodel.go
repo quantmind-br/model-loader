@@ -93,6 +93,13 @@ func BuildViewModel(d Draft, schema domain.BackendValidationSchema, backends []d
 	vm.BackendID = schema.BackendID
 	vm.Backends = backends
 	vm.Rules = schema.Rules
+	vm.AllFlags = allFlagEdits(schema)
+	return vm
+}
+
+// allFlagEdits returns every non-reserved flag as a FlagEditVM, sorted by
+// long name — the flags-grid rendering order.
+func allFlagEdits(schema domain.BackendValidationSchema) []FlagEditVM {
 	longs := make([]string, 0, len(schema.Flags))
 	for long := range schema.Flags {
 		if reservedFlags[long] {
@@ -101,10 +108,11 @@ func BuildViewModel(d Draft, schema domain.BackendValidationSchema, backends []d
 		longs = append(longs, long)
 	}
 	sort.Strings(longs)
+	out := make([]FlagEditVM, 0, len(longs))
 	for _, long := range longs {
-		vm.AllFlags = append(vm.AllFlags, flagEdit(long, schema.Flags[long]))
+		out = append(out, flagEdit(long, schema.Flags[long]))
 	}
-	return vm
+	return out
 }
 
 // surfacedFlags returns the set of long-form flags the editor renders as

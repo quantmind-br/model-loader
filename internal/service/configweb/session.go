@@ -2,6 +2,7 @@ package configweb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -15,13 +16,21 @@ import (
 
 // Deps are the stores/services the session needs to read and persist data.
 type Deps struct {
-	Profiles             profilestore.Store
-	Catalog              backendcatalog.Store
-	Schemas              backendcatalog.SchemaStore
-	Manager              *backendschema.Manager
-	InitialDraft         Draft
-	InitialBackendDraft  BackendDraft
+	Profiles            profilestore.Store
+	Catalog             backendcatalog.Store
+	Schemas             backendcatalog.SchemaStore
+	Manager             *backendschema.Manager
+	InitialDraft        Draft
+	InitialBackendDraft BackendDraft
+	// InstanceInUse reports whether a live backend is currently registered under
+	// profileID (instances.json). When it returns true a rename is refused: the
+	// running backend + its logs are keyed on the old id and would be stranded
+	// (PN1). nil disables the guard (tests, backend editor).
+	InstanceInUse func(profileID string) bool
 }
+
+// ErrProfileInUse blocks renaming a profile whose id has a live instance.
+var ErrProfileInUse = errors.New("cannot rename profile: a backend is running under this id")
 
 // Result is delivered on Done() when the session finishes.
 type Result struct {

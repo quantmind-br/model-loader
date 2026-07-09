@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -127,11 +128,14 @@ func (h deepSWEHandler) Execute(ctx context.Context, r *Runner, base, model stri
 
 	args := buildDeepSWEArgs(r.cfg, deepJobName, deepAPIBase(base, r.cfg.DeepSWEAPIBase), deepAPIKey(), model, jobsDir)
 
-	runCtx := ctx
+	// runCtx bounds the run: the optional whole-run timeout, plus a cancel the
+	// hang watchdog trips to group-kill a wedged harness.
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	if r.cfg.DeepSWETimeout > 0 {
-		var cancel context.CancelFunc
-		runCtx, cancel = context.WithTimeout(ctx, r.cfg.DeepSWETimeout)
-		defer cancel()
+		var tcancel context.CancelFunc
+		runCtx, tcancel = context.WithTimeout(runCtx, r.cfg.DeepSWETimeout)
+		defer tcancel()
 	}
 
 	total := h.Count(r)
@@ -139,25 +143,53 @@ func (h deepSWEHandler) Execute(ctx context.Context, r *Runner, base, model stri
 
 	runDir := filepath.Join(jobsDir, deepJobName)
 	stopPoll := make(chan struct{})
-	go deepProgressPoller(runDir, total, progress, stopPoll)
+	pollDone := make(chan struct{})
+	go func() {
+		defer close(pollDone)
+		deepProgressPoller(runDir, total, progress, stopPoll)
+	}()
 
 	cmd := exec.CommandContext(runCtx, bin, args...)
 	cmd.Env = tbEnv(os.Environ())
-	// Own process group so a cancel/timeout group-kills pier and its children;
-	// WaitDelay forces the kill if it ignores the signal.
+	// Own process group so a cancel/timeout/watchdog group-kills pier and its
+	// children; WaitDelay forces the kill if it ignores the signal.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 10 * time.Second
-	var out strings.Builder
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-	runErr := cmd.Run()
+	hlog := newHarnessLog(r.cfg.HarnessLogDir, "deep-swe")
+	defer hlog.Close()
+	cmd.Stdout = hlog
+	cmd.Stderr = hlog
+
+	if err := cmd.Start(); err != nil {
+		close(stopPoll)
+		<-pollDone
+		return nil, nil, fmt.Errorf("start pier: %w", err)
+	}
+	r.logger().Info("benchmark_harness_start", "run_id", r.runID, "mode", ModeDeepSWE, "bin", bin, "total", total, "log", hlog.path)
+
+	// Watchdog: a pier run that scored every task but won't exit, or stalled
+	// mid-run, keeps hammering the proxy and pins the GPU — same class and
+	// safety net as terminal-bench (BUGS UIUX-012).
+	var reason atomic.Int32
+	wdStop := make(chan struct{})
+	wdDone := make(chan struct{})
+	go func() {
+		defer close(wdDone)
+		runHangWatchdog("deep-swe", func() int { return deepCountCompletedTrials(runDir) }, total, cmd.Process.Pid, deepStallTimeout(r.cfg), cancel, progress, &reason, wdStop)
+	}()
+
+	runErr := cmd.Wait()
+	r.logger().Info("benchmark_harness_exit", "run_id", r.runID, "mode", ModeDeepSWE, "err", runErr, "scored", deepCountCompletedTrials(runDir))
+	close(wdStop)
+	<-wdDone
 	close(stopPoll)
+	<-pollDone // join before deferred os.RemoveAll(jobsDir) races the poller (audit N-C16)
 
 	problems, perr := deepParseRunDir(runDir)
 	if perr != nil {
 		return nil, nil, fmt.Errorf("deep-swe produced no per-trial results under %s (pier exited: %v): %w\n--- pier output (tail) ---\n%s",
-			runDir, runErr, perr, tbTail(out.String()))
+			runDir, runErr, perr, hlog.diagTail())
 	}
 
 	var transcripts []ProblemTranscript
@@ -165,15 +197,46 @@ func (h deepSWEHandler) Execute(ctx context.Context, r *Runner, base, model stri
 		transcripts = append(transcripts, ProblemTranscript{
 			ProblemID:     "deep-swe",
 			ProblemName:   "pier harness output",
-			ModelResponse: out.String(),
+			ModelResponse: hlog.transcript(),
 		})
 	}
 
-	// Propagate cancellation so Run records a partial run with the work done.
+	switch tbWatchReason(reason.Load()) {
+	case tbWatchStalled:
+		return problems, transcripts, fmt.Errorf("deep-swe stalled: no task scored for %s; harness killed", deepStallTimeout(r.cfg))
+	case tbWatchCompleted:
+		return problems, transcripts, nil
+	}
+	// Operator cancellation → partial run carrying its cause.
 	if ctx.Err() != nil {
 		return problems, transcripts, ctx.Err()
 	}
+	// Whole-run DeepSWETimeout fired: truncated, so a partial run (not a clean
+	// completion) even if some trials parsed.
+	if runCtx.Err() != nil {
+		return problems, transcripts, fmt.Errorf("deep-swe exceeded run timeout %s; harness killed", r.cfg.DeepSWETimeout)
+	}
+	// A non-zero pier exit with an incomplete trial set means the harness died
+	// mid-run: surface it as a partial run (BR3). Completeness gates the check
+	// (a completed-but-imperfect run may exit non-zero); an unknown total
+	// can't gate, but the exit error is still traced in the harness log.
+	if runErr != nil {
+		if total > 0 && len(problems) < total {
+			return problems, transcripts, fmt.Errorf("pier exited with error after %d/%d trials: %v\n--- pier output (tail) ---\n%s",
+				len(problems), total, runErr, hlog.diagTail())
+		}
+		fmt.Fprintf(hlog, "\n[model-loader] pier exited non-zero with a complete trial set: %v\n", runErr)
+	}
 	return problems, transcripts, nil
+}
+
+// deepStallTimeout resolves the pier no-progress kill threshold: the configured
+// DeepSWEStallTimeout when set, else the shared built-in default.
+func deepStallTimeout(cfg Config) time.Duration {
+	if cfg.DeepSWEStallTimeout > 0 {
+		return cfg.DeepSWEStallTimeout
+	}
+	return tbDefaultStallTimeout
 }
 
 // resolveDeepSWEBin resolves the pier binary: an explicit path/name from config,

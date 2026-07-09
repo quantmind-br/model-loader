@@ -68,6 +68,8 @@ type anthropicStreamer struct {
 	usage              *oaiUsage
 	emittedBytes       int // fallback output-token estimate when usage never arrives
 	warnedExtraChoices bool
+	reasoningBuf       strings.Builder
+	textSeen           bool
 
 	// Tool calls are accumulated across deltas — id, name, and argument
 	// fragments can arrive in any order and split across chunks — and emitted
@@ -185,6 +187,7 @@ func (st *anthropicStreamer) onChunk(c *oaiStreamChunk) error {
 		if err := st.ensureBlock("thinking"); err != nil {
 			return err
 		}
+		st.reasoningBuf.WriteString(rc)
 		st.emittedBytes += len(rc)
 		if err := st.writeDelta(sseThinkingDelta{Type: "thinking_delta", Thinking: rc}); err != nil {
 			return err
@@ -194,6 +197,7 @@ func (st *anthropicStreamer) onChunk(c *oaiStreamChunk) error {
 		if err := st.ensureBlock("text"); err != nil {
 			return err
 		}
+		st.textSeen = true
 		st.emittedBytes += len(tx)
 		if err := st.writeDelta(sseTextDelta{Type: "text_delta", Text: tx}); err != nil {
 			return err
@@ -231,8 +235,24 @@ func (st *anthropicStreamer) onChunk(c *oaiStreamChunk) error {
 	return nil
 }
 
+func (st *anthropicStreamer) mirrorReasoningOnlyAsText() error {
+	if st.textSeen || st.reasoningBuf.Len() == 0 || len(st.toolOrder) > 0 {
+		return nil
+	}
+	if err := st.ensureBlock("text"); err != nil {
+		return err
+	}
+	if err := st.writeDelta(sseTextDelta{Type: "text_delta", Text: st.reasoningBuf.String()}); err != nil {
+		return err
+	}
+	return st.closeBlock()
+}
+
 func (st *anthropicStreamer) finish() error {
 	if err := st.closeBlock(); err != nil {
+		return err
+	}
+	if err := st.mirrorReasoningOnlyAsText(); err != nil {
 		return err
 	}
 	if err := st.emitAccumulatedTools(); err != nil {

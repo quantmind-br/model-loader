@@ -1,6 +1,7 @@
 package app
 
 import (
+	"path/filepath"
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/config"
@@ -22,6 +23,8 @@ func BenchmarkConfig(cfg config.AppConfig) benchmark.Config {
 		Timeout:           time.Duration(b.TimeoutSec) * time.Second,
 		LongContextTokens: b.LongContextTokens,
 		SaveTranscripts:   b.SaveTranscripts,
+		HarnessLogDir:     filepath.Join(cfg.Paths.StateDir, "benchmark", "harness"),
+		UnloadAfterRun:    b.UnloadAfterRun,
 		Judge: benchmark.JudgeEndpoint{
 			BaseURL: b.Judge.BaseURL,
 			APIKey:  b.Judge.APIKey,
@@ -33,15 +36,16 @@ func BenchmarkConfig(cfg config.AppConfig) benchmark.Config {
 		LlamaBenchWarmup:  b.LlamaBench.Warmup,
 		EmbeddingsBaseURL: b.Embeddings.BaseURL,
 
-		TerminalBenchCmd:        b.TerminalBench.Command,
-		TerminalBenchAgent:      b.TerminalBench.Agent,
-		TerminalBenchDataset:    b.TerminalBench.Dataset,
-		TerminalBenchProvider:   b.TerminalBench.Provider,
-		TerminalBenchTasks:      b.TerminalBench.Tasks,
-		TerminalBenchNTasks:     b.TerminalBench.NTasks,
-		TerminalBenchConcurrent: b.TerminalBench.Concurrent,
-		TerminalBenchTimeout:    time.Duration(b.TerminalBench.TimeoutSec) * time.Second,
-		TerminalBenchExtraArgs:  b.TerminalBench.ExtraArgs,
+		TerminalBenchCmd:          b.TerminalBench.Command,
+		TerminalBenchAgent:        b.TerminalBench.Agent,
+		TerminalBenchDataset:      b.TerminalBench.Dataset,
+		TerminalBenchProvider:     b.TerminalBench.Provider,
+		TerminalBenchTasks:        b.TerminalBench.Tasks,
+		TerminalBenchNTasks:       b.TerminalBench.NTasks,
+		TerminalBenchConcurrent:   b.TerminalBench.Concurrent,
+		TerminalBenchTimeout:      time.Duration(b.TerminalBench.TimeoutSec) * time.Second,
+		TerminalBenchStallTimeout: time.Duration(b.TerminalBench.StallTimeoutSec) * time.Second,
+		TerminalBenchExtraArgs:    b.TerminalBench.ExtraArgs,
 
 		SweBenchProHarnessDir:    b.SweBenchPro.HarnessDir,
 		SweBenchProRawSample:     b.SweBenchPro.RawSamplePath,
@@ -56,17 +60,18 @@ func BenchmarkConfig(cfg config.AppConfig) benchmark.Config {
 		SweBenchProTimeout:       time.Duration(b.SweBenchPro.TimeoutSec) * time.Second,
 		SweBenchProExtraArgs:     b.SweBenchPro.ExtraArgs,
 
-		DeepSWECmd:        b.DeepSWE.Command,
-		DeepSWETasksDir:   b.DeepSWE.TasksDir,
-		DeepSWEAgent:      b.DeepSWE.Agent,
-		DeepSWEProvider:   b.DeepSWE.Provider,
-		DeepSWEModelClass: b.DeepSWE.ModelClass,
-		DeepSWEAPIBase:    b.DeepSWE.APIBase,
-		DeepSWETasks:      b.DeepSWE.Tasks,
-		DeepSWENTasks:     b.DeepSWE.NTasks,
-		DeepSWESampleSeed: b.DeepSWE.SampleSeed,
-		DeepSWEConcurrent: b.DeepSWE.Concurrent,
-		DeepSWETimeout:    time.Duration(b.DeepSWE.TimeoutSec) * time.Second,
-		DeepSWEExtraArgs:  b.DeepSWE.ExtraArgs,
+		DeepSWECmd:          b.DeepSWE.Command,
+		DeepSWETasksDir:     b.DeepSWE.TasksDir,
+		DeepSWEAgent:        b.DeepSWE.Agent,
+		DeepSWEProvider:     b.DeepSWE.Provider,
+		DeepSWEModelClass:   b.DeepSWE.ModelClass,
+		DeepSWEAPIBase:      b.DeepSWE.APIBase,
+		DeepSWETasks:        b.DeepSWE.Tasks,
+		DeepSWENTasks:       b.DeepSWE.NTasks,
+		DeepSWESampleSeed:   b.DeepSWE.SampleSeed,
+		DeepSWEConcurrent:   b.DeepSWE.Concurrent,
+		DeepSWETimeout:      time.Duration(b.DeepSWE.TimeoutSec) * time.Second,
+		DeepSWEStallTimeout: time.Duration(b.DeepSWE.StallTimeoutSec) * time.Second,
+		DeepSWEExtraArgs:    b.DeepSWE.ExtraArgs,
 	}
 }

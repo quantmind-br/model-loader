@@ -202,7 +202,7 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		// We therefore include the documented "spec-draft-*" primary name in each
 		// flag's Aliases so it remains resolvable by name (the form the quickstart
 		// and profiles use) after the merge.
-		enumFlag("spec-type", "", nil, []string{"none", "draft-simple", "draft-eagle3", "draft-mtp", "ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod", "ngram-cache", "suffix", "copyspec", "recycle", "dflash"}, "none", "Speculative decoding strategy. Use 'dflash' with a DFlash drafter or 'draft-mtp' for native MTP.", beeGroupSpeculative),
+		listEnumFlag("spec-type", "", nil, []string{"none", "draft-simple", "draft-eagle3", "draft-mtp", "ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod", "ngram-cache", "suffix", "copyspec", "recycle", "dflash"}, "none", "Speculative decoding strategy (comma-separated list, e.g. dflash,ngram-mod). Use 'dflash' with a DFlash drafter or 'draft-mtp' for native MTP.", beeGroupSpeculative),
 		strFlag("spec-draft-model", "md", []string{"model-draft", "spec-draft-model"}, nil, "Draft model for speculative decoding (DFlash drafter GGUF).", beeGroupSpeculative, false),
 		strFlag("spec-draft-hf", "hfd", []string{"hf-repo-draft", "spec-draft-hf", "hfrd"}, nil, "HF repo for the draft model, <user>/<model>[:quant]; downloads on first run.", beeGroupSpeculative, false),
 		strFlag("spec-draft-ngl", "ngld", []string{"n-gpu-layers-draft", "gpu-layers-draft", "spec-draft-ngl"}, nil, "Draft model layers offloaded to VRAM; integer count ('all' = use a high count like 99).", beeGroupSpeculative, false),

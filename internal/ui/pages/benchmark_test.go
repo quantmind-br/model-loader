@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -401,5 +402,71 @@ func TestRunning_EscArmsCancelConfirm(t *testing.T) {
 	}
 	if cancelled {
 		t.Fatal("esc must NOT cancel directly — only the confirm's affirmative path does")
+	}
+}
+
+// TestBenchmarkPage_CleanupCancelsRun guards audit N-C15: Cleanup on a page with
+// an in-flight run cancels it and returns once the engine acknowledges; an idle
+// page (nil runCancel) is a safe no-op.
+func TestBenchmarkPage_CleanupCancelsRun(t *testing.T) {
+	page := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
+
+	canceled := false
+	page.runCancel = func() { canceled = true }
+	done := make(chan struct{})
+	close(done) // engine already acknowledged the cancel
+	page.runDone = done
+
+	start := time.Now()
+	page.Cleanup()
+	if !canceled {
+		t.Fatal("Cleanup did not call runCancel")
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("Cleanup blocked %v; runDone was closed, expected immediate return", elapsed)
+	}
+
+	// Idle page (no run in flight) must not panic.
+	NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir()).Cleanup()
+}
+
+// UIUX-011: a run that dies before producing any problems surfaces an error
+// flash, and handleRunDone MUST return the flash-clear cmd so bubbletea drives
+// the auto-clear timer. The bug dropped that cmd (returned nil), so the error
+// stayed on screen forever and stacked across retries. This pins the cmd being
+// threaded through AND the FlashClearMsg it schedules actually clearing the
+// flash.
+func TestBenchmarkPage_RunFailureFlashAutoClears(t *testing.T) {
+	page := NewBenchmarkPage(nil, &fakeBStore{}, nil, t.TempDir())
+
+	m, cmd := page.handleRunDone(benchRunDoneMsg{
+		run: benchmark.Run{ID: "r2"},
+		err: errors.New("load profile via proxy: not ready"),
+	})
+	page = m.(BenchmarkPage)
+
+	// The core regression: dropping this cmd meant the flash never auto-cleared.
+	if cmd == nil {
+		t.Fatal("handleRunDone dropped the flash-clear cmd; error flash would never auto-clear")
+	}
+
+	msg, _ := page.StatusMessage()
+	if !strings.Contains(msg, "load profile via proxy: not ready") {
+		t.Fatalf("expected error flash to surface the failure; got %q", msg)
+	}
+
+	// Simulate the delayed clear tick without sleeping: the cmd is a real timer
+	// (FlashLifetimeError), so calling it would block. Build the matching
+	// FlashClearMsg from the queued item's identity and feed it through Update.
+	items := page.flash.Items()
+	if len(items) != 1 {
+		t.Fatalf("expected exactly one queued flash item; got %d", len(items))
+	}
+	clearMsg := components.FlashClearMsg{Tag: "benchmark", Seq: items[0].Seq}
+	mm, _ := page.Update(clearMsg)
+	page = mm.(BenchmarkPage)
+
+	if msg2, _ := page.StatusMessage(); msg2 != "" {
+		t.Fatalf("flash should be cleared after its FlashClearMsg; got %q", msg2)
 	}
 }

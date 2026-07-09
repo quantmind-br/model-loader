@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 )
@@ -210,5 +212,39 @@ func TestScanner_RespectsContextCancel(t *testing.T) {
 
 	// Drain the channel; we just need it to close without hanging.
 	for range ch {
+	}
+}
+
+// TestScanner_CancelUnblocksFullBuffer guards audit N-P6: a scan whose event
+// buffer fills while the consumer reads nothing must still terminate on ctx
+// cancel — the trailing progress/error sends select on ctx.Done().
+func TestScanner_CancelUnblocksFullBuffer(t *testing.T) {
+	dir := t.TempDir()
+	// More files than the channel buffer so the producer blocks on a send.
+	for i := range eventBuffer + 20 {
+		writeGGUFFile(t, filepath.Join(dir, fmt.Sprintf("m-%03d-Q4_K_M.gguf", i)), 1_000_000)
+	}
+
+	s := New()
+	ctx, cancel := context.WithCancel(context.Background())
+	ch, err := s.Scan(ctx, []string{dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Consumer reads nothing; let the producer fill the buffer, then cancel.
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case _, ok := <-ch:
+			if !ok {
+				return // channel closed → scan goroutine terminated
+			}
+		case <-deadline:
+			t.Fatal("scan goroutine did not terminate after cancel (blocked on a send)")
+		}
 	}
 }

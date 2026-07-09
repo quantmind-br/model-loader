@@ -35,10 +35,10 @@ type ExitError struct{ Code int }
 func (e *ExitError) Error() string { return fmt.Sprintf("exit code %d", e.Code) }
 
 var rootCmd = &cobra.Command{
-	Use:     "model-loader",
-	Short:   "Manage LLM inference server profiles and processes",
-	Long:    "model-loader manages LLM server profiles and processes.\n" + "Run with no subcommand to launch the interactive TUI.",
-	Version: Version,
+	Use:           "model-loader",
+	Short:         "Manage LLM inference server profiles and processes",
+	Long:          "model-loader manages LLM server profiles and processes.\n" + "Run with no subcommand to launch the interactive TUI.",
+	Version:       Version,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {

@@ -128,7 +128,6 @@ func (p *ModelsPage) relayout() {
 	p.resizeColumns(p.width)
 }
 
-
 func (p ModelsPage) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	p.width, p.height = msg.Width, msg.Height
 	p.relayout()

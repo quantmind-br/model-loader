@@ -361,8 +361,8 @@ func TestHandleAdminUnload_ForceTrueSkipsDrain(t *testing.T) {
 
 	// Fake a request in flight that never finishes — would block a non-force
 	// unload until the drain timeout. force=true must skip the wait entirely.
-	srv.inflightWG.Add(1)
-	defer srv.inflightWG.Done()
+	srv.serving.Add(1)
+	defer srv.serving.Add(-1)
 
 	mux := http.NewServeMux()
 	srv.registerRoutes(mux)
@@ -398,10 +398,10 @@ func TestHandleAdminUnload_DrainCompletesThenKills(t *testing.T) {
 
 	// Simulate a request in flight that finishes after 100ms; unload must
 	// wait, then kill the backend.
-	srv.inflightWG.Add(1)
+	srv.serving.Add(1)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		srv.inflightWG.Done()
+		srv.serving.Add(-1)
 	}()
 
 	mux := http.NewServeMux()
@@ -437,8 +437,8 @@ func TestHandleAdminUnload_DrainTimeoutProceedsToKill(t *testing.T) {
 
 	// Hang a request indefinitely; drain timeout must trigger and unload
 	// must still kill the backend.
-	srv.inflightWG.Add(1)
-	defer srv.inflightWG.Done()
+	srv.serving.Add(1)
+	defer srv.serving.Add(-1)
 
 	mux := http.NewServeMux()
 	srv.registerRoutes(mux)
@@ -457,6 +457,39 @@ func TestHandleAdminUnload_DrainTimeoutProceedsToKill(t *testing.T) {
 	}
 	if mgr.killCount() != 1 {
 		t.Errorf("kills = %d, want 1 (must kill even on drain timeout)", mgr.killCount())
+	}
+}
+
+func TestAdminUnload_DrainIgnoresNonServingInflight(t *testing.T) {
+	store := newStubStore(makeProfile("alpha", 9216))
+	mgr := newStubManager()
+	srv := newTestServer(t, store, mgr)
+	if _, err := srv.ensureLoaded(context.Background(), "alpha"); err != nil {
+		t.Fatalf("preload: %v", err)
+	}
+
+	// A request parked pre-swap bumps the inflight gauge only; serving == 0.
+	// Drain must NOT wait on it (audit C6) — unload returns immediately.
+	srv.inflight.Add(1)
+	defer srv.inflight.Add(-1)
+
+	mux := http.NewServeMux()
+	srv.registerRoutes(mux)
+
+	start := time.Now()
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest("POST",
+		"/_admin/unload?drain_timeout=5s", nil))
+	elapsed := time.Since(start)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	if elapsed > 1*time.Second {
+		t.Errorf("unload took %v — must not wait on a non-serving inflight request", elapsed)
+	}
+	if mgr.killCount() != 1 {
+		t.Errorf("kills = %d, want 1", mgr.killCount())
 	}
 }
 

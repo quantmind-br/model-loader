@@ -4,8 +4,10 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -353,6 +355,7 @@ func TestBackendsPage_Probe(t *testing.T) {
 
 	model, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
 	p = model.(BackendsPage)
+	cmd = firstProbeEventCmd(cmd)
 
 	for cmd != nil {
 		msg := cmd()
@@ -371,6 +374,46 @@ func TestBackendsPage_Probe(t *testing.T) {
 	}
 	if p.probeResults[b.ID].status != backendcatalog.ProbeStatusOK {
 		t.Fatalf("status = %s, want OK", p.probeResults[b.ID].status)
+	}
+}
+
+// ctxCapturingProber records the ctx passed to Probe and returns a channel it
+// never closes, so the consumer stays pending until the timeout fires.
+type ctxCapturingProber struct{ ctx context.Context }
+
+func (c *ctxCapturingProber) Probe(ctx context.Context) (<-chan backendcatalog.ProbeEvent, error) {
+	c.ctx = ctx
+	return make(chan backendcatalog.ProbeEvent), nil
+}
+
+// TestBackendsPage_ProbeTimeoutCancelsContext guards audit N-C14: the probe
+// timeout branch cancels the ctx so the prober's producer goroutine unblocks.
+func TestBackendsPage_ProbeTimeoutCancelsContext(t *testing.T) {
+	p, mgr, _ := newBackendsPageHarness(t)
+	addBackendForPage(t, mgr, "Probe Backend", "/bin/echo")
+	p = loadBackendsPage(t, p)
+
+	prober := &ctxCapturingProber{}
+	p = p.WithProber(prober)
+
+	model, _ := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
+	p = model.(BackendsPage)
+	if prober.ctx == nil {
+		t.Fatal("prober ctx not captured")
+	}
+
+	// Force the timeout branch: pretend the probe started 4s ago.
+	p.probeStartTime = time.Now().Add(-4 * time.Second)
+	model, _ = p.Update(spinner.TickMsg{})
+	p = model.(BackendsPage)
+	if p.pendingProbe {
+		t.Fatal("expected pendingProbe false after timeout")
+	}
+
+	select {
+	case <-prober.ctx.Done():
+	case <-time.After(1 * time.Second):
+		t.Fatal("probe context not canceled on timeout")
 	}
 }
 
@@ -417,6 +460,7 @@ func TestBackendsPage_ProbePendingGuard(t *testing.T) {
 
 	model, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
 	p = model.(BackendsPage)
+	cmd = firstProbeEventCmd(cmd)
 	oldEpoch := p.probeEpoch
 
 	if !p.pendingProbe {
@@ -471,6 +515,7 @@ func TestBackendsPage_ProbeStaleEpochIgnored(t *testing.T) {
 
 	model, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
 	p = model.(BackendsPage)
+	cmd = firstProbeEventCmd(cmd)
 	oldEpoch := p.probeEpoch
 
 	for cmd != nil {
@@ -487,6 +532,7 @@ func TestBackendsPage_ProbeStaleEpochIgnored(t *testing.T) {
 	if p.probeEpoch == oldEpoch {
 		t.Fatal("expected new probe epoch")
 	}
+	cmd = firstProbeEventCmd(cmd)
 
 	for cmd != nil {
 		msg := cmd()
@@ -528,6 +574,26 @@ func drainBackendsCmd(t *testing.T, p *BackendsPage, cmd tea.Cmd) {
 		*p = upd.(BackendsPage)
 		cmd = next
 	}
+}
+
+// firstProbeEventCmd unwraps askProbeAll's Batch(readNext, spinnerTick) into a
+// single cmd yielding the next probeEventMsg, dropping the spinner tick (armed
+// per audit N-P5) so the probe-driving test loops work unchanged.
+func firstProbeEventCmd(cmd tea.Cmd) tea.Cmd {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		return func() tea.Msg { return msg }
+	}
+	for _, c := range batch {
+		if pe, ok := c().(probeEventMsg); ok {
+			return func() tea.Msg { return pe }
+		}
+	}
+	return nil
 }
 
 // F-07 regression: pressing `/` on the Backends tab must enter the

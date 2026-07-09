@@ -1,10 +1,17 @@
 package benchmark
 
-import "time"
+import (
+	"log/slog"
+	"time"
+)
 
 // Config tunes the engine. main.go maps config.BenchmarkConfig onto it so the
 // benchmark package stays decoupled from the config package.
 type Config struct {
+	// Logger receives structured per-phase/per-item diagnostics (T1). nil →
+	// log.Nop() (NewRunner supplies the fallback). Set at the call site from
+	// the app logger since the config→Config mapping has no logger of its own.
+	Logger    *slog.Logger
 	MaxTokens int
 	// Limit caps how many items a reducible mode runs (problems for the dataset
 	// modes, presets for llama-bench). <=0 → no cap (full set). A uniform
@@ -16,7 +23,17 @@ type Config struct {
 	Timeout           time.Duration // per-problem inference timeout
 	LongContextTokens int           // target prompt size for the needle probe (0 → default)
 	SaveTranscripts   bool          // capture raw model/judge I/O for debugging
-	Judge             JudgeEndpoint
+	// HarnessLogDir, when set, receives one <mode>-<timestamp>.log per agentic
+	// run with the external harness's full merged stdout/stderr (teed live), so
+	// hours of output survive a model-loader crash and RAM stays bounded (BR7).
+	// Empty → bounded in-memory tail only.
+	HarnessLogDir string
+	// UnloadAfterRun frees the model from the proxy (calls /_admin/unload) when a
+	// run finishes — success, partial, or cancelled. Default false keeps the
+	// warm-model behavior (the proxy owns backend lifecycle); enable it so a long
+	// agentic run does not leave VRAM pinned after it completes.
+	UnloadAfterRun bool
+	Judge          JudgeEndpoint
 	// EmbeddingsBaseURL optionally overrides where similarity graders fetch
 	// embeddings. Empty → reuse the model-under-test server. Reserved for the
 	// instruction-consistency mode (added in a later plan).
@@ -63,6 +80,10 @@ type Config struct {
 	// TerminalBenchExtraArgs are passed through verbatim after the built flags
 	// (e.g. "--no-rebuild", "--no-cleanup", "--global-agent-timeout-sec", "600").
 	TerminalBenchExtraArgs []string
+	// TerminalBenchStallTimeout group-kills the tb harness when no new task has
+	// been scored for this long — a wedged agent/Docker task that would otherwise
+	// hang forever, pinning the GPU. 0 → built-in tbDefaultStallTimeout.
+	TerminalBenchStallTimeout time.Duration
 
 	// --- SWE-bench Pro (agentic) mode (ModeSweBenchPro) ---
 	// These configure the external SWE-bench Pro harness (scaleapi/SWE-bench_Pro-os).
@@ -159,6 +180,9 @@ type Config struct {
 	// DeepSWETimeout bounds the whole pier run from the model-loader side; 0 → no
 	// cap here (pier still enforces its own per-task timeouts from task.toml).
 	DeepSWETimeout time.Duration
+	// DeepSWEStallTimeout group-kills the pier harness when no new task is scored
+	// for this long (a wedged agent/Docker task). 0 → built-in tbDefaultStallTimeout.
+	DeepSWEStallTimeout time.Duration
 	// DeepSWEExtraArgs are passed through verbatim after the built flags (e.g.
 	// "--force-build", "--ae", "HTTP_PROXY=…").
 	DeepSWEExtraArgs []string

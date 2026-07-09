@@ -142,7 +142,7 @@ func (r *Runner) runCodeGenBench(ctx context.Context, base, model string, p Code
 	res := ProblemResult{ProblemID: p.TaskID, ProblemName: p.TaskID}
 	tr := ProblemTranscript{ProblemID: p.TaskID, ProblemName: p.TaskID}
 
-	reqCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout)
+	reqCtx, cancel := context.WithTimeout(ctx, r.inferTimeout())
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
 		Model:       model,
@@ -155,6 +155,7 @@ func (r *Runner) runCodeGenBench(ctx context.Context, base, model string, p Code
 	})
 	if err != nil {
 		res.Err = err.Error()
+		res.FailPhase = phaseInfer
 		tr.Error = err.Error()
 		return res, tr
 	}
@@ -199,10 +200,19 @@ func firstLine(s string) string {
 
 type codeGenHandler struct{}
 
-func (codeGenHandler) Mode() Mode                      { return ModeCodeGenBench }
-func (codeGenHandler) Category() Category              { return CatQuality }
-func (codeGenHandler) Count(r *Runner) int             { return r.capCount(len(r.codeGenProblems)) }
-func (codeGenHandler) Prepare(*Runner) (Scorer, error) { return nil, nil }
+func (codeGenHandler) Mode() Mode          { return ModeCodeGenBench }
+func (codeGenHandler) Category() Category  { return CatQuality }
+func (codeGenHandler) Count(r *Runner) int { return r.capCount(len(r.codeGenProblems)) }
+
+// Prepare fails fast when python3 is missing (BR4): candidate execution is
+// impossible, so refuse before the expensive backend launch instead of
+// persisting a fake one-item run.
+func (codeGenHandler) Prepare(*Runner) (Scorer, error) {
+	if _, err := lookPython(); err != nil {
+		return nil, fmt.Errorf("codegen-bench requires python3 on PATH: %w", err)
+	}
+	return nil, nil
+}
 
 // Finalize sets CodePassRate over EXECUTED problems only (those without an Err);
 // all-skipped → rate stays 0 (omitted via omitempty).
@@ -223,11 +233,6 @@ func (codeGenHandler) Finalize(agg *Aggregate, problems []ProblemResult) {
 }
 
 func (codeGenHandler) Execute(ctx context.Context, r *Runner, base, model string, _ Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
-	if _, err := lookPython(); err != nil {
-		res := ProblemResult{ProblemID: "codegen-skipped", ProblemName: "CodeGenBench", Err: "python3 not on PATH; CodeGenBench skipped"}
-		res.Detail = res.Err
-		return []ProblemResult{res}, nil, nil
-	}
 	return executeSerialBench(ctx, r, progress, r.capCount(len(r.codeGenProblems)),
 		func(i int) (string, string) {
 			p := r.codeGenProblems[i]

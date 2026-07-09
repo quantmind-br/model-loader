@@ -60,7 +60,7 @@ func (r *Runner) runRagas(ctx context.Context, base, model string, g grader, p R
 	tr := ProblemTranscript{ProblemID: p.ID, ProblemName: name}
 
 	docs := strings.Join(p.Documents, "\n")
-	reqCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout)
+	reqCtx, cancel := context.WithTimeout(ctx, r.inferTimeout())
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
 		Model:       model,
 		Temperature: 0,
@@ -73,6 +73,7 @@ func (r *Runner) runRagas(ctx context.Context, base, model string, g grader, p R
 	cancel()
 	if err != nil {
 		res.Err = err.Error()
+		res.FailPhase = phaseInfer
 		tr.Error = err.Error()
 		return res, tr
 	}
@@ -85,7 +86,14 @@ func (r *Runner) runRagas(ctx context.Context, base, model string, g grader, p R
 	res.CompletionTokens = comp.CompletionTokens
 	tr.ModelResponse = comp.Content
 
+	// A grading failure must surface as a per-problem error (BR1), never a
+	// silent zero blended into the aggregate. The first failure short-circuits
+	// the remaining criteria so a dead judge doesn't burn one timeout each.
+	var gradeErr error
 	grade := func(criterion, guidance, gctx, question string) gradeResult {
+		if gradeErr != nil || ctx.Err() != nil {
+			return gradeResult{}
+		}
 		gCtx, gCancel := context.WithTimeout(ctx, r.cfg.Timeout)
 		defer gCancel()
 		gr, gErr := g.Grade(gCtx, gradeRequest{
@@ -93,6 +101,7 @@ func (r *Runner) runRagas(ctx context.Context, base, model string, g grader, p R
 			Question: question, Context: gctx, Answer: comp.Content,
 		})
 		if gErr != nil {
+			gradeErr = fmt.Errorf("grade %s: %w", criterion, gErr)
 			tr.JudgeRaw = append(tr.JudgeRaw, criterion+": "+gErr.Error())
 			return gradeResult{}
 		}
@@ -105,6 +114,17 @@ func (r *Runner) runRagas(ctx context.Context, base, model string, g grader, p R
 	prec := grade("context precision", "the answer matches the ground-truth answer drawn from the relevant document",
 		"Ground truth: "+p.GroundTruth+"\nRelevant document: "+p.ExpectedContext, p.Question)
 
+	// Run cancelled mid-grading: keep the inference result without a fake
+	// grade or a per-problem error (mirrors Runner.scoreProblem).
+	if ctx.Err() != nil {
+		return res, tr
+	}
+	if gradeErr != nil {
+		res.Err = gradeErr.Error()
+		res.FailPhase = phaseScore
+		tr.Error = gradeErr.Error()
+		return res, tr
+	}
 	mean := (faith.Score + rel.Score + prec.Score) / 3
 	res.Score = mean
 	res.Resolved = mean >= ragasPassThreshold

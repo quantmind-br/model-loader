@@ -213,6 +213,9 @@ func (s *Session) doPersist(op persistOp) error {
 	case "create":
 		return s.deps.Profiles.Create(op.profile)
 	case "rename":
+		if s.deps.InstanceInUse != nil && s.deps.InstanceInUse(op.oldID) {
+			return fmt.Errorf("%w %q — stop the running instance/benchmark first, then rename", ErrProfileInUse, op.oldID)
+		}
 		// Move the file (write new, drop old) instead of leaving an orphaned
 		// copy under the original id.
 		return s.deps.Profiles.Rename(op.oldID, op.profile)

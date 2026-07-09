@@ -7,9 +7,14 @@
 <title>{{if .Draft.Name}}{{.Draft.Name}}{{else}}New Backend{{end}} · model-loader</title>
 <link rel="stylesheet" href="/static/app.css">
 <script src="/static/htmx.min.js"></script>
+<script defer src="/static/editor.js"></script>
 <script defer src="/static/alpine.min.js"></script>
 </head>
-<body x-data="{dirty:false}" @input.capture="dirty=true">
+<body x-data="{dirty:false}" @input.capture="dirty=true"
+  data-save-path="/backend/save" data-cancel-path="/backend/cancel"
+  @keydown.window.prevent.ctrl.s="document.querySelector('header .actions .primary').click()"
+  @keydown.window.prevent.meta.s="document.querySelector('header .actions .primary').click()"
+  @keydown.window.escape="htmx.ajax('POST','/backend/cancel',{})">
 <header class="topbar">
   <div class="title">{{if .Draft.Name}}{{.Draft.Name}}{{else}}New Backend{{end}} <span class="muted">· backend</span></div>
   <div class="actions">
@@ -25,37 +30,43 @@
       <input type="hidden" name="isNew" value="{{if .Draft.IsNew}}true{{else}}false{{end}}">
 
       <div class="backend-fields">
-        <div class="field">
+        <div class="field" data-field="name">
           <label for="backend-name">Name <span class="req">*</span></label>
           <input id="backend-name" name="name" value="{{.Draft.Name}}" placeholder="backend name" required aria-required="true">
+          <small class="field-error"></small>
         </div>
         {{if .IsNew}}
-        <div class="field">
+        <div class="field" data-field="kind">
           <label for="backend-kind">Kind <span class="req">*</span></label>
           <select id="backend-kind" name="kind" required aria-required="true">
             {{range .Kinds}}
             <option value="{{.}}"{{if eq . $.Draft.Kind}} selected{{end}}>{{.}}</option>
             {{end}}
           </select>
+          <small class="field-error"></small>
         </div>
         {{else}}
         <input type="hidden" name="kind" value="{{.Draft.Kind}}">
-        <div class="field">
+        <div class="field" data-field="kind">
           <label for="backend-kind">Kind</label>
           <input id="backend-kind" value="{{.Draft.Kind}}" disabled readonly>
+          <small class="field-error"></small>
         </div>
         {{end}}
-        <div class="field">
+        <div class="field" data-field="executable">
           <label for="backend-executable">Executable <span class="req">*</span></label>
           <input id="backend-executable" name="executable" value="{{.Draft.Executable}}" placeholder="path to executable" required aria-required="true">
+          <small class="field-error"></small>
         </div>
-        <div class="field">
+        <div class="field" data-field="description">
           <label for="backend-description">Description</label>
           <input id="backend-description" name="description" value="{{.Draft.Description}}" placeholder="short description">
+          <small class="field-error"></small>
         </div>
-        <div class="field">
+        <div class="field" data-field="tags">
           <label for="backend-tags">Tags</label>
           <input id="backend-tags" name="tags" value="{{range $i, $t := .Draft.Tags}}{{if $i}}, {{end}}{{$t}}{{end}}" placeholder="comma-separated tags">
+          <small class="field-error"></small>
         </div>
       </div>
     </form>
@@ -67,41 +78,5 @@
     <div class="toast" :class="t.type" x-text="t.msg"></div>
   </template>
 </div>
-<script>
-function toastHost(){return{
-  items:[],
-  init(){var self=this;window.addEventListener('toast',function(e){self.push(e.detail.msg,e.detail.type||'info');});},
-  push(msg,type){var id=Date.now()+Math.random();this.items.push({id:id,msg:msg,type:type});var self=this;setTimeout(function(){self.items=self.items.filter(function(x){return x.id!==id});},2600);}
-}}
-// Surface non-2xx responses (htmx ignores their bodies for swaps) as a toast
-// so failures from remaining http.Error paths are never silent.
-document.addEventListener('htmx:responseError', function (e) {
-  var msg = (e.detail && e.detail.xhr && e.detail.xhr.responseText) || 'Request failed';
-  window.dispatchEvent(new CustomEvent('toast', {detail:{msg:msg,type:'error'}}));
-});
-document.body.addEventListener('htmx:timeout', function () {
-  window.dispatchEvent(new CustomEvent('toast', {detail:{msg:'Request timed out — try again',type:'error'}}));
-});
-// A successful save/cancel navigates away via HX-Redirect; that departure is
-// intentional and must not trip the unsaved-changes prompt.
-var leavingIntentionally = false;
-document.body.addEventListener('htmx:beforeOnLoad', function (e) {
-  if (e.detail.xhr.getResponseHeader('HX-Redirect')) leavingIntentionally = true;
-});
-window.addEventListener('beforeunload', function (e) {
-  if (leavingIntentionally) return;
-  var data = window.Alpine ? Alpine.$data(document.body) : null;
-  if (data && data.dirty) { e.preventDefault(); e.returnValue = ''; }
-});
-// Confirm discarding unsaved edits when cancelling.
-document.body.addEventListener('htmx:confirm', function (e) {
-  if (e.detail.path !== '/backend/cancel') return;
-  var data = window.Alpine ? Alpine.$data(document.body) : null;
-  if (data && data.dirty) {
-    e.preventDefault();
-    if (confirm('Discard unsaved changes?')) e.detail.issueRequest();
-  }
-});
-</script>
 </body>
 </html>{{end}}

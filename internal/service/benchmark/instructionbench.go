@@ -177,7 +177,7 @@ func (r *Runner) runInstructionBench(pc probeCtx, sim similarityGrader, g grader
 	}
 	res, tr := newInstResult(p)
 
-	reqCtx, cancel := context.WithTimeout(pc.ctx, r.cfg.Timeout)
+	reqCtx, cancel := context.WithTimeout(pc.ctx, r.inferTimeout())
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, pc.base, "", ChatRequest{
 		Model:       pc.model,
@@ -189,6 +189,7 @@ func (r *Runner) runInstructionBench(pc probeCtx, sim similarityGrader, g grader
 	})
 	if err != nil {
 		res.Err = err.Error()
+		res.FailPhase = phaseInfer
 		tr.Error = err.Error()
 		return res, tr
 	}
@@ -210,6 +211,7 @@ func (r *Runner) runInstructionBench(pc probeCtx, sim similarityGrader, g grader
 			// An empty reply proves nothing about refusal behavior (it is usually
 			// a truncation or backend hiccup) — record an error, not a pass.
 			res.Err = "empty response"
+			res.FailPhase = phaseInfer
 			tr.Error = res.Err
 			return res, tr
 		}
@@ -246,7 +248,7 @@ func (r *Runner) runInstConsistency(pc probeCtx, sim similarityGrader, p Instruc
 	res, tr := newInstResult(p)
 	var replies []string
 	for i := range instConsistencySamples {
-		reqCtx, cancel := context.WithTimeout(pc.ctx, r.cfg.Timeout)
+		reqCtx, cancel := context.WithTimeout(pc.ctx, r.inferTimeout())
 		comp, err := Complete(reqCtx, nil, pc.base, "", ChatRequest{
 			Model:       pc.model,
 			Temperature: instConsistencyTemp,
@@ -258,6 +260,7 @@ func (r *Runner) runInstConsistency(pc probeCtx, sim similarityGrader, p Instruc
 		cancel()
 		if err != nil {
 			res.Err = err.Error()
+			res.FailPhase = phaseInfer
 			tr.Error = err.Error()
 			return res, tr
 		}

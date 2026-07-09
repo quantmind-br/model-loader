@@ -193,7 +193,7 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 		strFlag("control-vector-scaled", "", nil, nil, "Control vector with scale in FILE:SCALE format.", buunGroupLora, false),
 		strFlag("control-vector-layer-range", "", nil, nil, "Layer range applied to control vectors.", buunGroupLora, false),
 
-		enumFlag("spec-type", "", nil, []string{"none", "draft-simple", "draft-eagle3", "draft-mtp", "ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod", "ngram-cache", "suffix", "copyspec", "recycle", "dflash"}, "none", "Speculative decoding type.", buunGroupSpeculative),
+		listEnumFlag("spec-type", "", nil, []string{"none", "draft-simple", "draft-eagle3", "draft-mtp", "ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod", "ngram-cache", "suffix", "copyspec", "recycle", "dflash"}, "none", "Speculative decoding type (comma-separated list, e.g. dflash,ngram-mod).", buunGroupSpeculative),
 		strFlag("spec-draft-model", "md", nil, nil, "Draft model.", buunGroupSpeculative, false),
 		strFlag("spec-draft-hf", "", nil, nil, "HF repo for the draft model.", buunGroupSpeculative, false),
 		intFlag("spec-draft-n-max", "", nil, 16, "Maximum tokens proposed by the draft model.", buunGroupSpeculative, ptrutil.Ptr(0), nil),

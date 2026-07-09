@@ -2,6 +2,7 @@ package pages
 
 import (
 	"context"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -49,16 +50,26 @@ func (p BenchmarkPage) startRun() (tea.Model, tea.Cmd) {
 	ctx, cancel := context.WithCancel(context.Background())
 	prog := make(chan benchmark.Progress, 32)
 	done := make(chan benchRunDoneMsg, 1)
-	rc := benchmark.RunConfig{ProfileID: p.selectedProfileID, Mode: benchModes[p.modeCursor]}
+	runDone := make(chan struct{})
+	bstore := p.bstore
+	rc := benchmark.RunConfig{
+		ProfileID: p.selectedProfileID,
+		Mode:      benchModes[p.modeCursor],
+		// T7: persist partial progress mid-run (flagged Err="in progress");
+		// handleRunDone's final Save overwrites it on completion.
+		Checkpoint: func(partial benchmark.Run) { _ = bstore.Save(partial) },
+	}
 	runner := p.runner
 
 	go func() {
 		run, err := runner.Run(ctx, rc, prog)
 		close(prog)
-		done <- benchRunDoneMsg{run: run, err: err}
+		done <- benchRunDoneMsg{run: run, err: err} // buffered(1), never blocks
+		close(runDone)                              // signals Cleanup the engine acknowledged cancel
 	}()
 
 	p.runCancel = cancel
+	p.runDone = runDone
 	p.progressCh = prog
 	p.runningMode = rc.Mode
 	p.view = bvRunning
@@ -86,37 +97,55 @@ func (p BenchmarkPage) handleRunDone(msg benchRunDoneMsg) (tea.Model, tea.Cmd) {
 		p.runCancel()
 		p.runCancel = nil
 	}
+	var fc tea.Cmd
 	if msg.err != nil {
 		// A failed/cancelled run that completed some problems is still data:
 		// persist it flagged as partial (run.Err is set by the engine). Runs
 		// that died before producing anything (launch failure) are not saved.
 		if len(msg.run.Problems) == 0 {
-			p, _ = p.withFlashError("run failed: " + msg.err.Error())
+			p, fc = p.withFlashError("run failed: " + msg.err.Error())
 			p.view = bvDashboard
-			return p, nil
+			return p, fc
 		}
 		if err := p.bstore.Save(msg.run); err != nil {
-			p, _ = p.withFlashError("save partial run: " + err.Error())
+			p, fc = p.withFlashError("save partial run: " + err.Error())
 			p.view = bvDashboard
-			return p, p.loadRunsCmd()
+			return p, tea.Batch(fc, p.loadRunsCmd())
 		}
 		run := msg.run
 		p.detail = &run
 		p.view = bvRunDetail
-		p, _ = p.withFlashError("run incomplete (saved partial): " + msg.err.Error())
-		return p, p.loadRunsCmd()
+		p, fc = p.withFlashError("run incomplete (saved partial): " + msg.err.Error())
+		return p, tea.Batch(fc, p.loadRunsCmd())
 	}
 	if err := p.bstore.Save(msg.run); err != nil {
-		p, _ = p.withFlashError("save run: " + err.Error())
+		p, fc = p.withFlashError("save run: " + err.Error())
 		p.view = bvDashboard
-		return p, p.loadRunsCmd()
+		return p, tea.Batch(fc, p.loadRunsCmd())
 	}
 	run := msg.run
 	p.detail = &run
 	p.view = bvRunDetail
-	var fc tea.Cmd
 	p, fc = p.withFlash("benchmark complete")
 	return p, tea.Batch(fc, p.loadRunsCmd())
+}
+
+// Cleanup cancels an in-flight benchmark run on TUI quit and waits (bounded)
+// for the engine to acknowledge, so the external harness process group
+// (tb / SWE-bench / DeepSWE + Docker) is group-killed via cmd.Cancel before
+// the process exits (audit N-C15). No-ops when idle (handleRunDone nils
+// runCancel on completion).
+func (p BenchmarkPage) Cleanup() {
+	if p.runCancel == nil {
+		return
+	}
+	p.runCancel()
+	if p.runDone != nil {
+		select {
+		case <-p.runDone:
+		case <-time.After(5 * time.Second):
+		}
+	}
 }
 
 // keyRunning handles keys during bvRunning. Esc arms the cancelConfirm instead

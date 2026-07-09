@@ -153,8 +153,8 @@ func importProfiles(w io.Writer, store profilestore.Store, path string, mode pro
 
 // validationResult is the JSON-serialisable result of a profile validation.
 type validationResult struct {
-	ID       string                `json:"id"`
-	Valid    bool                  `json:"valid"`
+	ID       string                 `json:"id"`
+	Valid    bool                   `json:"valid"`
 	Errors   []validator.FieldIssue `json:"errors,omitempty"`
 	Warnings []validator.FieldIssue `json:"warnings,omitempty"`
 }

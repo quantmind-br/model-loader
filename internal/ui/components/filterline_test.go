@@ -8,6 +8,7 @@ import (
 )
 
 func TestFilterLine(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
 	theme.RebuildStyles()
 	cases := []struct {
 		name     string

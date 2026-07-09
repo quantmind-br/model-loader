@@ -16,6 +16,7 @@ import (
 type fakeProxyCtl struct {
 	base      string
 	loaded    []string
+	unloads   int
 	st        httpproxy.Status
 	ensureErr error
 	loadErr   error
@@ -34,6 +35,12 @@ func (f *fakeProxyCtl) Load(_ context.Context, id string) (httpproxy.Status, err
 
 func (f *fakeProxyCtl) Status() httpproxy.Status { return f.st }
 func (f *fakeProxyCtl) BaseURL() string          { return f.base }
+
+func (f *fakeProxyCtl) Unload(_ context.Context, _ bool) (httpproxy.Status, error) {
+	f.unloads++
+	f.st = httpproxy.Status{Running: true}
+	return f.st, nil
+}
 
 func TestEnsureLoaded_UsesProxy(t *testing.T) {
 	fp := &fakeProxyCtl{base: "http://127.0.0.1:9999"}

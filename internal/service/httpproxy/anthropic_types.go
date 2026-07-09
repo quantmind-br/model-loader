@@ -289,6 +289,22 @@ type oaiToolChoiceFunc struct {
 	} `json:"function"`
 }
 
+// canonicalReasoning returns the reasoning trace, preferring the canonical
+// "reasoning_content" and falling back to vLLM 0.24's "reasoning".
+func canonicalReasoning(reasoningContent, reasoning string) string {
+	if reasoningContent != "" {
+		return reasoningContent
+	}
+	return reasoning
+}
+
+// mirrorReasoningAsText reports whether a translated API must duplicate
+// reasoning into a normal text/content channel for clients that reject
+// reasoning-only completions. Tool-call-only outputs stay tool-call-only.
+func mirrorReasoningAsText(content, reasoning string, toolCalls int) bool {
+	return content == "" && reasoning != "" && toolCalls == 0
+}
+
 type oaiChatResponse struct {
 	ID      string      `json:"id"`
 	Choices []oaiChoice `json:"choices"`
@@ -304,6 +320,22 @@ type oaiRespMessage struct {
 	Content          string        `json:"content"` // JSON null decodes to ""
 	ReasoningContent string        `json:"reasoning_content"`
 	ToolCalls        []oaiToolCall `json:"tool_calls"`
+}
+
+// UnmarshalJSON accepts vLLM 0.24's "reasoning" as an alias for the canonical
+// "reasoning_content" (reasoning_content wins when both are present).
+func (m *oaiRespMessage) UnmarshalJSON(data []byte) error {
+	type alias oaiRespMessage
+	var v struct {
+		alias
+		Reasoning string `json:"reasoning"`
+	}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	*m = oaiRespMessage(v.alias)
+	m.ReasoningContent = canonicalReasoning(m.ReasoningContent, v.Reasoning)
+	return nil
 }
 
 type oaiUsage struct {
@@ -325,6 +357,22 @@ type oaiStreamDelta struct {
 	Content          string             `json:"content"`
 	ReasoningContent string             `json:"reasoning_content"`
 	ToolCalls        []oaiToolCallDelta `json:"tool_calls"`
+}
+
+// UnmarshalJSON accepts vLLM 0.24's "reasoning" as an alias for the canonical
+// "reasoning_content" (reasoning_content wins when both are present).
+func (d *oaiStreamDelta) UnmarshalJSON(data []byte) error {
+	type alias oaiStreamDelta
+	var v struct {
+		alias
+		Reasoning string `json:"reasoning"`
+	}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	*d = oaiStreamDelta(v.alias)
+	d.ReasoningContent = canonicalReasoning(d.ReasoningContent, v.Reasoning)
+	return nil
 }
 
 type oaiToolCallDelta struct {

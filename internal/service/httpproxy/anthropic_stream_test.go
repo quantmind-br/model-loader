@@ -443,3 +443,62 @@ func TestSynthesizeAnthropicStream(t *testing.T) {
 		t.Errorf("usage = %#v", usage)
 	}
 }
+
+func TestAnthropicStream_AcceptsVLLMReasoningField(t *testing.T) {
+	_, frames, err := runStream(t, sseScript(
+		`{"choices":[{"delta":{"reasoning":"think"}}]}`,
+		`{"choices":[{"delta":{"content":"answer"}}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	))
+	if err != nil {
+		t.Fatalf("runAnthropicStream: %v", err)
+	}
+	assertEventSequence(t, frames, []string{
+		"message_start", "ping",
+		"content_block_start", "content_block_delta", "content_block_stop",
+		"content_block_start", "content_block_delta", "content_block_stop",
+		"message_delta", "message_stop",
+	})
+	cb0, _ := frames[2].Data["content_block"].(map[string]any)
+	if cb0["type"] != "thinking" {
+		t.Errorf("block 0 = %#v, want thinking", cb0)
+	}
+	d0, _ := frames[3].Data["delta"].(map[string]any)
+	if d0["type"] != "thinking_delta" || d0["thinking"] != "think" {
+		t.Errorf("thinking delta = %#v", d0)
+	}
+	cb1, _ := frames[5].Data["content_block"].(map[string]any)
+	if cb1["type"] != "text" {
+		t.Errorf("block 1 = %#v, want text", cb1)
+	}
+}
+
+func TestAnthropicStream_MirrorsReasoningOnlyAsText(t *testing.T) {
+	_, frames, err := runStream(t, sseScript(
+		`{"choices":[{"delta":{"reasoning":"think"}}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"length"}]}`,
+		`[DONE]`,
+	))
+	if err != nil {
+		t.Fatalf("runAnthropicStream: %v", err)
+	}
+	assertEventSequence(t, frames, []string{
+		"message_start", "ping",
+		"content_block_start", "content_block_delta", "content_block_stop",
+		"content_block_start", "content_block_delta", "content_block_stop",
+		"message_delta", "message_stop",
+	})
+	cb1, _ := frames[5].Data["content_block"].(map[string]any)
+	if cb1["type"] != "text" {
+		t.Fatalf("block 1 = %#v, want mirrored text block", cb1)
+	}
+	d1, _ := frames[6].Data["delta"].(map[string]any)
+	if d1["type"] != "text_delta" || d1["text"] != "think" {
+		t.Fatalf("delta 1 = %#v, want mirrored text delta", d1)
+	}
+	md, _ := frames[8].Data["delta"].(map[string]any)
+	if md["stop_reason"] != "max_tokens" {
+		t.Fatalf("stop_reason = %#v, want max_tokens", md["stop_reason"])
+	}
+}

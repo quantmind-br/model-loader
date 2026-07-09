@@ -135,3 +135,39 @@ func TestCompactWriteFailureLeavesOriginal(t *testing.T) {
 		t.Fatalf("temp file should be removed, stat err=%v", err)
 	}
 }
+
+// TestCompact_SinglePassByteTrim — audit C2: the byte-bound trim drops the
+// oldest records until the file fits maxBytes, keeping the newest.
+func TestCompact_SinglePassByteTrim(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now().Unix()
+	for i := range 100 {
+		if err := Append(dir, "p", Record{TS: now, TTFTMs: int64(i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const maxBytes = 500
+	if err := Compact(dir, "p", 24*time.Hour, maxBytes); err != nil {
+		t.Fatalf("Compact: %v", err)
+	}
+	fi, err := os.Stat(filepath.Join(dir, "p.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Size() > maxBytes {
+		t.Fatalf("compacted file %d bytes exceeds maxBytes %d", fi.Size(), maxBytes)
+	}
+	after, err := Read(dir, "p", time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after) == 0 || len(after) >= 100 {
+		t.Fatalf("expected a trimmed non-empty set, got %d records", len(after))
+	}
+	if after[len(after)-1].TTFTMs != 99 {
+		t.Fatalf("newest record must survive; last TTFTMs = %d", after[len(after)-1].TTFTMs)
+	}
+	if after[0].TTFTMs == 0 {
+		t.Fatalf("oldest record should have been trimmed from the front")
+	}
+}

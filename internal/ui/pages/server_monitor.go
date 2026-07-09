@@ -107,39 +107,52 @@ func (p *ServerPage) handleMonitorEvent(m monitorEventMsg) (tea.Model, tea.Cmd) 
 	if st, ok := p.subs[m.ev.PID]; ok {
 		st.Apply(m.ev, p.paused)
 	}
+	var cmds []tea.Cmd
 	if m.ev.Source == monitor.SourceMetrics && p.metricsDir != "" {
 		if metrics, ok := m.ev.Data.(monitor.Metrics); ok {
-			var profileID string
-			for _, inst := range p.pm.List() {
-				if inst.PID == m.ev.PID {
-					profileID = inst.ProfileID
-					break
-				}
-			}
-			if profileID != "" {
-				var tps float64
-				if len(metrics.TokensPerSec) > 0 {
-					tps = metrics.TokensPerSec[len(metrics.TokensPerSec)-1]
-				}
-				var rps float64
-				if len(metrics.RequestsPerSec) > 0 {
-					rps = metrics.RequestsPerSec[len(metrics.RequestsPerSec)-1]
-				}
-				_ = metricsstore.Append(p.metricsDir, profileID, metricsstore.Record{
-					TS:           m.ev.Timestamp.Unix(),
-					TokensPerSec: tps,
-					RPS:          rps,
-				})
-			}
+			cmds = append(cmds, p.appendMetricsCmd(m.ev.PID, m.ev.Timestamp, metrics))
 		}
 	}
-	var cmds []tea.Cmd
 	// Re-arm listener for this PID.
 	if ch, ok := p.chans[m.ev.PID]; ok {
 		cmds = append(cmds, listenCmd(ch))
 	}
 	cmds = append(cmds, p.forwardToConfirms(m))
 	return p, tea.Batch(cmds...)
+}
+
+// appendMetricsCmd persists one metrics sample OFF the update loop: pm.List
+// stats/reads the registry file and Append writes to disk — neither belongs
+// in the Bubble Tea update path (audit N-P2). Fire-and-forget: metrics are
+// best-effort time-series; failures are ignored exactly as before. Concurrent
+// Appends are line-atomic (single O_APPEND write) and ordered by TS, so no
+// ordering guard is needed.
+func (p *ServerPage) appendMetricsCmd(pid int, ts time.Time, metrics monitor.Metrics) tea.Cmd {
+	pm, dir := p.pm, p.metricsDir
+	return func() tea.Msg {
+		var profileID string
+		for _, inst := range pm.List() {
+			if inst.PID == pid {
+				profileID = inst.ProfileID
+				break
+			}
+		}
+		if profileID == "" {
+			return nil
+		}
+		var tps float64
+		if len(metrics.TokensPerSec) > 0 {
+			tps = metrics.TokensPerSec[len(metrics.TokensPerSec)-1]
+		}
+		var rps float64
+		if len(metrics.RequestsPerSec) > 0 {
+			rps = metrics.RequestsPerSec[len(metrics.RequestsPerSec)-1]
+		}
+		_ = metricsstore.Append(dir, profileID, metricsstore.Record{
+			TS: ts.Unix(), TokensPerSec: tps, RPS: rps,
+		})
+		return nil
+	}
 }
 
 // applyInstances reconciles the page's per-PID table rows and subscription

@@ -598,3 +598,38 @@ func TestEstimateAnthropicTokens_Deterministic(t *testing.T) {
 		t.Errorf("empty request must clamp to 1, got %d", tok)
 	}
 }
+
+func TestBuildAnthropicResponse_AcceptsVLLMReasoningFieldFromJSON(t *testing.T) {
+	var oai oaiChatResponse
+	if err := json.Unmarshal([]byte(`{"choices":[{"finish_reason":"stop","message":{"reasoning":"think","content":"answer"}}]}`), &oai); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	resp := buildAnthropicResponse(&oai, "m", mllog.Nop())
+	want := []any{
+		anthropicThinkingBlock{Type: "thinking", Thinking: "think"},
+		anthropicTextBlock{Type: "text", Text: "answer"},
+	}
+	if !reflect.DeepEqual(resp.Content, want) {
+		t.Errorf("content = %#v, want thinking then text", resp.Content)
+	}
+}
+
+func TestBuildAnthropicResponse_MirrorsReasoningOnlyAsText(t *testing.T) {
+	var oai oaiChatResponse
+	if err := json.Unmarshal([]byte(`{"choices":[{"finish_reason":"length","message":{"reasoning":"think"}}]}`), &oai); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	resp := buildAnthropicResponse(&oai, "m", mllog.Nop())
+	if len(resp.Content) != 2 {
+		t.Fatalf("content = %#v, want thinking+text fallback", resp.Content)
+	}
+	if b0, ok := resp.Content[0].(anthropicThinkingBlock); !ok || b0.Thinking != "think" {
+		t.Fatalf("content[0] = %#v, want thinking block", resp.Content[0])
+	}
+	if b1, ok := resp.Content[1].(anthropicTextBlock); !ok || b1.Text != "think" {
+		t.Fatalf("content[1] = %#v, want mirrored text block", resp.Content[1])
+	}
+	if resp.StopReason == nil || *resp.StopReason != "max_tokens" {
+		t.Fatalf("stop_reason = %#v, want max_tokens", resp.StopReason)
+	}
+}

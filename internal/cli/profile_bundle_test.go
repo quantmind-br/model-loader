@@ -105,4 +105,3 @@ func TestValidateProfile_JSON_BlockingErrors(t *testing.T) {
 		t.Fatalf("expected errors in JSON result")
 	}
 }
-

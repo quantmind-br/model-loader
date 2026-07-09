@@ -22,10 +22,10 @@ import (
 // distinguish "flag provided" from "zero value", so edit only overrides what
 // the user passed.
 type profileInput struct {
-	id, name, model, backend, description string
-	args                                  map[string]string
-	extraArgs                             []string
-	env                                   []domain.EnvVar
+	id, name, model, backend, description  string
+	args                                   map[string]string
+	extraArgs                              []string
+	env                                    []domain.EnvVar
 	setName, setModel, setBackend, setDesc bool
 }
 

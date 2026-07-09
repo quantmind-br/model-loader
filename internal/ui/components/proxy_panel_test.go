@@ -164,6 +164,7 @@ func TestProxyPanel_ViewEmptyWhenNilProxy(t *testing.T) {
 }
 
 func TestProxyPanel_ViewShowsRunningStatus(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
 	f := &fakeHTTPProxy{status: httpproxy.Status{Running: true, Addr: "http://localhost:8080", LoadedProfileID: "qwen"}}
 	p := NewProxyPanel(f)
 	v := p.View()
@@ -179,6 +180,7 @@ func TestProxyPanel_ViewShowsRunningStatus(t *testing.T) {
 }
 
 func TestProxyPanel_ViewShowsStoppedStatus(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
 	f := &fakeHTTPProxy{status: httpproxy.Status{Running: false}}
 	p := NewProxyPanel(f)
 	v := p.View()

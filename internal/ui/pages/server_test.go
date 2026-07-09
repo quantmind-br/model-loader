@@ -15,6 +15,7 @@ import (
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
+	"github.com/quantmind-br/model-loader/internal/service/metricsstore"
 	"github.com/quantmind-br/model-loader/internal/service/monitor"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
@@ -69,11 +70,12 @@ func (fakeMonMgr) Subscribe(pid, port int, logPath string) (<-chan monitor.Monit
 // fakeProxyForPages implements serverProxyController, recording the order of
 // Unload/Load calls so restart tests can assert swap semantics.
 type fakeProxyForPages struct {
-	status    httpproxy.Status
-	statusSeq []httpproxy.Status // when non-empty, Status() pops from here first
-	ops       []string
-	loadErr   error
-	unloadErr error
+	status     httpproxy.Status
+	statusSeq  []httpproxy.Status // when non-empty, Status() pops from here first
+	ops        []string
+	loadErr    error
+	unloadErr  error
+	forceStops int
 }
 
 func (f *fakeProxyForPages) Start(context.Context) error { return nil }
@@ -88,6 +90,11 @@ func (f *fakeProxyForPages) Status() httpproxy.Status {
 }
 func (f *fakeProxyForPages) BaseURL() string                     { return "http://127.0.0.1:9999" }
 func (f *fakeProxyForPages) EnsureRunning(context.Context) error { return nil }
+func (f *fakeProxyForPages) ForceStop() error {
+	f.forceStops++
+	f.ops = append(f.ops, "forcestop")
+	return nil
+}
 func (f *fakeProxyForPages) Load(_ context.Context, id string) (httpproxy.Status, error) {
 	f.ops = append(f.ops, "load "+id) // record the attempt even when it fails
 	if f.loadErr != nil {
@@ -323,6 +330,40 @@ func TestServerPage_MetricsPlaceholderWhenEmpty(t *testing.T) {
 	out := p.View()
 	if !strings.Contains(out, "(no metrics yet") {
 		t.Fatalf("metrics view missing placeholder; got:\n%s", out)
+	}
+}
+
+// TestServerPage_MetricsPersistedOffUpdateLoop guards audit N-P2: metrics disk
+// persistence must run in a returned tea.Cmd, not inline in handleMonitorEvent.
+func TestServerPage_MetricsPersistedOffUpdateLoop(t *testing.T) {
+	dir := t.TempDir()
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{
+		{PID: 1, Port: 8080, ProfileID: "p1", LogPath: "/tmp/x.log"},
+	}}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil).WithMetricsDir(dir)
+
+	ev := monitorEventMsg{ev: monitor.MonitorEvent{
+		Source: monitor.SourceMetrics, PID: 1, Timestamp: time.Now(),
+		Data: monitor.Metrics{TokensPerSec: []float64{42}, RequestsPerSec: []float64{2}},
+	}}
+	_, cmd := p.Update(ev)
+
+	// The update loop must NOT have written the file synchronously.
+	if recs, _ := metricsstore.Read(dir, "p1", time.Time{}); len(recs) != 0 {
+		t.Fatalf("metrics persisted inline in update loop; got %d records", len(recs))
+	}
+
+	drainCmd(cmd)
+
+	recs, err := metricsstore.Read(dir, "p1", time.Time{})
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(recs) != 1 {
+		t.Fatalf("after draining cmds: %d records, want 1", len(recs))
+	}
+	if recs[0].TokensPerSec != 42 {
+		t.Errorf("tokens/s = %v, want 42", recs[0].TokensPerSec)
 	}
 }
 
@@ -849,8 +890,43 @@ func TestServerPage_KillDegradedProxyRefuses(t *testing.T) {
 		t.Errorf("degraded proxy: no proxy ops expected; ops=%v", proxy.ops)
 	}
 	p, _ = updateAs[*ServerPage](p, *kr)
-	if !strings.Contains(p.flash.Message(), "proxy status unavailable") {
-		t.Errorf("flash = %q, want degraded-proxy refusal surfaced", p.flash.Message())
+	if !p.forceKillConfirm.Active() {
+		t.Error("degraded proxy: kill refusal should arm the force-stop confirm (A13)")
+	}
+}
+
+// TestServerPage_ForceKillConfirmedForceStopsProxyAndKills — audit A13: after
+// the operator accepts the force-stop confirm, the proxy is force-stopped and
+// the stranded backend is killed directly.
+func TestServerPage_ForceKillConfirmedForceStopsProxyAndKills(t *testing.T) {
+	pm := &killTrackingMgr{fakeProcMgr: fakeProcMgr{
+		insts: []domain.RunningInstance{{ProfileID: "old", PID: 9, Port: 8081, LogPath: "/tmp/y.log"}},
+	}}
+	proxy := &fakeProxyForPages{}
+	p := NewServerPage(pm, &fakeMonMgr{}, nil).WithProxy(proxy)
+	p.SetSize(120, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	p, cmd := updateAs[*ServerPage](p, monitorForceKillConfirmedMsg{pid: 9})
+	msgs := drainCmd(cmd)
+	var kr *killResultMsg
+	for _, m := range msgs {
+		if v, ok := m.(killResultMsg); ok {
+			kr = &v
+			break
+		}
+	}
+	if kr == nil {
+		t.Fatalf("no killResultMsg in cmd batch; got %v", msgs)
+	}
+	if kr.err != nil {
+		t.Fatalf("force kill should succeed; err=%v", kr.err)
+	}
+	if proxy.forceStops != 1 {
+		t.Errorf("expected 1 ForceStop, got %d", proxy.forceStops)
+	}
+	if pm.killed != 9 {
+		t.Errorf("expected pid 9 killed after force-stop, got %d", pm.killed)
 	}
 }
 
@@ -1908,6 +1984,7 @@ func TestServerPage_CrashEmitsTabAttentionOnce(t *testing.T) {
 		t.Fatalf("crashSeen = %v after PID left the list, want empty", p.crashSeen)
 	}
 }
+
 // TUI-RESP: centeredDivider guard and SetSize column budget. The table's
 // internal viewport height excludes the bubbles header row, so we assert the
 // budget is honored by adding 1 for the header line. The formula values

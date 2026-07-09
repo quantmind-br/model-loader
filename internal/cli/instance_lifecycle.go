@@ -32,7 +32,13 @@ type proxyClient interface {
 	Unload(ctx context.Context, force bool) (httpproxy.Status, error)
 	Status() httpproxy.Status
 	BaseURL() string
+	// ForceStop SIGKILLs a wedged/degraded proxy so a stranded backend can be
+	// killed directly (audit A13). Only invoked behind `instance stop --force`.
+	ForceStop() error
 }
+
+// instanceStopForce backs the `instance stop --force` flag.
+var instanceStopForce bool
 
 func init() {
 	instanceCmd.AddCommand(&cobra.Command{
@@ -58,14 +64,17 @@ With --json the proxy status object is printed on stdout. Key fields:
 			return startInstance(ctx, out, errw, proxy, svc.Store, args[0])
 		}),
 	})
-	instanceCmd.AddCommand(&cobra.Command{
+	stopCmd := &cobra.Command{
 		Use:   "stop <pid|id>",
 		Short: "Stop a running instance",
 		Args:  cobra.ExactArgs(1),
 		RunE: instanceLifecycleRunE(func(ctx context.Context, out io.Writer, _ io.Writer, svc *app.Services, proxy proxyClient, args []string) error {
-			return stopInstance(ctx, out, proxy, svc.Mgr, args[0])
+			return stopInstance(ctx, out, proxy, svc.Mgr, args[0], instanceStopForce)
 		}),
-	})
+	}
+	stopCmd.Flags().BoolVar(&instanceStopForce, "force", false,
+		"force-stop a degraded/wedged proxy, then kill the instance directly")
+	instanceCmd.AddCommand(stopCmd)
 	instanceCmd.AddCommand(&cobra.Command{
 		Use:   "restart <pid|id>",
 		Short: "Restart a running instance through the HTTP proxy",
@@ -147,7 +156,7 @@ func proxyOwnsRef(st httpproxy.Status, ref string) bool {
 	return st.LoadedProfileID != "" && ref == st.LoadedProfileID
 }
 
-func stopInstance(ctx context.Context, out io.Writer, proxy proxyClient, mgr processmgr.Manager, ref string) error {
+func stopInstance(ctx context.Context, out io.Writer, proxy proxyClient, mgr processmgr.Manager, ref string, force bool) error {
 	st := proxy.Status()
 	if proxyOwnsRef(st, ref) {
 		unloaded, err := proxy.Unload(ctx, false)
@@ -178,6 +187,21 @@ func stopInstance(ctx context.Context, out io.Writer, proxy proxyClient, mgr pro
 		return nil
 	}
 	if err := refuseKillOnDegradedProxy(proxy, st, ri.PID); err != nil {
+		if errors.Is(err, proxysupervisor.ErrProxyDegraded) {
+			if force {
+				// Escape hatch (audit A13): SIGKILL the wedged proxy, then kill
+				// the stranded backend directly.
+				if ferr := proxy.ForceStop(); ferr != nil {
+					return fmt.Errorf("force-stop proxy: %w", ferr)
+				}
+				if kerr := mgr.Kill(ri.PID); kerr != nil && !errors.Is(kerr, processmgr.ErrUnknownPID) {
+					return fmt.Errorf("kill: %w", kerr)
+				}
+				fmt.Fprintf(out, "force-stopped proxy; stopped pid %d (%s)\n", ri.PID, ri.ProfileID)
+				return nil
+			}
+			return fmt.Errorf("%w (use --force to force-stop the proxy and kill it)", err)
+		}
 		return err
 	}
 	if err := mgr.Kill(ri.PID); err != nil {
@@ -204,7 +228,7 @@ func refuseKillOnDegradedProxy(proxy proxyClient, st httpproxy.Status, pid int) 
 	}
 	st = proxy.Status()
 	if st.Running && strings.HasPrefix(st.LastError, "status_probe_failed") {
-		return fmt.Errorf("proxy is running but its status is unavailable; refusing to kill pid %d directly — retry or stop the proxy first", pid)
+		return fmt.Errorf("%w — retry, or force-stop the proxy first (refusing to kill pid %d directly)", proxysupervisor.ErrProxyDegraded, pid)
 	}
 	if st.LoadedPID == pid {
 		// The refreshed status reveals the pid is the proxy-loaded backend.

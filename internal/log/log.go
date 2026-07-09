@@ -34,6 +34,11 @@ const rotatedGlob = "model-loader.*.log"
 type Config struct {
 	Dir   string
 	Level slog.Level
+	// Rotate renames the active log to a timestamped archive at open time.
+	// Only state owners (TUI, serve) rotate; one-shot CLI commands append to
+	// the active file without rotating so they cannot trim/rename the log a
+	// live session holds open (audit C6).
+	Rotate bool
 }
 
 // New opens a session-rotated log file under cfg.Dir and returns a *slog.Logger
@@ -45,7 +50,9 @@ func New(cfg Config) (*slog.Logger, func(), error) {
 	if err := os.MkdirAll(cfg.Dir, 0o755); err != nil {
 		return nil, nil, fmt.Errorf("mkdir log dir: %w", err)
 	}
-	rotate(cfg.Dir)
+	if cfg.Rotate {
+		rotate(cfg.Dir)
+	}
 	active := filepath.Join(cfg.Dir, activeName)
 	f, err := os.OpenFile(active, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {

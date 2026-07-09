@@ -5,23 +5,20 @@ import (
 	"sync"
 	"time"
 
+	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
 )
 
-// crashEvent batches a structured log emission to fire AFTER m.mu is
-// released. Liveness must not hold the lock across logger writes — see
-// AGENTS.md "What NOT to do". Slice is built under lock, drained outside.
-type crashEvent struct {
-	pid       int
-	profileID string
-}
-
-// startLivenessWithProbe inicia uma goroutine que polla cada `interval` os
-// PIDs trackeados e marca como Crashed os que `probe(pid)` retornar false.
-// Retorna função stop() idempotente that ALSO waits for the goroutine to
-// fully drain (including any pending registry save), eliminating the race
-// between `stop()` returning and `t.TempDir()` cleanup.
-func (m *fsManager) startLivenessWithProbe(interval time.Duration, probe func(int) bool) func() {
+// startLivenessWithProbe starts a goroutine that polls every `interval` the
+// tracked PIDs and marks Crashed those for which probe(inst) returns false.
+// The probe is identity-aware (audit A11): a recycled PID no longer masks a
+// dead backend as "running". Adopted instances (no reaper) that die get their
+// restart policy applied here (audit A10) — no waitEnrichment exists to do it.
+//
+// Returns an idempotent stop() that ALSO waits for the goroutine to fully
+// drain (including any pending registry save), eliminating the race between
+// stop() returning and t.TempDir() cleanup.
+func (m *fsManager) startLivenessWithProbe(interval time.Duration, probe func(domain.RunningInstance) bool) func() {
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
@@ -40,31 +37,44 @@ func (m *fsManager) startLivenessWithProbe(interval time.Duration, probe func(in
 				return
 			case now := <-t.C:
 				m.mu.Lock()
-				dirty := false
-				var crashes []crashEvent
+				var crashed []domain.RunningInstance
+				var adopted []domain.RunningInstance
 				nowUTC := now.UTC()
 				for pid, inst := range m.tracked {
 					if inst.Crashed {
 						continue
 					}
-					if probe(pid) {
+					if probe(inst) {
 						continue
 					}
 					ts := nowUTC
 					inst.Crashed = true
 					inst.ExitedAt = &ts
 					m.tracked[pid] = inst
-					dirty = true
-					crashes = append(crashes, crashEvent{pid: pid, profileID: inst.ProfileID})
+					crashed = append(crashed, inst)
+					// Adopted instances have no reaper to apply restart policy.
+					if _, owned := m.hasReaper[pid]; !owned {
+						adopted = append(adopted, inst)
+					}
 				}
-				snapshot := snapshotLocked(m.tracked)
 				m.mu.Unlock()
-				for _, c := range crashes {
+				for _, inst := range crashed {
 					m.logger.Info("liveness_crash_detected",
-						"pid", c.pid, "profile_id", c.profileID)
+						"pid", inst.PID, "profile_id", inst.ProfileID)
 				}
-				if dirty {
-					_ = saveRegistry(m.registryPath, snapshot)
+				// Flock-guarded delta: touch only the newly-crashed PIDs so a
+				// concurrent writer's fresh launch is never erased (audit A7).
+				if len(crashed) > 0 {
+					_ = mutateRegistry(m.registryPath, func(reg map[int]domain.RunningInstance) {
+						for _, inst := range crashed {
+							reg[inst.PID] = inst
+						}
+					})
+				}
+				// Restart adopted deaths off the ticker goroutine so backoff
+				// never blocks liveness (audit A10). exitCode nil = unknown.
+				for _, inst := range adopted {
+					go m.maybeScheduleRestart(inst, nil)
 				}
 			}
 		}
@@ -78,7 +88,9 @@ func (m *fsManager) startLivenessWithProbe(interval time.Duration, probe func(in
 	}
 }
 
-// startLiveness uses the default probe (procutil.Alive) and a 5-second tick.
+// startLiveness uses the default identity-aware probe and a 5-second tick.
 func (m *fsManager) startLiveness() func() {
-	return m.startLivenessWithProbe(5*time.Second, procutil.Alive)
+	return m.startLivenessWithProbe(5*time.Second, func(ri domain.RunningInstance) bool {
+		return procutil.SameProcess(ri.PID, ri.StartTicks)
+	})
 }

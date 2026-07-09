@@ -42,3 +42,29 @@ func saveRegistry(path string, insts []domain.RunningInstance) error {
 	}
 	return nil
 }
+
+// mutateRegistry performs a flock-guarded read-modify-write of instances.json:
+// under <path>.lock it loads the CURRENT file, hands the entries (keyed by
+// PID) to mutate for in-place edits, and writes the result atomically.
+// Delta-based: callers touch only the PIDs they own, so concurrent writers
+// (TUI vs serve) can no longer erase each other's instances (audit A7).
+//
+// A load error aborts without writing (never wipe the file on a parse failure).
+func mutateRegistry(path string, mutate func(map[int]domain.RunningInstance)) error {
+	return fsx.WithFileLock(path+".lock", func() error {
+		loaded, err := loadRegistry(path)
+		if err != nil {
+			return err
+		}
+		reg := make(map[int]domain.RunningInstance, len(loaded))
+		for _, ri := range loaded {
+			reg[ri.PID] = ri
+		}
+		mutate(reg)
+		out := make([]domain.RunningInstance, 0, len(reg))
+		for _, ri := range reg {
+			out = append(out, ri)
+		}
+		return saveRegistry(path, out)
+	})
+}

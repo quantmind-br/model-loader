@@ -47,9 +47,30 @@ type Supervisor struct {
 	binaryPath string
 	logger     *slog.Logger
 
-	mu    sync.RWMutex
+	// startMu serializes Start/Stop lifecycle transitions; mu guards only
+	// state reads/commits so the 1 Hz Status poll never blocks behind a 10s
+	// port wait (mirrors httpproxy.Server.startMu). Lock order: startMu → mu,
+	// never the reverse. Status/Reconcile/processAliveLocked take only mu.
+	startMu sync.Mutex
+	mu      sync.RWMutex
 	state *State
+	// portFails counts consecutive failed port probes so a transient dial
+	// timeout under GPU load does not destroy supervision of a healthy proxy
+	// (audit A9). Reset on any successful probe. Guarded by mu.
+	portFails int
+
+	// probe is a shared client for /_status GETs, built once (audit C4) to
+	// stop allocating an http.Client on every 1 Hz Status call.
+	probe *http.Client
 }
+
+// probeFailThreshold is the number of consecutive port-probe failures Status
+// tolerates before dropping proxy state (hysteresis, audit A9).
+const probeFailThreshold = 3
+
+// ErrProxyDegraded marks kill-refusals caused by a running-but-unresponsive
+// proxy, so UIs can offer the ForceStop escape hatch (audit A13).
+var ErrProxyDegraded = errors.New("proxy status unavailable")
 
 // New constructs a Supervisor. Nil-tolerant for Logger.
 func New(cfg Config) *Supervisor {
@@ -63,6 +84,7 @@ func New(cfg Config) *Supervisor {
 		port:       cfg.Port,
 		binaryPath: cfg.BinaryPath,
 		logger:     cfg.Logger,
+		probe:      &http.Client{Timeout: 500 * time.Millisecond},
 	}
 }
 
@@ -77,12 +99,16 @@ func (s *Supervisor) resolveExe() (string, error) {
 // "serve" subcommand. The process survives TUI exit. State is persisted so
 // future TUI sessions can discover it.
 func (s *Supervisor) Start(ctx context.Context) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.startMu.Lock()
+	defer s.startMu.Unlock()
 
-	if s.state != nil && s.isAliveLocked() {
-		return fmt.Errorf("%w on pid %d", ErrAlreadyRunning, s.state.PID)
+	s.mu.Lock()
+	if s.state != nil && s.processAliveLocked() {
+		pid := s.state.PID
+		s.mu.Unlock()
+		return fmt.Errorf("%w on pid %d", ErrAlreadyRunning, pid)
 	}
+	s.mu.Unlock()
 
 	exe, err := s.resolveExe()
 	if err != nil {
@@ -110,23 +136,54 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	}
 	_ = logF.Close()
 
+	// Reap the child so a serve that dies on bind does not linger as a zombie
+	// (a zombie is still signalable, so SameProcess alone can't detect it).
+	// This does NOT kill the detached serve: Wait only collects its exit
+	// status. When the TUI exits, this goroutine dies and the serve is
+	// reparented to init — the intended detached behavior.
+	exited := make(chan struct{})
+	go func() { _ = cmd.Wait(); close(exited) }()
+
+	ticks, _ := procutil.StartTicks(cmd.Process.Pid) // 0 on failure → identity disabled
 	st := &State{
-		PID:       cmd.Process.Pid,
-		Host:      s.host,
-		Port:      s.port,
-		StartedAt: time.Now().UTC(),
+		PID:        cmd.Process.Pid,
+		Host:       s.host,
+		Port:       s.port,
+		StartedAt:  time.Now().UTC(),
+		StartTicks: ticks,
 	}
 
-	waitCtx, waitCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Honor the caller's ctx (TUI quit / CLI Ctrl-C) so the 10s port wait
+	// can be aborted early instead of always running the full timeout (P-C12).
+	waitCtx, waitCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer waitCancel()
 	if err := s.waitForPort(waitCtx, st.Host, st.Port); err != nil {
-		_ = syscall.Kill(st.PID, syscall.SIGKILL)
+		_ = procutil.TerminateTree(st.PID, 0)
 		return fmt.Errorf("proxy did not bind: %w", err)
 	}
+	// waitForPort proves SOMETHING answers the port — verify it is OUR child
+	// and not a pre-existing proxy that kept the port while our child died on
+	// bind (audit A9). Recording a dead PID here caused the duplicate-spawn bug.
+	select {
+	case <-exited:
+		return fmt.Errorf("proxy process exited during startup (port %d answered by another process)", st.Port)
+	default:
+	}
+	if !procutil.SameProcess(st.PID, st.StartTicks) {
+		return fmt.Errorf("proxy process exited during startup (port %d answered by another process)", st.Port)
+	}
 
+	s.mu.Lock()
 	s.state = st
+	s.portFails = 0
+	s.mu.Unlock()
 	if err := saveState(s.statePath, st); err != nil {
-		_ = syscall.Kill(st.PID, syscall.SIGKILL)
+		_ = procutil.TerminateTree(st.PID, 0)
+		// Don't leave stale in-memory state after a save failure.
+		s.mu.Lock()
+		s.state = nil
+		s.portFails = 0
+		s.mu.Unlock()
 		return err
 	}
 
@@ -134,8 +191,18 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop sends SIGTERM to the proxy process, waits for exit, and cleans state.
+// Stop terminates the proxy process (SIGTERM, grace, then SIGKILL via the
+// process group) and cleans state. The grace defaults to 45s — enough to cover
+// serve's 30s Shutdown ctx + 10s drain + margin — so the supervisor never
+// SIGKILLs the serve before it can kill its own backend (audit A8). The ctx
+// deadline still clamps when earlier. If the serve was killed before it could
+// free VRAM, the loaded backend is swept afterward.
 func (s *Supervisor) Stop(ctx context.Context) error {
+	// Serialize against an in-flight Start (previously provided by mu). ForceStop
+	// deliberately does NOT take startMu — it must not queue behind a stuck Start.
+	s.startMu.Lock()
+	defer s.startMu.Unlock()
+
 	s.mu.Lock()
 	st := s.state
 	s.mu.Unlock()
@@ -144,33 +211,31 @@ func (s *Supervisor) Stop(ctx context.Context) error {
 		return fmt.Errorf("proxy not running")
 	}
 
-	proc, err := os.FindProcess(st.PID)
-	if err != nil {
-		return fmt.Errorf("find process: %w", err)
-	}
+	// Best-effort: learn the loaded backend PID before we tear the proxy down
+	// (0 when degraded / nothing loaded).
+	loadedPID := s.Status().LoadedPID
 
-	if err := proc.Signal(syscall.SIGTERM); err != nil && !errors.Is(err, os.ErrProcessDone) {
-		return fmt.Errorf("sigterm: %w", err)
-	}
-
-	deadline := time.Now().Add(10 * time.Second)
-	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
-		deadline = d
-	}
-
-	for time.Now().Before(deadline) {
-		if proc.Signal(syscall.Signal(0)) != nil {
-			break
+	grace := 45 * time.Second
+	if d, ok := ctx.Deadline(); ok {
+		if remaining := time.Until(d); remaining < grace {
+			grace = remaining
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
+	// serve is Setsid (its group contains only itself; backends live in their
+	// own sessions) so a group kill is safe.
+	_ = procutil.TerminateTree(st.PID, grace)
 
-	if proc.Signal(syscall.Signal(0)) == nil {
-		_ = proc.Signal(syscall.SIGKILL)
+	// If the serve was SIGKILLed before killCurrentBackend ran, its backend is
+	// still resident holding VRAM — sweep it (audit A8). The dead pid's
+	// registry entry is cleaned by the next owner liveness/reconcile.
+	if loadedPID > 0 && procutil.Alive(loadedPID) {
+		_ = procutil.TerminateTree(loadedPID, 5*time.Second)
+		s.logger.Info("proxy_stop_swept_backend", "backend_pid", loadedPID)
 	}
 
 	s.mu.Lock()
 	s.state = nil
+	s.portFails = 0
 	s.mu.Unlock()
 
 	if err := saveState(s.statePath, nil); err != nil {
@@ -185,32 +250,54 @@ func (s *Supervisor) Stop(ctx context.Context) error {
 // process died since the last check, state is cleaned automatically.
 func (s *Supervisor) Status() httpproxy.Status {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.state == nil {
+		s.mu.Unlock()
 		return httpproxy.Status{Running: false}
 	}
-
-	if !s.isAliveLocked() {
+	if !s.processAliveLocked() {
 		s.state = nil
+		s.portFails = 0
 		_ = saveState(s.statePath, nil)
+		s.mu.Unlock()
 		return httpproxy.Status{Running: false}
 	}
+	host, port := s.state.Host, s.state.Port
+	addr := s.addr(s.state)
+	s.mu.Unlock()
 
-	st := httpproxy.Status{
-		Running: true,
-		Addr:    s.addr(s.state),
+	// Probe the port OUTSIDE the mutex so a 500ms dial never blocks Start/Stop
+	// or the 1 Hz UI poll (audit C4).
+	if !portOpen(host, port) {
+		s.mu.Lock()
+		s.portFails++
+		n := s.portFails
+		if n >= probeFailThreshold {
+			s.state = nil
+			s.portFails = 0
+			_ = saveState(s.statePath, nil)
+			s.mu.Unlock()
+			s.logger.Info("proxy_state_dropped_after_probe_failures", "failures", n)
+			return httpproxy.Status{Running: false}
+		}
+		s.mu.Unlock()
+		// Hysteresis: a transient dial timeout keeps a healthy proxy
+		// supervised, reported degraded, until probeFailThreshold in a row.
+		return httpproxy.Status{
+			Running:   true,
+			Addr:      addr,
+			LastError: fmt.Sprintf("status_probe_failed: port not answering (%d/%d)", n, probeFailThreshold),
+		}
 	}
+	s.mu.Lock()
+	s.portFails = 0
+	s.mu.Unlock()
 
-	url := "http://" + s.addr(s.state) + "/_status"
-	client := &http.Client{Timeout: 500 * time.Millisecond}
-	resp, err := client.Get(url)
+	st := httpproxy.Status{Running: true, Addr: addr}
+	resp, err := s.probe.Get("http://" + addr + "/_status")
 	if err != nil {
-		// The process is alive but /_status did not answer. Surface the
-		// failure so callers can distinguish "running with nothing loaded"
-		// (healthy: empty loaded fields, no error) from "running but status
-		// unknown" — e.g. the CLI must not kill a pid directly while the
-		// proxy might still be routing to it.
+		// Process alive + port open but /_status did not answer. The
+		// kill-refusal guards key off the "status_probe_failed:" prefix —
+		// keep it byte-compatible.
 		st.LastError = "status_probe_failed: " + err.Error()
 		return st
 	}
@@ -233,26 +320,78 @@ func (s *Supervisor) Reconcile() error {
 		return nil
 	}
 
-	if !procutil.Alive(st.PID) || !portOpen(st.Host, st.Port) {
-		s.logger.Info("proxy_reconcile_dropped", "pid", st.PID, "reason", "pid_or_port_mismatch")
+	drop := func(reason string) {
+		s.logger.Info("proxy_reconcile_dropped", "pid", st.PID, "reason", reason)
 		if err := saveState(s.statePath, nil); err != nil {
 			s.logger.Error("proxy_reconcile_cleanup_failed", "err", err)
 		}
+	}
+	if st.StartTicks != 0 {
+		if !procutil.SameProcess(st.PID, st.StartTicks) {
+			drop("pid_recycled_or_dead")
+			return nil
+		}
+		if !portOpen(st.Host, st.Port) {
+			// Alive by identity but not answering: the serve is wedged. Kill it
+			// so a fresh proxy can bind the port (audit A9).
+			s.logger.Info("proxy_reconcile_killed_wedged", "pid", st.PID)
+			_ = procutil.TerminateTree(st.PID, 5*time.Second)
+			drop("wedged")
+			return nil
+		}
+	} else if !procutil.Alive(st.PID) || !portOpen(st.Host, st.Port) {
+		drop("pid_or_port_mismatch") // legacy state: pre-identity behavior
 		return nil
 	}
 
 	s.mu.Lock()
 	s.state = st
+	s.portFails = 0
 	s.mu.Unlock()
 	s.logger.Info("proxy_reconcile_kept", "pid", st.PID, "addr", s.addr(st))
 	return nil
 }
 
-func (s *Supervisor) isAliveLocked() bool {
+// processAliveLocked reports whether the tracked proxy process is still our
+// process. Identity-checked when StartTicks is present (audit A9); legacy
+// states fall back to Alive && portOpen exactly as before.
+func (s *Supervisor) processAliveLocked() bool {
 	if s.state == nil {
 		return false
 	}
+	if s.state.StartTicks != 0 {
+		return procutil.SameProcess(s.state.PID, s.state.StartTicks)
+	}
 	return procutil.Alive(s.state.PID) && portOpen(s.state.Host, s.state.Port)
+}
+
+// ForceStop SIGKILLs the proxy immediately (no drain, no grace) and clears
+// persisted state. Escape hatch for a wedged/degraded proxy that no longer
+// answers /_status (audit A13). Identity-checked: a recycled PID is never
+// signaled. Returns an error when no proxy state exists.
+func (s *Supervisor) ForceStop() error {
+	s.mu.Lock()
+	st := s.state
+	s.mu.Unlock()
+	if st == nil {
+		return fmt.Errorf("proxy not running")
+	}
+	alive := procutil.Alive(st.PID)
+	if st.StartTicks != 0 {
+		alive = procutil.SameProcess(st.PID, st.StartTicks)
+	}
+	if alive {
+		_ = procutil.TerminateTree(st.PID, 0)
+	}
+	s.mu.Lock()
+	s.state = nil
+	s.portFails = 0
+	s.mu.Unlock()
+	if err := saveState(s.statePath, nil); err != nil {
+		s.logger.Error("proxy_force_stop_cleanup_failed", "err", err)
+	}
+	s.logger.Info("proxy_force_stopped", "pid", st.PID)
+	return nil
 }
 
 func (s *Supervisor) addr(st *State) string {

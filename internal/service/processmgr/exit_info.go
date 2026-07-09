@@ -2,6 +2,7 @@ package processmgr
 
 import (
 	"bytes"
+	"io"
 	"os"
 )
 
@@ -21,9 +22,17 @@ type ExitInfo struct {
 // Matches the FRD requirement of 50.
 const stderrTailLines = 50
 
-// readStderrTail reads the on-disk log file and returns up to maxLines of
-// trailing lines (each preserved verbatim, including empty intermediate
-// lines — the LauncherPage's enrichWithExit picks the last non-empty one).
+// stderrTailMaxBytes caps how much of the log tail is read into memory. vLLM/
+// SGLang logs reach tens of MiB; reading the whole file per exit (once per
+// generation in a crash loop) is wasteful, so only the last 64 KiB is read
+// (audit C5).
+const stderrTailMaxBytes = 64 << 10
+
+// readStderrTail reads up to maxLines trailing lines of the log file (each
+// preserved verbatim, including empty intermediate lines — the LauncherPage's
+// enrichWithExit picks the last non-empty one). Only the final
+// stderrTailMaxBytes are read; when the file is larger, the leading partial
+// line is dropped so the first returned line is whole.
 // Returns nil on any error — the enrichment is best-effort and must never
 // block or panic the Wait goroutine.
 //
@@ -33,9 +42,33 @@ func readStderrTail(logPath string, maxLines int) []string {
 	if logPath == "" || maxLines <= 0 {
 		return nil
 	}
-	data, err := os.ReadFile(logPath)
+	f, err := os.Open(logPath)
 	if err != nil {
 		return nil
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil
+	}
+	size := fi.Size()
+	var data []byte
+	if size > stderrTailMaxBytes {
+		buf := make([]byte, stderrTailMaxBytes)
+		if _, err := f.ReadAt(buf, size-stderrTailMaxBytes); err != nil && err != io.EOF {
+			return nil
+		}
+		// Drop the leading partial line so the first returned line is whole.
+		if idx := bytes.IndexByte(buf, '\n'); idx >= 0 {
+			buf = buf[idx+1:]
+		}
+		data = buf
+	} else {
+		buf := make([]byte, size)
+		if _, err := f.ReadAt(buf, 0); err != nil && err != io.EOF {
+			return nil
+		}
+		data = buf
 	}
 	data = bytes.TrimRight(data, "\n")
 	if len(data) == 0 {

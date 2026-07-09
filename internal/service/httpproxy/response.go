@@ -8,9 +8,12 @@ import (
 	"strings"
 )
 
-// mirrorReasoningIntoEmptyContent copies reasoning_content into content when
-// content is empty but reasoning is present, preserving all other top-level
-// response fields (usage, id, model, timings, …).
+// mirrorReasoningIntoEmptyContent copies the reasoning trace into content when a
+// completed choice (finish_reason "stop") has empty content but non-empty
+// reasoning. It reads either "reasoning" (vLLM 0.24+) or "reasoning_content"
+// (older/other backends) and preserves all other top-level response fields
+// (usage, id, model, timings, …). Truncated choices (finish_reason "length")
+// are left untouched: their reasoning is an incomplete chain-of-thought.
 func mirrorReasoningIntoEmptyContent(body []byte) ([]byte, bool) {
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal(body, &root); err != nil {
@@ -26,6 +29,13 @@ func mirrorReasoningIntoEmptyContent(body []byte) ([]byte, bool) {
 	}
 	changed := false
 	for i := range choices {
+		// Mirror a reasoning-only answer regardless of finish_reason: a client
+		// like llm-wiki rejects an assistant turn that carries reasoning but
+		// empty content, whether the backend stopped normally or exhausted its
+		// token budget. The finish_reason itself is left untouched (a "length"
+		// turn stays "length"); only the empty content channel is filled. A
+		// tool-call turn keeps empty content — mirroring reasoning there would
+		// corrupt the tool call.
 		rawMsg, ok := choices[i]["message"]
 		if !ok {
 			continue
@@ -35,16 +45,22 @@ func mirrorReasoningIntoEmptyContent(body []byte) ([]byte, bool) {
 			continue
 		}
 		content, _ := msg["content"].(string)
-		reasoning, _ := msg["reasoning_content"].(string)
-		if content == "" && reasoning != "" {
-			msg["content"] = reasoning
-			changed = true
-			patched, err := json.Marshal(msg)
-			if err != nil {
-				return body, false
-			}
-			choices[i]["message"] = patched
+		// vLLM 0.24+ emits the reasoning trace under "reasoning"; older/other
+		// backends use "reasoning_content". Accept either.
+		reasoningContent, _ := msg["reasoning_content"].(string)
+		reasoningField, _ := msg["reasoning"].(string)
+		reasoning := canonicalReasoning(reasoningContent, reasoningField)
+		toolCalls, _ := msg["tool_calls"].([]any)
+		if !mirrorReasoningAsText(content, reasoning, len(toolCalls)) {
+			continue
 		}
+		msg["content"] = reasoning
+		changed = true
+		patched, err := json.Marshal(msg)
+		if err != nil {
+			return body, false
+		}
+		choices[i]["message"] = patched
 	}
 	if !changed {
 		return body, false
@@ -81,18 +97,21 @@ func wrapChatCompletionResponseBody(body io.ReadCloser, maxBytes int64) (io.Read
 	if body == nil {
 		return nil, 0, nil
 	}
-	defer body.Close()
 	if maxBytes <= 0 {
 		maxBytes = defaultMaxBodyBuffer
 	}
 	limited := io.LimitReader(body, maxBytes+1)
 	raw, err := io.ReadAll(limited)
 	if err != nil {
+		_ = body.Close()
 		return nil, 0, err
 	}
 	if int64(len(raw)) > maxBytes {
-		return io.NopCloser(bytes.NewReader(raw)), int64(len(raw)), nil
+		// Too large to normalize: stream through untouched (buffered prefix
+		// chained with the unread remainder). Length unknown → caller sets -1.
+		return &prefixedBody{Reader: io.MultiReader(bytes.NewReader(raw), body), closer: body}, -1, nil
 	}
+	_ = body.Close()
 	adjusted, ok := mirrorReasoningIntoEmptyContent(raw)
 	if !ok {
 		return io.NopCloser(bytes.NewReader(raw)), int64(len(raw)), nil

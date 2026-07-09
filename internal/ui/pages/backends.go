@@ -2,6 +2,7 @@
 package pages
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -74,6 +75,7 @@ type BackendsPage struct {
 	probeEpoch   int
 	probeCh      <-chan backendcatalog.ProbeEvent
 	probeResults map[string]backendProbeResult
+	probeCancel  context.CancelFunc
 
 	webEditing bool
 	webURL     string
@@ -119,7 +121,9 @@ func (p BackendsPage) WithStores(catalog backendcatalog.Store, schema backendcat
 }
 
 func (p BackendsPage) Init() tea.Cmd {
-	return tea.Batch(p.loadCmd(), p.spinnerModel.Tick)
+	// Spinner tick is armed only when probe/refresh work begins (audit N-P5);
+	// an always-on tick loop wastes wakeups while the tab is idle.
+	return p.loadCmd()
 }
 
 // Reload refreshes the backend list on tab focus. It emits backendsReloadMsg
@@ -171,6 +175,10 @@ func (p BackendsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.probeEpoch++
 		p.probeCh = nil
 		p.pendingProbe = false
+		if p.probeCancel != nil {
+			p.probeCancel() // stop the producer goroutine (audit N-C14)
+			p.probeCancel = nil
+		}
 		return p, p.loadCmd()
 	case backendDeleteConfirmedMsg:
 		return p.performDelete(m.id)
@@ -278,7 +286,8 @@ func (p BackendsPage) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return p, nil
 		}
 		p.pendingRefresh = true
-		return p.askRefreshSelected()
+		model, cmd := p.askRefreshSelected()
+		return model, tea.Batch(cmd, p.spinnerModel.Tick)
 	case key.Matches(msg, p.keys.Probe):
 		if p.pendingProbe {
 			return p, nil
@@ -297,9 +306,9 @@ func (p BackendsPage) Hints() string {
 	case p.form != nil:
 		return "[enter] submit  [esc] cancel"
 	case p.refreshConfirm.Active():
-		return "[←→] choose  [enter] confirm  [esc] cancel"
+		return components.ConfirmHints
 	case p.deleteConfirm.Active():
-		return "[←→] choose  [enter] confirm  [esc] cancel"
+		return components.ConfirmHints
 	default:
 		hints := "[e] edit  [n] new  [X] del  [D] default  [R] refresh"
 		if p.prober != nil {

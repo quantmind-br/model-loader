@@ -182,3 +182,177 @@ func TestHandleResponses_NonStream_Integration(t *testing.T) {
 		t.Fatalf("output = %#v, want one message item", resp["output"])
 	}
 }
+
+func TestBuildResponsesResponse_AcceptsVLLMReasoningFieldFromJSON(t *testing.T) {
+	var oai oaiChatResponse
+	if err := json.Unmarshal([]byte(`{"choices":[{"finish_reason":"stop","message":{"reasoning":"think","content":"answer"}}]}`), &oai); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	resp := buildResponsesResponse(&oai, "m", 123)
+	if len(resp.Output) == 0 {
+		t.Fatalf("output empty: %#v", resp)
+	}
+	item, ok := resp.Output[0].(responsesReasoningItem)
+	if !ok || item.Type != "reasoning" {
+		t.Fatalf("output0 = %#v, want reasoning", resp.Output[0])
+	}
+	if len(item.Summary) == 0 {
+		t.Fatalf("summary empty: %#v", item)
+	}
+	sum, ok := item.Summary[0].(responsesSummaryText)
+	if !ok || sum.Type != "summary_text" || sum.Text != "think" {
+		t.Errorf("summary0 = %#v, want summary_text think", item.Summary[0])
+	}
+}
+
+func TestResponsesStream_AcceptsVLLMReasoningField(t *testing.T) {
+	rec := httptest.NewRecorder()
+	script := sseScript(
+		`{"choices":[{"delta":{"reasoning":"think"}}]}`,
+		`{"choices":[{"delta":{"content":"answer"}}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	)
+	if err := runResponsesStream(context.Background(), rec, strings.NewReader(script), "alpha", 100, mllog.Nop()); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	frames := parseSSE(t, rec.Body.String())
+	reasoningDeltas := 0
+	for _, f := range frames {
+		if f.Event == "response.reasoning_summary_text.delta" {
+			reasoningDeltas++
+			if f.Data["delta"] != "think" {
+				t.Errorf("reasoning delta = %#v, want think", f.Data["delta"])
+			}
+		}
+	}
+	if reasoningDeltas != 1 {
+		t.Errorf("reasoning_summary_text.delta count = %d, want 1", reasoningDeltas)
+	}
+	last := frames[len(frames)-1]
+	if last.Event != "response.completed" {
+		t.Fatalf("last event = %s, want response.completed", last.Event)
+	}
+	respObj, _ := last.Data["response"].(map[string]any)
+	out, _ := respObj["output"].([]any)
+	var hasReasoning, hasMessage bool
+	for _, it := range out {
+		m, _ := it.(map[string]any)
+		switch m["type"] {
+		case "reasoning":
+			hasReasoning = true
+		case "message":
+			hasMessage = true
+		}
+	}
+	if !hasReasoning || !hasMessage {
+		t.Errorf("completed output = %#v, want reasoning+message", out)
+	}
+}
+
+// TestResponsesStream_CompletedOutputIncludesReasoning isolates a snapshot
+// content-loss bug independent of the reasoning alias: finish() assembled the
+// terminal response.completed output from message + tool items only, dropping
+// the reasoning item that was streamed incrementally. Uses the canonical
+// reasoning_content field so it fails on the finish() gap, not the alias.
+func TestResponsesStream_CompletedOutputIncludesReasoning(t *testing.T) {
+	rec := httptest.NewRecorder()
+	script := sseScript(
+		`{"choices":[{"delta":{"reasoning_content":"think"}}]}`,
+		`{"choices":[{"delta":{"content":"answer"}}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	)
+	if err := runResponsesStream(context.Background(), rec, strings.NewReader(script), "alpha", 100, mllog.Nop()); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	frames := parseSSE(t, rec.Body.String())
+	last := frames[len(frames)-1]
+	if last.Event != "response.completed" {
+		t.Fatalf("last event = %s, want response.completed", last.Event)
+	}
+	respObj, _ := last.Data["response"].(map[string]any)
+	out, _ := respObj["output"].([]any)
+	if len(out) != 2 {
+		t.Fatalf("completed output len = %d, want reasoning+message: %#v", len(out), out)
+	}
+	r0, _ := out[0].(map[string]any)
+	if r0["type"] != "reasoning" {
+		t.Errorf("output0 = %#v, want reasoning", out[0])
+	}
+	if m1, _ := out[1].(map[string]any); m1["type"] != "message" {
+		t.Errorf("output1 = %#v, want message", out[1])
+	}
+	summary, _ := r0["summary"].([]any)
+	if len(summary) == 0 {
+		t.Fatalf("reasoning summary empty: %#v", r0)
+	}
+	if s0, _ := summary[0].(map[string]any); s0["text"] != "think" {
+		t.Errorf("summary text = %#v, want think", s0["text"])
+	}
+}
+
+func TestBuildResponsesResponse_MirrorsReasoningOnlyAsMessage(t *testing.T) {
+	var oai oaiChatResponse
+	if err := json.Unmarshal([]byte(`{"choices":[{"finish_reason":"length","message":{"reasoning":"think"}}]}`), &oai); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	resp := buildResponsesResponse(&oai, "m", 123)
+	if len(resp.Output) != 2 {
+		t.Fatalf("output = %#v, want reasoning+message fallback", resp.Output)
+	}
+	if _, ok := resp.Output[0].(responsesReasoningItem); !ok {
+		t.Fatalf("output[0] = %#v, want reasoning", resp.Output[0])
+	}
+	msg, ok := resp.Output[1].(responsesMessageItem)
+	if !ok {
+		t.Fatalf("output[1] = %#v, want message", resp.Output[1])
+	}
+	if len(msg.Content) != 1 {
+		t.Fatalf("message content = %#v, want one output_text", msg.Content)
+	}
+	txt, ok := msg.Content[0].(responsesOutputText)
+	if !ok || txt.Text != "think" {
+		t.Fatalf("message content[0] = %#v, want mirrored output_text", msg.Content[0])
+	}
+}
+
+func TestResponsesStream_MirrorsReasoningOnlyAsMessage(t *testing.T) {
+	rec := httptest.NewRecorder()
+	script := sseScript(
+		`{"choices":[{"delta":{"reasoning":"think"}}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"length"}]}`,
+		`[DONE]`,
+	)
+	if err := runResponsesStream(context.Background(), rec, strings.NewReader(script), "alpha", 100, mllog.Nop()); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	frames := parseSSE(t, rec.Body.String())
+	var sawTextDelta bool
+	for _, f := range frames {
+		if f.Event == "response.output_text.delta" && f.Data["delta"] == "think" {
+			sawTextDelta = true
+		}
+	}
+	if !sawTextDelta {
+		t.Fatalf("no mirrored output_text.delta in frames: %#v", frames)
+	}
+	last := frames[len(frames)-1]
+	if last.Event != "response.completed" {
+		t.Fatalf("last event = %s, want response.completed", last.Event)
+	}
+	respObj, _ := last.Data["response"].(map[string]any)
+	out, _ := respObj["output"].([]any)
+	if len(out) != 2 {
+		t.Fatalf("completed output = %#v, want reasoning+message fallback", out)
+	}
+	msg, _ := out[1].(map[string]any)
+	content, _ := msg["content"].([]any)
+	if len(content) != 1 {
+		t.Fatalf("message content = %#v, want one output_text", content)
+	}
+	txt, _ := content[0].(map[string]any)
+	if txt["text"] != "think" {
+		t.Fatalf("output text = %#v, want mirrored reasoning", txt)
+	}
+}

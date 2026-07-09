@@ -59,14 +59,24 @@ func extractFromBody(r *http.Request, maxBody int64) string {
 	buf := bytes.NewBuffer(make([]byte, 0, 1024))
 	limited := io.LimitReader(r.Body, maxBody+1)
 	n, err := io.Copy(buf, limited)
-	_ = r.Body.Close()
-	if err != nil || n > maxBody {
-		// Restore an empty body — original was already partially drained.
+	if err != nil {
+		// Read error mid-body: restore what we got (request will fail
+		// upstream anyway) and skip model extraction.
+		_ = r.Body.Close()
 		r.Body = io.NopCloser(bytes.NewReader(buf.Bytes()))
 		r.ContentLength = int64(buf.Len())
 		return ""
 	}
-
+	if n > maxBody {
+		// Body exceeds the buffer cap (only reachable with unknown length —
+		// known lengths > maxBody bailed at the ContentLength check above).
+		// Forward UNTRUNCATED: chain the buffered prefix with the unread
+		// remainder; skip model extraction.
+		r.Body = &prefixedBody{Reader: io.MultiReader(bytes.NewReader(buf.Bytes()), r.Body), closer: r.Body}
+		r.ContentLength = -1
+		return ""
+	}
+	_ = r.Body.Close()
 	r.Body = io.NopCloser(bytes.NewReader(buf.Bytes()))
 	r.ContentLength = int64(buf.Len())
 

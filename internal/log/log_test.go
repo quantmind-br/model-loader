@@ -34,7 +34,7 @@ func TestNew_RotatesExistingLog(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, activeName), []byte("OLD\n"), 0o644); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	_, closeFn, err := New(Config{Dir: dir, Level: slog.LevelInfo})
+	_, closeFn, err := New(Config{Dir: dir, Level: slog.LevelInfo, Rotate: true})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestNew_Caps5Files(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, activeName), []byte("live"), 0o644); err != nil {
 		t.Fatalf("seed active: %v", err)
 	}
-	_, closeFn, err := New(Config{Dir: dir, Level: slog.LevelInfo})
+	_, closeFn, err := New(Config{Dir: dir, Level: slog.LevelInfo, Rotate: true})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -164,4 +164,26 @@ func TestNop_WritesNothing(t *testing.T) {
 	lg.Info("x")
 	lg.Warn("x")
 	lg.Error("x")
+}
+
+// TestNew_NoRotateLeavesActiveIntact — audit C6: an observer (Rotate:false)
+// appends to the active log without renaming it, so it cannot trim/rename the
+// file a live owner session holds open.
+func TestNew_NoRotateLeavesActiveIntact(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, activeName), []byte("LIVE\n"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	_, closeFn, err := New(Config{Dir: dir, Level: slog.LevelInfo, Rotate: false})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer closeFn()
+	if matches, _ := filepath.Glob(filepath.Join(dir, rotatedGlob)); len(matches) != 0 {
+		t.Fatalf("Rotate:false must not create rotated archives; got %v", matches)
+	}
+	active, _ := os.ReadFile(filepath.Join(dir, activeName))
+	if !strings.HasPrefix(string(active), "LIVE\n") {
+		t.Fatalf("Rotate:false must append to the existing active log, not rename it; got %q", string(active))
+	}
 }

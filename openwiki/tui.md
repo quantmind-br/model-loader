@@ -63,7 +63,7 @@ The TUI collapses to "Editing in browser…" frame while the web editor is open.
 |-----|--------|
 | `v` | Cycle Logs / Slots / Metrics / History |
 | `Space` | Pause / resume log scroll (2000-line FIFO tail) |
-| `K` | Kill selected — routes through `/_admin/unload` when proxy owns the PID, else `pm.Kill`. **Refuses to kill a degraded proxy** |
+| `K` | Kill selected — routes through `/_admin/unload` when proxy owns the PID, else `pm.Kill`. **Refuses on degraded proxy** and arms a "Force-stop proxy" confirmation; accepting it SIGKILLs the proxy then kills the backend directly (audit A13) |
 | `R` | Restart (confirm) |
 | `h` | History chart |
 | `1`/`2`/`3`/`4` | History chart window: 1h / 6h / 24h / 7d |

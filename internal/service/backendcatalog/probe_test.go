@@ -163,3 +163,19 @@ func (b *brokenStore) SetDefault(string) error              { return nil }
 func (b *brokenStore) DefaultBackendID() (string, error)  { return "", nil }
 func (b *brokenStore) Backends() ([]domain.Backend, error) { return nil, nil }
 
+
+// TestRunProbe_QuoteAwareSplit guards audit N-C13: probe tokenizes the command
+// with the shared quote-aware splitter, so a quoted executable path containing
+// spaces is exec'd as one path — not shredded on whitespace like strings.Fields.
+func TestRunProbe_QuoteAwareSplit(t *testing.T) {
+	status, _, err := runProbe(t.Context(), `"/tmp/dir with space/bin" --extra`, "--help")
+	if err == nil {
+		t.Fatal("expected error probing a nonexistent quoted executable")
+	}
+	if status != ProbeStatusWarn {
+		t.Errorf("status = %v, want WARN", status)
+	}
+	if !strings.Contains(err.Error(), "/tmp/dir with space/bin") {
+		t.Errorf("error %q must mention the unsplit quoted path, not /tmp/dir", err.Error())
+	}
+}

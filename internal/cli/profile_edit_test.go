@@ -51,10 +51,10 @@ func TestCoerceArgs_TypesBySchema(t *testing.T) {
 
 func TestAssembleProfile_FlagsOverrideBase(t *testing.T) {
 	base := domain.Profile{
-		ID:    "p1",
-		Name:  "Old",
-		Model: "old.gguf",
-		Args:  map[string]any{"port": 1, "ctx-size": 2048},
+		ID:     "p1",
+		Name:   "Old",
+		Model:  "old.gguf",
+		Args:   map[string]any{"port": 1, "ctx-size": 2048},
 		Launch: domain.LaunchConfig{BackendID: "llama"},
 	}
 	in := profileInput{

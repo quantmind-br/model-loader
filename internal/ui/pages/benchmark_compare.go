@@ -26,8 +26,9 @@ type benchCompareSection struct {
 // comparison. p.runs is newest-first, so the first hit per key wins.
 func (p BenchmarkPage) openCompare() (tea.Model, tea.Cmd) {
 	if len(p.runs) == 0 {
-		p, _ = p.withFlashError("no runs to compare")
-		return p, nil
+		var cmd tea.Cmd
+		p, cmd = p.withFlashError("no runs to compare")
+		return p, cmd
 	}
 	seen := map[string]bool{}
 	byMode := map[benchmark.Mode][]benchmark.Run{}
@@ -54,8 +55,9 @@ func (p BenchmarkPage) openCompare() (tea.Model, tea.Cmd) {
 		sections = append(sections, benchCompareSection{Mode: m, Runs: runs})
 	}
 	if len(sections) == 0 {
-		p, _ = p.withFlashError("no complete runs to compare")
-		return p, nil
+		var cmd tea.Cmd
+		p, cmd = p.withFlashError("no complete runs to compare")
+		return p, cmd
 	}
 	p.compareSections = sections
 	p.view = bvCompare
@@ -66,8 +68,9 @@ func (p BenchmarkPage) openCompare() (tea.Model, tea.Cmd) {
 func (p BenchmarkPage) openHistory() (tea.Model, tea.Cmd) {
 	seed, ok := p.selectedDashboardRun()
 	if !ok {
-		p, _ = p.withFlashError("select a run first")
-		return p, nil
+		var cmd tea.Cmd
+		p, cmd = p.withFlashError("select a run first")
+		return p, cmd
 	}
 	target := seed.ProfileID
 	hist := make([]benchmark.Run, 0)

@@ -18,7 +18,7 @@ func TestLiveness_MarksDeadPIDCrashed(t *testing.T) {
 
 	// Stub probe — first call says alive, subsequent say dead.
 	calls := atomic.Int32{}
-	probe := func(pid int) bool {
+	probe := func(_ domain.RunningInstance) bool {
 		c := calls.Add(1)
 		return c == 1 // alive on first probe, dead after
 	}
@@ -45,7 +45,7 @@ func TestLiveness_AliveStaysAlive(t *testing.T) {
 	t.Cleanup(func() { _ = m.Close() })
 	m.tracked[111] = domain.RunningInstance{ProfileID: "x", PID: 111, Port: 9000, Background: true}
 
-	stop := m.startLivenessWithProbe(20*time.Millisecond, func(_ int) bool { return true })
+	stop := m.startLivenessWithProbe(20*time.Millisecond, func(_ domain.RunningInstance) bool { return true })
 	defer stop()
 
 	time.Sleep(80 * time.Millisecond)

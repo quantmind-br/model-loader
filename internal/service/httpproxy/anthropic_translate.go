@@ -157,11 +157,11 @@ func systemMessageText(m anthropicMessage) string {
 	return strings.Join(parts, "\n\n")
 }
 
-// appendUserMessage translates a user turn. tool_result blocks each become
-// one {role:"tool"} message emitted BEFORE the remaining user content of the
-// same turn (the ordering the OpenAI API requires after an assistant
-// tool_calls message). The tool_result is_error flag and any non-text payload
-// inside it are dropped — a documented lossy corner of the translation.
+// appendUserMessage translates a user turn. tool_result blocks each become one
+// {role:"tool"} message emitted BEFORE the remaining user content of the same
+// turn. The is_error flag is surfaced via a [tool_error] prefix (OpenAI tool
+// messages have no error flag); non-text payloads inside tool_result are
+// dropped.
 func appendUserMessage(out []oaiChatMessage, m anthropicMessage) ([]oaiChatMessage, *anthropicAPIError) {
 	if m.Content.IsString {
 		return append(out, oaiChatMessage{Role: "user", Content: m.Content.Text}), nil
@@ -398,11 +398,16 @@ func buildAnthropicResponse(oai *oaiChatResponse, requestedModel string, logger 
 	stop := "end_turn"
 	if len(oai.Choices) > 0 {
 		ch := oai.Choices[0]
-		if ch.Message.ReasoningContent != "" {
-			resp.Content = append(resp.Content, anthropicThinkingBlock{Type: "thinking", Thinking: ch.Message.ReasoningContent})
+		reasoning := ch.Message.ReasoningContent
+		content := ch.Message.Content
+		if reasoning != "" {
+			resp.Content = append(resp.Content, anthropicThinkingBlock{Type: "thinking", Thinking: reasoning})
 		}
-		if ch.Message.Content != "" {
-			resp.Content = append(resp.Content, anthropicTextBlock{Type: "text", Text: ch.Message.Content})
+		if mirrorReasoningAsText(content, reasoning, len(ch.Message.ToolCalls)) {
+			content = reasoning
+		}
+		if content != "" {
+			resp.Content = append(resp.Content, anthropicTextBlock{Type: "text", Text: content})
 		}
 		for _, tc := range ch.Message.ToolCalls {
 			resp.Content = append(resp.Content, anthropicToolUseBlock{
