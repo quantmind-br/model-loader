@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
@@ -54,13 +55,20 @@ type RunConfig struct {
 	Checkpoint func(Run)
 }
 
-// Progress is streamed to the UI while a run executes.
+// Progress is streamed to the UI while a run executes. The first five fields are
+// the original wire contract; the rest are additive (item_done / activity
+// events) and are stamped/consumed by RunFeed.
 type Progress struct {
 	Index       int
 	Total       int
 	ProblemID   string
 	ProblemName string
-	Phase       string // "launch" | "infer" | "score" | "done"
+	Phase       string    // "launch" | "infer" | "score" | "item_done" | "activity" | "done"
+	At          time.Time // stamped by the feed when zero
+	Detail      string    // human activity line (harness output line, "streaming — N tok")
+	Outcome     string    // item_done only: "pass" | "fail" | "error"
+	Score       float64   // item_done only
+	ItemMs      int64     // item_done only: item wall time
 }
 
 // Runner orchestrates a full benchmark run against one profile.
@@ -85,6 +93,8 @@ type Runner struct {
 	runID           string                // current run id for log correlation; set by Run (single-flight)
 	checkpoint      func([]ProblemResult) // incremental persistence hook (T7); set by Run, nil when disabled
 	lastCheckpoint  time.Time             // throttle for checkpoint
+	feedMu          sync.Mutex            // guards feed
+	feed            *RunFeed              // authoritative live-run model; nil before the first run, retained after
 }
 
 // NewRunner builds a Runner and loads the embedded dataset.
