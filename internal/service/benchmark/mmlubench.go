@@ -92,6 +92,7 @@ func (r *Runner) runMMLUBench(ctx context.Context, base, model string, p MMLUPro
 		Model:       model,
 		Temperature: 0,
 		MaxTokens:   r.cfg.MaxTokens,
+		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
 			{Role: "system", Content: "You are answering a multiple-choice question. Respond with ONLY the letter (A, B, C, or D) of the correct answer."},
 			{Role: "user", Content: buildMMLUPrompt(p)},

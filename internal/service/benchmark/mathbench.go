@@ -89,6 +89,7 @@ func (r *Runner) runMathBench(ctx context.Context, base, model string, p MathPro
 		Model:       model,
 		Temperature: 0,
 		MaxTokens:   r.cfg.MaxTokens,
+		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
 			{Role: "system", Content: "You are a careful math solver. Reason step by step, then end with 'The answer is <number>'."},
 			{Role: "user", Content: p.Question},

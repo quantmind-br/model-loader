@@ -1,6 +1,9 @@
 package benchmark
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestRegistry_LookupUnknown(t *testing.T) {
 	if _, ok := handlerFor(Mode("does-not-exist")); ok {
@@ -95,5 +98,63 @@ func TestCategoryOf(t *testing.T) {
 	}
 	if _, ok := CategoryOf("nope"); ok {
 		t.Fatal("CategoryOf(unknown) should report not found")
+	}
+}
+
+func TestExecuteSerialBench_EmitsItemDone(t *testing.T) {
+	r := &Runner{}
+	outcomes := []ProblemResult{
+		{ProblemID: "p1", ProblemName: "n1", Resolved: true, Score: 1, TotalMs: 10},
+		{ProblemID: "p2", ProblemName: "n2", Resolved: false, Score: 0, TotalMs: 20},
+		{ProblemID: "p3", ProblemName: "n3", Err: "boom", TotalMs: 30},
+	}
+	progress := make(chan Progress, 100)
+	meta := func(i int) (string, string) { return outcomes[i].ProblemID, outcomes[i].ProblemName }
+	runOne := func(i int) (ProblemResult, ProblemTranscript) { return outcomes[i], ProblemTranscript{} }
+	if _, _, err := executeSerialBench(context.Background(), r, progress, len(outcomes), meta, runOne); err != nil {
+		t.Fatalf("executeSerialBench: %v", err)
+	}
+	close(progress)
+
+	var done []Progress
+	for p := range progress {
+		if p.Phase == "item_done" {
+			done = append(done, p)
+		}
+	}
+	if len(done) != 3 {
+		t.Fatalf("got %d item_done events, want 3", len(done))
+	}
+	want := []string{"pass", "fail", "error"}
+	for i, p := range done {
+		if p.Outcome != want[i] {
+			t.Errorf("item %d outcome = %q, want %q", i, p.Outcome, want[i])
+		}
+		if p.ProblemID != outcomes[i].ProblemID {
+			t.Errorf("item %d id = %q, want %q", i, p.ProblemID, outcomes[i].ProblemID)
+		}
+		if p.ItemMs != outcomes[i].TotalMs {
+			t.Errorf("item %d ItemMs = %d, want %d", i, p.ItemMs, outcomes[i].TotalMs)
+		}
+		if p.Detail != outcomes[i].Err {
+			t.Errorf("item %d Detail = %q, want %q (the item's Err)", i, p.Detail, outcomes[i].Err)
+		}
+	}
+}
+
+func TestOutcomeOf(t *testing.T) {
+	tests := []struct {
+		pr   ProblemResult
+		want string
+	}{
+		{ProblemResult{Err: "x"}, "error"},
+		{ProblemResult{Err: "x", Resolved: true}, "error"},
+		{ProblemResult{Resolved: true}, "pass"},
+		{ProblemResult{Resolved: false}, "fail"},
+	}
+	for _, tt := range tests {
+		if got := outcomeOf(tt.pr); got != tt.want {
+			t.Errorf("outcomeOf(%+v) = %q, want %q", tt.pr, got, tt.want)
+		}
 	}
 }

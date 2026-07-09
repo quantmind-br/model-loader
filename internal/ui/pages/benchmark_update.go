@@ -38,12 +38,32 @@ func (p BenchmarkPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return p, nil
 	case benchProgressMsg:
-		p.progress = m.p
+		p = p.captureFeed()
 		return p, waitProgress(m.ch)
 	case benchProgressClosedMsg:
 		return p, nil
+	case benchRunTickMsg:
+		if p.view != bvRunning {
+			return p, nil
+		}
+		p = p.captureFeed()
+		return p, p.runTick()
 	case benchRunDoneMsg:
 		return p.handleRunDone(m)
+	case benchWebStartedMsg:
+		p.webViewer = m.viewer
+		p.webViewing = true
+		p.webStarting = false
+		var cmd tea.Cmd
+		p, cmd = p.withFlash("benchmark viewer: " + m.url)
+		return p, tea.Batch(cmd, waitForBenchWeb(m.viewer))
+	case benchWebDoneMsg:
+		p.webViewer = nil
+		p.webViewing = false
+		return p, nil
+	case benchWebFailedMsg:
+		p.webStarting = false
+		return p.withFlashError("web viewer: " + m.err.Error())
 	case spinner.TickMsg:
 		// Only re-arm the tick while a run is in flight; outside bvRunning the
 		// spinner is invisible and ticking would just burn CPU.
@@ -89,20 +109,12 @@ func (p BenchmarkPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.keyWizard(msg)
 	case bvRunning:
 		return p.keyRunning(msg)
-	case bvRunDetail, bvCompare:
-		if msg.String() == "esc" {
-			p.view = bvDashboard
-			return p, nil
-		}
-		if msg.String() == "E" && p.view == bvRunDetail && p.detail != nil {
-			return p.exportRunValue(*p.detail)
-		}
-		// Compare view: cycle the ranking metric.
-		if msg.String() == "m" && p.view == bvCompare {
-			p.compareMetric = (p.compareMetric + 1) % 4
-			return p, nil
-		}
-		return p, nil
+	case bvRunDetail:
+		return p.keyDetail(msg)
+	case bvProblem:
+		return p.keyProblem(msg)
+	case bvCompare:
+		return p.keyCompare(msg)
 	case bvHistory:
 		return p.keyHistory(msg)
 	default:
@@ -111,6 +123,14 @@ func (p BenchmarkPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (p BenchmarkPage) keyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// While the read-only web viewer holds focus the dashboard captures input:
+	// esc closes the viewer, every other key is swallowed (the browser drives).
+	if p.webViewing {
+		if msg.String() == "esc" && p.webViewer != nil {
+			p.webViewer.Cancel()
+		}
+		return p, nil
+	}
 	rows := dashboardRows(p.runs, p.focusedDashboardMode())
 	switch msg.String() {
 	case "up", "k":
@@ -137,8 +157,7 @@ func (p BenchmarkPage) keyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.openWizard()
 	case "enter":
 		if r, ok := p.selectedDashboardRun(); ok {
-			p.detail = &r
-			p.view = bvRunDetail
+			p = p.openDetail(r, bvDashboard)
 		}
 	case "c":
 		return p.openCompare()
@@ -150,6 +169,113 @@ func (p BenchmarkPage) keyDashboard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return p.exportSelected()
 	case "R":
 		return p, p.loadRunsCmd()
+	case "W":
+		if p.webStarting || p.webViewing {
+			return p, nil
+		}
+		p.webStarting = true
+		return p, p.startBenchWeb()
+	}
+	return p, nil
+}
+
+// openDetail switches to the run-detail view for r, remembering the entry view
+// (so esc returns there) and resetting the per-problem cursor, sort, and the
+// lazily-loaded transcript cache.
+func (p BenchmarkPage) openDetail(r benchmark.Run, from benchView) BenchmarkPage {
+	run := r
+	p.detail = &run
+	p.detailFrom = from
+	p.view = bvRunDetail
+	p.probCursor = 0
+	p.detailSort = 0
+	p.probTranscript = nil
+	p.probTranscriptTried = false
+	return p
+}
+
+// detailReturn resolves the view esc goes back to from run detail.
+func (p BenchmarkPage) detailReturn() benchView {
+	switch p.detailFrom {
+	case bvCompare, bvHistory:
+		return p.detailFrom
+	default:
+		return bvDashboard
+	}
+}
+
+// keyDetail drives the run-detail per-problem cursor, sort cycle, export, and
+// the [enter] drill-in (loading the run transcript lazily on first entry).
+func (p BenchmarkPage) keyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if p.detail == nil {
+		if msg.String() == "esc" {
+			p.view = p.detailReturn()
+		}
+		return p, nil
+	}
+	n := len(p.detail.Problems)
+	switch msg.String() {
+	case "esc":
+		p.view = p.detailReturn()
+	case "E":
+		return p.exportRunValue(*p.detail)
+	case "s":
+		p.detailSort = (p.detailSort + 1) % 3
+		p.probCursor = 0
+	case "up", "k":
+		if p.probCursor > 0 {
+			p.probCursor--
+		}
+	case "down", "j":
+		if p.probCursor < n-1 {
+			p.probCursor++
+		}
+	case "g", "home":
+		p.probCursor = 0
+	case "G", "end":
+		if n > 0 {
+			p.probCursor = n - 1
+		}
+	case "enter":
+		if n > 0 {
+			p.view = bvProblem
+			p.probScroll = 0
+			if !p.probTranscriptTried {
+				tr, err := p.bstore.LoadTranscript(p.detail.ID)
+				if err != nil {
+					tr = nil
+				}
+				p.probTranscript = tr
+				p.probTranscriptTried = true
+			}
+		}
+	}
+	return p, nil
+}
+
+// keyProblem scrolls the problem drill-in; esc returns to run detail.
+func (p BenchmarkPage) keyProblem(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	avail := 1
+	if p.height > 1 {
+		avail = p.height - 1
+	}
+	maxOff := max(0, len(p.problemLines())-avail)
+	switch msg.String() {
+	case "esc":
+		p.view = bvRunDetail
+		p.probScroll = 0
+	case "up", "k":
+		if p.probScroll > 0 {
+			p.probScroll--
+		}
+	case "down", "j":
+		if p.probScroll < maxOff {
+			p.probScroll++
+		}
+	case "g", "home":
+		p.probScroll = 0
+	case "G", "end":
+		p.probScroll = maxOff
 	}
 	return p, nil
 }
@@ -230,7 +356,7 @@ func (p BenchmarkPage) exportSelected() (tea.Model, tea.Cmd) {
 
 // exportRunValue writes a run to the exports dir and flashes the result.
 func (p BenchmarkPage) exportRunValue(r benchmark.Run) (tea.Model, tea.Cmd) {
-	jsonPath, _, err := exportRun(p.exportDir, r)
+	jsonPath, _, err := benchmark.ExportRun(r, p.exportDir)
 	if err != nil {
 		var cmd tea.Cmd
 		p, cmd = p.withFlashError("export: " + err.Error())

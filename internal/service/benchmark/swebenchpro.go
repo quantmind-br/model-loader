@@ -145,7 +145,7 @@ func (h sweBenchProHandler) Execute(ctx context.Context, r *Runner, base, model 
 		defer cancel()
 	}
 
-	hlog := newHarnessLog(cfg.HarnessLogDir, "swe-bench-pro")
+	hlog := newHarnessLog(cfg.HarnessLogDir, "swe-bench-pro", r.harnessLineEmitter(ModeSweBenchPro))
 	defer hlog.Close()
 	total := h.Count(r)
 	r.logger().Info("benchmark_harness_start", "run_id", r.runID, "mode", ModeSweBenchPro, "harness", harness, "total", total, "log", hlog.path)
@@ -243,6 +243,23 @@ func (h sweBenchProHandler) Execute(ctx context.Context, r *Runner, base, model 
 			cfg.SweBenchProRawSample, evalErr, hlog.diagTail())
 	}
 	problems := sweapResultsToProblems(res)
+	// Per-instance item_done, emitted from the authoritative eval_results.json.
+	// Unlike tb/deep-swe (whose harnesses drop a per-trial results file the moment
+	// each trial finishes, so their pollers can stream live outcomes), the
+	// SWE-bench Pro harness only writes verdicts collectively at eval exit
+	// (docs/swe-bench-pro.md: eval_results.json = {instance_id: bool}). The
+	// per-instance <id>/*_output.json is raw test output with an undocumented
+	// schema — deriving pass/fail from it would risk fabricating a wrong verdict.
+	// So live progress stays the poller's instance count + harness lines, and the
+	// real ✓/✗ breakdown lands here in one batch, keeping the terminal feed
+	// snapshot (Pass/Fail/Done) consistent with the persisted run (BR11).
+	for i, pr := range problems {
+		send(progress, Progress{
+			Index: i + 1, Total: len(problems),
+			ProblemID: pr.ProblemID, ProblemName: pr.ProblemName,
+			Phase: "item_done", Outcome: outcomeOf(pr), Score: pr.Score, ItemMs: pr.TotalMs, Detail: pr.Err,
+		})
+	}
 
 	var transcripts []ProblemTranscript
 	if cfg.SaveTranscripts {

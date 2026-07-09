@@ -163,6 +163,7 @@ func (r *Runner) runLongContext(ctx context.Context, base, model string) (Proble
 		Model:       model,
 		Temperature: 0,
 		MaxTokens:   128,
+		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
 			{Role: "system", Content: "You are a careful code-reading assistant. Answer literally."},
 			{Role: "user", Content: user},

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -22,14 +21,37 @@ import (
 )
 
 func init() {
+	benchCmd := &cobra.Command{
+		Use:   "benchmark",
+		Short: "Run, list, compare, and inspect profile benchmarks",
+		Long: "Run, list, compare, and inspect profile benchmarks.\n\n" +
+			"Runs are started and cancelled from `benchmark run`; the other\n" +
+			"subcommands read the saved run store.",
+		// A bare `benchmark` prints help (exit 0) — no hidden flag dispatch.
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return cmd.Help()
+		},
+	}
+	benchCmd.AddCommand(newBenchRunCmd())
+	benchCmd.AddCommand(newBenchListCmd())
+	benchCmd.AddCommand(newBenchCompareCmd())
+	benchCmd.AddCommand(newBenchHistoryCmd())
+	benchCmd.AddCommand(newBenchShowCmd())
+	benchCmd.AddCommand(newBenchTranscriptCmd())
+	benchCmd.AddCommand(newBenchExportCmd())
+	benchCmd.AddCommand(newBenchDeleteCmd())
+	benchCmd.AddCommand(newBenchWebCmd())
+	rootCmd.AddCommand(benchCmd)
+}
+
+// newBenchRunCmd builds `benchmark run`: the headless run path. It reuses the
+// proxy-supervisor + runner wiring verbatim and preserves the --min-solve gate
+// (exit 2) and forced transcript persistence.
+func newBenchRunCmd() *cobra.Command {
 	var (
 		profileID     string
 		modeStr       string
-		list          bool
-		compare       bool
-		asJSON        bool
 		minSolve      float64
-		transcript    string
 		tbTasks       []string
 		tbNTasks      int
 		limit         int
@@ -39,12 +61,12 @@ func init() {
 		deepTasks     []string
 		deepNTasks    int
 		deepTasksDir  string
+		verbose       bool
 	)
-
 	cmd := &cobra.Command{
-		Use:   "benchmark",
-		Short: "Run, list, or compare profile benchmarks",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Use:   "run",
+		Short: "Run a benchmark against a profile",
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.Load()
 			if err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "config error: %v\n", err)
@@ -52,27 +74,6 @@ func init() {
 			}
 			out, errw := cmd.OutOrStdout(), cmd.ErrOrStderr()
 			store := benchmarkstore.New(filepath.Join(cfg.Paths.StateDir, "benchmark", "runs"))
-
-			if transcript != "" {
-				return benchExit(benchPrintTranscript(out, store, transcript, asJSON))
-			}
-			if list {
-				return benchExit(benchPrintList(out, store, asJSON))
-			}
-			if compare && profileID == "" {
-				return benchExit(benchPrintCompare(out, store, asJSON))
-			}
-			if profileID == "" {
-				fmt.Fprintln(errw, "usage:")
-				fmt.Fprintf(errw, "  model-loader benchmark --profile <id> [--mode %s] [--limit N] [--tb-task <id>] [--tb-n-tasks N] [--sweap-instance <id>] [--deepswe-task <id>] [--deepswe-n-tasks N] [--json] [--min-solve N]\n", benchModeList())
-				fmt.Fprintln(errw, "  model-loader benchmark --list [--json]")
-				fmt.Fprintln(errw, "  model-loader benchmark --compare [--profile <id>] [--json]")
-				fmt.Fprintln(errw, "  model-loader benchmark --transcript <run-id> [--json]")
-				return &ExitError{Code: 1}
-			}
-			if compare {
-				return benchExit(benchPrintHistory(out, store, profileID, asJSON))
-			}
 
 			mode, ok := parseBenchMode(modeStr)
 			if !ok {
@@ -154,26 +155,30 @@ func init() {
 				// T7: persist partial progress during the run (flagged in
 				// progress); the final save below overwrites it.
 				Checkpoint: func(partial benchmark.Run) { _ = store.Save(partial) },
-			}, errw)
+			}, errw, verbose)
 			if err != nil {
 				// Persist whatever completed before the failure/SIGINT so the
-				// partial data shows up (flagged) in the TUI and --list.
+				// partial data shows up (flagged) in the TUI and `benchmark list`.
 				if len(run.Problems) > 0 {
 					if sErr := store.Save(run); sErr != nil {
 						fmt.Fprintf(errw, "warning: could not save partial run: %v\n", sErr)
 					} else {
 						fmt.Fprintf(errw, "partial run saved: %s\n", run.ID)
 					}
+					// UIUX-028: show the partial summary (text or JSON) so a
+					// cancelled/failed run still surfaces what completed, like
+					// the success path. The run is already failing, so a render
+					// error is only noted (inside renderRun), not escalated.
+					_ = renderRun(out, errw, run, jsonOut)
 				}
 				fmt.Fprintf(errw, "run failed: %v\n", err)
 				return &ExitError{Code: 1}
 			}
-			return persistAndRenderBenchmarkRun(out, errw, store, run, asJSON, minSolve)
+			return persistAndRenderBenchmarkRun(out, errw, store, run, jsonOut, minSolve)
 		},
 	}
-
 	cmd.Flags().StringVar(&profileID, "profile", "", "profile id to benchmark")
-	cmd.Flags().StringVar(&modeStr, "mode", "judge", "scoring mode: judge | math-bench | codegen-bench | ragas-bench | summary-bench | llama-bench | longctx | instruction-bench | mmlu-bench | terminal-bench | swe-bench-pro | deep-swe")
+	cmd.Flags().StringVar(&modeStr, "mode", "judge", "scoring mode: "+benchModeList())
 	cmd.Flags().StringArrayVar(&tbTasks, "tb-task", nil, "terminal-bench: task id or glob to run (repeatable; overrides config.benchmark.terminalbench.tasks); only used with --mode terminal-bench")
 	cmd.Flags().IntVar(&tbNTasks, "tb-n-tasks", 0, "terminal-bench: cap number of tasks (tb --n-tasks); overrides config when >0; only used with --mode terminal-bench")
 	cmd.Flags().IntVar(&limit, "limit", 0, "reduced run: cap items per mode (dataset problems + llama-bench presets; also terminal-bench/deep-swe --n-tasks when no mode-specific task flag); 0 → full set")
@@ -183,15 +188,26 @@ func init() {
 	cmd.Flags().StringArrayVar(&deepTasks, "deepswe-task", nil, "deep-swe: task id or glob to run (repeatable; overrides config.benchmark.deepswe.tasks); only used with --mode deep-swe")
 	cmd.Flags().IntVar(&deepNTasks, "deepswe-n-tasks", 0, "deep-swe: cap number of tasks (pier --n-tasks); overrides config when >0; only used with --mode deep-swe")
 	cmd.Flags().StringVar(&deepTasksDir, "deepswe-tasks", "", "deep-swe: path to a cloned deep-swe tasks/ dir (overrides config.benchmark.deepswe.tasks_dir)")
-	cmd.Flags().BoolVar(&list, "list", false, "list saved runs and exit")
-	cmd.Flags().BoolVar(&compare, "compare", false, "with --profile: that profile's run history; alone: latest run per profile")
-	cmd.Flags().BoolVar(&asJSON, "json", false, "emit JSON instead of text")
 	cmd.Flags().Float64Var(&minSolve, "min-solve", -1, "exit code 2 if solve rate < this (0..1); -1 disables")
-	cmd.Flags().StringVar(&transcript, "transcript", "", "print the raw transcript of a saved run id and exit")
-	rootCmd.AddCommand(cmd)
+	cmd.Flags().BoolVar(&verbose, "verbose", false, "include harness/stream activity lines in the live output")
+	_ = cmd.MarkFlagRequired("profile")
+	return cmd
 }
 
-// benchExit maps legacy int return of bench print helpers (0 ok, 1 err) onto cobra error contract.
+// openBenchStore loads config and returns a filesystem-backed run store for the
+// read-only benchmark subcommands. Config errors are reported to the command's
+// stderr; the caller maps the error to exit 1.
+func openBenchStore(cmd *cobra.Command) (benchmarkstore.Store, config.AppConfig, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "config error: %v\n", err)
+		return nil, config.AppConfig{}, err
+	}
+	return benchmarkstore.New(filepath.Join(cfg.Paths.StateDir, "benchmark", "runs")), cfg, nil
+}
+
+// benchExit maps the legacy int return of the bench print helpers (0 ok, 1 err)
+// onto the cobra error contract.
 func benchExit(code int) error {
 	if code == 0 {
 		return nil
@@ -250,7 +266,7 @@ func buildBenchmarkEnvironment(svc *app.Services, cfg config.AppConfig, errw io.
 
 	mon := monitor.New(monitor.Config{NvidiaSMIPath: "nvidia-smi"})
 	bc := app.BenchmarkConfig(cfg)
-	// The headless CLI always persists transcripts so `benchmark --transcript
+	// The headless CLI always persists transcripts so `benchmark transcript
 	// <run-id>` can replay a run later; the TUI shows them live and config-gates.
 	bc.SaveTranscripts = true
 	bc.Logger = svc.Logger
@@ -263,33 +279,21 @@ func buildBenchmarkEnvironment(svc *app.Services, cfg config.AppConfig, errw io.
 	return &benchmarkEnv{supervisor: supervisor, runner: runner}, nil
 }
 
-// runBenchmark runs the benchmark while streaming progress lines to errw, then
-// returns the completed (possibly partial) run. The progress goroutine is fully
-// drained before returning.
-func runBenchmark(ctx context.Context, runner *benchmark.Runner, rc benchmark.RunConfig, errw io.Writer) (benchmark.Run, error) {
+// runBenchmark runs the benchmark while streaming a live view to errw (driven by
+// the runner's authoritative feed), then returns the completed (possibly
+// partial) run. The live renderer goroutine is fully drained before returning.
+func runBenchmark(ctx context.Context, runner *benchmark.Runner, rc benchmark.RunConfig, errw io.Writer, verbose bool) (benchmark.Run, error) {
 	progress := make(chan benchmark.Progress, 32)
+	live := newBenchLive(errw, runner.Feed, verbose)
 	drained := make(chan struct{})
 	go func() {
-		runBenchmarkProgressListener(progress, errw)
+		live.run(progress)
 		close(drained)
 	}()
 	run, err := runner.Run(ctx, rc, progress)
 	close(progress)
 	<-drained
 	return run, err
-}
-
-// runBenchmarkProgressListener drains progress events, rendering launch/infer/
-// score phases to errw until the channel closes.
-func runBenchmarkProgressListener(progress <-chan benchmark.Progress, errw io.Writer) {
-	for p := range progress {
-		switch p.Phase {
-		case "launch":
-			fmt.Fprintln(errw, "loading profile via proxy — waiting for backend health (large models can take minutes)…")
-		case "infer", "score":
-			fmt.Fprintln(errw, benchmark.FormatBenchProgress(p.Index, p.Total, p.ProblemName, p.Phase))
-		}
-	}
 }
 
 // persistAndRenderBenchmarkRun saves the completed run, prints the transcript
@@ -301,12 +305,10 @@ func persistAndRenderBenchmarkRun(out, errw io.Writer, store benchmarkstore.Stor
 	}
 	if len(run.Transcript) > 0 {
 		fmt.Fprintf(errw, "transcript: %s\n", store.TranscriptPath(run.ID))
-		fmt.Fprintf(errw, "inspect raw output: model-loader benchmark --transcript %s\n", run.ID)
+		fmt.Fprintf(errw, "inspect raw output: model-loader benchmark transcript %s\n", run.ID)
 	}
-	if asJSON {
-		_ = emitJSON(out, run)
-	} else {
-		printRun(out, run)
+	if err := renderRun(out, errw, run, asJSON); err != nil {
+		return &ExitError{Code: 1}
 	}
 	if minSolve >= 0 {
 		if errored := countErroredProblems(run.Problems); errored > 0 {
@@ -317,6 +319,22 @@ func persistAndRenderBenchmarkRun(out, errw io.Writer, store benchmarkstore.Stor
 			return &ExitError{Code: 2}
 		}
 	}
+	return nil
+}
+
+// renderRun writes a run's final summary to out as JSON or the text block,
+// shared by the success path and the partial (cancelled/failed) path so both
+// surface the same result. A JSON encode failure is reported to errw and
+// returned so the caller can exit nonzero. (UIUX-026, UIUX-028)
+func renderRun(out, errw io.Writer, run benchmark.Run, asJSON bool) error {
+	if asJSON {
+		if err := emitJSON(out, run); err != nil {
+			fmt.Fprintf(errw, "encode json: %v\n", err)
+			return err
+		}
+		return nil
+	}
+	printRun(out, run)
 	return nil
 }
 
@@ -331,146 +349,4 @@ func countErroredProblems(problems []benchmark.ProblemResult) int {
 		}
 	}
 	return n
-}
-
-func printRun(out io.Writer, run benchmark.Run) {
-	a := run.Aggregate
-	fmt.Fprintf(out, "Profile: %s (%s)\n", run.ProfileName, run.ProfileID)
-	fmt.Fprintf(out, "Mode:    %s\n", run.Mode.Title())
-	fmt.Fprintf(out, "Model:   %s   quant=%s  cache k/v=%s/%s  ctx=%d\n",
-		run.Profile.Model, dashOr(run.Profile.Quantization), dashOr(run.Profile.CacheTypeK), dashOr(run.Profile.CacheTypeV), run.Profile.CtxSize)
-	if run.Err != "" {
-		fmt.Fprintf(out, "Error:   %s (partial run)\n", run.Err)
-	}
-	solve := fmt.Sprintf("Solve:   %.0f%% (%d/%d)   avg score %.2f", a.SolveRate*100, a.Resolved, a.Total, a.AvgScore)
-	if a.Errored > 0 {
-		solve += fmt.Sprintf("   errored %d (excluded from rates)", a.Errored)
-	}
-	fmt.Fprintln(out, solve)
-	fmt.Fprintf(out, "Speed:   tok/s %.1f   TTFT %.0fms   total %.1fs\n", a.AvgTokensPerSecond, a.AvgTTFTms, float64(a.TotalMs)/1000)
-	fmt.Fprintf(out, "Tokens:  in %d / out %d\n", a.TotalPromptTokens, a.TotalCompletionTokens)
-	fmt.Fprintf(out, "GPU:     peak VRAM %dMB   util %.0f%%\n", a.PeakVRAMMB, a.AvgGPUUtil)
-	fmt.Fprintln(out, "Problems:")
-	for _, pr := range run.Problems {
-		verdict := "fail"
-		if pr.Resolved {
-			verdict = "pass"
-		}
-		detail := pr.Detail
-		if pr.Err != "" {
-			detail = "err: " + pr.Err
-		}
-		fmt.Fprintf(out, "  [%s] %-28s score=%.2f tok/s=%.1f ttft=%dms  %s\n",
-			verdict, pr.ProblemName, pr.Score, pr.TokensPerSecond, pr.TTFTms, detail)
-	}
-}
-
-func benchPrintList(out io.Writer, store benchmarkstore.Store, asJSON bool) int {
-	runs, err := store.List()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "list runs: %v\n", err)
-		return 1
-	}
-	if asJSON {
-		_ = emitJSON(out, runs)
-		return 0
-	}
-	if len(runs) == 0 {
-		fmt.Fprintln(out, "no benchmark runs yet")
-		return 0
-	}
-	fmt.Fprintf(out, "%-19s  %-20s  %-22s  %6s  %8s\n", "when", "profile", "mode", "solve", "tok/s")
-	for _, r := range runs {
-		mode := r.Mode.Title()
-		if r.Err != "" {
-			mode = "! " + mode // partial run
-		}
-		fmt.Fprintf(out, "%-19s  %-20s  %-22s  %5.0f%%  %8.1f\n",
-			r.StartedAt.Format("2006-01-02 15:04"), clip(r.ProfileName, 20), clip(mode, 22),
-			r.Aggregate.SolveRate*100, r.Aggregate.AvgTokensPerSecond)
-	}
-	return 0
-}
-
-func benchPrintHistory(out io.Writer, store benchmarkstore.Store, profileID string, asJSON bool) int {
-	runs, err := store.ListByProfile(profileID)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "history: %v\n", err)
-		return 1
-	}
-	if asJSON {
-		_ = emitJSON(out, runs)
-		return 0
-	}
-	if len(runs) == 0 {
-		fmt.Fprintf(out, "no runs for profile %q\n", profileID)
-		return 0
-	}
-	fmt.Fprintf(out, "History — %s\n", runs[0].ProfileName)
-	fmt.Fprintf(out, "%-19s  %-22s  %6s  %6s  %8s\n", "when", "mode", "solve", "score", "tok/s")
-	for _, r := range runs {
-		a := r.Aggregate
-		fmt.Fprintf(out, "%-19s  %-22s  %5.0f%%  %6.2f  %8.1f\n",
-			r.StartedAt.Format("2006-01-02 15:04"), clip(r.Mode.Title(), 22), a.SolveRate*100, a.AvgScore, a.AvgTokensPerSecond)
-	}
-	return 0
-}
-
-func benchPrintCompare(out io.Writer, store benchmarkstore.Store, asJSON bool) int {
-	runs, err := store.List()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "compare: %v\n", err)
-		return 1
-	}
-	seen := map[string]bool{}
-	latest := make([]benchmark.Run, 0)
-	for _, r := range runs { // newest-first
-		if seen[r.ProfileID] {
-			continue
-		}
-		seen[r.ProfileID] = true
-		latest = append(latest, r)
-	}
-	if asJSON {
-		_ = emitJSON(out, latest)
-		return 0
-	}
-	if len(latest) == 0 {
-		fmt.Fprintln(out, "no runs to compare")
-		return 0
-	}
-	fmt.Fprintf(out, "%-20s  %-22s  %6s  %6s  %8s  %8s  %s\n", "profile", "mode", "solve", "score", "tok/s", "vram", "quant")
-	for _, r := range latest {
-		a := r.Aggregate
-		fmt.Fprintf(out, "%-20s  %-22s  %5.0f%%  %6.2f  %8.1f  %6dMB  %s\n",
-			clip(r.ProfileName, 20), clip(r.Mode.Title(), 22), a.SolveRate*100, a.AvgScore,
-			a.AvgTokensPerSecond, a.PeakVRAMMB, dashOr(r.Profile.Quantization))
-	}
-	return 0
-}
-
-func benchPrintTranscript(out io.Writer, store benchmarkstore.Store, id string, asJSON bool) int {
-	tr, err := store.LoadTranscript(id)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "transcript: %v (run with benchmark.save_transcripts enabled)\n", err)
-		return 1
-	}
-	if asJSON {
-		_ = emitJSON(out, tr)
-		return 0
-	}
-	for _, t := range tr {
-		fmt.Fprintf(out, "════ %s (%s)  diffFound=%v\n", t.ProblemName, t.ProblemID, t.DiffFound)
-		if t.Error != "" {
-			fmt.Fprintf(out, "  ERROR: %s\n", t.Error)
-		}
-		fmt.Fprintln(out, "  ── model response ──")
-		fmt.Fprintln(out, indent(t.ModelResponse, "    "))
-		for i, jr := range t.JudgeRaw {
-			fmt.Fprintf(out, "  ── judge sample %d ──\n", i+1)
-			fmt.Fprintln(out, indent(jr, "    "))
-		}
-		fmt.Fprintln(out)
-	}
-	return 0
 }

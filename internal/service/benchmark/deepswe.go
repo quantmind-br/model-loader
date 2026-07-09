@@ -156,7 +156,7 @@ func (h deepSWEHandler) Execute(ctx context.Context, r *Runner, base, model stri
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 10 * time.Second
-	hlog := newHarnessLog(r.cfg.HarnessLogDir, "deep-swe")
+	hlog := newHarnessLog(r.cfg.HarnessLogDir, "deep-swe", r.harnessLineEmitter(ModeDeepSWE))
 	defer hlog.Close()
 	cmd.Stdout = hlog
 	cmd.Stderr = hlog
@@ -485,11 +485,14 @@ func deepProgressPoller(runDir string, total int, progress chan<- Progress, stop
 	t := time.NewTicker(3 * time.Second)
 	defer t.Stop()
 	last := -1
+	seen := map[string]bool{}
 	for {
 		select {
 		case <-stop:
+			emitNewDeepTrials(runDir, seen, progress) // final scan: catch trials finished in the last <=3s window (BR14)
 			return
 		case <-t.C:
+			emitNewDeepTrials(runDir, seen, progress)
 			n := deepCountCompletedTrials(runDir)
 			if n != last {
 				last = n
@@ -497,6 +500,38 @@ func deepProgressPoller(runDir string, total int, progress chan<- Progress, stop
 			}
 		}
 	}
+}
+
+// emitNewDeepTrials scans runDir for per-trial result.json files not yet in seen,
+// decodes each as a deepTrialResult, and emits an item_done for the trial's
+// pass/fail outcome. A path is marked seen only after a successful parse so a
+// mid-write file is retried on a later tick.
+func emitNewDeepTrials(runDir string, seen map[string]bool, progress chan<- Progress) {
+	root := filepath.Clean(runDir)
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if d.Name() != "result.json" || filepath.Dir(path) == root || seen[path] {
+			return nil
+		}
+		data, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return nil
+		}
+		var tr deepTrialResult
+		if json.Unmarshal(data, &tr) != nil || tr.TaskName == "" {
+			return nil
+		}
+		seen[path] = true
+		reward, hasReward := deepReward(tr)
+		outcome := "fail"
+		if hasReward && reward >= 1 {
+			outcome = "pass"
+		}
+		send(progress, Progress{ProblemID: tr.TaskName, ProblemName: tr.TaskName, Phase: "item_done", Outcome: outcome, Detail: deepDetail(reward, hasReward, tr)})
+		return nil
+	})
 }
 
 func deepProgressLabel(done, total int) string {

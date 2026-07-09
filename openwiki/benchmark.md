@@ -44,7 +44,7 @@ Dashboard → h → History  → esc
 
 - **Dashboard** — mode-focused leaderboard. Summary strip · mode-focus bar · ranked rows (latest *complete* run per profile, `MetricBar` + Δ vs previous; partial `Err` runs skipped) · insight panel (trend sparkline + Δ)
 - **Wizard** — unified 3-step launcher: profile (filterable) → mode (cards grouped by category) → review. `enter` advances, `esc` back-navs (preserves selection), `/` filters profiles
-- **Running** — phase label + progress bar (`components.MetricBar`) + current problem name. `esc` arms cancel-confirm modal (stray esc does not abort a long run). Progress streams over a 32-buffered channel
+- **Running** — phase label + progress bar (`components.MetricBar`) + running-tallies (✓/✗/!) + current item, with activity log and staleness footer. Rendered from the runner's authoritative `RunFeed.Snapshot()` on a 1s tick. `esc` arms cancel-confirm modal (stray esc does not abort a long run).
 - **RunDetail** — scorecards (primary metric, tok/s, TTFT inverted, VRAM) + mode-specific breakdown lines (math difficulty, code pass rate, instruction format/refusal/consistency, MMLU category, RAG faithfulness/relevancy/precision, summary coherence, agentic accuracy). `E` export, `esc` back
 - **Compare** — latest run per profile, grouped by mode. `m` cycles ranking metric (mode primary · tok/s · TTFT-lower · VRAM-lower). `esc` back
 - **History** — runs of one profile over time with timeline + sparkline. `m` toggles sparkline metric. `esc` back
@@ -53,21 +53,21 @@ Dashboard → h → History  → esc
 
 ```bash
 # List modes
-model-loader benchmark --list
+model-loader benchmark list
 
 # Run a single mode
-model-loader benchmark --profile my-profile --mode math-bench --limit 5
-model-loader benchmark --profile my-profile --mode llama-bench
-model-loader benchmark --profile my-profile --mode longctx
+model-loader benchmark run --profile my-profile --mode math-bench --limit 5
+model-loader benchmark run --profile my-profile --mode llama-bench
+model-loader benchmark run --profile my-profile --mode longctx
 
 # Compare latest runs across profiles
-model-loader benchmark --compare
+model-loader benchmark compare
 
 # Inspect a run
-model-loader benchmark --transcript <run-id>
+model-loader benchmark transcript <run-id>
 
 # Gate on minimum solve rate (exit 0 vs 2)
-model-loader benchmark --profile my-profile --mode math-bench --min-solve 0.7
+model-loader benchmark run --profile my-profile --mode math-bench --min-solve 0.7
 ```
 
 Per-mode flags: `--tb-task` / `--tb-n-tasks` (terminal-bench), `--sweap-{harness,patches,instance}` (swe-bench-pro), `--deepswe-{task,n-tasks,tasks}` (deep-swe). `--limit` caps items per reducible mode (`0` = full).

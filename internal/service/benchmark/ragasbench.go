@@ -65,6 +65,7 @@ func (r *Runner) runRagas(ctx context.Context, base, model string, g grader, p R
 		Model:       model,
 		Temperature: 0,
 		MaxTokens:   r.cfg.MaxTokens,
+		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
 			{Role: "system", Content: "You are a careful retrieval-augmented assistant. Answer only from the provided documents."},
 			{Role: "user", Content: buildRagasPrompt(p)},

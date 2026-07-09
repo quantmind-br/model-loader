@@ -192,7 +192,7 @@ func TestRunLlamaBench_AllRepsFailIsError(t *testing.T) {
 // the full output to a persistent file whose path the transcript names.
 func TestHarnessLog_BoundedTailAndFileTee(t *testing.T) {
 	// No dir → bounded tail only, no file reference.
-	mem := newHarnessLog("", "x")
+	mem := newHarnessLog("", "x", nil)
 	defer mem.Close()
 	big := strings.Repeat("A", harnessTailMax+5000)
 	_, _ = mem.Write([]byte(big))
@@ -205,7 +205,7 @@ func TestHarnessLog_BoundedTailAndFileTee(t *testing.T) {
 
 	// With dir → full output persisted, path referenced.
 	dir := t.TempDir()
-	h := newHarnessLog(dir, "terminal-bench")
+	h := newHarnessLog(dir, "terminal-bench", nil)
 	if h.path == "" {
 		t.Fatal("configured dir must open a log file")
 	}

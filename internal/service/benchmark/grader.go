@@ -49,6 +49,9 @@ type llmGrader struct {
 	model    string
 	maxTok   int
 	judgedBy string // "external" or "self"
+	// activity, when set, is a per-second token heartbeat forwarded to the run
+	// feed so a slow grader endpoint still shows liveness.
+	activity func(int)
 }
 
 func (g llmGrader) Grade(ctx context.Context, req gradeRequest) (gradeResult, error) {
@@ -57,6 +60,7 @@ func (g llmGrader) Grade(ctx context.Context, req gradeRequest) (gradeResult, er
 		Model:       g.model,
 		Temperature: 0,
 		MaxTokens:   g.maxTok,
+		OnDelta:     g.activity,
 		Messages: []ChatMessage{
 			{Role: "system", Content: graderSystem},
 			{Role: "user", Content: user},

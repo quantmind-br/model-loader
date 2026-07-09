@@ -148,6 +148,7 @@ func (r *Runner) runCodeGenBench(ctx context.Context, base, model string, p Code
 		Model:       model,
 		Temperature: 0,
 		MaxTokens:   r.cfg.MaxTokens,
+		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
 			{Role: "system", Content: "You are an expert Python programmer. Implement the requested function. Return ONLY the complete function definition in a single ```python code block."},
 			{Role: "user", Content: p.Prompt},

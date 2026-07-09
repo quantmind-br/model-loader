@@ -30,6 +30,27 @@ type benchProgressMsg struct {
 // benchProgressClosedMsg signals the progress channel closed.
 type benchProgressClosedMsg struct{}
 
+// benchRunTickMsg drives a 1s repaint of the live-run view so elapsed time,
+// staleness, and the activity log stay current between engine progress events.
+// Re-armed in Update only while the running view is active.
+type benchRunTickMsg struct{}
+
+// runTick schedules the next live-run repaint.
+func (p BenchmarkPage) runTick() tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg { return benchRunTickMsg{} })
+}
+
+// captureFeed grabs the runner's current live feed (nil-safe) so the running
+// view renders authoritative snapshot state, not the lossy progress channel.
+func (p BenchmarkPage) captureFeed() BenchmarkPage {
+	if p.runner != nil {
+		if f := p.runner.Feed(); f != nil {
+			p.feed = f
+		}
+	}
+	return p
+}
+
 // benchRunDoneMsg is delivered when the engine finishes (or errors).
 type benchRunDoneMsg struct {
 	run benchmark.Run
@@ -73,9 +94,9 @@ func (p BenchmarkPage) startRun() (tea.Model, tea.Cmd) {
 	p.progressCh = prog
 	p.runningMode = rc.Mode
 	p.view = bvRunning
-	p.progress = benchmark.Progress{Total: runner.CountForMode(rc.Mode)}
+	p.feed = nil
 
-	return p, tea.Batch(waitProgress(prog), waitDone(done), p.spinner.Tick)
+	return p, tea.Batch(waitProgress(prog), waitDone(done), p.spinner.Tick, p.runTick())
 }
 
 func waitProgress(ch chan benchmark.Progress) tea.Cmd {
@@ -112,9 +133,7 @@ func (p BenchmarkPage) handleRunDone(msg benchRunDoneMsg) (tea.Model, tea.Cmd) {
 			p.view = bvDashboard
 			return p, tea.Batch(fc, p.loadRunsCmd())
 		}
-		run := msg.run
-		p.detail = &run
-		p.view = bvRunDetail
+		p = p.openDetail(msg.run, bvDashboard)
 		p, fc = p.withFlashError("run incomplete (saved partial): " + msg.err.Error())
 		return p, tea.Batch(fc, p.loadRunsCmd())
 	}
@@ -123,9 +142,7 @@ func (p BenchmarkPage) handleRunDone(msg benchRunDoneMsg) (tea.Model, tea.Cmd) {
 		p.view = bvDashboard
 		return p, tea.Batch(fc, p.loadRunsCmd())
 	}
-	run := msg.run
-	p.detail = &run
-	p.view = bvRunDetail
+	p = p.openDetail(msg.run, bvDashboard)
 	p, fc = p.withFlash("benchmark complete")
 	return p, tea.Batch(fc, p.loadRunsCmd())
 }
@@ -136,6 +153,9 @@ func (p BenchmarkPage) handleRunDone(msg benchRunDoneMsg) (tea.Model, tea.Cmd) {
 // the process exits (audit N-C15). No-ops when idle (handleRunDone nils
 // runCancel on completion).
 func (p BenchmarkPage) Cleanup() {
+	if p.webViewer != nil {
+		p.webViewer.Cancel()
+	}
 	if p.runCancel == nil {
 		return
 	}

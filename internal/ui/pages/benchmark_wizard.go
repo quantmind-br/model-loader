@@ -91,21 +91,27 @@ func (p BenchmarkPage) viewWizardProfile() string {
 		}
 		rows = append(rows, line)
 	}
-	parts := []string{title}
+	top := []string{title}
 	if fl := components.FilterLine(p.filterMode, p.filter); fl != "" {
-		parts = append(parts, fl)
+		top = append(top, fl)
 	}
-	parts = append(parts, strings.Join(rows, "\n"))
-	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+	return p.composeWindowed(top, rows, nil, p.profCursor)
 }
 
 func (p BenchmarkPage) viewWizardMode() string {
 	title := theme.Title.Render("Run benchmark — pick a mode") + "  " + theme.Subtitle.Render("(2/3)")
 	rows := make([]string, 0, len(benchModes)+4)
+	// cursorLine is the physical-line index (within the flattened row list) of
+	// the selected mode's first line. Category headers and 2-line prereq cards
+	// mean row index != physical-line index, so we track it explicitly and hand
+	// it to composeWindowed — otherwise the window can't follow modeCursor and
+	// agentic modes clip below the fold with no marker (UIUX-021).
+	cursorLine, physical := 0, 0
 	var lastCat benchmark.Category
 	for i, m := range benchModes {
 		if c, ok := benchmark.CategoryOf(m); ok && c != lastCat {
 			rows = append(rows, theme.Subtitle.Render(string(c)))
+			physical++
 			lastCat = c
 		}
 		// Card: title + description on the first line; prerequisites (if any)
@@ -124,6 +130,7 @@ func (p BenchmarkPage) viewWizardMode() string {
 			line += "\n    " + theme.Warn.Render("⚠ "+prLine)
 		}
 		if i == p.modeCursor {
+			cursorLine = physical
 			if theme.NoColor() {
 				line = "> " + strings.ReplaceAll(line, "\n", "\n> ")
 			} else {
@@ -133,9 +140,10 @@ func (p BenchmarkPage) viewWizardMode() string {
 			line = "  " + line
 		}
 		rows = append(rows, line)
+		physical += 1 + strings.Count(line, "\n")
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, title,
-		theme.Subtitle.Render("profile: "+p.runningName), strings.Join(rows, "\n"))
+	top := []string{title, theme.Subtitle.Render("profile: " + p.runningName)}
+	return p.composeWindowed(top, rows, nil, cursorLine)
 }
 
 func (p BenchmarkPage) viewWizardReview() string {
@@ -157,7 +165,7 @@ func (p BenchmarkPage) viewWizardReview() string {
 	}
 	lines = append(lines, "", "Description:", "  "+truncate(modeDescription(mode), max(12, p.width-4)),
 		"", theme.Subtitle.Render("[enter] start run   [esc] back to mode"))
-	return lipgloss.JoinVertical(lipgloss.Left, title, strings.Join(lines, "\n"))
+	return p.clampBody(lipgloss.JoinVertical(lipgloss.Left, title, strings.Join(lines, "\n")))
 }
 
 // keyWizard dispatches a key to the current wizard step, supporting forward

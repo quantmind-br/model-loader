@@ -59,6 +59,8 @@ func (judgeHandler) Execute(ctx context.Context, r *Runner, base, model string, 
 		results = append(results, pr)
 		trs = append(trs, tr)
 		if !scoreIt {
+			send(progress, Progress{Index: i + 1, Total: total, ProblemID: p.ID, ProblemName: p.Name,
+				Phase: "item_done", Outcome: outcomeOf(pr), Score: pr.Score, ItemMs: pr.TotalMs, Detail: pr.Err})
 			continue
 		}
 		send(progress, Progress{Index: i + 1, Total: total, ProblemID: p.ID, ProblemName: p.Name, Phase: "score"})
@@ -66,7 +68,7 @@ func (judgeHandler) Execute(ctx context.Context, r *Runner, base, model string, 
 		// the results/trs slice variables, which the loop keeps reassigning.
 		resPtr, trPtr := &results[len(results)-1], &trs[len(trs)-1]
 		wg.Add(1)
-		go func(p Problem, content string) {
+		go func(idx int, p Problem, content string) {
 			defer wg.Done()
 			// A cancelled run must unblock a goroutine waiting for a semaphore slot
 			// instead of stranding it behind a slow judge that will never drain.
@@ -78,7 +80,13 @@ func (judgeHandler) Execute(ctx context.Context, r *Runner, base, model string, 
 			defer func() { <-sem }()
 			// Distinct slots: each goroutine writes only its own problem.
 			r.scoreProblem(ctx, scorer, p, content, resPtr, trPtr)
-		}(p, comp.Content)
+			// Emit the finish event from the scoring goroutine: the slot's final
+			// outcome is only known after scoreProblem returns. It may arrive after
+			// a later item's infer event (overlapped scoring) — RunFeed matches by
+			// id and uses ItemMs, so out-of-order finishes fold correctly.
+			send(progress, Progress{Index: idx + 1, Total: total, ProblemID: p.ID, ProblemName: p.Name,
+				Phase: "item_done", Outcome: outcomeOf(*resPtr), Score: resPtr.Score, ItemMs: resPtr.TotalMs, Detail: resPtr.Err})
+		}(i, p, comp.Content)
 	}
 	wg.Wait()
 	return results, transcripts(r, trs), nil

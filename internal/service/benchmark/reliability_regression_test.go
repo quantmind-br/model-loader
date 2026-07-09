@@ -145,3 +145,38 @@ func TestRun_CheckpointsFlaggedInProgress(t *testing.T) {
 		t.Errorf("checkpoint ID %q must match final run ID %q (final save overwrites)", c.ID, run.ID)
 	}
 }
+
+// BR9: Run must JOIN its feed drainer before returning, so the caller's
+// close(progress) — the exact TUI (benchmark_run.go) and CLI (benchmark.go)
+// pattern — can never race a drainer forward into a now-closed channel. A send
+// case on a closed channel is selected over default and panics, which would
+// crash the whole process on the normal success path. Verified: reverting the
+// drainer join makes this panic with "send on closed channel" on the first run;
+// with the join it is clean.
+func TestRun_ClosingProgressAfterReturnNeverPanics(t *testing.T) {
+	srv := stubAnswerServer(t, "The answer is 2")
+	for i := 0; i < 30; i++ {
+		r := &Runner{
+			store: fakeGetStore{p: domain.Profile{ID: "p", Name: "P"}},
+			mon:   &fakeMonitor{ch: make(chan monitor.MonitorEvent, 4)},
+			proxy: &fakeProxyCtl{base: srv.URL},
+			cfg:   Config{MaxTokens: 16, Timeout: 5 * time.Second},
+			mathProblems: []MathProblem{
+				{ID: "m1", Question: "1+1?", Answer: "2"},
+				{ID: "m2", Question: "2+2?", Answer: "4"},
+			},
+		}
+		prog := make(chan Progress, 4)
+		drained := make(chan struct{})
+		go func() {
+			for range prog { // consume lossy forwards until the caller closes
+			}
+			close(drained)
+		}()
+		if _, err := r.Run(context.Background(), RunConfig{ProfileID: "p", Mode: ModeMathBench}, prog); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		close(prog) // caller closes right after Run returns — must be panic-safe
+		<-drained
+	}
+}

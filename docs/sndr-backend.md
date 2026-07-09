@@ -165,9 +165,9 @@ Upstream numbers come from their rig — verify locally before promoting
 `-sndr` profiles to defaults:
 
 ```sh
-model-loader benchmark --profile qwen3.6-27b-awq-mtp-fp8-vllm-tp2-256k  --mode llama-bench
-model-loader benchmark --profile qwen3.6-27b-awq-mtp-fp8-sndr-tp2-256k --mode llama-bench
-model-loader benchmark --compare
+model-loader benchmark run --profile qwen3.6-27b-awq-mtp-fp8-vllm-tp2-256k  --mode llama-bench
+model-loader benchmark run --profile qwen3.6-27b-awq-mtp-fp8-sndr-tp2-256k --mode llama-bench
+model-loader benchmark compare
 ```
 
 ## Updating / rollback

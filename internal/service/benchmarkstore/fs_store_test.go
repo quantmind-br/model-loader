@@ -128,3 +128,43 @@ func must(t *testing.T, err error) {
 		t.Fatal(err)
 	}
 }
+
+// BR10: run ids that could escape the runs dir (empty, "..", path separators)
+// must be rejected at every entry point and never reach the filesystem.
+func TestTraversalIDsRejected(t *testing.T) {
+	parent := t.TempDir()
+	runs := filepath.Join(parent, "runs")
+	s := New(runs)
+
+	// A sentinel sibling of the runs dir that a traversal id could target.
+	sentinel := filepath.Join(parent, "sentinel.json")
+	if err := os.WriteFile(sentinel, []byte("keep"), 0o644); err != nil {
+		t.Fatalf("seed sentinel: %v", err)
+	}
+
+	bad := []string{"", "..", "../sentinel", "../../foo", "a/b", `a\b`, "sub/../x"}
+	for _, id := range bad {
+		if _, err := s.Load(id); err != ErrNotFound {
+			t.Errorf("Load(%q) = %v, want ErrNotFound", id, err)
+		}
+		if _, err := s.LoadTranscript(id); err != ErrNotFound {
+			t.Errorf("LoadTranscript(%q) = %v, want ErrNotFound", id, err)
+		}
+		if err := s.Delete(id); err != ErrNotFound {
+			t.Errorf("Delete(%q) = %v, want ErrNotFound", id, err)
+		}
+		if err := s.Save(benchmark.Run{ID: id}); err == nil {
+			t.Errorf("Save(id=%q) = nil, want non-nil error", id)
+		}
+	}
+
+	// The sentinel must be untouched: no traversal delete removed it and no
+	// save overwrote it.
+	b, err := os.ReadFile(sentinel)
+	if err != nil {
+		t.Fatalf("traversal id escaped the runs dir (sentinel gone): %v", err)
+	}
+	if string(b) != "keep" {
+		t.Fatalf("traversal id overwrote sentinel: %q", b)
+	}
+}

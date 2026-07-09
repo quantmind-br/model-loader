@@ -138,7 +138,7 @@ func (h terminalBenchHandler) Execute(ctx context.Context, r *Runner, base, mode
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 10 * time.Second
-	hlog := newHarnessLog(r.cfg.HarnessLogDir, "terminal-bench")
+	hlog := newHarnessLog(r.cfg.HarnessLogDir, "terminal-bench", r.harnessLineEmitter(ModeTerminalBench))
 	defer hlog.Close()
 	cmd.Stdout = hlog
 	cmd.Stderr = hlog
@@ -560,24 +560,71 @@ func tbProgressPoller(runDir string, total int, progress chan<- Progress, stop <
 	t := time.NewTicker(3 * time.Second)
 	defer t.Stop()
 	last := -1
+	lastTotal := -1
+	seen := map[string]bool{}
 	for {
 		select {
 		case <-stop:
+			emitNewTBTrials(runDir, seen, progress) // final scan: catch trials finished in the last <=3s window (BR14)
 			return
 		case <-t.C:
+			emitNewTBTrials(runDir, seen, progress)
+			// Match the watchdog's completed clock — max(per-trial files, aggregate
+			// results.json) — so an Index bump (hence LastItemDone and the UI stall
+			// countdown) advances on exactly the progress the kill clock counts, never
+			// showing an imminent kill the watchdog will not perform (BR15).
 			n := countCompletedTrials(runDir)
 			effectiveTotal := total
-			if effectiveTotal <= 0 {
-				if agg := tbReadAggregateResultsTotal(runDir); agg > 0 {
+			if agg := tbReadAggregateResultsTotal(runDir); agg > 0 {
+				if agg > n {
+					n = agg
+				}
+				if effectiveTotal <= 0 {
 					effectiveTotal = agg
 				}
 			}
-			if n != last || effectiveTotal != total {
+			if n != last || effectiveTotal != lastTotal {
 				last = n
+				lastTotal = effectiveTotal
 				send(progress, Progress{Index: n, Total: effectiveTotal, ProblemID: "terminal-bench", ProblemName: tbProgressLabel(n, effectiveTotal), Phase: "infer"})
 			}
 		}
 	}
+}
+
+// emitNewTBTrials scans runDir for per-trial results.json files not yet in seen,
+// decodes each as a single tbTrialResult, and emits an item_done for the trial's
+// pass/fail outcome. A path is marked seen only after a successful parse so a
+// mid-write file is retried on a later tick.
+func emitNewTBTrials(runDir string, seen map[string]bool, progress chan<- Progress) {
+	root := filepath.Clean(runDir)
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if d.Name() != "results.json" || filepath.Dir(path) == root || seen[path] {
+			return nil
+		}
+		data, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return nil
+		}
+		var tr tbTrialResult
+		if json.Unmarshal(data, &tr) != nil || tr.TaskID == "" {
+			return nil
+		}
+		seen[path] = true
+		name := tr.TrialName
+		if name == "" {
+			name = tr.TaskID
+		}
+		outcome := "fail"
+		if tr.IsResolved != nil && *tr.IsResolved {
+			outcome = "pass"
+		}
+		send(progress, Progress{ProblemID: tr.TaskID, ProblemName: name, Phase: "item_done", Outcome: outcome, Detail: tbDetail(outcome == "pass", tr)})
+		return nil
+	})
 }
 
 func tbProgressLabel(done, total int) string {

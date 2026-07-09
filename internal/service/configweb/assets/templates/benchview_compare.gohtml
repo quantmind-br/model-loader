@@ -1,0 +1,42 @@
+{{define "benchcompare"}}<!doctype html>
+<html lang="en">
+<head>{{template "benchhead" .}}</head>
+<body>
+{{template "benchnav" .}}
+<main class="bench">
+  <h1 class="bench-h1">Compare <span class="muted">— latest complete run per mode</span></h1>
+  {{if .Empty}}
+  <p class="bench-empty">no runs to compare</p>
+  {{else}}
+  {{range .Sections}}
+  <section class="bench-section">
+    <h2 class="bench-h2">{{.Mode}}</h2>
+    <table class="bench-table">
+      <thead>
+        <tr><th></th><th>profile</th><th>{{.MetricLabel}}</th><th class="num">tok/s</th><th class="num">TTFT</th><th class="num">vram</th><th>quant</th></tr>
+      </thead>
+      <tbody>
+        {{range .Rows}}
+        <tr>
+          <td class="bench-best">{{if .Best}}<span class="ok">▲</span>{{end}}</td>
+          <td>{{.Profile}}</td>
+          <td>
+            <div class="bench-cmp-metric">
+              <div class="bench-bar"><span class="bench-bar-fill" style="width:{{.Frac}}%"></span></div>
+              <span class="mono">{{.MetricText}}</span>
+            </div>
+          </td>
+          <td class="num mono">{{.TokS}}</td>
+          <td class="num mono">{{.TTFT}}</td>
+          <td class="num mono">{{.VRAM}}</td>
+          <td>{{.Quant}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </section>
+  {{end}}
+  {{end}}
+</main>
+</body>
+</html>{{end}}

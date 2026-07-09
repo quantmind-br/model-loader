@@ -125,15 +125,15 @@ tasks_dir   = "~/dev/deep-swe/tasks"   # cloned corpus tasks/ dir (required)
 
 ```bash
 # Reduced run — 3 deterministic tasks (the fast functioning check):
-model-loader benchmark --profile <id> --mode deep-swe --limit 3
+model-loader benchmark run --profile <id> --mode deep-swe --limit 3
 
 # A specific task (or glob), ad-hoc:
-model-loader benchmark --profile <id> --mode deep-swe \
+model-loader benchmark run --profile <id> --mode deep-swe \
   --deepswe-tasks ~/dev/deep-swe/tasks \
   --deepswe-task abs-module-cache-flags
 
 # Full corpus (113 tasks — long; only with a capable model):
-model-loader benchmark --profile <id> --mode deep-swe
+model-loader benchmark run --profile <id> --mode deep-swe
 ```
 
 CLI overrides: `--deepswe-task` (repeatable, glob), `--deepswe-n-tasks`,

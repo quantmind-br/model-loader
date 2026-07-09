@@ -10,7 +10,7 @@
 | 2 | Server | `pages/server.go` | ProxyPanel + instances table + Logs/Slots/Metrics/History sub-views cycled by `v` |
 | 3 | Models | `pages/models.go` | Library / Downloads / Discover (HF Hub). `R` rescan, `s` HF search, `i` info |
 | 4 | Backends | `pages/backends.go` | Catalog list. `n` new, `e`/`enter` edit, `X` delete, `D` default, `P` probe all |
-| 5 | Benchmark | `pages/benchmark.go` | State machine: Dashboard → Wizard → Running → RunDetail, plus Compare/History |
+| 5 | Benchmark | `pages/benchmark.go` | State machine: Dashboard → Wizard → Running → RunDetail (→ Problem drill-in), plus Compare/History; `W` opens the read-only web viewer |
 
 ## Global chrome
 
@@ -105,14 +105,15 @@ Master-detail (Name + ID) + detail panel (ID / Kind / Executable / SchemaRef / T
 
 ## Tab 5 — Benchmark
 
-State machine in `benchmark.go::benchView`: **Dashboard** (landing) → **Wizard** → **Running** → **RunDetail**, with **Compare** and **History** as side views.
+State machine in `benchmark.go::benchView`: **Dashboard** (landing) → **Wizard** → **Running** → **RunDetail**, with a **Problem** drill-in off RunDetail and **Compare** / **History** as side views. Every view budgets `p.width`×`p.height` via `benchmark_layout.go` (`fitColumns`/`visibleWindow`/`renderCells`) and the shared `theme.*RuneWidth` helpers — no view overflows or soft-wraps (regression-guarded by a width/height property test).
 
-- **Dashboard** (`benchmark_dashboard.go`) — mode-focused leaderboard. Summary strip, mode-focus bar, ranked rows (latest *complete* run per profile, `MetricBar` + Δ vs previous; partial `Err` runs skipped), insight panel (trend sparkline + Δ)
-- **Wizard** (`benchmark_wizard.go`) — unified 3-step launcher: profile (filterable) → mode (cards grouped by category) → review. `enter` advances, `esc` back-navs (preserves selection), `/` filters profiles
-- **Running** (`benchmark_run.go`) — phase label + progress bar (`components.MetricBar`) + current problem name. `esc` arms cancel-confirm modal (stray esc does not abort a long run). Progress streams over a 32-buffered channel
-- **RunDetail** — scorecards (primary metric, tok/s, TTFT inverted, VRAM) + mode-specific breakdown lines
-- **Compare** (`benchmark_compare.go`) — latest run per profile, grouped by mode. `m` cycles ranking metric (mode primary · tok/s · TTFT-lower · VRAM-lower)
-- **History** (`benchmark_compare.go::keyHistory`) — runs of one profile over time with timeline + sparkline
+- **Dashboard** (`benchmark_dashboard.go`) — mode-focused leaderboard. Summary strip, mode-focus bar, windowed ranked rows (latest run per profile, `MetricBar` + Δ; newest-run-partial rows carry a `!` badge), insight panel pinned to the bottom (never clipped)
+- **Wizard** (`benchmark_wizard.go`) — unified 3-step launcher: profile (filterable, windowed) → mode (cards grouped by category) → review. `enter` advances, `esc` back-navs, `/` filters profiles. `IsCapturingInput` now captures in every non-dashboard view so `q`/`1-5`/`tab` no longer leak to root mid-wizard
+- **Running** (`benchmark_run.go`) — rendered from the runner's authoritative `RunFeed.Snapshot()` on a 1s tick: header + elapsed, progress bar + `Index/Total` + ✓/✗/! tallies, now-line (current item + phase + item elapsed + latest stream heartbeat), a flexible activity log (item / harness / stream lines, newest at bottom), and a staleness footer (`benchmark.StalenessLabel`) with a watchdog countdown for tb/deep-swe. Collapses gracefully on short terminals. `esc` arms the cancel-confirm modal
+- **RunDetail** — fixed header (meta + scorecards + summary + mode lines) over a windowed per-problem table (cursor `j/k/g/G`, `s` cycles sort dataset·score↑·score↓, `enter` drills in). Scorecards reflow 4-across / 2×2 / vertical by width; bars normalize against data-relative `benchmark.CeilingsFor` (max observed ×1.1, fixed defaults only without peer data)
+- **Problem** drill-in — full-body scroll of every `ProblemResult` field (outcome, sub-scores, fail phase, tokens, speeds, sandbox, judged-by, err) plus a lazily-loaded transcript excerpt (`transcripts not saved for this run` when absent)
+- **Compare** (`benchmark_compare.go`) — latest run per profile, grouped by mode, flattened into one cursor space; `enter`→detail, `m` cycles ranking metric
+- **History** (`benchmark_compare.go::keyHistory`) — one profile's runs over time via `fitColumns` with a pinned sparkline
 
 | Key | Action |
 |-----|--------|
@@ -122,11 +123,14 @@ State machine in `benchmark.go::benchView`: **Dashboard** (landing) → **Wizard
 | `h` | Open history timeline |
 | `X` | Delete run |
 | `E` | Export run |
+| `W` | Open read-only web viewer (saved runs + live monitor) |
 | `R` | Reload |
 | `m` | Cycle metric (compare / history) |
 | `↑↓/k/j/g/G` | Cursor |
 | `←/→/[/]` | Focus mode |
 | `esc` | Back |
+| `s` | Cycle per-problem sort (run detail) |
+| `enter` | Drill into selected problem (run detail) |
 
 **Primary metric** (`benchmark_metrics.go::primaryMetric`): every mode except `llama-bench` (tok/s) and `longctx` (recall/`AvgScore`) reports **solve rate** as headline metric. One derivation feeds dashboard ranking, scorecard, compare default, and history trend.
 
@@ -140,6 +144,8 @@ State machine in `benchmark.go::benchView`: **Dashboard** (landing) → **Wizard
 - Curated highlights live in `essentialSeed` (`backendschema/presentation.go`)
 
 The schema regen workflow (`Pattern A`/`B`/`C`) is described in `.claude/commands/backend-schema-update.md` — A: live `--help` + overlay, B: curated Go, C: embedded rows.
+
+The same `configweb` stack also serves a **read-only benchmark viewer + live monitor** (`benchview_*.go`): `BenchViewer` mirrors the session's ephemeral `127.0.0.1:0` + lingering-shutdown lifecycle and exposes `Runs`/`Compare`/`Live` pages. The Benchmark tab's `W` key launches it in-process (so `/live` observes TUI-launched runs via `runner.Feed()`); `model-loader benchmark web` launches it headlessly against saved runs (no live feed).
 
 ## Implementation notes for future agents
 

@@ -247,3 +247,38 @@ func TestComplete_SendsAuthHeader(t *testing.T) {
 		t.Errorf("Authorization = %q, want %q", gotAuth, "Bearer secret-key")
 	}
 }
+
+// OnDelta is throttled to at most one call per second: several deltas arriving
+// within a second collapse to a single heartbeat.
+func TestComplete_OnDeltaThrottle(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		chunks := []string{
+			`{"choices":[{"delta":{"content":"a"}}]}`,
+			`{"choices":[{"delta":{"content":"b"}}]}`,
+			`{"choices":[{"delta":{"content":"c"}}]}`,
+			`{"choices":[],"usage":{"prompt_tokens":1,"completion_tokens":3}}`,
+			`[DONE]`,
+		}
+		for _, c := range chunks {
+			_, _ = w.Write([]byte("data: " + c + "\n\n"))
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+	}))
+	defer srv.Close()
+
+	var calls atomic.Int32
+	_, err := Complete(context.Background(), srv.Client(), srv.URL, "", ChatRequest{
+		Model:   "m",
+		OnDelta: func(int) { calls.Add(1) },
+	})
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if n := calls.Load(); n != 1 {
+		t.Errorf("OnDelta calls = %d, want 1 (throttled within 1s)", n)
+	}
+}

@@ -1,11 +1,13 @@
 package benchmark
 
 import (
+	"bytes"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,22 +24,28 @@ var harnessLogRe = regexp.MustCompile(`^(.+)-(\d{8}-\d{6})\.log$`)
 // configured.
 const harnessTailMax = 64 << 10
 
+// harnessLineBufMax bounds the partial-line accumulator used to feed live output
+// lines to onLine: a newline-less flood discards oldest bytes rather than growing.
+const harnessLineBufMax = 4 << 10
+
 // harnessLog is the sink for an external harness's merged stdout/stderr: a
 // bounded in-memory tail plus, when a log dir is configured, a tee to a
 // persistent file. It replaces the unbounded in-memory capture that grew
 // without limit on hours-long runs and died with the process (BR7).
 type harnessLog struct {
-	mu   sync.Mutex
-	tail []byte
-	file *os.File
-	path string
+	mu      sync.Mutex
+	tail    []byte
+	file    *os.File
+	path    string
+	onLine  func(string) // when set, receives each complete non-blank output line live
+	lineBuf []byte       // partial-line accumulator for onLine (bounded by harnessLineBufMax)
 }
 
 // newHarnessLog opens the persistent log file <dir>/<label>-<timestamp>.log
 // (dir created on demand). An empty dir or a failed open degrades to the
 // bounded in-memory tail only — capture must never fail the run.
-func newHarnessLog(dir, label string) *harnessLog {
-	h := &harnessLog{}
+func newHarnessLog(dir, label string, onLine func(string)) *harnessLog {
+	h := &harnessLog{onLine: onLine}
 	if dir == "" {
 		return h
 	}
@@ -67,7 +75,38 @@ func (h *harnessLog) Write(p []byte) (int, error) {
 		copy(h.tail, h.tail[over:])
 		h.tail = h.tail[:harnessTailMax]
 	}
+	if h.onLine != nil {
+		h.emitLinesLocked(p)
+	}
 	return len(p), nil
+}
+
+// emitLinesLocked accumulates p and forwards each complete non-blank line
+// (CR-trimmed) to onLine. Runs under mu. The trailing partial line is compacted
+// to the front and bounded so a newline-less flood stays memory-safe.
+func (h *harnessLog) emitLinesLocked(p []byte) {
+	h.lineBuf = append(h.lineBuf, p...)
+	start := 0
+	for {
+		i := bytes.IndexByte(h.lineBuf[start:], '\n')
+		if i < 0 {
+			break
+		}
+		line := strings.TrimRight(string(h.lineBuf[start:start+i]), "\r")
+		if j := strings.LastIndexByte(line, '\r'); j >= 0 {
+			line = line[j+1:] // bare-CR (\r) progress redraw: keep only the final overwrite segment so embedded CRs never reach a renderer (BR16)
+		}
+		start += i + 1
+		if strings.TrimSpace(line) != "" {
+			h.onLine(line)
+		}
+	}
+	if start > 0 {
+		h.lineBuf = append(h.lineBuf[:0], h.lineBuf[start:]...)
+	}
+	if over := len(h.lineBuf) - harnessLineBufMax; over > 0 {
+		h.lineBuf = append(h.lineBuf[:0], h.lineBuf[over:]...)
+	}
 }
 
 // Tail returns the bounded in-memory tail captured so far.

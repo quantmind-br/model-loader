@@ -101,13 +101,13 @@ the working directory). Absolute paths are used as-is.
 
 ```bash
 # Evaluate pre-generated patches (no agent), one instance, ad-hoc:
-model-loader benchmark --profile <id> --mode swe-bench-pro \
+model-loader benchmark run --profile <id> --mode swe-bench-pro \
   --sweap-harness ~/dev/SWE-bench_Pro-os \
   --sweap-patches ./my_patches.json \
   --sweap-instance instance_<repo>__<repo>-<hash>
 
 # Full pipeline (agent_cmd + raw_sample_path configured in TOML):
-model-loader benchmark --profile <id> --mode swe-bench-pro --sweap-instance <id>
+model-loader benchmark run --profile <id> --mode swe-bench-pro --sweap-instance <id>
 ```
 
 CLI overrides: `--sweap-harness`, `--sweap-patches`, `--sweap-instance`
@@ -124,7 +124,7 @@ cd ~/dev/SWE-bench_Pro-os
 # extract gold patches into the patch JSON format
 python helper_code/extract_gold_patches.py --output gold_patches.json
 # keep just one instance_id to bound the Docker cost, then:
-model-loader benchmark --profile <any-id> --mode swe-bench-pro \
+model-loader benchmark run --profile <any-id> --mode swe-bench-pro \
   --sweap-harness ~/dev/SWE-bench_Pro-os \
   --sweap-patches gold_patches.json \
   --sweap-instance <one-instance-id>

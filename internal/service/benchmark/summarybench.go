@@ -97,6 +97,7 @@ func (r *Runner) runSummary(ctx context.Context, base, model string, g grader, p
 		Model:       model,
 		Temperature: 0,
 		MaxTokens:   r.cfg.MaxTokens,
+		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
 			{Role: "system", Content: "You are a precise summarization assistant."},
 			{Role: "user", Content: buildSummaryPrompt(p)},

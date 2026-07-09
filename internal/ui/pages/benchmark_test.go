@@ -25,6 +25,14 @@ func (f *fakeBStore) Save(r benchmark.Run) error                    { f.saved = 
 func (f *fakeBStore) List() ([]benchmark.Run, error)                { return nil, nil }
 func (f *fakeBStore) ListByProfile(string) ([]benchmark.Run, error) { return nil, nil }
 func (f *fakeBStore) Delete(id string) error                        { f.deleted = append(f.deleted, id); return nil }
+func (f *fakeBStore) Load(id string) (benchmark.Run, error) {
+	for _, r := range f.saved {
+		if r.ID == id {
+			return r, nil
+		}
+	}
+	return benchmark.Run{}, errors.New("run not found")
+}
 func (f *fakeBStore) LoadTranscript(string) ([]benchmark.ProblemTranscript, error) {
 	return nil, nil
 }
@@ -378,7 +386,11 @@ func TestViewRunning_ShowsProgressBar(t *testing.T) {
 	page.view = bvRunning
 	page.runningName = "Demo"
 	page.runningMode = benchmark.ModeJudge
-	page.progress = benchmark.Progress{Phase: "infer", Index: 3, Total: 10, ProblemName: "swe-001"}
+	// A live feed at 3/10 with the current item swe-001 inferring.
+	page.feed = benchmark.NewFeedForTest(
+		benchmark.FeedSnapshot{Mode: benchmark.ModeJudge, Total: 10, StartedAt: time.Now()},
+		benchmark.Progress{Index: 3, Total: 10, ProblemID: "swe-001", ProblemName: "swe-001", Phase: "infer"},
+	)
 	out := page.viewRunning()
 	for _, want := range []string{"3/10", "swe-001"} {
 		if !strings.Contains(out, want) {

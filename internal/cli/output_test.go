@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestFormatCandidates(t *testing.T) {
@@ -85,5 +86,33 @@ func TestDashOr(t *testing.T) {
 	}
 	if dashOr("x") != "x" {
 		t.Fatalf("non-empty should pass through")
+	}
+}
+
+// UIUX-016: clip() is rune-safe (was byte-slicing, truncating multi-byte names).
+func TestClip_RuneSafe(t *testing.T) {
+	// Short strings pass through untouched.
+	if got := clip("héllo", 10); got != "héllo" {
+		t.Fatalf("short string should pass through, got %q", got)
+	}
+	// Truncation counts runes, not bytes, and never splits a multi-byte rune.
+	got := clip("héllo wörld ünîcödé", 8)
+	if !utf8.ValidString(got) {
+		t.Fatalf("clip produced invalid UTF-8: %q", got)
+	}
+	if n := utf8.RuneCountInString(got); n != 8 {
+		t.Fatalf("clip(…, 8) should be 8 runes (7 + ellipsis), got %d in %q", n, got)
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Fatalf("truncated string should end with ellipsis, got %q", got)
+	}
+	// A byte-slicing clip would cut a 2-byte rune here and corrupt the output;
+	// verify the emoji boundary stays intact.
+	emoji := clip("🙂🙂🙂🙂🙂", 3)
+	if !utf8.ValidString(emoji) {
+		t.Fatalf("clip split a multi-byte rune: %q", emoji)
+	}
+	if utf8.RuneCountInString(emoji) != 3 {
+		t.Fatalf("clip(emoji, 3) should be 3 runes, got %q", emoji)
 	}
 }

@@ -38,15 +38,20 @@ func dashOr(s string) string {
 	return s
 }
 
-// clip truncates s to max runes, appending an ellipsis when shortened.
+// clip truncates s to max runes, appending an ellipsis when shortened. Rune-safe
+// so multi-byte profile/mode names never split mid-character.
 func clip(s string, max int) string {
-	if len(s) <= max {
+	if max <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= max {
 		return s
 	}
-	if max <= 1 {
-		return s[:max]
+	if max == 1 {
+		return string(r[:1])
 	}
-	return s[:max-1] + "…"
+	return string(r[:max-1]) + "…"
 }
 
 // indent prefixes every line of s with pad; "(empty)" for the empty string.

@@ -20,8 +20,10 @@ demand.
   `buun-llama-cpp`, `beellama-cpp`, `ik-llama-cpp`, `unsloth`, `tabby`. Operators register
   each backend (binary + kind) via `model-loader backend add`.
 - **Surfaces:** 5-tab Bubble Tea TUI (default), headless `serve` proxy daemon,
-  full Cobra CLI mirroring every TUI action. Backends are intentionally
-  **orphaned** on TUI exit so inference survives.
+  full Cobra CLI mirroring every TUI action (`benchmark` is a subcommand tree:
+  `run`/`list`/`compare`/`history`/`show`/`transcript`/`export`/`delete`/`web`).
+  A read-only benchmark viewer (`benchmark web` / TUI `W`) reuses `configweb`.
+  Backends are intentionally **orphaned** on TUI exit so inference survives.
 - **Module:** `github.com/quantmind-br/model-loader`
 - **Repo state:** bug tracker in `BUGS.md`; PRDs/plans under `docs/superpowers/`;
   curated reference in `openwiki/`; AGENTS.md (this file) is the operator KB.
@@ -309,8 +311,8 @@ No Dockerfile / goreleaser / brew formula. Distribution = `make install`.
 | Backend catalog + schema | `internal/service/backendcatalog/`, `internal/service/backendschema/` |
 | Embedded `--help` schemas | `internal/service/{llama,vllm,sglang,dflash,buun,unsloth,tabby}help/` |
 | Monitor (logs/slots/GPU/metrics) | `internal/service/monitor/` |
-| Benchmark engine | `internal/service/benchmark/` (single mode list at `handler.go::ModesInOrder`) |
-| Web editor | `internal/service/configweb/` |
+| Benchmark engine | `internal/service/benchmark/` (single mode list at `handler.go::ModesInOrder`; live-run feed `tracker.go`, export `export.go`, data-relative ceilings `metrics_scale.go`) |
+| Web editor + benchmark viewer | `internal/service/configweb/` (profile/backend editor + read-only benchmark viewer & htmx live monitor in `benchview_*.go`) |
 | TUI root + pages | `internal/ui/root.go`, `internal/ui/pages/{profiles,server,models,backends,benchmark}*.go` |
 | Reusable widgets | `internal/ui/components/` |
 | Theme | `internal/ui/theme/` |
@@ -394,6 +396,17 @@ documented in dedicated `*_regression_test.go` files like
 
 When you find a defect, add it to `BUGS.md` and ask the user whether they want
 it fixed in the same session.
+
+## OpenWiki
+
+This repository has documentation located in the /openwiki directory.
+
+Start here:
+- [OpenWiki quickstart](openwiki/quickstart.md)
+
+OpenWiki includes repository overview, architecture notes, workflows, domain concepts, operations, integrations, testing guidance, and source maps.
+
+When working in this repository, read the OpenWiki quickstart first, then follow its links to the relevant architecture, workflow, domain, operation, and testing notes.
 
 ### Project slash commands / skills
 

@@ -1,0 +1,31 @@
+{{define "benchlist"}}<!doctype html>
+<html lang="en">
+<head>{{template "benchhead" .}}</head>
+<body>
+{{template "benchnav" .}}
+<main class="bench">
+  <h1 class="bench-h1">Runs</h1>
+  {{if .Empty}}
+  <p class="bench-empty">no benchmark runs yet</p>
+  {{else}}
+  <table class="bench-table">
+    <thead>
+      <tr><th>when</th><th>profile</th><th>mode</th><th>metric</th><th class="num">tok/s</th><th></th></tr>
+    </thead>
+    <tbody>
+      {{range .Rows}}
+      <tr class="bench-row" onclick="location.href='/run/{{.ID}}'">
+        <td class="mono">{{.When}}</td>
+        <td>{{.Profile}}{{if .Partial}} <span class="bench-badge warn" title="incomplete run">!</span>{{end}}</td>
+        <td class="muted">{{.Mode}}</td>
+        <td>{{.Metric}} <span class="mono">{{.MetricText}}</span></td>
+        <td class="num mono">{{.TokS}}</td>
+        <td class="num"><a href="/run/{{.ID}}">detail →</a></td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{end}}
+</main>
+</body>
+</html>{{end}}

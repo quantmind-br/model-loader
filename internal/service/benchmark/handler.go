@@ -25,6 +25,8 @@ func executeSerialBench(
 		id, name := meta(i)
 		send(progress, Progress{Index: i + 1, Total: total, ProblemID: id, ProblemName: name, Phase: "infer"})
 		pr, tr := runOne(i)
+		send(progress, Progress{Index: i + 1, Total: total, ProblemID: id, ProblemName: name,
+			Phase: "item_done", Outcome: outcomeOf(pr), Score: pr.Score, ItemMs: pr.TotalMs, Detail: pr.Err})
 		results = append(results, pr)
 		if r.cfg.SaveTranscripts {
 			transcripts = append(transcripts, tr)
@@ -37,6 +39,19 @@ func executeSerialBench(
 		}
 	}
 	return results, transcripts, nil
+}
+
+// outcomeOf classifies a finished ProblemResult for item_done progress events:
+// a per-item error wins, then a resolved item is a pass, else a fail.
+func outcomeOf(pr ProblemResult) string {
+	switch {
+	case pr.Err != "":
+		return "error"
+	case pr.Resolved:
+		return "pass"
+	default:
+		return "fail"
+	}
 }
 
 // Category groups modes for the UI picker.

@@ -51,7 +51,7 @@ Full keymap and conventions: [tui](tui.md).
 - [TUI](tui.md) — tabs, keybindings, conventions, web editor
 - [CLI](cli.md) — Cobra reference (subcommands, flags, exit codes)
 - [HTTP proxy](proxy.md) — routes, OpenAI / Anthropic / Responses / Gemini translation, model swap, admin endpoints
-- [Backends](backends.md) — catalog, 8 `BackendKind`s, per-kind args, schema generation
+- [Backends](backends.md) — catalog, 9 `BackendKind`s, per-kind args, schema generation
 - [Profiles](profiles.md) — JSON schema, naming convention, args vs env vs extraArgs
 - [Benchmark](benchmark.md) — 12 modes across 5 categories, run/wizard/compare/history
 - [Operations](operations.md) — build, config file, state layout, troubleshooting, lifecycle, testing

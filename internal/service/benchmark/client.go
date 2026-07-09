@@ -31,6 +31,10 @@ type ChatRequest struct {
 	// fixed tg-token length and runs stay comparable. Standard OpenAI servers
 	// ignore the unknown field harmlessly.
 	IgnoreEOS bool `json:"-"`
+	// OnDelta, when set, is invoked with the running count of streamed delta
+	// chunks at most once per second — a liveness heartbeat for the benchmark
+	// feed. Non-wire (precedent: IgnoreEOS); nil = zero behavior change.
+	OnDelta func(int) `json:"-"`
 }
 
 // CompletionResult holds the model output plus the per-request metrics the
@@ -130,7 +134,7 @@ func completeOnce(ctx context.Context, doer httpDoer, base, apiKey string, req C
 		return CompletionResult{}, resp.StatusCode >= 500, fmt.Errorf("chat request failed: status %d", resp.StatusCode)
 	}
 
-	st, retryable, err := parseStream(resp.Body, start)
+	st, retryable, err := parseStream(resp.Body, start, req.OnDelta)
 	// A cancelled/expired context must surface as an error — not a silently
 	// truncated "successful" answer that scoring would treat as a real reply.
 	// Check it before the stream error so a cancel is never reported as
@@ -160,12 +164,14 @@ type streamState struct {
 // time-to-first-token (first delta of any kind, measured from start), token
 // usage, and any trailing server timings block. The bool reports whether a read
 // failure is worth retrying; a malformed chunk is a hard (non-retryable) error.
-func parseStream(body io.Reader, start time.Time) (streamState, bool, error) {
+func parseStream(body io.Reader, start time.Time, onDelta func(int)) (streamState, bool, error) {
 	var (
 		sb       strings.Builder
 		rb       strings.Builder
 		st       streamState
 		gotFirst bool
+		deltas   int
+		lastCall time.Time
 	)
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
@@ -193,6 +199,13 @@ func parseStream(body io.Reader, start time.Time) (streamState, bool, error) {
 			}
 			sb.WriteString(content)
 			rb.WriteString(reasoning)
+			deltas++
+			if onDelta != nil {
+				if now := time.Now(); now.Sub(lastCall) >= time.Second {
+					lastCall = now
+					onDelta(deltas)
+				}
+			}
 		}
 		if chunk.Usage != nil {
 			st.promptTokens = chunk.Usage.PromptTokens

@@ -7,7 +7,7 @@
 - Persistent flags everywhere: `--log-level` (also `$MODEL_LOADER_LOG_LEVEL` / config), `--json`
 - Cobra provides `--version` (default `dev`) and `-h/--help`
 - Reference resolution is uniform: **exact id → exact name → unique prefix** (ambiguous → error listing ≤10 candidates)
-- Exit codes: `0` ok · `1` generic/lookup/IO · `2` `profile validate` blocking errors and `benchmark --min-solve` gate
+- Exit codes: `0` ok · `1` generic/lookup/IO · `2` `profile validate` blocking errors and `benchmark run --min-solve` gate
 - Write paths take the single-instance flock via `bootstrapWithLock`; read-only commands skip it
 - `&ExitError{Code:N}` for non-1 exits (unwrapped by `Execute()`)
 - Every leaf command calls `app.Bootstrap` and defers `svc.Close()`
@@ -80,11 +80,21 @@
 
 ### `benchmark …`
 
-Single subcommand with many `--mode` aliases. TUI and CLI share `BenchmarkConfig` (`internal/app/benchmark_config.go`) as the single source of truth.
+Restructured into a subcommand tree (clean cutover — the old `--list` / `--compare` / `--transcript` flag-dispatch forms were removed). TUI and CLI share `BenchmarkConfig` (`internal/app/benchmark_config.go`) as the single source of truth.
 
 | Subcommand | Purpose | Key flags |
 |------------|---------|-----------|
-| `benchmark` | Run / list / compare / inspect | `--profile`, `--mode <judge\|math-bench\|codegen-bench\|ragas-bench\|summary-bench\|llama-bench\|longctx\|instruction-bench\|mmlu-bench\|terminal-bench\|swe-bench-pro\|deep-swe>` (aliases `long-context`→longctx, `llamabench`/`throughput`→llama-bench), `--list`, `--compare`, `--transcript <run-id>`, `--min-solve <0..1>`, `--limit` (cap items per reducible mode; `0`→full), `--tb-task`/`--tb-n-tasks`, `--sweap-{harness,patches,instance}`, `--deepswe-{task,n-tasks,tasks}`, `--json` |
+| `benchmark run` | Run one mode, streaming live progress | `--profile` (required), `--mode <judge\|math-bench\|codegen-bench\|ragas-bench\|summary-bench\|llama-bench\|longctx\|instruction-bench\|mmlu-bench\|terminal-bench\|swe-bench-pro\|deep-swe>`, `--min-solve <0..1>` (exit 2 gate), `--limit` (`0`→full), `--verbose`, `--tb-task`/`--tb-n-tasks`, `--sweap-{harness,patches,instance}`, `--deepswe-{task,n-tasks,tasks}` |
+| `benchmark list` | Saved-runs table (includes the run-`id` column) | — |
+| `benchmark compare` | Latest run per profile, side by side | — |
+| `benchmark history <profile-id>` | One profile's runs over time | — |
+| `benchmark show <run-id>` | One run's full result | — |
+| `benchmark transcript <run-id>` | Raw per-problem I/O | — |
+| `benchmark export <run-id>` | Write the run's JSON + CSV | `--dir` |
+| `benchmark delete <run-id>` | Remove a saved run | `--yes` (required) |
+| `benchmark web` | Read-only browser for saved runs (+ live monitor) | — |
+
+`--json` is honored from the root persistent flag (no per-command `--json`). `benchmark run` live output: permanent per-item ✓/✗/! lines, phase + staleness-transition lines, and — on a TTY — a repainting status block with a watchdog countdown; a non-TTY (piped) emits zero ANSI.
 
 Categories: Quality / Speed / Robustness / Knowledge / **Agentic**. Three agentic modes (`terminal-bench`, `swe-bench-pro`, `deep-swe`) shell out to external harnesses (`tb`, SWE-bench_Pro-os, `pier`) plus Docker.
 
@@ -116,7 +126,7 @@ curl -sX POST http://127.0.0.1:4321/v1/chat/completions \
 model-loader instance stop qwen-4b-q4
 
 # Run a benchmark
-model-loader benchmark --profile qwen-4b-q4 --mode math-bench --limit 5
+model-loader benchmark run --profile qwen-4b-q4 --mode math-bench --limit 5
 ```
 
 ## Anti-patterns

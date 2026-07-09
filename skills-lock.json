@@ -18,6 +18,11 @@
       "sourceType": "local",
       "computedHash": "d99b92723cc416c4b2c8c984dd5b61b605118e0f0df4d2592a320f45db7b71fe"
     },
+    "shotgun-ignore": {
+      "source": "/home/diogo/dev/skills/shotgun-ignore",
+      "sourceType": "local",
+      "computedHash": "bbcf37f8eeb08cac889ee9bfad39fffad705fe88d54c15de3420f957a2a091c2"
+    },
     "tui-design": {
       "source": "/home/diogo/dev/skills/tui-design",
       "sourceType": "local",

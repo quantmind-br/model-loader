@@ -32,6 +32,9 @@ type judgeScorer struct {
 	model   string
 	maxTok  int
 	samples int
+	// activity, when set, is a per-second token heartbeat forwarded to the run
+	// feed so a slow judge endpoint still shows liveness.
+	activity func(int)
 }
 
 // judgeSystem instructs the judge to score against a reference patch using a
@@ -116,6 +119,7 @@ func (j judgeScorer) callOnce(ctx context.Context, user string, temp float64) (j
 		Model:       j.model,
 		Temperature: temp,
 		MaxTokens:   j.maxTok,
+		OnDelta:     j.activity,
 		Messages: []ChatMessage{
 			{Role: "system", Content: judgeSystem},
 			{Role: "user", Content: user},

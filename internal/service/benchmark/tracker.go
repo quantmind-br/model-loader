@@ -27,6 +27,7 @@ type ItemState struct {
 	Phase     string // "infer" | "score"
 	Outcome   string // "" while running; "pass"|"fail"|"error" when done
 	Score     float64
+	Detail    string // item_done: short failure/error text (e.g. the item's Err), when supplied
 	StartedAt time.Time
 	Elapsed   time.Duration
 }
@@ -162,7 +163,7 @@ func (f *RunFeed) startOrUpdateCurrentLocked(p Progress) {
 
 func (f *RunFeed) closeCurrentLocked(p Progress) {
 	s := &f.snap
-	item := ItemState{ID: p.ProblemID, Name: p.ProblemName, Outcome: p.Outcome, Score: p.Score}
+	item := ItemState{ID: p.ProblemID, Name: p.ProblemName, Outcome: p.Outcome, Score: p.Score, Detail: p.Detail}
 	if s.Current != nil && s.Current.ID == p.ProblemID {
 		item.StartedAt = s.Current.StartedAt
 		item.Phase = s.Current.Phase
@@ -303,4 +304,15 @@ func truncateRunes(s string, max int) string {
 		return "…"
 	}
 	return string(r[:max-1]) + "…"
+}
+
+// NewFeedForTest builds a RunFeed seeded with snap and pre-populated by emitting
+// events, for tests in other packages (ui/cli/configweb) that need a populated
+// *RunFeed — the renderers consume Snapshot(). Not used in production code.
+func NewFeedForTest(snap FeedSnapshot, events ...Progress) *RunFeed {
+	f := newRunFeed(nil, snap)
+	for _, e := range events {
+		f.Emit(e)
+	}
+	return f
 }

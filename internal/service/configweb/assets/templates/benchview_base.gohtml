@@ -1,0 +1,15 @@
+{{define "benchhead"}}<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="htmx-config" content='{"timeout":10000}'>
+<title>{{.Title}} · model-loader</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js"></script>{{end}}
+
+{{define "benchnav"}}<header class="topbar bench-topbar">
+  <div class="title">Benchmark <span class="muted">· model-loader</span></div>
+  <nav class="bench-nav" aria-label="Benchmark views">
+    <a href="/" class="{{if eq .Active "runs"}}active{{end}}">Runs</a>
+    <a href="/compare" class="{{if eq .Active "compare"}}active{{end}}">Compare</a>
+    <a href="/live" class="{{if eq .Active "live"}}active{{end}}">Live</a>
+  </nav>
+</header>{{end}}

@@ -157,17 +157,9 @@ func (p BenchmarkPage) viewDashboard() string {
 			components.EmptyState("No benchmark runs yet", "Press [b] to run your first benchmark"))
 	}
 	mode := p.focusedDashboardMode()
-	parts := []string{
-		title,
-		p.renderDashSummary(),
-		"",
-		p.renderModeBar(mode),
-		"",
-		p.renderLeaderboard(mode),
-		"",
-		p.renderInsight(mode),
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+	top := []string{title, p.renderDashSummary(), "", p.renderModeBar(mode), ""}
+	bottom := []string{"", p.renderInsight(mode)}
+	return p.composeWindowed(top, p.leaderboardRows(mode), bottom, p.dashCursor)
 }
 
 // renderDashSummary is the top strip: total runs, complete vs partial counts,
@@ -212,26 +204,23 @@ func (p BenchmarkPage) renderModeBar(focus benchmark.Mode) string {
 	return "Mode: " + strings.Join(cells, "  ")
 }
 
-// renderLeaderboard renders the ranked rows for the focused mode with a
-// proportional MetricBar and a Δ arrow vs the previous run. Throughput modes
-// (Frac==0 from primaryMetric) are normalized against the column's max Raw so
-// their bars are still proportional.
-func (p BenchmarkPage) renderLeaderboard(mode benchmark.Mode) string {
+// leaderboardRows renders the ranked rows for the focused mode with a
+// proportional MetricBar, a Δ arrow vs the previous run, a partial badge for
+// profiles whose newest run is incomplete, and a cursor marker. Throughput
+// modes (Frac==0 from primaryMetric) are normalized against the column's max
+// Raw so their bars stay proportional.
+func (p BenchmarkPage) leaderboardRows(mode benchmark.Mode) []string {
 	rows := dashboardRows(p.runs, mode)
 	if len(rows) == 0 {
-		return theme.Subtitle.Render("no complete runs for this mode")
+		return []string{theme.Subtitle.Render("no complete runs for this mode")}
 	}
-	// Determine bar width from terminal width (fallback 20).
 	barW := 20
 	if p.width > 0 {
-		barW = p.width / 3
-		if barW < 8 {
-			barW = 8
-		}
-		if barW > 40 {
-			barW = 40
-		}
+		barW = min(40, max(8, p.width/3))
 	}
+	// Below 60 cols drop the trend glyph column first (bar floors at 8, name
+	// truncates) so the row still fits.
+	showTrend := p.width == 0 || p.width >= 60
 	// Throughput normalization: when Frac is 0 but Raw>0 we scale by max Raw.
 	maxRaw := 0.0
 	for _, r := range rows {
@@ -239,32 +228,47 @@ func (p BenchmarkPage) renderLeaderboard(mode benchmark.Mode) string {
 			maxRaw = r.Metric.Raw
 		}
 	}
-	var b strings.Builder
+	out := make([]string, 0, len(rows))
 	for i, r := range rows {
 		frac := r.Metric.Frac
 		if frac == 0 && maxRaw > 0 {
 			frac = r.Metric.Raw / maxRaw
 		}
 		bar := components.MetricBar(frac, barW)
-		arrow := deltaArrow(r)
 		cursor := "  "
 		if i == p.dashCursor {
 			cursor = "> "
 		}
+		// Partial badge: the profile's newest run (any mode/state) is partial.
+		badge := " "
+		if p.profileNewestPartial(r.ProfileID) {
+			badge = theme.Warn.Render("!")
+		}
 		nameW := 22
 		if p.width > 0 {
-			nameW = min(22, max(10, p.width-barW-12))
+			nameW = min(22, max(10, p.width-barW-14))
 		}
-		line := fmt.Sprintf("%s%-*s %s %6s %s", cursor, nameW, truncate(r.ProfileName, nameW), bar, r.Metric.Text, arrow)
+		line := fmt.Sprintf("%s%s %-*s %s %6s", cursor, badge, nameW, truncate(r.ProfileName, nameW), bar, r.Metric.Text)
+		if showTrend {
+			line += " " + deltaArrow(r)
+		}
 		if i == p.dashCursor && !theme.NoColor() {
 			line = theme.Selected.Render(line)
 		}
-		b.WriteString(line)
-		if i < len(rows)-1 {
-			b.WriteString("\n")
+		out = append(out, line)
+	}
+	return out
+}
+
+// profileNewestPartial reports whether the profile's most recent run (any mode,
+// any state) is a partial run (Err set). p.runs is newest-first.
+func (p BenchmarkPage) profileNewestPartial(profileID string) bool {
+	for _, r := range p.runs {
+		if r.ProfileID == profileID {
+			return r.Err != ""
 		}
 	}
-	return b.String()
+	return false
 }
 
 // deltaArrow renders the trend marker vs the previous run. Higher-is-better is

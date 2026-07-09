@@ -183,6 +183,7 @@ func (r *Runner) runInstructionBench(pc probeCtx, sim similarityGrader, g grader
 		Model:       pc.model,
 		Temperature: 0,
 		MaxTokens:   r.cfg.MaxTokens,
+		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
 			{Role: "user", Content: p.Prompt},
 		},
@@ -253,6 +254,7 @@ func (r *Runner) runInstConsistency(pc probeCtx, sim similarityGrader, p Instruc
 			Model:       pc.model,
 			Temperature: instConsistencyTemp,
 			MaxTokens:   r.cfg.MaxTokens,
+			OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 			Messages: []ChatMessage{
 				{Role: "user", Content: p.Prompt},
 			},

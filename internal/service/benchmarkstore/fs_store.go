@@ -5,6 +5,7 @@ package benchmarkstore
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -24,6 +25,8 @@ type Store interface {
 	List() ([]benchmark.Run, error)
 	ListByProfile(profileID string) ([]benchmark.Run, error)
 	Delete(id string) error
+	// Load reads a single run by id, returning ErrNotFound when no file exists.
+	Load(id string) (benchmark.Run, error)
 	// LoadTranscript returns the raw per-problem I/O captured for a run, or
 	// ErrNotFound when transcripts were not saved.
 	LoadTranscript(id string) ([]benchmark.ProblemTranscript, error)
@@ -50,7 +53,21 @@ func (s *fsStore) TranscriptPath(id string) string {
 	return filepath.Join(s.dir, id+".transcript.json")
 }
 
+// validRunID reports whether id is a safe single filename component. A run id
+// maps to exactly one file inside the runs dir, so anything that could escape
+// it — empty, a path separator, or a ".." segment — is rejected before it can
+// reach filepath.Join and traverse out of the directory. (BR10)
+func validRunID(id string) bool {
+	if id == "" || strings.Contains(id, "..") || strings.ContainsAny(id, `/\`) {
+		return false
+	}
+	return filepath.Base(id) == id
+}
+
 func (s *fsStore) Save(run benchmark.Run) error {
+	if !validRunID(run.ID) {
+		return fmt.Errorf("benchmarkstore: invalid run id %q", run.ID)
+	}
 	if err := fsx.WriteJSONAtomic(s.path(run.ID), run); err != nil {
 		return err
 	}
@@ -62,6 +79,9 @@ func (s *fsStore) Save(run benchmark.Run) error {
 
 // LoadTranscript reads the raw I/O captured for a run.
 func (s *fsStore) LoadTranscript(id string) ([]benchmark.ProblemTranscript, error) {
+	if !validRunID(id) {
+		return nil, ErrNotFound
+	}
 	tr, err := fsx.ReadJSON[[]benchmark.ProblemTranscript](s.TranscriptPath(id))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -70,6 +90,21 @@ func (s *fsStore) LoadTranscript(id string) ([]benchmark.ProblemTranscript, erro
 		return nil, err
 	}
 	return tr, nil
+}
+
+// Load reads a single run by id, mapping a missing file to ErrNotFound.
+func (s *fsStore) Load(id string) (benchmark.Run, error) {
+	if !validRunID(id) {
+		return benchmark.Run{}, ErrNotFound
+	}
+	run, err := fsx.ReadJSON[benchmark.Run](s.path(id))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return benchmark.Run{}, ErrNotFound
+		}
+		return benchmark.Run{}, err
+	}
+	return run, nil
 }
 
 // isRunFile reports whether name is a run JSON file, excluding the sidecar
@@ -104,6 +139,9 @@ func (s *fsStore) ListByProfile(profileID string) ([]benchmark.Run, error) {
 }
 
 func (s *fsStore) Delete(id string) error {
+	if !validRunID(id) {
+		return ErrNotFound
+	}
 	_ = os.Remove(s.TranscriptPath(id)) // best-effort sidecar cleanup
 	err := os.Remove(s.path(id))
 	if os.IsNotExist(err) {

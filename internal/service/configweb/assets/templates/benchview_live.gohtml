@@ -1,0 +1,44 @@
+{{define "benchlivepage"}}<!doctype html>
+<html lang="en">
+<head>{{template "benchhead" .}}</head>
+<body>
+{{template "benchnav" .}}
+<main class="bench">
+  <h1 class="bench-h1">Live run</h1>
+  <div id="bench-live" hx-get="/live/fragment" hx-trigger="load, every 1s" hx-swap="innerHTML">
+    <p class="bench-empty">connecting…</p>
+  </div>
+</main>
+</body>
+</html>{{end}}
+
+{{define "benchlivefragment"}}
+{{if not .Running}}
+<p class="bench-empty">no run in progress</p>
+{{else}}
+<div class="bench-live-head">
+  <span class="bench-live-title">▶ {{.Profile}} <span class="muted">— {{.Mode}}</span></span>
+  <span class="mono">elapsed {{.Elapsed}}</span>
+</div>
+
+<div class="bench-live-progress">
+  {{if .HasBar}}<div class="bench-bar"><span class="bench-bar-fill" style="width:{{.Frac}}%"></span></div>
+  <span class="mono">{{.Index}}/{{.Total}}</span>{{else}}<span class="mono">item {{.Index}}</span>{{end}}
+  <span class="bench-tallies"><span class="ok">✓{{.Pass}}</span> <span class="err">✗{{.Fail}}</span> <span class="warn">!{{.Errored}}</span></span>
+</div>
+
+{{if .Completed}}<div class="bench-complete ok">✓ run complete</div>{{end}}
+
+{{if .HasNow}}
+<div class="bench-now">now: <strong>{{.NowItem}}</strong> — {{.NowPhase}} <span class="mono">{{.NowElapsed}}</span>{{if .NowStream}} <span class="muted">{{.NowStream}}</span>{{end}}</div>
+{{end}}
+
+<ul class="bench-activity">
+  {{range .Activity}}
+  <li><span class="mono muted">{{.Time}}</span> <span class="bench-glyph {{.Class}}">{{.Glyph}}</span> <span>{{.Text}}</span></li>
+  {{end}}
+</ul>
+
+<div class="bench-stale {{.StaleClass}}">{{.StaleText}}{{if .Watchdog}} — {{.Watchdog}}{{end}}</div>
+{{end}}
+{{end}}

@@ -162,6 +162,7 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 			Model:       model,
 			Temperature: 0,
 			MaxTokens:   ps.GenTokens,
+			OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 			IgnoreEOS:   true, // ask for exactly tg tokens where honored; real code still hits EOS earlier
 			Messages:    msgs,
 		})

@@ -212,10 +212,58 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 		return Run{}, err
 	}
 
-	send(progress, Progress{Total: h.Count(r), Phase: "launch"})
+	// Install the authoritative live-run feed and its drainer. Every emitter
+	// (Run itself, handlers, pollers, watchdogs) writes to the drained internal
+	// tap; the drainer folds each event into the feed snapshot and lossy-forwards
+	// it to the caller's channel. Lossiness now lives ONLY in that forward — the
+	// snapshot never drops an event.
+	var stall time.Duration
+	switch rc.Mode {
+	case ModeTerminalBench:
+		stall = tbStallTimeout(r.cfg)
+	case ModeDeepSWE:
+		stall = deepStallTimeout(r.cfg)
+	}
+	internal := make(chan Progress, 64)
+	stopDrain := make(chan struct{})
+	drainDone := make(chan struct{})
+	feed := newRunFeed(progress, FeedSnapshot{
+		RunID: run.ID, ProfileID: profile.ID, ProfileName: profile.Name,
+		Mode: rc.Mode, Total: h.Count(r), StartedAt: started, StallTimeout: stall,
+	})
+	r.feedMu.Lock()
+	r.feed = feed
+	r.feedMu.Unlock()
+	go func() {
+		defer close(drainDone)
+		for {
+			select {
+			case p := <-internal:
+				feed.Emit(p)
+			case <-stopDrain:
+				for {
+					select {
+					case p := <-internal:
+						feed.Emit(p)
+					default:
+						return
+					}
+				}
+			}
+		}
+	}()
+	// internal is never closed (late stragglers write into the buffer harmlessly).
+	// stopDrain fires on every exit path AFTER Run's terminal event is queued; the
+	// drainer is then JOINED (<-drainDone) so no feed.Emit forward can outlive this
+	// return and race the caller's close(progress) — a send on a closed channel is
+	// selected over default and panics, so the join is load-bearing, not cosmetic (BR9).
+	defer func() { close(stopDrain); <-drainDone }()
+
+	send(internal, Progress{Total: h.Count(r), Phase: "launch"})
 
 	base, logPath, pid, reused, err := r.ensureLoaded(ctx, profile)
 	if err != nil {
+		send(internal, Progress{Total: h.Count(r), Phase: "done", Detail: err.Error()})
 		return Run{}, err
 	}
 	// A reused (warm, possibly busy) backend can skew performance numbers;
@@ -260,7 +308,7 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 	// The proxy routes requests by profile id (OpenAI "model" field).
 	model := profile.ID
 
-	results, transcripts, err := h.Execute(ctx, r, base, model, scorer, progress)
+	results, transcripts, err := h.Execute(ctx, r, base, model, scorer, internal)
 	run.Problems = results
 	run.Transcript = transcripts
 	if err == nil {
@@ -279,13 +327,14 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 		h.Finalize(&run.Aggregate, run.Problems)
 		r.logger().Warn("benchmark_run_partial", "run_id", run.ID, "mode", rc.Mode,
 			"err", err.Error(), "completed", len(run.Problems), "errored", run.Aggregate.Errored)
+		send(internal, Progress{Total: h.Count(r), Phase: "done", Detail: err.Error()})
 		return run, err
 	}
 
 	run.FinishedAt = time.Now()
 	run.Aggregate = aggregate(run.Problems, gpu.peakVRAM(), gpu.avgUtil())
 	h.Finalize(&run.Aggregate, run.Problems)
-	send(progress, Progress{Total: h.Count(r), Phase: "done"})
+	send(internal, Progress{Total: h.Count(r), Phase: "done"})
 	r.logger().Info("benchmark_run_done", "run_id", run.ID, "mode", rc.Mode,
 		"resolved", run.Aggregate.Resolved, "total", run.Aggregate.Total,
 		"errored", run.Aggregate.Errored, "solve_rate", run.Aggregate.SolveRate)
@@ -301,6 +350,50 @@ func (r *Runner) unloadAfterRun() {
 	_, _ = r.proxy.Unload(ctx, true)
 }
 
+// Feed returns the live-run feed for the current or most recent run, or nil
+// before any run has started. It survives after a run ends so late renders can
+// display terminal state.
+func (r *Runner) Feed() *RunFeed {
+	r.feedMu.Lock()
+	defer r.feedMu.Unlock()
+	return r.feed
+}
+
+// streamHeartbeat returns an OnDelta callback that emits a "streaming — N tok"
+// activity heartbeat for a model-under-test inference. See activityHeartbeat.
+func (r *Runner) streamHeartbeat(id, name string) func(int) {
+	return r.activityHeartbeat(id, name, "streaming")
+}
+
+// activityHeartbeat returns an OnDelta callback that emits a "<verb> — N tok"
+// activity heartbeat straight to the feed (bypassing the tap channel — heartbeats
+// are pure liveness and must never contend for a buffer slot). A nil feed makes
+// it a no-op. name is non-empty so RunFeed tags the entry Kind "stream".
+func (r *Runner) activityHeartbeat(id, name, verb string) func(int) {
+	return func(n int) {
+		f := r.Feed()
+		if f == nil {
+			return
+		}
+		f.Emit(Progress{ProblemID: id, ProblemName: name, Phase: "activity", Detail: fmt.Sprintf("%s — %d tok", verb, n)})
+	}
+}
+
+// harnessLineEmitter returns an onLine callback that forwards each harness output
+// line to the feed as a "harness"-kind activity entry (ProblemName empty). Lines
+// are rune-clipped to 300 so a runaway harness line never blows up a render. A
+// nil feed makes it a no-op.
+func (r *Runner) harnessLineEmitter(mode Mode) func(string) {
+	label := string(mode)
+	return func(line string) {
+		f := r.Feed()
+		if f == nil {
+			return
+		}
+		f.Emit(Progress{ProblemID: label, Phase: "activity", Detail: truncateRunes(line, 300)})
+	}
+}
+
 // inferProblem runs the model-under-test inference for one judge problem and
 // fills the request metrics. The bool reports whether inference succeeded and
 // scoring should follow.
@@ -314,6 +407,7 @@ func (r *Runner) inferProblem(ctx context.Context, base, model string, p Problem
 		Model:       model,
 		Temperature: r.cfg.Temperature,
 		MaxTokens:   r.cfg.MaxTokens,
+		OnDelta:     r.streamHeartbeat(p.ID, p.Name),
 		Messages:    BuildPrompt(p),
 	})
 	if err != nil {
@@ -408,9 +502,9 @@ func (r *Runner) ensureLoaded(ctx context.Context, profile domain.Profile) (base
 func (r *Runner) graderFor(base, model string) grader {
 	maxTok := r.cfg.MaxTokens
 	if j := r.cfg.Judge; j.BaseURL != "" && j.Model != "" {
-		return llmGrader{base: j.BaseURL, apiKey: j.APIKey, model: j.Model, maxTok: maxTok, judgedBy: "external"}
+		return llmGrader{base: j.BaseURL, apiKey: j.APIKey, model: j.Model, maxTok: maxTok, judgedBy: "external", activity: r.activityHeartbeat("grader", "grading", "grading")}
 	}
-	return llmGrader{base: base, model: model, maxTok: maxTok, judgedBy: "self"}
+	return llmGrader{base: base, model: model, maxTok: maxTok, judgedBy: "self", activity: r.activityHeartbeat("grader", "grading", "grading")}
 }
 
 func (r *Runner) newScorer(mode Mode) (Scorer, error) {
@@ -420,7 +514,7 @@ func (r *Runner) newScorer(mode Mode) (Scorer, error) {
 		if j.BaseURL == "" || j.Model == "" {
 			return nil, fmt.Errorf("judge mode requires benchmark.judge.base_url and benchmark.judge.model in config")
 		}
-		return judgeScorer{base: j.BaseURL, apiKey: j.APIKey, model: j.Model, maxTok: r.cfg.MaxTokens, samples: j.Samples}, nil
+		return judgeScorer{base: j.BaseURL, apiKey: j.APIKey, model: j.Model, maxTok: r.cfg.MaxTokens, samples: j.Samples, activity: r.activityHeartbeat("judge", "judging", "judging")}, nil
 	default:
 		return nil, fmt.Errorf("unsupported scoring mode %q", mode)
 	}
@@ -428,14 +522,16 @@ func (r *Runner) newScorer(mode Mode) (Scorer, error) {
 
 // --- helpers ---------------------------------------------------------------
 
+// send delivers p to ch. The channel handed to handlers/pollers/watchdogs is
+// always the runner's internal tap, drained for the whole run, so this blocks
+// only momentarily on a full 64-slot buffer and never loses an event. Lossiness
+// lives solely in RunFeed.Emit's forward to the caller's channel. A nil ch (a
+// test emitter with no consumer) is a no-op.
 func send(ch chan<- Progress, p Progress) {
 	if ch == nil {
 		return
 	}
-	select {
-	case ch <- p:
-	default:
-	}
+	ch <- p
 }
 
 // allItemsFailed returns a run-level error when every item of a non-empty

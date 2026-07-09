@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/service/benchmark"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
@@ -61,6 +60,7 @@ func (p BenchmarkPage) openCompare() (tea.Model, tea.Cmd) {
 	}
 	p.compareSections = sections
 	p.view = bvCompare
+	p.cmpCursor = 0
 	return p, nil
 }
 
@@ -81,66 +81,178 @@ func (p BenchmarkPage) openHistory() (tea.Model, tea.Cmd) {
 	}
 	p.historyRuns = hist
 	p.view = bvHistory
+	p.histCursor = 0
 	return p, nil
 }
 
 func (p BenchmarkPage) viewCompare() string {
 	title := theme.Title.Render("Compare profiles (latest complete run per mode)")
-	parts := []string{title}
-	for _, sec := range p.compareSections {
-		parts = append(parts, "", theme.Subtitle.Render(sec.Mode.Title()))
-		parts = append(parts, p.compareSectionRows(sec)...)
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, parts...)
-}
-
-// compareSectionRows renders one mode section as a ranked leaderboard with
-// proportional MetricBars and a ▲ marker on the best performer. The ranking
-// metric is driven by compareMetric: 0 = the mode's primary metric (solve /
-// recall / tok/s), 1 = tok/s, 2 = TTFT (lower is better), 3 = VRAM (lower is
-// better). Columns that don't apply to the selected metric are still shown as
-// text for context.
-func (p BenchmarkPage) compareSectionRows(sec benchCompareSection) []string {
-	runs := sortedCompareRuns(sec, p.compareMetric)
-	barW := 16
-
-	nameW := 20
-	if p.width > 0 {
-		nameW = min(20, max(10, p.width-64))
-	}
-	header := fmt.Sprintf("%-*s  %-16s  %8s  %7s  %8s  %s",
-		nameW, "profile", p.compareMetricLabel(sec.Mode), "tok/s", "TTFT", "vram", "quant")
-	rows := []string{theme.Subtitle.Render(header)}
-
-	for i, r := range runs {
-		a := r.Aggregate
-		frac, text, higher := compareMetricValue(r, p.compareMetric, sec.Mode)
-		frac = normalizeCompareFrac(frac, p.compareMetric, runs, sec.Mode)
-		bar := components.MetricBar(frac, barW)
-		marker := "  "
-		if i == 0 && len(runs) > 1 && higher {
-			marker = theme.OK.Render("▲")
+	rows := p.compareRows()
+	var body []string
+	cursorLine, flat := 0, 0
+	for si, sec := range p.compareSections {
+		ceil := benchmark.CeilingsFor(p.runs, sec.Mode)
+		cols := compareCols(p.width, sec.Mode, p.compareMetric)
+		body = append(body, "", theme.Subtitle.Render(sec.Mode.Title()), theme.Subtitle.Render("  "+renderHeader(cols)))
+		for _, row := range rows {
+			if row.sectionIdx != si {
+				continue
+			}
+			if flat == p.cmpCursor {
+				cursorLine = len(body)
+			}
+			body = append(body, p.compareRowLine(cols, row, flat == p.cmpCursor, ceil))
+			flat++
 		}
-		line := fmt.Sprintf("%s%-*s  %s %6s  %8.1f  %5.0fms  %6dMB  %s",
-			marker+" ", nameW, truncate(r.ProfileName, nameW), bar, text,
-			a.AvgTokensPerSecond, a.AvgTTFTms, a.PeakVRAMMB, dash(r.Profile.Quantization))
-		rows = append(rows, line)
 	}
-	return rows
+	return p.composeWindowed([]string{title}, body, nil, cursorLine)
 }
 
-// compareMetricLabel returns the column header for the selected compare metric.
-func (p BenchmarkPage) compareMetricLabel(mode benchmark.Mode) string {
-	switch p.compareMetric {
-	case 1:
-		return "tok/s (bar)"
-	case 2:
-		return "TTFT↓ (bar)"
-	case 3:
-		return "VRAM↓ (bar)"
-	default:
-		return primaryMetricLabel(mode) + " (bar)"
+// benchCompareRow is one flattened compare row: a run within a section, its bar
+// fraction hint + pre-formatted metric text, and whether it tops its section.
+type benchCompareRow struct {
+	sectionIdx int
+	best       bool
+	run        benchmark.Run
+	frac       float64
+	text       string
+}
+
+// compareRows flattens every section's ranked runs into one cursor space, in the
+// order viewCompare renders them, so cmpCursor and [enter]→detail line up.
+func (p BenchmarkPage) compareRows() []benchCompareRow {
+	var out []benchCompareRow
+	for si, sec := range p.compareSections {
+		runs := sortedCompareRuns(sec, p.compareMetric)
+		for i, r := range runs {
+			frac, text, higher := compareMetricValue(r, p.compareMetric, sec.Mode)
+			out = append(out, benchCompareRow{
+				sectionIdx: si,
+				best:       i == 0 && len(runs) > 1 && higher,
+				run:        r,
+				frac:       frac,
+				text:       text,
+			})
+		}
 	}
+	return out
+}
+
+// compareRowLine renders one flattened compare row through fitColumns, with a
+// leading ▲ best / > cursor gutter and a metric bar sized to its column.
+func (p BenchmarkPage) compareRowLine(cols []benchCol, row benchCompareRow, cursor bool, ceil benchmark.Ceilings) string {
+	a := row.run.Aggregate
+	frac := normalizeCompareFrac(row.frac, p.compareMetric, row.run.Mode, ceil)
+	metricW := 20
+	if len(cols) > 1 {
+		metricW = cols[1].w
+	}
+	barCells := max(3, metricW-theme.RuneWidth(row.text)-1)
+	perf := map[string]string{
+		"tok/s": fmt.Sprintf("%.1f", a.AvgTokensPerSecond),
+		"TTFT":  fmt.Sprintf("%.0fms", a.AvgTTFTms),
+		"vram":  fmt.Sprintf("%dMB", a.PeakVRAMMB),
+		"quant": dash(row.run.Profile.Quantization),
+	}
+	cells := make([]string, len(cols))
+	for i, c := range cols {
+		switch i {
+		case 0:
+			cells[i] = row.run.ProfileName
+		case 1:
+			cells[i] = components.MetricBar(frac, barCells) + " " + row.text
+		default:
+			cells[i] = perf[c.title]
+		}
+	}
+	line := compareMarker(row.best, cursor) + renderCells(cols, cells)
+	if cursor && !theme.NoColor() {
+		line = theme.Selected.Render(line)
+	}
+	return line
+}
+
+// compareMarker is the 2-cell row gutter: ▲ marks the section best, > the
+// cursor (best wins the glyph; the cursor also gets a color highlight).
+func compareMarker(best, cursor bool) string {
+	switch {
+	case best:
+		return "▲ "
+	case cursor:
+		return "> "
+	default:
+		return "  "
+	}
+}
+
+// compareCols builds the compare columns for the width, reserving a 2-cell
+// marker gutter. profile flexes; the metric bar is fixed; perf columns shed
+// right-to-left as width shrinks.
+func compareCols(width int, mode benchmark.Mode, metric int) []benchCol {
+	title := compareMetricLabelFor(mode, metric)
+	if width <= 0 {
+		return []benchCol{
+			{title: "profile", w: 20},
+			{title: title, w: 24},
+			{title: "tok/s", w: 8, right: true},
+			{title: "TTFT", w: 7, right: true},
+			{title: "vram", w: 8, right: true},
+			{title: "quant", w: 8},
+		}
+	}
+	return fitColumns(width-2, []benchCol{
+		{title: "profile", w: 0, prio: 0},
+		{title: title, w: min(24, max(14, width/4)), prio: 0},
+		{title: "tok/s", w: 8, prio: 2, right: true},
+		{title: "TTFT", w: 7, prio: 3, right: true},
+		{title: "vram", w: 8, prio: 4, right: true},
+		{title: "quant", w: 8, prio: 5},
+	})
+}
+
+// compareMetricLabelFor is the metric column header for the selected metric.
+func compareMetricLabelFor(mode benchmark.Mode, metric int) string {
+	switch metric {
+	case 1:
+		return "tok/s"
+	case 2:
+		return "TTFT↓"
+	case 3:
+		return "VRAM↓"
+	default:
+		return primaryMetricLabel(mode)
+	}
+}
+
+// keyCompare drives the flattened compare cursor and [enter]→detail.
+func (p BenchmarkPage) keyCompare(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	rows := p.compareRows()
+	switch msg.String() {
+	case "esc":
+		p.view = bvDashboard
+	case "m":
+		p.compareMetric = (p.compareMetric + 1) % 4
+		p.cmpCursor = 0
+	case "up", "k":
+		if p.cmpCursor > 0 {
+			p.cmpCursor--
+		}
+	case "down", "j":
+		if p.cmpCursor < len(rows)-1 {
+			p.cmpCursor++
+		}
+	case "g", "home":
+		p.cmpCursor = 0
+	case "G", "end":
+		if len(rows) > 0 {
+			p.cmpCursor = len(rows) - 1
+		}
+	case "enter":
+		if p.cmpCursor >= 0 && p.cmpCursor < len(rows) {
+			p = p.openDetail(rows[p.cmpCursor].run, bvCompare)
+		}
+	}
+	return p, nil
 }
 
 // compareMetricValue returns (fracHint, displayText, higherIsBetter) for the
@@ -160,38 +272,37 @@ func compareMetricValue(r benchmark.Run, metric int, mode benchmark.Mode) (float
 	}
 }
 
-// normalizeCompareFrac scales a raw metric value into [0,1] for the bar:
-// rate metrics (solve/recall) are already 0..1 so the raw value IS the fill;
-// throughput scales by section max; TTFT/VRAM invert and scale by section max
-// so lower fills more bar. For the lower-is-better metrics a raw value of 0 is
-// treated as "not collected" and renders an empty bar (never a full one).
-func normalizeCompareFrac(raw float64, metric int, runs []benchmark.Run, mode benchmark.Mode) float64 {
-	if metric == 0 {
-		// Primary metric: rate modes are already 0..1; throughput needs scaling.
+// normalizeCompareFrac scales a raw metric value into [0,1] for the bar using
+// data-relative ceilings: rate metrics (solve/recall) are already 0..1 so the
+// raw value is the fill; throughput scales by the tok/s ceiling; TTFT/VRAM
+// invert (lower fills more) against their ceilings. A lower-is-better value of
+// 0 is treated as "not collected" and renders an empty bar, never a full one.
+func normalizeCompareFrac(raw float64, metric int, mode benchmark.Mode, c benchmark.Ceilings) float64 {
+	switch metric {
+	case 1: // tok/s
+		if c.TPS <= 0 {
+			return 0
+		}
+		return raw / c.TPS
+	case 2: // TTFT — lower is better
+		if raw <= 0 || c.TTFTms <= 0 {
+			return 0
+		}
+		return 1 - raw/c.TTFTms
+	case 3: // VRAM — lower is better
+		if raw <= 0 || c.VRAMMB <= 0 {
+			return 0
+		}
+		return 1 - raw/c.VRAMMB
+	default: // primary metric
 		if primaryMetric(benchmark.Run{Mode: mode}).Rate {
 			return raw
 		}
-	}
-	// Lower-is-better metrics with no data (0) are unknown, not "best".
-	if (metric == 2 || metric == 3) && raw <= 0 {
-		return 0
-	}
-	// Find max for scaling.
-	maxVal := 0.0
-	for _, r := range runs {
-		v, _, _ := compareMetricValue(r, metric, mode)
-		if v > maxVal {
-			maxVal = v
+		if c.TPS <= 0 {
+			return 0
 		}
+		return raw / c.TPS
 	}
-	if maxVal == 0 {
-		return 0
-	}
-	if metric == 2 || metric == 3 {
-		// Lower is better: invert (min→full, max→empty).
-		return 1 - raw/maxVal
-	}
-	return raw / maxVal
 }
 
 // sortedCompareRuns returns the section's runs sorted by the selected metric
@@ -252,9 +363,7 @@ func (p BenchmarkPage) keyHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		cur := p.histCursor
 		if cur >= 0 && cur < len(p.historyRuns) {
-			r := p.historyRuns[cur]
-			p.detail = &r
-			p.view = bvRunDetail
+			p = p.openDetail(p.historyRuns[cur], bvHistory)
 		}
 	}
 	return p, nil
@@ -269,37 +378,55 @@ func (p BenchmarkPage) viewHistory() string {
 	if p.histMetric == 1 {
 		metricLabel = "tok/s"
 	}
-	modeW := 16
-	if p.width > 0 {
-		modeW = min(16, max(8, p.width-60))
-	}
-	header := theme.Subtitle.Render(fmt.Sprintf("%-19s  %-*s  %8s  %8s  %7s  %8s",
-		"when", modeW, "mode", metricLabel, "tok/s", "TTFT", "vram"))
-	rows := []string{header}
+	cols := fitColumns(p.width-2, []benchCol{
+		{title: "when", w: 16, prio: 0},
+		{title: "mode", w: 0, prio: 1},
+		{title: metricLabel, w: 8, prio: 0, right: true},
+		{title: "tok/s", w: 8, prio: 2, right: true},
+		{title: "TTFT", w: 7, prio: 3, right: true},
+		{title: "vram", w: 8, prio: 4, right: true},
+	})
 	cur := p.histCursor
 	if cur >= len(p.historyRuns) {
 		cur = len(p.historyRuns) - 1
 	}
+	rows := make([]string, 0, len(p.historyRuns))
 	for i, r := range p.historyRuns {
 		a := r.Aggregate
 		m := primaryMetric(r)
 		if p.histMetric == 1 {
 			m.Text = fmt.Sprintf("%.1f", a.AvgTokensPerSecond)
 		}
-		cursor := "  "
-		if i == cur {
-			cursor = "> "
+		perf := map[string]string{
+			"tok/s": fmt.Sprintf("%.1f", a.AvgTokensPerSecond),
+			"TTFT":  fmt.Sprintf("%.0fms", a.AvgTTFTms),
+			"vram":  fmt.Sprintf("%dMB", a.PeakVRAMMB),
 		}
-		line := fmt.Sprintf("%s%-19s  %-*s  %8s  %8.1f  %5.0fms  %6dMB",
-			cursor, r.StartedAt.Format("2006-01-02 15:04"), modeW, truncate(r.Mode.Title(), modeW),
-			m.Text, a.AvgTokensPerSecond, a.AvgTTFTms, a.PeakVRAMMB)
+		cells := make([]string, len(cols))
+		for j, c := range cols {
+			switch j {
+			case 0:
+				cells[j] = r.StartedAt.Format("2006-01-02 15:04")
+			case 1:
+				cells[j] = r.Mode.Title()
+			case 2:
+				cells[j] = m.Text
+			default:
+				cells[j] = perf[c.title]
+			}
+		}
+		marker := "  "
+		if i == cur {
+			marker = "> "
+		}
+		line := marker + renderCells(cols, cells)
 		if i == cur && !theme.NoColor() {
 			line = theme.Selected.Render(line)
 		}
 		rows = append(rows, line)
 	}
-	spark := p.historySparkline()
-	return lipgloss.JoinVertical(lipgloss.Left, title, strings.Join(rows, "\n"), "", spark)
+	header := theme.Subtitle.Render("  " + renderHeader(cols))
+	return p.composeWindowed([]string{title, header}, rows, []string{"", p.historySparkline()}, cur)
 }
 
 // historySparkline renders the oldest→newest trend with min/max labels and a
@@ -346,43 +473,3 @@ func (p BenchmarkPage) historySparkline() string {
 	return theme.Subtitle.Render(fmt.Sprintf("%s: %s   min %.2f  max %.2f", label, b.String(), minV, maxV))
 }
 
-// sparkTrend renders an oldest→newest trend line. The metric depends on the most
-// recent run's mode: throughput (llama-bench) runs trend on tokens/second
-// (normalized by the series max), every other mode trends on solve-rate (0..1).
-func sparkTrend(runs []benchmark.Run) string {
-	if len(runs) < 2 {
-		return ""
-	}
-	throughput := runs[0].Mode == benchmark.ModeLlamaBench
-
-	// Collect the metric per run and the normalization scale.
-	vals := make([]float64, len(runs))
-	scale := 1.0
-	label := "solve-rate trend (old→new): "
-	if throughput {
-		label = "tok/s trend (old→new): "
-		for i, r := range runs {
-			vals[i] = r.Aggregate.AvgTokensPerSecond
-			if vals[i] > scale {
-				scale = vals[i]
-			}
-		}
-	} else {
-		for i, r := range runs {
-			vals[i] = r.Aggregate.SolveRate
-		}
-	}
-
-	// bars are multibyte runes: index against the rune slice length, never the
-	// byte length, or WriteRune panics for fractions above ~30%.
-	bars := []rune("▁▂▃▄▅▆▇█")
-	var b strings.Builder
-	// runs is newest-first; walk in reverse for chronological order.
-	for i := len(runs) - 1; i >= 0; i-- {
-		frac := vals[i] / scale
-		idx := int(frac * float64(len(bars)-1))
-		idx = max(0, min(idx, len(bars)-1))
-		b.WriteRune(bars[idx])
-	}
-	return theme.Subtitle.Render(label + b.String())
-}

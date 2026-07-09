@@ -1,0 +1,73 @@
+{{define "benchrun"}}<!doctype html>
+<html lang="en">
+<head>{{template "benchhead" .}}</head>
+<body>
+{{template "benchnav" .}}
+<main class="bench">
+  <a href="/" class="bench-back">← runs</a>
+  <h1 class="bench-h1">{{.Profile}} <span class="muted">— {{.Mode}}</span></h1>
+
+  {{if .Err}}<p class="bench-incomplete">run incomplete: {{.Err}}</p>{{end}}
+
+  <dl class="bench-meta">
+    <div><dt>started</dt><dd class="mono">{{.StartedAt}}</dd></div>
+    <div><dt>model</dt><dd class="mono">{{.Model}}</dd></div>
+    <div><dt>quant</dt><dd>{{.Quant}}</dd></div>
+    <div><dt>cache k/v</dt><dd>{{.CacheK}} / {{.CacheV}}</dd></div>
+    <div><dt>ctx</dt><dd>{{.Ctx}}</dd></div>
+    <div><dt>instance</dt><dd>{{.Instance}}</dd></div>
+  </dl>
+
+  <div class="bench-cards">
+    {{range .Cards}}
+    <div class="bench-card">
+      <div class="bench-card-head"><span class="bench-card-label">{{.Label}}</span><span class="mono">{{.Text}}</span></div>
+      <div class="bench-bar"><span class="bench-bar-fill" style="width:{{.Frac}}%"></span></div>
+    </div>
+    {{end}}
+  </div>
+
+  <div class="bench-stats">
+    {{range .Stats}}<span class="bench-stat"><span class="muted">{{.Label}}</span> <span class="mono">{{.Value}}</span></span>{{end}}
+  </div>
+
+  {{if .ModeLines}}
+  <ul class="bench-modelines">
+    {{range .ModeLines}}<li class="mono">{{.}}</li>{{end}}
+  </ul>
+  {{end}}
+
+  <table class="bench-table">
+    <thead>
+      <tr><th>problem</th><th>result</th><th class="num">score</th><th class="num">tok/s</th><th class="num">TTFT</th><th>detail</th></tr>
+    </thead>
+    <tbody>
+      {{range .Problems}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td><span class="bench-outcome {{.Outcome}}">{{if eq .Outcome "pass"}}✓ pass{{else if eq .Outcome "error"}}! error{{else}}✗ fail{{end}}</span></td>
+        <td class="num mono">{{.Score}}</td>
+        <td class="num mono">{{.TokS}}</td>
+        <td class="num mono">{{.TTFT}}</td>
+        <td class="muted">{{.Detail}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+
+  {{if .HasTranscript}}
+  <details class="bench-transcript">
+    <summary>Transcript excerpt</summary>
+    {{range .Transcript}}
+    <div class="bench-tr-item">
+      <div class="bench-tr-name">{{.Name}}</div>
+      {{if .Error}}<div class="bench-outcome error">! {{.Error}}</div>{{end}}
+      <pre class="bench-tr-body">{{.Response}}</pre>
+      {{range .Judge}}<pre class="bench-tr-judge">{{.}}</pre>{{end}}
+    </div>
+    {{end}}
+  </details>
+  {{end}}
+</main>
+</body>
+</html>{{end}}
