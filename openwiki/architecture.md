@@ -78,7 +78,7 @@ caller
 
 Anthropic/Responses/Gemini go through a translation layer (`anthropic_*.go`, `responses_*.go`, `gemini_*.go`) before being forwarded. Translation **never** goes through the `httputil.ReverseProxy` because its `ModifyResponse` destroys reasoning mapping; it uses a hand-rolled `http.Client` instead.
 
-`count_tokens` and admin endpoints **must not** touch `inflightWG` — only the catch-all forwarder and `/v1/messages` increment it. Doing so would self-deadlock the drain path.
+`count_tokens` and admin endpoints **must not** touch `serving` — all inference handlers (catch-all forwarder, `/v1/messages`, `/v1/responses`, Gemini) increment it after loading the backend. Doing so would self-deadlock the drain path.
 
 ## State & on-disk layout
 

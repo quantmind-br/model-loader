@@ -67,9 +67,8 @@ The OpenAI `/v1/chat/completions` SSE streaming path (`newReverseProxy` `ModifyR
 
 `inflight` (atomic) tracks concurrent request count. A separate `serving` (atomic) tracks requests actively proxied through the loaded backend. The old `inflightWG` (sync.WaitGroup) was replaced by `drainServing()`, which polls `serving` with a timeout:
 
-- **Only the catch-all forwarder increments `serving`** (wraps `cur.proxy.ServeHTTP`)
+- **All inference handlers increment `serving`**: the catch-all forwarder (wraps `cur.proxy.ServeHTTP`), `/v1/messages` (Anthropic), `/v1/responses` (Responses), and Gemini routes each increment it after `ensureLoaded`.
 - `count_tokens` and admin endpoints **must not** touch it (drain self-deadlocks)
-- `/v1/messages` and `/v1/responses` flow through the translation path and do **not** increment `serving` — they are tracked by `inflight` only
 - `POST /_admin/unload?drain_timeout=10s` calls `drainServing()` which polls `serving == 0` up to the timeout, then kills regardless
 
 ## Status wire contract
