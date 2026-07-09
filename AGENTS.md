@@ -16,8 +16,8 @@ demand.
 
 - **For:** a single operator curating tuned launch configs for one GPU.
   Loopback-only proxy, no auth, single-instance lock.
-- **Backends (8 `BackendKind`s):** `llama-server`, `vllm`, `sglang`, `dflash`,
-  `buun-llama-cpp`, `beellama-cpp`, `unsloth`, `tabby`. Operators register
+- **Backends (9 `BackendKind`s):** `llama-server`, `vllm`, `sglang`, `dflash`,
+  `buun-llama-cpp`, `beellama-cpp`, `ik-llama-cpp`, `unsloth`, `tabby`. Operators register
   each backend (binary + kind) via `model-loader backend add`.
 - **Surfaces:** 5-tab Bubble Tea TUI (default), headless `serve` proxy daemon,
   full Cobra CLI mirroring every TUI action. Backends are intentionally

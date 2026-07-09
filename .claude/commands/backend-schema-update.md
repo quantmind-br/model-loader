@@ -14,7 +14,7 @@ If `$1` is empty, stop and ask the user for the backend path before doing anythi
 
 ## 0. Identify the backend kind and its schema pattern
 
-Model Loader has **8 backend kinds** (`internal/domain/backend.go`), each with a registered generator (`internal/service/backendschema/register.go`). How a kind's schema is built decides **which files you edit** — there is no single workflow. Map `$1` to a kind, then to its pattern:
+Model Loader has **9 backend kinds** (`internal/domain/backend.go`), each with a registered generator (`internal/service/backendschema/register.go`). How a kind's schema is built decides **which files you edit** — there is no single workflow. Map `$1` to a kind, then to its pattern:
 
 | `backends/<dir>` | Catalog kind | Schema **Pattern** | Authoritative model-loader file(s) |
 |---|---|---|---|
@@ -23,6 +23,7 @@ Model Loader has **8 backend kinds** (`internal/domain/backend.go`), each with a
 | `buun-llama-cpp` | `buun-llama-cpp` | **A** | `backendschema/curated_buun.go` |
 | `vllm-stable`, `vllm-nightly` | `vllm` | **B — pure curated Go (NO `--help` parse)** | `backendschema/curated_vllm.go` |
 | `sglang-stable`, `sglang-nightly`, `sglang-unlimited`, `sglang-dflash` | `sglang` | **B** | `backendschema/curated_sglang.go` |
+| `ik_llama.cpp` | `ik-llama-cpp` | **B** | `backendschema/curated_ik.go` |
 | `lucebox-hub` | `dflash` | **C — embedded Go rows** | `dflashhelp/dflashhelp.go` |
 | `unsloth` | `unsloth` | **C** | `unslothhelp/unslothhelp.go` |
 | `tabby` | `tabby` | **C** | `tabbyhelp/tabbyhelp.go` |
@@ -41,9 +42,10 @@ Inspect the backend at `$1` per its pattern:
 
 - **Pattern A (llama-server / beellama-cpp / buun-llama-cpp):** flags are declared in `common/arg.cpp`, filtered to the server by `LLAMA_EXAMPLE_SERVER` (singleton init near the top of the file; per-flag `.set_examples({..., LLAMA_EXAMPLE_SERVER, ...})` / `.set_excludes({LLAMA_EXAMPLE_SERVER})`; `if (ex == LLAMA_EXAMPLE_SERVER)` server-only blocks). Read `common/arg.cpp` for the authoritative set; `build/bin/llama-server --help` is the convenient cross-check.
   - **Forks add deltas only visible in source.** BeeLlama and Buun add TurboQuant KV types (`turbo2_tcq`/`turbo3_tcq`/`turbo4_0`/`turbo8_0` in `kv_cache_type_from_str`), a `--spec-dflash-*` / `--spec-dm-*` adaptive-draft family, `--mmproj-gpu-swap`, `--reasoning-loop-guard`, etc. BeeLlama also ships a `docs/beellama-args.md` cataloguing its delta. `--help` alone will miss flags that the curated overlay is the only place to surface.
-- **Pattern B (vllm / sglang):** the engine is pip-installed inside the dir's `.venv` (the dir itself is wrapper-only: `*-serve.sh` + `backend-build.sh`). Read the installed arg declarations:
+- **Pattern B (vllm / sglang / ik-llama-cpp):** for Python engines the install lives inside the dir's `.venv` (the dir itself is wrapper-only: `*-serve.sh` + `backend-build.sh`). Read the installed arg declarations:
   - vLLM: `<$1>/.venv/lib/python*/site-packages/vllm/engine/arg_utils.py` (`EngineArgs`/`AsyncEngineArgs` dataclasses).
   - sglang: `<$1>/.venv/lib/python*/site-packages/sglang/srt/server_args.py` (`ServerArgs` dataclass).
+  - ik_llama.cpp is a C++ checkout (not a venv) — read `common/common.cpp` (`gpt_params_parse_ex` for accepted args, `gpt_params_print_usage` for descriptions/defaults); its `--help` is old-format and must never be parsed.
 - **Pattern C:**
   - dflash (`lucebox-hub`): `server/src/server/server_main.cpp` — read the **argument parse loop**, not just `print_usage` (usage text is incomplete: e.g. `--spark*` flags are parsed but undocumented).
   - unsloth: `cli.py` / `unsloth-cli.py` (and `studio/`).
@@ -114,6 +116,7 @@ Where Essentials are **persisted in code** depends on the pattern:
 | `beellama-cpp` | `n-gpu-layers, ctx-size, host, port, batch-size, ubatch-size, flash-attn, cache-type-k, cache-type-v, cache-ram, kv-unified, mmproj, jinja, reasoning, spec-type, spec-draft-hf, spec-draft-model, spec-draft-ngl, spec-dflash-cross-ctx, spec-dflash-max-slots` | `BeeLlamaPresentation()` |
 | `buun-llama-cpp` | `hf-repo, hf-token, ctx-size, host, port, n-gpu-layers, device, parallel, threads, batch-size, ubatch-size, cache-type-k, cache-type-v, cache-ram, kv-unified, cont-batching, api-key, alias` | `BuunPresentation()` (no configured schema on disk — Go is the only authority) |
 | `vllm` | `host, port, api-key, served-model-name, dtype, max-model-len, quantization, tensor-parallel-size, gpu-memory-utilization, kv-cache-dtype, enable-prefix-caching, max-num-batched-tokens, max-num-seqs, enable-chunked-prefill, uvicorn-log-level` | `vllmPresentation()` |
+| `ik-llama-cpp` | `ctx-size, host, port, n-gpu-layers, split-mode, tensor-split, threads, batch-size, ubatch-size, flash-attn, mla-use, cache-type-k, cache-type-v, run-time-repack, override-tensor, n-cpu-moe, smart-expert-reduction, parallel, cont-batching, api-key, alias` | `IkLlamaPresentation()` |
 | `sglang` | `served-model-name, host, port, api-key, context-length, dtype, quantization, kv-cache-dtype, mem-fraction-static, max-running-requests, max-total-tokens, tensor-parallel-size, tp-size, pipeline-parallel-size, data-parallel-size, device, enable-multimodal, chat-template` | `sglangPresentation()` |
 | `dflash` | `draft, max-ctx, ddtree, ddtree-budget, cache-type-k, cache-type-v, fa-window` | `essentialSeed[dflash]` |
 | `unsloth` | `gguf-variant, ctx-size, n-gpu-layers, parallel, flash-attn, cache-type-k, cache-type-v` | `essentialSeed[unsloth]` |

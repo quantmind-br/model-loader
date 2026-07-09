@@ -12,6 +12,7 @@ const (
 	BackendKindDFlash       BackendKind = "dflash"
 	BackendKindBuunLlamaCpp BackendKind = "buun-llama-cpp"
 	BackendKindBeeLlamaCpp  BackendKind = "beellama-cpp"
+	BackendKindIkLlamaCpp   BackendKind = "ik-llama-cpp"
 	BackendKindUnsloth      BackendKind = "unsloth"
 	BackendKindTabby        BackendKind = "tabby"
 )

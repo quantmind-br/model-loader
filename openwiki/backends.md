@@ -4,7 +4,7 @@ The backend catalog (`~/.config/model-loader/backends/catalog.json`) is a flat l
 
 There is **no default backend** — the resolver falls back to `default_backend_id` (unset) then a llama-server PATH lookup.
 
-## `BackendKind` (8 values)
+## `BackendKind` (9 values)
 
 | Kind | Example catalog id(s) | Arg shape | Schema |
 |------|----------------------|-----------|--------|
@@ -16,6 +16,7 @@ There is **no default backend** — the resolver falls back to `default_backend_
 | `unsloth` | `unsloth-rtx3090` | `unsloth studio run … -H 127.0.0.1`; captures `sk-unsloth-…` auth token post-load | `unslothhelp` |
 | `tabby` | `tabby` | TabbyAPI `main.py` (EXL2/EXL3, ExLlamaV2/V3); model **dir** → `--model-dir`/`--model-name`; wrapper forces `--host 127.0.0.1 --disable-auth true`; bools emit `--flag true`; `gpu-split`/`autosplit-reserve`/`draft-gpu-split` are nargs+ (whitespace-delimited per element → spans 2 cards); auto-detects exl2 vs exl3; `PYTHONUNBUFFERED=1` injected | `tabbyhelp` (Pattern C, embedded) |
 | `buun-llama-cpp` | `buun-rtx3090` | buun llama.cpp fork; embedded schema | `buunhelp` |
+| `ik-llama-cpp` | (operator-registered) | llama.cpp fork (ikawrakow); MLA, fused MoE, run-time repack, SER, extra KV quants (q6_0/q8_KV); binary named llama-server; --model + canonicalized flags | pure curated (curated_ik.go), --help never parsed |
 
 Per-kind variants (stable/nightly/unlimited/dflash) each resolve to different `backends/<id>/…` checkouts.
 

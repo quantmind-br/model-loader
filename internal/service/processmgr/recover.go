@@ -21,6 +21,7 @@ var kindLegacyToken = map[domain.BackendKind]string{
 	domain.BackendKindLlamaServer:  "llama-server",
 	domain.BackendKindBeeLlamaCpp:  "llama-server",
 	domain.BackendKindBuunLlamaCpp: "llama-server",
+	domain.BackendKindIkLlamaCpp:   "llama-server",
 	domain.BackendKindVLLM:         "vllm",
 	domain.BackendKindSGLang:       "sglang",
 	domain.BackendKindDFlash:       "dflash",

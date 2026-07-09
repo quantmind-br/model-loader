@@ -183,6 +183,7 @@ func TestBuildLaunchEnv(t *testing.T) {
 			domain.BackendKindLlamaServer,
 			domain.BackendKindBeeLlamaCpp,
 			domain.BackendKindBuunLlamaCpp,
+			domain.BackendKindIkLlamaCpp,
 			domain.BackendKindDFlash,
 		} {
 			if got := buildLaunchEnv(kind, nil); got != nil {
