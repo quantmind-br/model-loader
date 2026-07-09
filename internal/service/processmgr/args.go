@@ -38,6 +38,8 @@ func BuildArgsForBackend(p domain.Profile, kind domain.BackendKind, executable s
 		return buildLlamaArgs(p), nil
 	case domain.BackendKindBeeLlamaCpp:
 		return buildLlamaArgs(p), nil
+	case domain.BackendKindIkLlamaCpp:
+		return buildLlamaArgs(p), nil
 	case domain.BackendKindUnsloth:
 		return buildUnslothArgs(p), nil
 	case domain.BackendKindTabby:

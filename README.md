@@ -1,6 +1,6 @@
 # model-loader
 
-A terminal UI (TUI) for managing inference server profiles and processes across multiple backends — [llama.cpp](https://github.com/ggerganov/llama.cpp), vLLM, SGLang, DFlash, Unsloth, buun-llama-cpp, and beellama.cpp. Built with Go + [Bubble Tea](https://github.com/charmbracelet/bubbletea).
+A terminal UI (TUI) for managing inference server profiles and processes across multiple backends — [llama.cpp](https://github.com/ggerganov/llama.cpp), vLLM, SGLang, DFlash, Unsloth, buun-llama-cpp, beellama.cpp, and ik_llama.cpp. Built with Go + [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
 ## Features
 

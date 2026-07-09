@@ -26,6 +26,7 @@ func (s *Session) handleBackendIndex(w http.ResponseWriter, r *http.Request) {
 			domain.BackendKindDFlash,
 			domain.BackendKindBuunLlamaCpp,
 			domain.BackendKindBeeLlamaCpp,
+			domain.BackendKindIkLlamaCpp,
 			domain.BackendKindTabby,
 		},
 		IsNew:        s.deps.InitialBackendDraft.IsNew,

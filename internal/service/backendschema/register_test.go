@@ -19,6 +19,7 @@ func TestRegisterDefaults_RegistersAllGeneratorKinds(t *testing.T) {
 		domain.BackendKindDFlash,
 		domain.BackendKindBuunLlamaCpp,
 		domain.BackendKindBeeLlamaCpp,
+		domain.BackendKindIkLlamaCpp,
 		domain.BackendKindUnsloth,
 		domain.BackendKindTabby,
 	}
