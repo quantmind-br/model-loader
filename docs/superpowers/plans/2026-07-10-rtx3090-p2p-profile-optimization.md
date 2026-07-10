@@ -131,11 +131,11 @@ Replace stale P2P-disabled and vBIOS-blocked statements with verified driver, ba
 
 - [ ] **Step 4: Update backend references**
 
-Make vLLM/SGLang P2P-on the default for this rig; custom AR is an A/B decision with log proof. Mark old llama/dflash split measurements as pre-P2P. Do not claim `GGML_CUDA_P2P` support unless source/binary search proves it.
+Make vLLM/SGLang P2P-on the default for this rig. For vLLM TP2 on SM86, require `disable-custom-all-reduce=true` with the measured crash evidence; SGLang custom-AR self-disables and does not need this warning. Mark old llama/dflash split measurements as pre-P2P. Do not claim `GGML_CUDA_P2P` support unless source/binary search proves it.
 
 - [ ] **Step 5: Update workflows**
 
-Audit must flag P2P-disable/custom-AR-disable in TP2. Troubleshoot must separate patched and stock paths. Full tuning must capture launch-log evidence and rollback flags.
+Audit must flag P2P-disable in TP2 and vLLM TP2 with custom all-reduce enabled (missing `disable-custom-all-reduce=true`); it must not flag the mandatory disable flag. Troubleshoot must separate patched and stock paths. Full tuning must capture launch-log evidence and rollback flags.
 
 - [ ] **Step 6: Run skill scenarios with the updated skill**
 

@@ -53,7 +53,7 @@ Default TP2 communication configuration:
 - `tensor-parallel-size: 2`
 - `distributed-executor-backend: mp`
 - no `NCCL_P2P_DISABLE`
-- no `disable-custom-all-reduce` unless an A/B test proves the fallback is required
+- `disable-custom-all-reduce: true` — mandatory: custom all-reduce crashes at startup on this SM86 rig (vLLM 0.24.0, `custom_all_reduce.cuh:455 'invalid argument'`, measured 2026-07-10); this is not a preemptive fallback
 
 Interactive profiles use `performance-mode: interactivity`, low `max-num-seqs`, and bounded `max-num-batched-tokens`. Throughput profiles retain larger concurrency values.
 
