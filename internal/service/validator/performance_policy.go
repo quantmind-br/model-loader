@@ -136,11 +136,24 @@ func tensorParallelSize(p domain.Profile, kind domain.BackendKind) (int, bool) {
 }
 
 // isMultiGPU reports whether a profile deliberately distributes across both
-// cards: vLLM/SGLang tensor parallelism >= 2, or a llama.cpp tensor/row split
-// (split-mode, or an explicit multi-device tensor-split).
+// cards: vLLM/SGLang tensor parallelism >= 2, a llama.cpp tensor/row split
+// (split-mode, or an explicit multi-device tensor-split), or a TabbyAPI
+// profile in its native tensor-parallel mode / with a manual multi-device
+// gpu-split.
 func isMultiGPU(p domain.Profile, kind domain.BackendKind) bool {
 	if tp, ok := tensorParallelSize(p, kind); ok && tp >= 2 {
 		return true
+	}
+	if kind == domain.BackendKindTabby {
+		// TabbyAPI spans both cards via its native tensor-parallel backend or a
+		// manual per-GPU gpu-split (a comma-separated VRAM list); either marks
+		// the profile as deliberately multi-GPU.
+		if argBool(p, "tensor-parallel") {
+			return true
+		}
+		if gs := strings.TrimSpace(argStringRaw(p, "gpu-split")); strings.Contains(gs, ",") {
+			return true
+		}
 	}
 	switch strings.ToLower(strings.TrimSpace(argStringRaw(p, "split-mode"))) {
 	case "tensor", "row":
@@ -152,9 +165,14 @@ func isMultiGPU(p domain.Profile, kind domain.BackendKind) bool {
 	return false
 }
 
-// hasSingleGPUPin reports whether launch env pins the process to exactly one
-// visible CUDA device via CUDA_VISIBLE_DEVICES.
+// hasSingleGPUPin reports whether launch env deterministically pins the process
+// to one card: CUDA_DEVICE_ORDER=PCI_BUS_ID (so device indices follow the PCIe
+// bus rather than the driver's default FASTEST_FIRST order) AND a single-index
+// CUDA_VISIBLE_DEVICES. Either one alone is not a reliable pin.
 func hasSingleGPUPin(p domain.Profile) bool {
+	if !hasEnv(p, "CUDA_DEVICE_ORDER", "PCI_BUS_ID") {
+		return false
+	}
 	for _, e := range p.Launch.Env {
 		if e.Key != "CUDA_VISIBLE_DEVICES" {
 			continue

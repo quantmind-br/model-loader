@@ -25,6 +25,8 @@ func policySchema() domain.FlagSchema {
 		"n-gpu-layers":              f("n-gpu-layers", domain.FlagTypeInt),
 		"split-mode":                f("split-mode", domain.FlagTypeString),
 		"tensor-split":              f("tensor-split", domain.FlagTypeString),
+		"tensor-parallel":           f("tensor-parallel", domain.FlagTypeBool),
+		"gpu-split":                 f("gpu-split", domain.FlagTypeString),
 		"main-gpu":                  f("main-gpu", domain.FlagTypeInt),
 		"gpu-memory-utilization":    f("gpu-memory-utilization", domain.FlagTypeFloat),
 	}}
@@ -196,7 +198,7 @@ func TestPerformancePolicy(t *testing.T) {
 				ID:   "single-vllm",
 				Args: map[string]any{"tensor-parallel-size": float64(1)},
 				Launch: domain.LaunchConfig{
-					Env: envVars("CUDA_VISIBLE_DEVICES", "0", "NCCL_P2P_DISABLE", "1"),
+					Env: envVars("CUDA_DEVICE_ORDER", "PCI_BUS_ID", "CUDA_VISIBLE_DEVICES", "0", "NCCL_P2P_DISABLE", "1"),
 				},
 			},
 			wantWarns: 0,
@@ -226,6 +228,54 @@ func TestPerformancePolicy(t *testing.T) {
 					"cache-type-k": "q8_0",
 					"cache-type-v": "q8_0",
 					"n-gpu-layers": float64(99),
+				},
+			},
+			wantWarns: 0,
+		},
+		{
+			// TabbyAPI's native tensor-parallel mode spans both cards (its PCIe TP
+			// backend), and a manual gpu-split lists per-GPU VRAM — either makes the
+			// profile deliberately multi-GPU, so an unpinned tabby TP profile must
+			// NOT receive the single-GPU-pin warning.
+			name: "tabby tensor-parallel profile is treated as multi-GPU",
+			kind: domain.BackendKindTabby,
+			profile: domain.Profile{
+				ID:   "tabby-tp",
+				Name: "Tabby TP 2x3090",
+				Args: map[string]any{"tensor-parallel": true, "gpu-split": "21,23"},
+			},
+			wantWarns: 0,
+		},
+		{
+			// A CUDA_VISIBLE_DEVICES index alone is not a deterministic pin: without
+			// CUDA_DEVICE_ORDER=PCI_BUS_ID the index follows the driver's default
+			// FASTEST_FIRST order, so the profile can still land on the wrong card.
+			// The pin only counts when BOTH env vars are present (docs row 8).
+			name: "single-GPU profile pinned without CUDA_DEVICE_ORDER still warns",
+			kind: domain.BackendKindLlamaServer,
+			profile: domain.Profile{
+				ID:   "embed-nopci",
+				Name: "Qwen3 Embedding f16",
+				Args: map[string]any{"n-gpu-layers": float64(99), "ctx-size": float64(32768)},
+				Launch: domain.LaunchConfig{
+					Env: envVars("CUDA_VISIBLE_DEVICES", "1"),
+				},
+			},
+			wantWarns:  1,
+			wantFields: []string{"launch.env"},
+			wantMsgs:   []string{"CUDA_DEVICE_ORDER=PCI_BUS_ID"},
+		},
+		{
+			// The same profile with both CUDA_DEVICE_ORDER=PCI_BUS_ID and a single
+			// CUDA_VISIBLE_DEVICES index is a complete, deterministic pin: clean.
+			name: "single-GPU profile pinned with CUDA_DEVICE_ORDER + index does not warn",
+			kind: domain.BackendKindLlamaServer,
+			profile: domain.Profile{
+				ID:   "embed-pinned",
+				Name: "Qwen3 Embedding f16",
+				Args: map[string]any{"n-gpu-layers": float64(99), "ctx-size": float64(32768)},
+				Launch: domain.LaunchConfig{
+					Env: envVars("CUDA_DEVICE_ORDER", "PCI_BUS_ID", "CUDA_VISIBLE_DEVICES", "1"),
 				},
 			},
 			wantWarns: 0,
