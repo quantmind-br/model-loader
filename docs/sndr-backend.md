@@ -90,8 +90,12 @@ add them to `launch.env` or every boot mis-behaves:**
 - **Dual-3090 / desktop headroom:** `gpu-memory-utilization 0.84` (0.86 OOMs
   GPU0 which runs the desktop), `GENESIS_ENABLE_PN95_TIER_AWARE_CACHE=0` (the
   YAML's `PN95_CONFIG_KEY=a5000-2x-tier-aware` is A5000-specific — TurboQuant
-  already fits 262144 without it), plus `NCCL_P2P_DISABLE=1` +
-  `disable-custom-all-reduce` + `distributed-executor-backend mp` (no NVLink).
+  already fits 262144 without it), plus `disable-custom-all-reduce` +
+  `distributed-executor-backend mp` (no NVLink). The 2026-07-03 as-built profiles
+  also set `NCCL_P2P_DISABLE=1` from the launcher template; on the patched rig,
+  drop it per `.agents/skills/rtx3090-inference-profiles/references/sndr.md` §P2P
+  (the validator warns on it), while keeping `disable-custom-all-reduce` because
+  custom all-reduce crashes on SM86.
 
 The six profiles created 2026-07-03 (all `launch.backendId: sndr-vllm`,
 `served-model-name` == id):
