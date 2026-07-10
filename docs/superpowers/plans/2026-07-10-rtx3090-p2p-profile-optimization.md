@@ -60,8 +60,8 @@ Expected: PASS.
 Cover:
 - disabled policy emits no workstation warnings;
 - vLLM TP2 + env `NCCL_P2P_DISABLE=1` warns on `launch.env`;
-- vLLM TP2 + `disable-custom-all-reduce=true` warns;
-- SGLang TP2 uses the same rules;
+- vLLM TP2 with custom all-reduce ENABLED (no `disable-custom-all-reduce`) warns — it crashes on SM86 (`custom_all_reduce.cuh:455`); `disable-custom-all-reduce=true` must NOT warn;
+- SGLang TP2 shares the `NCCL_P2P_DISABLE` rule; SGLang custom-AR self-disables silently, so it is not warned;
 - TP1 does not warn;
 - fitting/apparent single-GPU profile with no CUDA pin warns;
 - split/TP profile does not receive the single-GPU-pin warning;
@@ -169,9 +169,9 @@ Expected: exit 0.
 
 Add `rtx3090_p2p = true` under `[performance_policy]` without disturbing unrelated config.
 
-- [ ] **Step 4: Correct TP2 communication flags**
+- [ ] **Step 4: Correct TP2 communication flags (measured 2026-07-10)**
 
-For active vLLM TP2 profiles, remove `NCCL_P2P_DISABLE=1` and remove `disable-custom-all-reduce=true`. Preserve all other parameters. Candidate files:
+Custom all-reduce CRASHES on this SM86 rig (vLLM 0.24.0, `custom_all_reduce.cuh:455 'invalid argument'`), so `disable-custom-all-reduce=true` is MANDATORY and MUST be kept. The measured P2P win comes only from removing `NCCL_P2P_DISABLE=1` (PyNCCL P2P transport -> +13.5% concurrent throughput, `isAllDirectP2p 1` via P2P/CUMEM). For active vLLM TP2 profiles: remove `NCCL_P2P_DISABLE=1`, KEEP `disable-custom-all-reduce=true`. Preserve all other parameters. Candidate files:
 - `gemma-4-e4b-awq-vllm-tp2-128k.json`
 - `gemma-4-e4b-awq-vllm-tp2-32k.json`
 - `qwen3.6-27b-int4-autoround-dflash-vllm-tp2-192k.json`

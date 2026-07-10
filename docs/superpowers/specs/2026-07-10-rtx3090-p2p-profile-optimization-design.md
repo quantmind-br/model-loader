@@ -30,7 +30,7 @@ Measured specialized variants remain separate; no universal profile replaces all
 
 The skill must describe two explicit communication states:
 
-1. Current patched rig: CUDA/NCCL P2P enabled and validated. TP2 defaults keep P2P enabled; custom all-reduce is tested rather than disabled preemptively.
+1. Current patched rig: CUDA/NCCL P2P enabled and validated. TP2 keeps P2P transport enabled (no `NCCL_P2P_DISABLE`). Custom all-reduce, however, CRASHES on this SM86 rig (vLLM 0.24.0, `custom_all_reduce.cuh:455`), so `disable-custom-all-reduce=true` is mandatory and kept, not a preemptive fallback (measured 2026-07-10).
 2. Stock-driver or diagnostic fallback: `NCCL_P2P_DISABLE=1`, disabled custom all-reduce, and forbidden llama P2P forcing are workarounds only.
 
 Update `SKILL.md`, `references/dual-gpu.md`, `references/vllm-sglang.md`, `references/llama-family.md`, `references/dflash.md`, `references/sndr.md`, `workflows/audit-profile.md`, `workflows/troubleshoot.md`, `workflows/full-tuning.md`, and `evals/evals.json`.
@@ -78,7 +78,7 @@ Tabby keeps its native PCIe TP backend until NCCL is measured faster on this PHB
 Apply mechanical corrections immediately when behavior is unambiguous:
 
 - Remove explicit P2P-disable flags from active TP2 profiles.
-- Remove custom-all-reduce disablement from active vLLM TP2 profiles, then validate launches and real requests.
+- Keep `disable-custom-all-reduce=true` on active vLLM TP2 profiles (custom AR crashes on SM86); remove only `NCCL_P2P_DISABLE=1` (the measured +13.5% P2P-transport win). Validate launches and real requests.
 - Pin single-GPU utility profiles explicitly; utility services target GPU0 and primary models target GPU1.
 - Preserve distinct 1M long-context q4-KV and 256k agent-safe q8-KV Qwythos variants; make their purposes explicit.
 
@@ -89,7 +89,7 @@ Do not convert layer to tensor, q4 KV to q8 KV, change context, or change specul
 Add reusable profile-performance diagnostics to the validator rather than hard-coding individual profile IDs. Diagnostics are warnings, not blocking schema errors:
 
 - TP2 vLLM/SGLang/SNDR with `NCCL_P2P_DISABLE=1` on this configured rig.
-- TP2 with custom all-reduce disabled.
+- TP2 vLLM with custom all-reduce ENABLED (missing `disable-custom-all-reduce`) — it crashes on SM86; `disable-custom-all-reduce=true` is correct and not flagged.
 - Apparent single-GPU profile without an explicit CUDA device pin.
 - Agent/tool-calling llama-family profile using q4 KV.
 
