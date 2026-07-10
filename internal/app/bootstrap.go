@@ -204,7 +204,7 @@ func Bootstrap(cliLevel string, opts ...BootstrapOption) (*Services, error) {
 		Resolver:      resolver,
 		DefaultSchema: defaultSchema,
 		Mgr:           mgr,
-		Val:           validator.New(logger),
+		Val:           validator.NewWithOptions(logger, validator.Options{RTX3090P2P: cfg.PerformancePolicy.RTX3090P2P}),
 		closeLog:      closeLog,
 	}, nil
 }

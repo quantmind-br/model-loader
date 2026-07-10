@@ -107,3 +107,34 @@ func TestLoad_DefaultLoggingLevelIsInfo(t *testing.T) {
 		t.Errorf("default logging.level = %q, want %q", cfg.Logging.Level, "info")
 	}
 }
+
+func TestLoad_PerformancePolicyDefaultsDisabled(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+
+	cfg, err := LoadFrom(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadFrom returned error: %v", err)
+	}
+	if cfg.PerformancePolicy.RTX3090P2P {
+		t.Errorf("absent config: PerformancePolicy.RTX3090P2P = true, want false")
+	}
+}
+
+func TestLoad_PerformancePolicyEnabledFromTOML(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+
+	contents := "[performance_policy]\nrtx3090_p2p = true\n"
+	if err := os.WriteFile(cfgPath, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadFrom(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadFrom returned error: %v", err)
+	}
+	if !cfg.PerformancePolicy.RTX3090P2P {
+		t.Errorf("[performance_policy] rtx3090_p2p = true: RTX3090P2P = false, want true")
+	}
+}

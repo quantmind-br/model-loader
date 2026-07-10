@@ -12,12 +12,24 @@ import (
 
 // AppConfig is the in-memory representation of the user config.
 type AppConfig struct {
-	Paths     PathsConfig     `mapstructure:"paths"`
-	Models    ModelsConfig    `mapstructure:"models"`
-	UI        UIConfig        `mapstructure:"ui"`
-	Logging   LoggingConfig   `mapstructure:"logging"`
-	Serve     ServeConfig     `mapstructure:"serve"`
-	Benchmark BenchmarkConfig `mapstructure:"benchmark"`
+	Paths             PathsConfig             `mapstructure:"paths"`
+	Models            ModelsConfig            `mapstructure:"models"`
+	UI                UIConfig                `mapstructure:"ui"`
+	Logging           LoggingConfig           `mapstructure:"logging"`
+	Serve             ServeConfig             `mapstructure:"serve"`
+	Benchmark         BenchmarkConfig         `mapstructure:"benchmark"`
+	PerformancePolicy PerformancePolicyConfig `mapstructure:"performance_policy"`
+}
+
+// PerformancePolicyConfig holds optional, installation-specific performance
+// policy toggles. The zero value is the generic installation: no workstation
+// policy is active. These toggles only enable extra advisory (warning-only)
+// validator checks; they never change how a backend is launched.
+type PerformancePolicyConfig struct {
+	// RTX3090P2P enables the dual-RTX-3090 patched-P2P workstation policy in
+	// the profile validator. Mapped from [performance_policy].rtx3090_p2p.
+	// Warning-only; never blocks a profile.
+	RTX3090P2P bool `mapstructure:"rtx3090_p2p"`
 }
 
 // BenchmarkConfig controls the Benchmark tab's evaluation engine.
@@ -311,4 +323,5 @@ func applyDefaults(v *viper.Viper) {
 	v.SetDefault("benchmark.swebenchpro.num_workers", 4)
 	v.SetDefault("benchmark.swebenchpro.use_modal", false)
 	v.SetDefault("benchmark.swebenchpro.timeout_sec", 0)
+	v.SetDefault("performance_policy.rtx3090_p2p", false)
 }

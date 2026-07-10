@@ -164,6 +164,22 @@ the full guide (chat-completions routing and container→host networking matter)
 | `timeout_sec` | `0` | Whole-run cap; `0` → none |
 | `extra_args` | `[]` | Passed verbatim after the built flags |
 
+### `[performance_policy]`
+
+Optional, installation-specific performance policy for the profile validator. When the section is absent or every toggle is `false`, model-loader behaves like a generic installation and this section changes nothing. It only enables extra **advisory (warning-only)** validator checks; it never changes how a backend is launched and never blocks a profile.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `rtx3090_p2p` | `false` | Enable the dual-RTX-3090 patched-P2P workstation policy. Intended only for a two-card, no-NVLink rig whose driver exposes a validated PCIe P2P path. Leave `false` on any other machine. |
+
+When `rtx3090_p2p = true`, the validator emits (never-blocking) warnings for the following workstation-specific situations:
+
+- A tensor-parallel (`tensor-parallel-size` ≥ 2 for vLLM, `tp-size` ≥ 2 for SGLang) profile carrying `NCCL_P2P_DISABLE=1` in its launch env, or `disable-custom-all-reduce=true` in its args — both pin the profile to the stock-driver fallback instead of the validated P2P / custom all-reduce path.
+- A single-GPU profile (not a tensor/row split, not TP ≥ 2) that is not pinned to a specific card via `CUDA_DEVICE_ORDER=PCI_BUS_ID` + `CUDA_VISIBLE_DEVICES`, so it may land on the wrong GPU or span both.
+- An agent/tool-calling llama.cpp profile using a q4 KV cache (`cache-type-k`/`cache-type-v`), which corrupts tool-call output; use `q8_0/q8_0`. Profiles explicitly marked long-context/non-tool are exempt.
+
+These checks are purely advisory: they never fail validation. A profile deliberately kept on the fallback path (for example the A side of a P2P A/B comparison) still validates cleanly, with the warning left as a reminder of the trade-off. Removing the offending flag, pinning the card, or restoring `q8_0` KV clears the corresponding warning.
+
 ## Example
 
 ```toml
@@ -210,6 +226,9 @@ repetitions = 3
 
 # [benchmark.deepswe]
 # tasks_dir = "~/dev/deep-swe/tasks"   # required for --mode deep-swe; see docs/deep-swe.md
+
+[performance_policy]
+rtx3090_p2p = false   # workstation-only; enable on the dual-RTX-3090 patched-P2P rig
 ```
 
 ## Backend Catalog

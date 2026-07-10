@@ -52,6 +52,7 @@ func New(logger *slog.Logger) Validator {
 
 type defaultValidator struct {
 	logger *slog.Logger
+	opts   Options
 }
 
 func (v defaultValidator) Validate(p domain.Profile, schema domain.FlagSchema, kind domain.BackendKind) Report {
@@ -61,6 +62,7 @@ func (v defaultValidator) Validate(p domain.Profile, schema domain.FlagSchema, k
 	rep = applyRequiredRules(p, schema, rep)
 	rep = applyCrossFieldRules(p, schema, rep)
 	rep = applyExistenceRules(p, kind, rep)
+	rep = applyPerformancePolicyRules(p, kind, v.opts, rep)
 	if rep.HasBlockingErrors() {
 		v.logger.Info("validation_failed",
 			"profile_id", p.ID,
