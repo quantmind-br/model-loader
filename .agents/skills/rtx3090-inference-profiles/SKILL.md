@@ -51,10 +51,10 @@ files above — it never re-derives knowledge that lives in a reference.
 - **GPU0 drives the desktop** (~0.6–1 GiB → ~22.4 GiB usable), old small-BAR vBIOS.
 - **No NVLink; PCIe PHB.** P2P is **enabled and validated** on the patched NVIDIA driver
   `610.43.02` (measured peer copies GPU0↔GPU1 ~13.3/13.2 GB/s; two-GPU NCCL all-reduce verified;
-  boot `iommu=pt` + ACS-redirect-disable, which costs DMA isolation). PHB caps it — no NVLink
-  bandwidth, and P2P does NOT fix backend correctness bugs. The **stock-driver fallback** (P2P
-  driver-disabled → collectives bounce through host RAM) stays the diagnostic baseline; engagement
-  is real only when a launch log / probe proves it — never a perf delta. → dual-gpu.md §P2P.
+  boot `iommu=pt` + per-root-port ACS-redirect-disable, which costs DMA isolation). PHB caps it — no
+  NVLink bandwidth, and P2P does NOT fix backend correctness bugs. **Measured 2026-07-10: it wins on
+  vLLM TP2 concurrent only** (dropping `NCCL_P2P_DISABLE` = +13.5%); single-stream llama/lucebox splits
+  tie. Engagement is real only when a launch log / probe proves it — never a perf delta. → dual-gpu.md §P2P.
 - **VRAM cap 46 GiB total** (user policy): plan ≤23 GiB/card.
 - **The 2nd card's value depends on the mode** (all measured here): `split-mode tensor` =
   +22…39% batch-1 decode on ≤31B DENSE at short ctx (shrinks with ctx, reverses ≥512k, prefill
@@ -107,15 +107,16 @@ files above — it never re-derives knowledge that lives in a reference.
   `spec-type` is a **list-valued enum** (comma-chained values and `draft-dflash` both pass the
   validator; beellama/buun spell it `dflash`/`mtp` and are now list-valued too). Confirm the MTP
   head and the ngram drafter actually load in the launch log — config fields lie.
-- **P2P is a validated A/B lever, not an assumed default** (dual-gpu.md §P2P). On this patched
-  rig (driver 610.43.02) vLLM/SGLang TP2 run **P2P-on** (drop `NCCL_P2P_DISABLE`; custom
-  all-reduce is A/B, not preemptively disabled), but every engagement needs **launch-log proof**
-  and the disable flags stay the stock-driver fallback only. `GGML_CUDA_P2P=1` is **parsed only by
-  llama.cpp-stable/nightly/beellama/buun** (getenv in ggml-cuda.cu — proven; NOT ik = its own
-  default peer-access, NOT lucebox = `--peer-access`): a split-only A/B lever carrying the upstream
-  IOMMU/BIOS crash caveat — never claim it for a backend without source/binary proof. Multi-GPU
-  output can still corrupt silently (#20052, #40725) — **validate a long / non-English generation**
-  before trusting any 2-GPU profile.
+- **P2P is validated but its win is narrow — measured, not assumed** (dual-gpu.md §P2P). On this patched
+  rig (driver 610.43.02) vLLM TP2 runs **P2P-on** — drop `NCCL_P2P_DISABLE` (measured **+13.5% concurrent**)
+  — but **`disable-custom-all-reduce: true` is MANDATORY on SM86**: custom AR engages then CRASHES
+  (`custom_all_reduce.cuh:455`); P2P does not fix that backend bug, so **never drop the disable flag**.
+  SGLang TP2 P2P is inconclusive (treat as NCCL, keep the disable flag, `--enable-p2p-check`).
+  `GGML_CUDA_P2P=1` is **parsed only by llama.cpp-stable/nightly/beellama/buun** (getenv in ggml-cuda.cu —
+  proven; NOT ik = its own default peer-access, NOT lucebox = `--peer-access`) and measured a **TIE** for
+  single-stream splits (keep defaults) — a log-proven A/B lever carrying the IOMMU/BIOS crash caveat, never
+  claimed without source/binary proof. Multi-GPU output can still corrupt silently (#20052, #40725) —
+  **validate a long / non-English generation** before trusting any 2-GPU profile.
 - Existing profiles are calibrated anchors — mirror their arg spelling. **On a 2-GPU box
   llama.cpp auto-splits when both cards are visible** — pin single-GPU profiles to GPU1.
 - **NEVER asymmetric multi-GPU split on this rig.** When both RTX 3090s share weights/KV via llama.cpp `split-mode` **layer** or **tensor** (or any engine flag that partitions layers/tensors across cards), **`tensor-split` MUST be equal** — default **`"0.5,0.5"`** only. **Banned:** `0.45,0.55`, `0.4,0.6`, or any uneven ratio. Measured 2026-07-03 (Qwythos-9B MTP Q4_K_M @262k): tensor `0.5,0.5` ≈ **96** tok/s vs `0.45,0.55` ≈ **83** tok/s. `main-gpu` (e.g. `1`) is fine — it is not a substitute for asymmetric `tensor-split`. Desktop GPU0 headroom → **pin single-GPU** (`CUDA_VISIBLE_DEVICES=1`) or **pin-per-GPU two models**, not skewed splits.
@@ -211,8 +212,8 @@ ctx-label check (label = binary-k floored from `ctx-size`/`max-model-len`).
 - "It's in the schema enum, so the GPU supports it"
 - "tensor-parallel can't help without NVLink" (false for llama.cpp tensor + exllama TP on dense)
   / "tensor split helps everything" (false for MoE, long ctx, drafts)
-- "row-split is the fast path" (row = −2.8×, banned) / "just set `GGML_CUDA_P2P=1` or drop `NCCL_P2P_DISABLE` and it's faster" (P2P is a log-proven, split-only A/B lever — `GGML_CUDA_P2P` parsed only by llama.cpp-stable/nightly/beellama/buun — never an assumed speedup; dual-gpu.md §P2P)
-- "P2P can't work on 3090s, keep `NCCL_P2P_DISABLE=1`" (STALE — validated on the patched driver 610.43.02; the disable flags are stock-driver fallback only, and engagement still needs launch-log proof)
+- "row-split is the fast path" (row = −2.8×, banned) / "just set `GGML_CUDA_P2P=1` and the split is faster" (measured a TIE for single-stream llama/lucebox splits — keep defaults; the only measured P2P win is dropping `NCCL_P2P_DISABLE` on vLLM TP2 concurrent, +13.5%; dual-gpu.md §P2P)
+- "P2P can't work on 3090s, keep `NCCL_P2P_DISABLE=1`" (STALE — validated on driver 610.43.02; dropping it is a measured +13.5% on vLLM TP2 concurrent) / "P2P works now, so I can drop `disable-custom-all-reduce`" (NO — custom AR CRASHES on SM86, `custom_all_reduce.cuh:455`; keep it disabled; dual-gpu.md §P2P)
 - "the chained spec-type / sglang parser is blocked, route it through extraArgs" (S1/S2 fixed — it validates in `args`)
 - "Startup succeeded, ship it" (no long/non-English/near-full-ctx/warm re-test)
 - "The first request's tok/s is the number" (cold-start ~half speed)

@@ -91,13 +91,15 @@ Run top to bottom. Steps 1–8 are pre-launch; 9–12 are the measured loop.
    dflash → `references/dflash.md` §Tuning on this card · tabby → `references/exllama-tabby.md`
    §Gotchas). **ONE change per iteration**, re-measure.
 
-   **TP2 / split P2P evidence + rollback (patched rig):** on a two-GPU vLLM/SGLang/split-llama profile,
-   capture the launch-log line that proves the communication path — the NCCL-P2P / custom-AR init line
-   (vLLM/SGLang) or the peer-access line (llama `GGML_CUDA_P2P` / lucebox `--peer-access`). **Absence of a
-   disable flag is not proof.** Record the exact rollback flags in the description so a regression reverts
-   fast (stock/fallback: re-add `NCCL_P2P_DISABLE=1` + `disable-custom-all-reduce`, unset `GGML_CUDA_P2P`).
-   Keep a P2P/custom-AR change only if warm A/B shows it non-regressing for the profile's purpose metric
-   (dual-gpu.md §P2P); it never relaxes the tensor+draft / row / asymmetric bans.
+   **TP2 / split P2P evidence + rollback (patched rig, measured 2026-07-10):** on a two-GPU
+   vLLM/SGLang/split-llama profile, capture the launch-log transport line — vLLM `isAllDirectP2p 1` /
+   `0->1 via P2P/CUMEM`, or the llama `GGML_CUDA_P2P` / lucebox `--peer-access` peer line. **Absence of a
+   disable flag is not proof.** The measured picture: **vLLM TP2 dropping `NCCL_P2P_DISABLE` = +13.5%
+   concurrent (keep it dropped); `disable-custom-all-reduce: true` is MANDATORY on SM86 (custom AR crashes,
+   `custom_all_reduce.cuh:455`) — never A/B it off; native single-stream `GGML_CUDA_P2P`/`--peer-access`
+   splits tie (keep defaults).** Rollback in the description: re-add `NCCL_P2P_DISABLE=1` (init hang /
+   corruption only — it costs the +13.5%). Keep an `NCCL_P2P_DISABLE`-drop only if warm A/B is
+   non-regressing (dual-gpu.md §P2P); it never relaxes the tensor+draft / row / asymmetric bans.
 
 10. **Agent-readiness** (any tool-calling / coding-agent profile — non-negotiable for those).
     Run `references/model-research.md` §4 through the proxy: the **shell-hostile tool-call round
@@ -130,9 +132,9 @@ The scattered discipline that makes step 9 (and the whole loop) trustworthy:
 - **OOM ladders live in the backend files — link, don't duplicate.** Sacrifice in the order that
   file prescribes; never drop KV below `q8_0` on a tool-calling profile.
 - **Multi-GPU output can corrupt silently, and P2P engagement must be proven — never assumed.**
-  Validate a long, non-English generation before trusting any 2-GPU profile; confirm the P2P /
-  custom-AR / peer path from the launch log (not a perf delta), and keep the stock-driver rollback flags
-  noted (`references/dual-gpu.md` §P2P). P2P is an interconnect A/B lever, not a correctness fix.
+  Validate a long, non-English generation before trusting any 2-GPU profile; confirm the transport from the
+  launch log (not a perf delta), keep `disable-custom-all-reduce: true` on SM86 vLLM TP2, and note the
+  `NCCL_P2P_DISABLE` rollback (`references/dual-gpu.md` §P2P). P2P is an interconnect A/B lever, not a correctness fix.
 - **"CLI says not found while the proxy owns the process."** The proxy (`127.0.0.1:4321`) holds the
   live instance; a stale `instance list` can miss it. Check `curl -s 127.0.0.1:4321/_status` and
   read the log directly at `~/.local/state/model-loader/logs/<profile>-<port>.log` — don't

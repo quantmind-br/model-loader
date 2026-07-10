@@ -92,11 +92,11 @@ Config source of truth = the SNDR **ModelDef YAML**
   GDN → −30% TPS / OOM). A ready generator lives in a scratchpad from the 2026-07-03
   session; regenerate by parsing the YAML.
 
-**P2P policy (patched rig):** SNDR is a `vllm` variant, so it inherits the vLLM TP2 **P2P-on**
-default (dual-gpu.md §P2P) — `NCCL_P2P_DISABLE=1` (an SNDR launcher-template default) and
-`disable-custom-all-reduce: true` are now the **stock/fallback** setting, not the target. For a P2P-on
-A/B, drop `NCCL_P2P_DISABLE` and treat `disable-custom-all-reduce` as A/B, then **prove the NCCL-P2P /
-custom-AR path from the launch log** (never a throughput delta). This does NOT waive SNDR's
+**P2P policy (patched rig):** SNDR is a `vllm` variant on vLLM 0.24.0, so it inherits the TP2 rule
+(dual-gpu.md §P2P): **drop `NCCL_P2P_DISABLE`** (an SNDR launcher-template default) for the measured
+**+13.5% concurrent** P2P-on win, but **keep `disable-custom-all-reduce: true` — custom AR crashes on
+SM86** (`custom_all_reduce.cuh:455`); it is the required default, not a stock fallback, so never drop it.
+Prove the NCCL-P2P transport from the launch log (never a throughput delta). This does NOT waive SNDR's
 large-prefill safety test (below) — always `benchmark --mode llama-bench` a big prefill before
 trusting a `-sndr` profile, P2P or not.
 

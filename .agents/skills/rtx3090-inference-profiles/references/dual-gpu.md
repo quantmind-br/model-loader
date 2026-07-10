@@ -31,10 +31,10 @@ single-stream speed.** Measured split-mode ranking (batch-1, ≤31B dense, q4_0 
 - **vLLM/SGLang TP=2 = capacity** (per-card KV ~doubles); batch-1 decode gain comes from
   spec-decode + fp8-KV headroom, not the TP itself.
 
-> These split rankings were measured **pre-P2P** (stock driver). P2P (now validated, §P2P) is an
-> **additional A/B lever on top** — it may lift layer/tensor collective comm, but rebenchmark with
-> launch-log proof; it does not change the model-class rules (MoE/long-ctx/drafts) or the
-> row/asymmetric bans, and never auto-splits a fitting single-GPU model.
+> These split rankings were measured **pre-P2P** (stock driver); re-measured on the patched driver P2P
+> is a **TIE for single-stream llama/lucebox splits** (§P2P) — it lifts NCCL collective throughput
+> (concurrent vLLM TP2), not a single-stream split. It changes none of the model-class rules
+> (MoE/long-ctx/drafts) or the row/asymmetric bans, and never auto-splits a fitting single-GPU model.
 
 ## llama.cpp `-sm tensor` — status (upstream PR #19378, merged 2026-04; in b9847, NCCL build ON)
 
@@ -71,11 +71,14 @@ Hard caveats, all verified current at b9847 (2026-07):
   **llama.cpp-stable/nightly, beellama and buun** (NOT ik-llama-cpp, which auto-enables peer access
   via its own `ggml_cuda_set_peer_access`; NOT lucebox, which uses `--peer-access`). These builds are
   compiled **NCCL-ON** (`-DGGML_USE_NCCL`), so peer access is already enabled for the NCCL comm path;
-  `GGML_CUDA_P2P` mainly grants peer access to the **non-NCCL VMM copy path**. On the patched driver it
-  is a legitimate **split-only A/B lever** (no effect on a single-GPU pin — no peer to reach), but
-  upstream still warns it **can crash/corrupt on some IOMMU/BIOS setups** — prove engagement in the log
-  and validate a long/non-English generation; unset it if unstable. Never claim it for a backend
-  without source/binary proof.
+  `GGML_CUDA_P2P` mainly grants peer access to the **non-NCCL VMM copy path**. **Measured 2026-07-10
+  (ornith-9B tensor-split, internal MTP): env-proven engaged, decode ~141 / prefill ~4120 tok/s with
+  and without — a TIE within noise. Keep the DEFAULT (absent).** Batch-1 single-stream decode is
+  weight-bandwidth-bound; the per-token cross-GPU exchange is tiny vs PCIe latency, so P2P lifts NCCL
+  collective throughput (concurrent vLLM), not a single-stream llama split. It stays a split-only A/B
+  lever (no effect on a single-GPU pin), carries the upstream **IOMMU/BIOS crash caveat** — prove
+  engagement in the log and validate a long/non-English generation; unset if unstable. Never claim it
+  for a backend without source/binary proof.
 - ⚠ Long-ctx correctness: #20052 (layer-split garbage >2048 ctx on non-P2P rigs) was CLOSED as a
   marginal PCIe riser cable degrading signal integrity (Xid 79 bus drops), NOT a llama.cpp bug
   (github.com/ggml-org/llama.cpp/issues/20052) — the lesson stands: **validate a long /
@@ -83,13 +86,14 @@ Hard caveats, all verified current at b9847 (2026-07):
 
 ## vLLM / SGLang TP2 (details in vllm-sglang.md)
 
-- vLLM: `tensor-parallel-size 2, distributed-executor-backend mp`. **P2P-on default (patched rig):**
-  **no `NCCL_P2P_DISABLE`**, and **do not preemptively `disable-custom-all-reduce`** — custom AR is now
-  an A/B decision (P2P is validated, so it can genuinely engage). Prove the NCCL-P2P / custom-AR path
-  from the launch log, never from a throughput delta or the absence of a disable flag. util 0.84–0.90.
-  **Stock-driver / diagnostic fallback only:** re-add `NCCL_P2P_DISABLE=1` + `disable-custom-all-reduce
-  true` (on the stock driver custom-AR self-disables after the P2P probe, so disabling it was merely
-  deterministic).
+- vLLM: `tensor-parallel-size 2, distributed-executor-backend mp`; util 0.84–0.90. **`disable-custom-all-reduce:
+  true` is MANDATORY on SM86 (measured 2026-07-10, vLLM 0.24.0):** with the flag absent the log shows
+  `Using ['CUSTOM','PYNCCL']` → CUSTOM selected → CRASH at startup (`custom_all_reduce.cuh:455 'invalid
+  argument'`, EngineCore dies, backend never healthy, reproduced 2×). P2P being real does **not** fix this
+  backend bug — keep custom-AR disabled. **Drop `NCCL_P2P_DISABLE` (P2P-on):** measured **+13.5% concurrent**
+  (conc-32 2422–2444 vs 2112–2169 tok/s) with custom-AR already disabled — log `isAllDirectP2p 1`, `0->1 via
+  P2P/CUMEM` (vs `isAllDirectP2p 0` / `via SHM`); TTFT/VRAM tie. Prove the NCCL-P2P path from the launch log,
+  not a throughput delta. `NCCL_P2P_DISABLE=1` is the diagnostic fallback only (costs the +13.5%).
 - **`enable-expert-parallel`: OFF for A3B-class sparse MoE at batch-1** (EP adds 7–12% overhead
   on ultra-sparse MoE; DeepEP fast paths are Hopper+NVLink-only). It paid off once here on a
   capacity-bound MoE (Nex-N2-mini +13% over GGUF-on-one-card) — treat as per-model experiment.
@@ -98,20 +102,22 @@ Hard caveats, all verified current at b9847 (2026-07):
   TP=2 runs clean here daily. Validate non-English output after every vLLM upgrade.
 - PP=2: official no-NVLink *throughput* guidance, but zero batch-1 decode gain and incompatible
   with spec decode — corruption-workaround only.
-- SGLang: `tp-size 2` + `--enable-p2p-check` (0.5.9 default assumes P2P allowed without checking) —
-  keep P2P on; `disable-custom-all-reduce` is A/B (prove custom-AR engaged from the log, don't assume it
-  from removing the flag). Add `NCCL_P2P_DISABLE=1` only as the diagnostic fallback if it hangs at
-  "Init torch distributed".
+- SGLang: `tp-size 2` + `--enable-p2p-check` (0.5.9 default assumes P2P allowed without checking) — keep P2P
+  on. **P2P engagement was INCONCLUSIVE here (measured 2026-07-10, unlimited-ocr): no launch-log line proved
+  CUSTOM/P2P engaged (silent self-disable) → treat SGLang TP2 as NCCL.** Keep `disable-custom-all-reduce`
+  (SM86 custom-AR is unproven here and crashes on the vLLM sibling). `mem-fraction-static` must stay **0.78**
+  while GPU0 hosts the desktop (0.84/0.88 OOM on the first OCR request). Add `NCCL_P2P_DISABLE=1` only as the
+  diagnostic fallback if it hangs at "Init torch distributed".
 
 ## lucebox dflash — draft-split (see dflash.md)
 
 **Draft-split is the right 2-GPU mode:** target on GPU1 + drafter on GPU0
 (`"target-device":"cuda:1","draft-device":"cuda:0"`) = **74 tok/s @256k** (single-GPU speed,
-frees ~2 GiB for full KV). Target layer-split measured **−26…−46%** (F32 activations over PCIe) —
-**pre-P2P**; `--peer-access` was a no-op then. On the patched driver `--peer-access` now has a working
-substrate: treat it (and target layer-split) as an A/B lever to rebenchmark — prove peer access engaged
-in the log — but **draft-split stays the baseline** until layer-split+peer-access is shown to win the
-declared metric.
+frees ~2 GiB for full KV). Target layer-split measured **−26…−46%** (F32 activations over PCIe).
+**`--peer-access` measured 2026-07-10 (Qwen3.6-27B NEO-CODE 64L layer-split): config-dump-proven on/off,
+decode ~33 / prefill ~1072 tok/s both — a TIE. Keep the DEFAULT (off)** for a 2-way layer-split; the
+per-token cross-GPU exchange is bandwidth-bound, not P2P-limited. **Draft-split stays the baseline.**
+(A 9B/33L target was rejected by dflash — block_count not divisible by 4.)
 
 ## unsloth
 
@@ -139,25 +145,48 @@ launch.env (array of {"key","value"} objects — "KEY=VALUE" strings fail profil
   headless proxy — `model-loader serve --port 4322` — for the secondary profile (serve doesn't
   take the single-instance lock; each profile still lands on its env-pinned GPU).
 
-## P2P — status, engagement, verification
+## P2P — status, engagement, verification (measured 2026-07-10)
 
-**Applied and validated (2026-07):** the `aikitoria/open-gpu-kernel-modules` P2P patch for the exact
-installed driver **610.43.02** is live. CUDA peer access works both directions; measured peer copies
-GPU0→GPU1 **13.34** / GPU1→GPU0 **13.15 GB/s**; two-GPU NCCL all-reduce verified. Boot policy
-`iommu=pt` + `pci=disable_acs_redir=…` (ACS-redirect-disable) is load-bearing — **cost: loss of DMA
-isolation**; P2P still hairpins through the root complex (PHB), so it is **not** NVLink bandwidth and
-fixes **no** correctness bug (validate a long/non-English generation regardless).
+**Applied and validated:** the `aikitoria/open-gpu-kernel-modules` P2P patch for the exact installed
+driver **610.43.02** is live. CUDA peer access works both directions; measured peer copies GPU0→GPU1
+**13.34** / GPU1→GPU0 **13.15 GB/s**; two-GPU NCCL all-reduce verified. `nvidia-smi topo -p2p r/p` →
+GPU0↔GPU1 OK. P2P still hairpins through the root complex (PHB) — **not** NVLink bandwidth — and fixes
+**no** correctness bug (validate a long/non-English generation regardless).
 
-**Engagement is never assumed — prove it every time:**
-- vLLM/SGLang: read the launch log for the NCCL-P2P / custom-AR init line; the absence of
-  `NCCL_P2P_DISABLE` / `disable-custom-all-reduce` is **not** evidence.
-- llama family: `GGML_CUDA_P2P` (source-verified above: stable/nightly/beellama/buun only) or the
-  NCCL-build peer path; ik uses its own default peer-access, lucebox uses `--peer-access`. Confirm in
-  the log, then warm-measure an A/B — never infer P2P from a throughput delta.
+**Where it actually pays off (and where it doesn't):**
+- **vLLM TP2 concurrent = REAL WIN.** Dropping `NCCL_P2P_DISABLE` (custom-AR already disabled) measured
+  **+13.5% concurrent** (conc-32 2422–2444 vs 2112–2169 tok/s; batch-1 176.75 vs 171.75) — log
+  `Check P2P Type isAllDirectP2p 1`, `Channel 00/0: 0->1 via P2P/CUMEM` vs `isAllDirectP2p 0` / `via SHM`;
+  TTFT/VRAM tie, both fluent PT, 0 Xid. Applied to `gemma-4-e4b-awq-vllm-tp2-32k`; the other 3 vLLM TP2
+  profiles inherit the class (gain expected, magnitude unconfirmed).
+- **custom all-reduce = BROKEN on SM86** (vLLM 0.24.0): with the flag absent, CUSTOM engages then CRASHES
+  (`custom_all_reduce.cuh:455 'invalid argument'`) — `disable-custom-all-reduce: true` is MANDATORY,
+  independent of P2P.
+- **SGLang TP2 = inconclusive** (no engagement line; silent self-disable) → treat as NCCL, keep
+  `--enable-p2p-check` + `disable-custom-all-reduce`, `mem-fraction-static 0.78`.
+- **Native single-stream splits = TIE, no gain.** llama `GGML_CUDA_P2P` (~141 dec / ~4120 pref) and
+  lucebox `--peer-access` (~33 dec / ~1072 pref) measured equal on/off — keep DEFAULTS. Batch-1 decode is
+  weight-bandwidth-bound; P2P helps NCCL collective throughput, not a single-stream split.
 
-**Stock-driver / diagnostic fallback** (revert only these comm flags, nothing else): re-add
-`NCCL_P2P_DISABLE=1` and `disable-custom-all-reduce true`, unset `GGML_CUDA_P2P`. Use when diagnosing a
-hang/corruption or on an unpatched driver.
+**Engagement is never assumed — prove it every time:** read the launch log for the transport line above;
+the absence of a disable flag is **not** evidence; never infer P2P from a throughput delta.
+
+**Prerequisites / diagnostics (driver README):**
+- Boot `iommu=pt pci=disable_acs_redir=0000:00:01.1;0000:00:01.3`. **`iommu=pt` REQUIRED** — a translating
+  IOMMU makes BAR1 P2P transfers fail. Verify the persisted boot entry survives kernel/grub updates.
+- **ACS-redirect disabled on the GPU root ports REQUIRED for bandwidth.** Proven live: `00:01.1` (GPU0) /
+  `00:01.3` (GPU1) read `ACSCtl ReqRedir- CmpltRedir-`. ACS on → traffic hairpins through the CPU root
+  complex → "P2P engaged but no gain". **`disable_acs_redir` is per-root-port** — changing GPU slots
+  changes the IDs and requires re-pointing (other AMD bridges keep ACS on; irrelevant, no GPU traffic).
+- **Security tradeoff:** BAR1 P2P does direct DMA writes and `iommu=pt` reduces DMA isolation — do not run
+  untrusted code/devices on this box.
+- **Hugepage caveat:** the patched driver auto-enables an experimental fast `cudaHostRegister` path for
+  1G-hugepage-backed buffers that may misbehave where the stock driver is fine — unexplained host-memory
+  corruption is not necessarily NCCL/custom-AR.
+
+**Diagnostic fallback** (unpatched driver / init hang / suspected corruption): re-add `NCCL_P2P_DISABLE=1`
+(costs the measured +13.5% concurrent), unset `GGML_CUDA_P2P`. **`disable-custom-all-reduce: true` is NOT a
+fallback — it is the required SM86 default; never drop it to "test P2P".**
 
 ## Interconnect upgrades (further, optional — ask the user first)
 
@@ -228,4 +257,5 @@ nvidia-smi --query-gpu=index,pci.bus_id --format=csv   # confirm physical mappin
 - **"NCCL_P2P_DISABLE=1 fixes consumer-GPU corruption."** Not always (#40725) — validate output.
 - **"3090s can't do P2P, period."** Outdated — this rig runs the aikitoria patch on driver 610.43.02
   with P2P validated (peer copies ~13 GB/s, NCCL all-reduce OK). It is a PHB/root-complex path (no
-  NVLink bandwidth), engagement needs log proof, and the disable flags are the stock-driver fallback.
+  NVLink bandwidth). Measured: dropping `NCCL_P2P_DISABLE` = +13.5% concurrent on vLLM TP2, but custom-AR
+  still crashes on SM86 (keep `disable-custom-all-reduce`) and single-stream llama/lucebox splits tie.

@@ -1,6 +1,6 @@
 {
   "skill_name": "rtx3090-inference-profiles",
-  "note": "Rewritten 2026-07-02, premises re-verified 2026-07-07 (installed builds: llama.cpp-stable b9847 / nightly b9869, beellama main@85e22ea0 b10102, buun b9792, vLLM 0.24.0, SGLang 0.5.9, exllamav3 0.0.43, lucebox 1b11c50; BUGS.md S1+S2 FIXED — spec-type chains/draft-dflash and sglang parsers validate directly in args). The previous eval set encoded stale premises (old catalog ids, 'split never speeds decode', buun/tabby unregistered, and the now-reversed S1 'curated enum blocks the chain'). 2026-07-09 added the ik-llama-cpp scenario (#17): the catalog now includes ik-llama-cpp/vllm-dflash/vllm-dspark (17 entries); ik shares llama-server's CLI but a hand-curated flag subset, split none/graph/layer only, cache-ram (not cache-reuse), free-string spec-type in the bare mtp/dflash dialect. 2026-07-10 added the validated-P2P scenarios (#18-#21): the rig now runs the patched NVIDIA driver 610.43.02 with CUDA/NCCL P2P validated (measured peer copies GPU0->GPU1 13.34 / GPU1->GPU0 13.15 GB/s; two-GPU NCCL all-reduce verified; still PHB / no NVLink; boot iommu=pt + ACS-redirect-disable, at the cost of DMA isolation). Premises: NCCL_P2P_DISABLE / disable-custom-all-reduce are now STALE fallback on this rig (P2P-on default; keep only as documented stock/diagnostic fallback); P2P / custom-AR engagement demands launch-log proof, never a throughput delta or the mere absence of a disable flag; GGML_CUDA_P2P is parsed only by llama.cpp-stable/nightly/beellama/buun (getenv in ggml/src/ggml-cuda/ggml-cuda.cu; NOT ik-llama-cpp, which uses its own default ggml_cuda_set_peer_access, and NOT lucebox, which uses --peer-access) so it must be source/binary-proven before any claim; and the split-mode tensor + external-draft prohibition (#22473/#24309) still stands - P2P is an interconnect win, not a code-path fix.",
+  "note": "Rewritten 2026-07-02; premises re-verified 2026-07-07 (builds: llama.cpp-stable b9847 / nightly b9869, beellama main@85e22ea0 b10102, buun b9792, vLLM 0.24.0, SGLang 0.5.9, exllamav3 0.0.43, lucebox 1b11c50; BUGS.md S1+S2 fixed). 2026-07-09 added the ik-llama-cpp scenario (#17). 2026-07-10 P2P measured on this patched rig (driver 610.43.02): #18-#21 updated and #22-#23 added to encode the DECISIVE A/Bs - dropping NCCL_P2P_DISABLE on vLLM TP2 = +13.5% concurrent (proven), but custom all-reduce CRASHES on SM86 so disable-custom-all-reduce=true is MANDATORY (not a stale fallback); SGLang TP2 P2P inconclusive (treat as NCCL); native GGML_CUDA_P2P / lucebox --peer-access single-stream splits measured a TIE (keep defaults). 23 scenarios total; graded premises cited inside each eval.",
   "evals": [
     {
       "id": 1,
@@ -205,49 +205,73 @@
     {
       "id": 18,
       "prompt": "Audita meu profile vllm-tp2 do Qwen3.6-27B: ele tem NCCL_P2P_DISABLE=1 no launch.env e disable-custom-all-reduce=true nos args. Está certo pro rig?",
-      "expected_output": "Knows THIS rig now runs the patched NVIDIA driver 610.43.02 with CUDA/NCCL P2P validated (measured peer copies GPU0->GPU1 13.34 / GPU1->GPU0 13.15 GB/s, two-GPU NCCL all-reduce verified; topology still PHB, no NVLink; boot iommu=pt + ACS-redirect-disable). So on this configured workstation NCCL_P2P_DISABLE=1 and disable-custom-all-reduce=true are STALE fallback flags, not the default — flags them (matching the rtx3090_p2p workstation performance policy: warnings, not schema errors). The P2P-on default: drop NCCL_P2P_DISABLE and treat custom all-reduce as an A/B decision (do NOT disable it preemptively). CRITICAL: engagement must be proven from the launch log (the NCCL P2P / custom-AR init line), never inferred from a throughput delta or from the mere absence of a disable flag. Keeps the disable flags ONLY as a documented stock-driver / diagnostic fallback. Still runs a long non-English (Portuguese) generation before trusting the TP2 profile (vLLM #40725 corruption class is NOT fixed by P2P) and warm-measures an A/B before claiming any speedup.",
+      "expected_output": "Half right, half wrong - grounded in the 2026-07-10 measured A/Bs on this patched rig (driver 610.43.02, P2P validated: peer copies ~13 GB/s, NCCL all-reduce OK, still PHB/no NVLink). (1) NCCL_P2P_DISABLE=1 is STALE and costs performance - dropping it measured +13.5% concurrent (conc-32 ~2440 vs ~2140 tok/s; log Check P2P Type isAllDirectP2p 1 / 0->1 via P2P/CUMEM); flag it and drop it (matches the rtx3090_p2p performance policy: warnings, not schema errors). (2) disable-custom-all-reduce=true is CORRECT and MANDATORY on SM86, NOT stale - with it absent vLLM 0.24.0 selects the CUSTOM kernel and CRASHES at startup (custom_all_reduce.cuh:455 invalid argument, EngineCore dies); keep it. Never conflate the two flags. Proves engagement from the launch-log transport line (absence of a disable flag is not evidence), warm-measures the A/B, and validates a long non-English (Portuguese) generation (vLLM #40725 not fixed by P2P) before trusting the profile.",
       "files": [],
       "assertions": [
-        "Knows the patched driver 610.43.02 makes CUDA/NCCL P2P validated on this rig (measured ~13 GB/s peer copies, NCCL all-reduce OK; still PHB/no NVLink)",
-        "Flags NCCL_P2P_DISABLE=1 + disable-custom-all-reduce=true as STALE fallback on the patched rig (P2P-on is the default); keeps them only as a documented stock/diagnostic fallback",
-        "Requires launch-log PROOF the P2P/custom-AR path engaged (absence of a disable flag is NOT evidence); does not infer P2P from a perf delta",
-        "Still validates a long non-English generation (#40725 not fixed by P2P) and warm-measures an A/B before claiming a speedup"
+        "Knows the patched driver 610.43.02 makes P2P validated here (measured ~13 GB/s peer copies, NCCL all-reduce OK; still PHB/no NVLink)",
+        "Flags NCCL_P2P_DISABLE=1 as a measured +13.5% concurrent loss and drops it (P2P-on); does NOT flag disable-custom-all-reduce=true",
+        "Knows disable-custom-all-reduce=true is CORRECT/MANDATORY on SM86 (custom AR crashes at custom_all_reduce.cuh:455 when enabled); keeps it",
+        "Proves engagement from the launch log (absence of a disable flag is not evidence), warm-measures, and validates a long non-English generation (#40725 not fixed by P2P)"
       ]
     },
     {
       "id": 19,
       "prompt": "Ativa GGML_CUDA_P2P=1 no meu profile llama.cpp de 2 GPUs pra acelerar, agora que o P2P do rig funciona.",
-      "expected_output": "Does NOT blindly enable it. Before asserting the backend supports the variable it verifies the exact checked-out backend parses it: GGML_CUDA_P2P is read via getenv in llama.cpp-stable/nightly, beellama and buun (ggml/src/ggml-cuda/ggml-cuda.cu; documented in docs/multi-gpu.md + docs/build.md) — but it is NOT parsed by ik-llama-cpp (ik enables peer access through its own default ggml_cuda_set_peer_access, no such env var) and NOT by lucebox-dflash (which uses the --peer-access flag). Knows the installed llama.cpp builds are compiled NCCL-ON (-DGGML_USE_NCCL), so peer access is already enabled for the NCCL comm path; GGML_CUDA_P2P mainly affects the non-NCCL VMM peer-copy path — making it an A/B lever for a GENUINE tensor/layer split on the patched rig, not a magic switch and not applicable to a fitting single-GPU pinned profile (no peer to access). Requires log/probe proof the peer path actually engaged and a warm A/B measurement, and carries the upstream caveat that P2P can still crash/corrupt on some IOMMU/BIOS configs (validate a long non-English generation). Does not fabricate a tok/s number and does not add it to a single-GPU profile.",
+      "expected_output": "Does NOT blindly enable it. First verifies the exact checked-out backend parses it: GGML_CUDA_P2P is read via getenv in llama.cpp-stable/nightly, beellama and buun (ggml/src/ggml-cuda/ggml-cuda.cu; docs/multi-gpu.md + docs/build.md) - NOT ik-llama-cpp (own default ggml_cuda_set_peer_access, no such env) and NOT lucebox-dflash (--peer-access). Knows the installed builds are NCCL-ON (-DGGML_USE_NCCL) so peer access is already enabled for the NCCL comm path; GGML_CUDA_P2P mainly affects the non-NCCL VMM peer-copy path. CRUCIAL measured result (2026-07-10, ornith-9B tensor-split): the env was proven engaged but the A/B was a TIE (decode ~141 / prefill ~4120 tok/s with and without) - batch-1 single-stream decode is weight-bandwidth-bound, so P2P lifts NCCL collective throughput (concurrent vLLM), not a single-stream llama split. Recommends KEEPING THE DEFAULT (absent), not enabling it for speed. Only a split-only A/B lever (no effect on a single-GPU pin), needs log/probe proof + a warm A/B if used, carries the IOMMU/BIOS crash caveat, and never a fabricated tok/s number.",
       "files": [],
       "assertions": [
         "Does NOT blindly recommend GGML_CUDA_P2P; verifies the exact backend parses it (source/binary) before asserting support",
         "Knows GGML_CUDA_P2P is parsed by llama.cpp-stable/nightly/beellama/buun but NOT ik-llama-cpp (own default peer-access) and NOT lucebox (--peer-access)",
-        "Treats it as an A/B lever for a genuine tensor/layer split on the patched rig (NCCL build already enables peer access; the env affects the VMM peer-copy path); not a single-GPU switch; states the IOMMU/BIOS crash caveat",
-        "Requires log/probe proof the peer path engaged + a warm A/B; does not fabricate a benchmark number"
+        "Cites the measured TIE (ornith-9B tensor-split: ~141 dec / ~4120 pref both) - keeps the DEFAULT (absent); P2P helps NCCL collective throughput, not single-stream splits",
+        "Split-only lever (not a single-GPU switch); states the IOMMU/BIOS caveat; requires log proof + warm A/B if used; does not fabricate a number"
       ]
     },
     {
       "id": 20,
       "prompt": "Meu profile SGLang tp-size 2 do Qwen tem disable-custom-all-reduce. Com o P2P do rig ligado, o custom all-reduce passa a funcionar sozinho?",
-      "expected_output": "Knows custom all-reduce SELF-DISABLES silently when the runtime P2P probe fails, so on the old stock-driver path disable-custom-all-reduce was merely cosmetic/deterministic. On the patched rig P2P is validated, so custom-AR CAN now engage — but engagement must be PROVEN from the launch log (SGLang's custom-AR / P2P init line), never assumed from having removed the flag. Adds --enable-p2p-check (SGLang 0.5.9 assumes P2P is allowed without checking). Treats disable-custom-all-reduce as an A/B decision now (keep it only if the log or the A/B shows the custom kernel is unstable/slower), and NCCL_P2P_DISABLE=1 only as a diagnostic fallback for an init hang. Warm-measures and validates a long non-English (Portuguese) generation. Does NOT claim custom-AR is active just because the flag is gone.",
+      "expected_output": "NO - do not drop it. Custom all-reduce SELF-DISABLES silently when the P2P probe fails, and on SGLang TP2 here (measured 2026-07-10, unlimited-ocr) NO launch-log line proved CUSTOM/P2P engaged - a silent self-disable - so treat SGLang TP2 as NCCL and do not claim custom-AR is active. Worse, on the vLLM 0.24.0 sibling on this SM86 rig custom AR is proven BROKEN (enabling it selects CUSTOM then CRASHES at custom_all_reduce.cuh:455), so dropping disable-custom-all-reduce is unproven-here and dangerous - KEEP disable-custom-all-reduce. Adds --enable-p2p-check (SGLang 0.5.9 assumes P2P allowed without checking). Keeps mem-fraction-static 0.78 while GPU0 hosts the desktop (0.84/0.88 OOM on the first OCR request). NCCL_P2P_DISABLE=1 only as a diagnostic fallback for an init hang. Warm-measures and validates a long non-English (Portuguese) generation.",
       "files": [],
       "assertions": [
-        "Knows custom all-reduce self-disables silently when the P2P probe fails (disable-custom-all-reduce was cosmetic on the stock path)",
-        "On the patched rig custom-AR CAN engage but engagement must be PROVEN from the launch log, not assumed from removing the flag; adds --enable-p2p-check",
-        "Treats disable-custom-all-reduce as an A/B decision; NCCL_P2P_DISABLE=1 only a diagnostic fallback for an init hang",
-        "Warm-measures + validates a long non-English generation; does not claim custom-AR active just because the flag is gone"
+        "Knows custom all-reduce self-disables silently when the P2P probe fails; on SGLang TP2 here no log proved engagement (treat as NCCL, do not claim it active)",
+        "Says KEEP disable-custom-all-reduce (unproven on SGLang; proven to CRASH on the SM86 vLLM sibling, custom_all_reduce.cuh:455); does NOT drop it just because P2P is on",
+        "Adds --enable-p2p-check and keeps mem-fraction-static 0.78 (0.84/0.88 OOM on first OCR request); NCCL_P2P_DISABLE=1 only a diagnostic fallback for an init hang",
+        "Warm-measures + validates a long non-English generation; does not claim custom-AR active from the flag alone"
       ]
     },
     {
       "id": 21,
       "prompt": "Agora que o P2P está validado no rig, posso finalmente usar split-mode tensor com meu drafter DFlash externo no beellama pra somar as duas coisas?",
-      "expected_output": "NO — P2P does not fix the split-mode tensor + external-draft crash (open upstream bugs #22473 silent stops / #24309 nextn-tensor load crash; beellama rejects tensor+draft explicitly; a model carrying a nextn head crashes AT LOAD). P2P is an interconnect win, not a code-path fix, so the tensor+external-draft prohibition stands regardless of P2P. Keeping the draft on layer-split still wins anyway (measured beellama DFlash layer 79-83 tok/s >> tensor-no-draft 48-49). Offers the real 2-GPU options that coexist with the draft: layer split (+4..7%, keeps DFlash), lucebox draft-split (target GPU1 + draft GPU0, ~74 tok/s @256k), or tabby EXL3 TP+draft. Notes that P2P (or GGML_CUDA_P2P on the llama family) may improve layer-split collective comm but must be A/B-proven with launch-log evidence + a long non-English generation; a model-internal MTP head under tensor stays model-dependent (validate per model), not 'fixed by P2P'.",
+      "expected_output": "NO - P2P does not fix the split-mode tensor + external-draft crash (open upstream bugs #22473 silent stops / #24309 nextn-tensor load crash; beellama rejects tensor+draft explicitly; a model carrying a nextn head crashes AT LOAD). P2P is an interconnect win, not a code-path fix, so the tensor+external-draft prohibition stands regardless of P2P. Keeping the draft on layer-split still wins anyway (measured beellama DFlash layer 79-83 tok/s >> tensor-no-draft 48-49). Offers the real 2-GPU options that coexist with the draft: layer split (+4..7%, keeps DFlash), lucebox draft-split (target GPU1 + draft GPU0, ~74 tok/s @256k), or tabby EXL3 TP+draft. And does not sell P2P as a layer-split speedup: measured 2026-07-10, GGML_CUDA_P2P on a single-stream llama split was a TIE (keep the default) - any gain would still need launch-log proof + a long non-English generation; a model-internal MTP head under tensor stays model-dependent (validate per model), not fixed by P2P.",
       "files": [],
       "assertions": [
         "Says NO: P2P does not fix split-mode tensor + external-draft crash (#22473/#24309; beellama rejects it; nextn head crashes at load)",
         "Keeps the tensor+external-draft prohibition regardless of P2P (interconnect win != code-path fix)",
         "Keeping the draft on layer-split still wins (DFlash layer 79-83 >> tensor-no-draft 48-49); offers layer / lucebox draft-split / tabby TP+draft",
-        "Any P2P / GGML_CUDA_P2P layer-split gain must be A/B-proven with launch-log evidence + a long non-English gen"
+        "Does not sell P2P as a layer-split speedup - GGML_CUDA_P2P measured a TIE on single-stream splits (keep default); any gain needs launch-log proof + a long non-English gen"
+      ]
+    },
+    {
+      "id": 22,
+      "prompt": "Removi disable-custom-all-reduce=true do meu profile vLLM TP2 porque o P2P do rig agora está validado, e o servidor quebra no startup. O que houve?",
+      "expected_output": "Correctly diagnoses the vLLM 0.24.0 / SM86 custom all-reduce bug, not a P2P problem. With disable-custom-all-reduce absent, vLLM logs Using ['CUSTOM','PYNCCL'] with disable_custom_all_reduce=False, selects the CUSTOM kernel, then CRASHES at startup: custom_all_reduce.cuh:455 'invalid argument', EngineCore fails, the backend never becomes healthy (reproduced 2x on this rig). P2P being validated does NOT fix this backend correctness bug - the two are independent. FIX: re-add disable-custom-all-reduce: true (it is MANDATORY on this SM86 rig/backend, not a stale fallback). Keep NCCL_P2P_DISABLE dropped for the P2P-on throughput win. Does not misattribute the crash to P2P/NCCL, IOMMU, or the driver patch, and does not try to fix it by re-adding NCCL_P2P_DISABLE.",
+      "files": [],
+      "assertions": [
+        "Identifies the vLLM 0.24.0/SM86 custom all-reduce crash (custom_all_reduce.cuh:455 'invalid argument', CUSTOM selected, EngineCore dies) - a backend bug, not a P2P/IOMMU/driver failure",
+        "Fix = re-add disable-custom-all-reduce: true (MANDATORY on SM86, not a stale fallback); P2P being validated does not fix it",
+        "Keeps NCCL_P2P_DISABLE dropped (P2P-on win); does not re-add NCCL_P2P_DISABLE to fix the crash",
+        "Does not misattribute the startup crash to P2P, NCCL transport, IOMMU, or the driver patch"
+      ]
+    },
+    {
+      "id": 23,
+      "prompt": "No rig com o driver patcheado, tirar NCCL_P2P_DISABLE do meu vLLM TP2 realmente adianta? Quanto?",
+      "expected_output": "Yes - measured on this rig 2026-07-10 (with disable-custom-all-reduce already true). Dropping NCCL_P2P_DISABLE gives +13.5% concurrent throughput: conc-32 2422-2444 tok/s vs 2112-2169 with NCCL_P2P_DISABLE=1 (batch-1 176.75 vs 171.75; TTFT and VRAM tie; both outputs fluent Portuguese; 0 Xid). The proof is the launch log: Check P2P Type isAllDirectP2p 1 and Channel 00/0: 0->1 via P2P/CUMEM (vs isAllDirectP2p 0 / 0->1 via SHM when disabled) - engagement is read from that transport line, never inferred from the throughput delta alone. So drop NCCL_P2P_DISABLE and keep it dropped (it is the P2P-on default; re-add only as a diagnostic fallback for an init hang/corruption, at the cost of the +13.5%). MUST keep disable-custom-all-reduce: true (custom AR still crashes on SM86 - the P2P win is a separate NCCL-transport effect). Notes this is a concurrent-throughput win; single-stream batch-1 llama/lucebox splits measured a tie. Warm-measures and validates a long non-English generation.",
+      "files": [],
+      "assertions": [
+        "Confirms the measured +13.5% concurrent win (conc-32 ~2440 vs ~2140 tok/s) from dropping NCCL_P2P_DISABLE with custom-AR already disabled",
+        "Cites the launch-log proof (isAllDirectP2p 1 / via P2P/CUMEM vs isAllDirectP2p 0 / via SHM); reads engagement from the transport line, not the perf delta",
+        "Keeps disable-custom-all-reduce: true (custom AR crashes on SM86 - separate from the NCCL P2P transport win); NCCL_P2P_DISABLE re-added only as a diagnostic fallback",
+        "Frames it as a concurrent-throughput win (single-stream llama/lucebox splits tie) and validates a long non-English generation"
       ]
     }
   ]

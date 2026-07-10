@@ -40,8 +40,8 @@ SM86 has **no FP8/FP4 compute units**. Schema enums describe the binary, not thi
   always warm-measure before recording tok/s.
 - `launch.env` staples: `CUDA_DEVICE_ORDER=PCI_BUS_ID` (+ `CUDA_VISIBLE_DEVICES=1` when
   single-GPU), `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` (vLLM, avoids fragmentation
-  OOM on deep prefill). **TP2: P2P-on default (patched rig) — no `NCCL_P2P_DISABLE`;** re-add it only
-  as the stock-driver / init-hang fallback (dual-gpu.md §P2P).
+  OOM on deep prefill). **TP2: drop `NCCL_P2P_DISABLE` (P2P-on, measured +13.5% concurrent) but KEEP
+  `disable-custom-all-reduce: true` — custom AR crashes on SM86** (dual-gpu.md §P2P).
 - Sampling: both engines default to the repo's `generation_config.json`; per-request values
   (Claude Code's temperature!) override it — see model-research.md.
 
@@ -103,9 +103,10 @@ SM86 has **no FP8/FP4 compute units**. Schema enums describe the binary, not thi
 ```
 (Flags not in the schema → extraArgs. TP2 variant: drop the CUDA_VISIBLE_DEVICES pin, add
 `"tensor-parallel-size": 2, "distributed-executor-backend": "mp"`; util 0.84–0.90 — GPU0 runs the
-desktop. **P2P-on default on the patched rig: no `NCCL_P2P_DISABLE`, and do NOT preemptively set
-`disable-custom-all-reduce` — custom AR is an A/B decision now; prove the NCCL-P2P / custom-AR path
-from the launch log. Fallback (stock driver / init hang): re-add both** — dual-gpu.md §P2P.)
+desktop. **P2P-on: no `NCCL_P2P_DISABLE` (measured +13.5% concurrent, log `isAllDirectP2p 1` / `via
+P2P/CUMEM`). `disable-custom-all-reduce: true` is MANDATORY on SM86 — custom AR engages then crashes
+(`custom_all_reduce.cuh:455`); never drop it. Prove the NCCL-P2P transport from the launch log. Init-hang
+fallback: re-add `NCCL_P2P_DISABLE=1`** — dual-gpu.md §P2P.)
 
 OOM ladder: use the printed max-model-len → util 0.95→0.92→0.90→0.84 (TP2) →
 max-num-batched-tokens 4096 (caps prefill transient) → 4-bit checkpoint → kv fp8 (verify quality)
@@ -150,10 +151,10 @@ Never `cpu-offload-gb`/`swap-space` for interactive use.
   parsers in `args`.
 - Deterministic evals: `--enable-deterministic-inference --attention-backend triton`
   (mandatory explicit triton on SM86 — the auto fallback picks fa3 and fails; ~34% slower).
-- Dual-GPU: `"tp-size": 2` + `--enable-p2p-check` (0.5.9 assumes P2P allowed without checking); keep
-  P2P on, `disable-custom-all-reduce` is A/B (prove custom-AR engaged from the log, don't assume it from
-  removing the flag). Add `NCCL_P2P_DISABLE=1` only as the fallback if it hangs at "Init torch
-  distributed". Model fits one card → don't TP; `--dp-size 2` only for heavy concurrent fan-out (2
+- Dual-GPU: `"tp-size": 2` + `--enable-p2p-check` (0.5.9 assumes P2P allowed without checking); keep P2P
+  on. **P2P engagement here is INCONCLUSIVE (silent self-disable, no log proof) → treat SGLang TP2 as
+  NCCL; keep `disable-custom-all-reduce`** (SM86 custom AR is unproven here and crashes on the vLLM sibling).
+  Add `NCCL_P2P_DISABLE=1` only as the fallback if it hangs at "Init torch distributed". Model fits one card → don't TP; `--dp-size 2` only for heavy concurrent fan-out (2
   separate pinned servers are operationally simpler).
 
 ```json
@@ -183,10 +184,9 @@ OOM ladder: mem-fraction-static ↓ (0.90→0.85) → context-length ↓ (to `ma
 
 Only when checkpoint + KV exceed one card, or to unlock fp8-KV 256k on 27B-class. TP2 buys
 ~double KV pool per card; batch-1 decode gain is model-dependent (MoE+MTP profiles measured
-99–150 tok/s here). Custom all-reduce **self-disables when the P2P probe fails** — on the stock driver
-`disable-custom-all-reduce` was merely deterministic; **on the patched rig (P2P validated) it can
-genuinely engage, so treat it as an A/B decision and prove it from the log — don't disable
-preemptively**. vLLM: `distributed-executor-backend mp`;
+99–150 tok/s here). **Custom all-reduce is BROKEN on SM86 (vLLM 0.24.0, measured 2026-07-10): with the
+disable flag absent, CUSTOM engages then crashes (`custom_all_reduce.cuh:455`) — `disable-custom-all-reduce:
+true` is MANDATORY, P2P does not fix it.** vLLM: `distributed-executor-backend mp`;
 never PP with spec decode. MoE: `enable-expert-parallel` helps capacity-bound MoE (measured
 Nex-N2-mini W4A16 TP2+EP: 149.5 tok/s, +13% over GGUF-on-one-card, ~4× better TTFT). ⚠ validate
 a long non-English generation (vLLM #40725 corruption class) before trusting any TP profile.
@@ -194,9 +194,9 @@ a long non-English generation (vLLM #40725 corruption class) before trusting any
 ## Tuning by model type (vLLM & SGLang on SM86)
 
 Pick knobs by *architecture class*, not parameter count alone. All four classes inherit the rig
-invariants (≤23 GiB/card, symmetric `0.5,0.5` splits only, no NVLink but **P2P validated → TP2 runs
-P2P-on**, with `NCCL_P2P_DISABLE=1` the stock/hang fallback only; dual-gpu.md §P2P — prefer a
-single-GPU pin when the model fits one card).
+invariants (≤23 GiB/card, symmetric `0.5,0.5` splits only, no NVLink but **vLLM TP2 runs P2P-on** — drop
+`NCCL_P2P_DISABLE`, +13.5% concurrent — while **`disable-custom-all-reduce` stays MANDATORY** on SM86;
+dual-gpu.md §P2P — prefer a single-GPU pin when the model fits one card).
 
 - **Dense (Llama / Qwen-dense / Gemma-text):** compute-bound decode. Keep `max-num-seqs` low (4–8)
   for a single operator; batch-1 latency lives on CUDA graphs, so `performance-mode interactivity`

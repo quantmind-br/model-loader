@@ -145,8 +145,8 @@ load is a **real load failure**, never a validator block. Do not "work around" i
 - **Diagnose:** run the sanity check ONCE before blaming the profile →
   references/dual-gpu.md §P2P + §NCCL / P2P sanity check. **Separate the two paths first:** on the
   **patched rig** (driver 610.43.02, P2P validated) `nvidia-smi topo -p2p r` should read **OK** and TP2
-  runs P2P-on; on a **stock/unpatched driver** it reads **NS** and the `NCCL_P2P_DISABLE` /
-  `disable-custom-all-reduce` fallback applies. `nvidia-smi topo -m` expect PHB; per-GPU
+  runs P2P-on (drop `NCCL_P2P_DISABLE`; **keep `disable-custom-all-reduce` — custom AR crashes on SM86**);
+  on a **stock/unpatched driver** it reads **NS** and `NCCL_P2P_DISABLE=1` applies. `nvidia-smi topo -m` expect PHB; per-GPU
   `pcie.link.gen/width` — asymmetric/degraded = the #20052 riser-cable root cause, not a software bug.
 - **Fixes (one per iteration):**
   1. **`tensor-split` MUST be `"0.5,0.5"`** — any asymmetric ratio is banned and measured slower
@@ -155,12 +155,13 @@ load is a **real load failure**, never a validator block. Do not "work around" i
      GPU1: `launch.env` `CUDA_DEVICE_ORDER=PCI_BUS_ID` + `CUDA_VISIBLE_DEVICES=1`, no split flags.
   3. **When genuinely splitting, no `CUDA_VISIBLE_DEVICES` mask** (it remaps the card to `cuda:0`);
      use equal `tensor-split` + optional `main-gpu 1`, and never pair the mask with `-mg`/`--device`.
-  4. **P2P is patched-vs-stock, and log-proven either way.** Patched rig: TP2 P2P-on (drop
-     `NCCL_P2P_DISABLE`, custom-AR A/B); `GGML_CUDA_P2P=1` is a valid split-only A/B lever on
-     llama.cpp-stable/nightly/beellama/buun (NOT ik/lucebox) — prove it in the log, heed the IOMMU/BIOS
-     crash caveat, unset if it garbles. Stock/unpatched or a hang: re-add `NCCL_P2P_DISABLE=1` +
-     `disable-custom-all-reduce` (dual-gpu.md §P2P). External draft + `split-mode tensor` → use `layer`
-     (crash — P2P does not fix it).
+  4. **P2P is a narrow, log-proven win.** vLLM TP2: drop `NCCL_P2P_DISABLE` (P2P-on, +13.5% concurrent) but
+     **keep `disable-custom-all-reduce: true` — custom AR crashes on SM86** (`custom_all_reduce.cuh:455`);
+     an engine that dies at startup with the flag absent is this bug, not a P2P failure. `GGML_CUDA_P2P=1`
+     on llama.cpp-stable/nightly/beellama/buun (NOT ik/lucebox) measured a TIE for single-stream splits —
+     keep the default; prove any use in the log, heed the IOMMU/BIOS crash caveat, unset if it garbles.
+     Init hang / suspected corruption: re-add `NCCL_P2P_DISABLE=1` (dual-gpu.md §P2P). External draft +
+     `split-mode tensor` → use `layer` (crash — P2P does not fix it).
   5. Suspect a marginal PCIe riser/cable if output garbles under otherwise-correct split config.
 - **Verify:** the long non-English generation stays coherent end-to-end.
 

@@ -67,8 +67,8 @@ the same binary.
 |---|---|--:|---|
 | **draft-split (USE for 2 GPUs)** | `"target-device":"cuda:1","draft-device":"cuda:0"` | **74 @256k** | = single-GPU speed; frees ~2 GiB on the target card for full 256k KV |
 | single-GPU (pin GPU1) | env `CUDA_VISIBLE_DEVICES=1` | 75.6 @32k | baseline |
-| target layer-split | `target-devices cuda:0,cuda:1` + `target-layer-split 1,1` | 56 @32k / 40 @256k | −26…−46% (F32 over PCIe) — **measured pre-P2P**; rebenchmark with `--peer-access` on the patched driver before trusting; only niche: q8_0 KV @256k (37.7) |
-| `--peer-access` | — | **A/B (rebenchmark)** | pre-P2P it was a no-op (P2P driver-disabled); on the patched driver 610.43.02 it has a working substrate — prove peer access in the log + A/B vs draft-split, which stays the baseline until it wins |
+| target layer-split | `target-devices cuda:0,cuda:1` + `target-layer-split 1,1` | 56 @32k / 40 @256k | −26…−46% (F32 over PCIe); only niche: q8_0 KV @256k (37.7) |
+| `--peer-access` | — | **TIE — keep OFF** | measured 2026-07-10 (Qwen3.6-27B NEO-CODE 64L layer-split): config-dump-proven on/off, decode ~33 / prefill ~1072 tok/s **both** — no gain on this patched driver. Batch-1 layer-split decode is bandwidth-bound, not P2P-limited; **draft-split stays the baseline** (dual-gpu.md §P2P) |
 
 No `CUDA_VISIBLE_DEVICES` mask when using draft-split (both cards must be visible);
 `CUDA_DEVICE_ORDER=PCI_BUS_ID` in `launch.env`.

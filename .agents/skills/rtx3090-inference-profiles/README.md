@@ -25,12 +25,42 @@ notes only (kept out of the skill per user policy — nothing here loads into ag
   no naive CPU expert offload (`--n-cpu-moe` on explicit request only; Luce Spark is the
   sanctioned path); VRAM cap ≤46 GiB; mmproj on CPU (`--no-mmproj-offload`); English-only
   UI/schema text in the repo.
-- Evals in `evals/evals.json` = **21 scenarios**: rewritten 2026-07-02 from verified premises,
+- Evals in `evals/evals.json` = **23 scenarios**: rewritten 2026-07-02 from verified premises,
   corrected + extended 2026-07-07 (S1/S2 reversal; quick-profile / audit / benchmark-compare /
-  S1-regression), + the ik-llama-cpp scenario 2026-07-09, + the validated-P2P scenarios #18–#21
-  (2026-07-10). Graded premises cited inside each eval.
+  S1-regression), + the ik-llama-cpp scenario 2026-07-09, + the P2P scenarios #18–#23 (2026-07-10:
+  #18–#21 measured-corrected, #22 custom-AR crash, #23 NCCL P2P +13.5% gain). Graded premises cited inside each eval.
 
 ## Changelog
+
+### 2026-07-10 (later) — measured P2P A/Bs (Task 6 of the rtx3090-p2p optimization)
+- **Corrects the inverted custom-AR premise from the Task-2 entry below.** Task 2 marked
+  `disable-custom-all-reduce` as an A/B lever ("do not preemptively disable"). The measured A/Bs on this
+  rig (`local://rtx3090-p2p-measured-facts.md`) invert that:
+  - **custom all-reduce is BROKEN on SM86** (vLLM 0.24.0): with the flag absent, CUSTOM is selected and
+    CRASHES at startup (`custom_all_reduce.cuh:455 'invalid argument'`, EngineCore dies, reproduced 2×) —
+    `disable-custom-all-reduce: true` is **MANDATORY**, not a stale fallback. P2P does not fix it.
+  - **NCCL P2P is a real win:** dropping `NCCL_P2P_DISABLE` (custom-AR already disabled) measured
+    **+13.5% concurrent** (conc-32 2422–2444 vs 2112–2169 tok/s; log `isAllDirectP2p 1` / `via P2P/CUMEM`
+    vs `isAllDirectP2p 0` / `via SHM`). Applied to `gemma-4-e4b-awq-vllm-tp2-32k`.
+  - **SGLang TP2 = inconclusive** (silent self-disable, no engagement proof) → treat as NCCL,
+    `--enable-p2p-check`, `mem-fraction-static 0.78`.
+  - **Native single-stream splits = TIE:** llama `GGML_CUDA_P2P` (ornith-9B tensor-split, ~141 dec /
+    ~4120 pref) and lucebox `--peer-access` (Qwen3.6-27B NEO-CODE 64L layer-split, ~33 dec / ~1072 pref)
+    equal on/off — keep DEFAULTS.
+- **Skill changes:** SKILL.md (rig fact, hard rule, 2 red flags → custom-AR mandatory, +13.5% NCCL win,
+  native tie); references/dual-gpu.md §P2P (rewritten: measured results, prerequisites/diagnostics —
+  `iommu=pt`, per-root-port ACS, DMA-isolation tradeoff, hugepage `cudaHostRegister` caveat; vLLM/SGLang
+  TP2, GGML_CUDA_P2P, lucebox, myth); references/vllm-sglang.md (5 spots); references/llama-family.md +
+  references/dflash.md (measured tie); references/sndr.md (inherits the corrected TP2 rule); workflows/
+  audit-profile.md (row 15 inverted: custom-AR=true CORRECT, warn only NCCL_P2P_DISABLE + custom-AR
+  ENABLED; row 16 + note); workflows/troubleshoot.md; workflows/full-tuning.md. Evals 21→23 (#18–#21
+  measured-corrected, #22 custom-AR crash, #23 NCCL +13.5% gain).
+- **Validator alignment:** matches the `internal/service/validator` correction (ValidatorPolicyFix) — vLLM
+  TP2 no longer warns on `disable-custom-all-reduce=true`, warns when custom-AR is ENABLED; NCCL_P2P_DISABLE
+  keeps its warning for both.
+- **No claim beyond the measured facts;** everything above is dated 2026-07-10 on this rig.
+- **Canonical copy:** edited the worktree `.agents/` copy (force-added on branch
+  `optimize/rtx3090-p2p-profiles`); the live `~/dev/model-loader/.agents/` copy still needs a sync.
 
 ### 2026-07-10 — validated PCIe P2P state (Task 2 of the rtx3090-p2p optimization)
 - **Rig-fact update:** the aikitoria P2P patch on driver **610.43.02** is now live and validated —

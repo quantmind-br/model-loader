@@ -178,13 +178,14 @@ numbers. `split-mode tensor` = fastest dense batch-1 at short ctx (+22…39%, re
 no external drafts; no fit; set ngl+ctx manually); `layer` = safe/compatible (+4…7%);
 `row` = deprecated, −2.8×. **`tensor-split` MUST be `"0.5,0.5"`** when splitting (never asymmetric ratios); `main-gpu 1`, no CUDA_VISIBLE_DEVICES mask when splitting.
 
-**P2P (patched rig):** genuine layer/tensor splits can now use validated PCIe P2P as an A/B lever
-(dual-gpu.md §P2P). `GGML_CUDA_P2P=1` is **source-verified for this family** (`getenv` in
+**P2P (patched rig):** `GGML_CUDA_P2P=1` is **source-verified for this family** (`getenv` in
 `ggml/src/ggml-cuda/ggml-cuda.cu`; llama.cpp-stable/nightly + beellama + buun — these builds are
 NCCL-ON, so peer access is already on for the NCCL path and the env mainly grants it to the VMM copy
-path). It is split-only (no effect on a single-GPU pin), must be **log-proven + warm-A/B'd** (never
-assume a speedup), carries the upstream IOMMU/BIOS crash caveat, and relaxes **no** rule below —
-tensor still crashes with external drafts, `row` stays banned, `tensor-split` stays `0.5,0.5`.
+path). **Measured 2026-07-10 (ornith-9B tensor-split): env-proven engaged but a TIE (decode ~141 /
+prefill ~4120 both on/off) — batch-1 single-stream decode is weight-bandwidth-bound. Keep the DEFAULT
+(absent).** It is split-only (no effect on a single-GPU pin), stays a log-proven A/B lever carrying the
+upstream IOMMU/BIOS crash caveat, and relaxes **no** rule below — tensor still crashes with external
+drafts, `row` stays banned, `tensor-split` stays `0.5,0.5`. (dual-gpu.md §P2P.)
 
 ## Measured anchors (carry values, not names)
 
@@ -197,7 +198,8 @@ tensor still crashes with external drafts, `row` stays banned, `tensor-split` st
 | 27B DFlash layer-split | 131072 | 79–83 > tensor-no-draft 48–49 | keeping the draft beats tensor |
 
 _The split rows above (tensor / layer-split deltas) were measured **pre-P2P**; on the patched driver
-re-measure with P2P as an A/B lever (dual-gpu.md §P2P) — the model-class rules are unchanged._
+`GGML_CUDA_P2P` measured a TIE for these single-stream splits (dual-gpu.md §P2P) — the model-class
+rules are unchanged._
 
 ## Profile template (adapt; drop spec keys when not speculating)
 
