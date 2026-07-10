@@ -45,9 +45,16 @@ func applyPerformancePolicyRules(p domain.Profile, kind domain.BackendKind, opts
 }
 
 // checkTP2Communication warns when a tensor-parallel (TP>=2) vLLM/SGLang
-// profile pins itself to the stock-driver fallback communication path. On the
-// patched-P2P rig both NCCL_P2P_DISABLE=1 and disable-custom-all-reduce=true
-// suppress the validated peer-to-peer / custom all-reduce path.
+// profile deviates from the communication config proven on this SM86 rig:
+//
+//   - NCCL_P2P_DISABLE=1 pins NCCL to the SHM fallback instead of the validated
+//     PCIe P2P transport (measured +13.5% concurrent throughput on vLLM TP2).
+//     Warned for both backends.
+//   - custom all-reduce crashes at startup on SM86 vLLM TP>=2
+//     (custom_all_reduce.cuh:455 'invalid argument'), so
+//     disable-custom-all-reduce=true is mandatory there. Warned only when a vLLM
+//     profile leaves custom all-reduce enabled (flag absent or false). SGLang
+//     silently self-disables custom all-reduce and is not warned either way.
 func checkTP2Communication(p domain.Profile, kind domain.BackendKind, rep Report) Report {
 	tp, ok := tensorParallelSize(p, kind)
 	if !ok || tp < 2 {
@@ -56,14 +63,14 @@ func checkTP2Communication(p domain.Profile, kind domain.BackendKind, rep Report
 	if hasEnv(p, "NCCL_P2P_DISABLE", "1") {
 		rep = appendIssue(rep, FieldIssue{
 			Field:    "launch.env",
-			Message:  "NCCL_P2P_DISABLE=1 forces the stock-driver fallback and disables the validated PCIe P2P path for this TP>=2 profile; remove it to use the patched-driver P2P path (rtx3090_p2p policy)",
+			Message:  "NCCL_P2P_DISABLE=1 forces the stock-driver SHM fallback instead of the validated PCIe P2P transport for this TP>=2 profile (measured +13.5% concurrent throughput on vLLM TP2); remove it to keep the P2P path (rtx3090_p2p policy)",
 			Severity: SeverityWarning,
 		})
 	}
-	if argBool(p, "disable-custom-all-reduce") {
+	if kind == domain.BackendKindVLLM && !argBool(p, "disable-custom-all-reduce") {
 		rep = appendIssue(rep, FieldIssue{
 			Field:    "args.disable-custom-all-reduce",
-			Message:  "disable-custom-all-reduce=true opts out of the custom all-reduce path this TP>=2 profile can use on the patched-P2P rig; drop it, or keep it only as a proven A/B fallback (rtx3090_p2p policy)",
+			Message:  "custom all-reduce crashes at startup on this SM86 rig for TP>=2 vLLM (custom_all_reduce.cuh:455 'invalid argument'); set disable-custom-all-reduce=true (mandatory here) to fall back to NCCL (rtx3090_p2p policy)",
 			Severity: SeverityWarning,
 		})
 	}
@@ -112,14 +119,18 @@ func checkAgentKVCache(p domain.Profile, rep Report) Report {
 	})
 }
 
-// tensorParallelSize returns the configured tensor-parallel degree using the
-// backend-specific arg name (vLLM: tensor-parallel-size; SGLang: tp-size).
+// tensorParallelSize returns the configured tensor-parallel degree. vLLM uses
+// tensor-parallel-size; SGLang's canonical flag is tp-size but it also accepts
+// the tensor-parallel-size alias, so fall back to it when tp-size is absent.
 func tensorParallelSize(p domain.Profile, kind domain.BackendKind) (int, bool) {
 	switch kind {
 	case domain.BackendKindVLLM:
 		return argInt(p, "tensor-parallel-size")
 	case domain.BackendKindSGLang:
-		return argInt(p, "tp-size")
+		if tp, ok := argInt(p, "tp-size"); ok {
+			return tp, true
+		}
+		return argInt(p, "tensor-parallel-size")
 	}
 	return 0, false
 }

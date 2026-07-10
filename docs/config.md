@@ -174,11 +174,12 @@ Optional, installation-specific performance policy for the profile validator. Wh
 
 When `rtx3090_p2p = true`, the validator emits (never-blocking) warnings for the following workstation-specific situations:
 
-- A tensor-parallel (`tensor-parallel-size` ≥ 2 for vLLM, `tp-size` ≥ 2 for SGLang) profile carrying `NCCL_P2P_DISABLE=1` in its launch env, or `disable-custom-all-reduce=true` in its args — both pin the profile to the stock-driver fallback instead of the validated P2P / custom all-reduce path.
+- A tensor-parallel (TP ≥ 2) profile carrying `NCCL_P2P_DISABLE=1` in its launch env — this pins NCCL to the SHM fallback instead of the validated PCIe P2P transport (measured +13.5% concurrent throughput on vLLM TP2). TP is detected from `tensor-parallel-size` for vLLM and from `tp-size` (or the `tensor-parallel-size` alias) for SGLang.
+- A tensor-parallel (TP ≥ 2) **vLLM** profile that leaves custom all-reduce enabled — i.e. `disable-custom-all-reduce` is absent or `false`. On this SM86 rig custom all-reduce crashes at startup (`custom_all_reduce.cuh:455 'invalid argument'`), so `disable-custom-all-reduce=true` is **mandatory** and setting it clears the warning. SGLang silently self-disables custom all-reduce and is not warned either way.
 - A single-GPU profile (not a tensor/row split, not TP ≥ 2) that is not pinned to a specific card via `CUDA_DEVICE_ORDER=PCI_BUS_ID` + `CUDA_VISIBLE_DEVICES`, so it may land on the wrong GPU or span both.
 - An agent/tool-calling llama.cpp profile using a q4 KV cache (`cache-type-k`/`cache-type-v`), which corrupts tool-call output; use `q8_0/q8_0`. Profiles explicitly marked long-context/non-tool are exempt.
 
-These checks are purely advisory: they never fail validation. A profile deliberately kept on the fallback path (for example the A side of a P2P A/B comparison) still validates cleanly, with the warning left as a reminder of the trade-off. Removing the offending flag, pinning the card, or restoring `q8_0` KV clears the corresponding warning.
+These checks are purely advisory: they never fail validation. A profile deliberately keeping `NCCL_P2P_DISABLE=1` (for example the A side of a P2P A/B comparison) still validates cleanly, with the warning left as a reminder of the trade-off. Removing `NCCL_P2P_DISABLE=1`, setting `disable-custom-all-reduce=true` on a vLLM TP profile, pinning the card, or restoring `q8_0` KV clears the corresponding warning.
 
 ## Example
 
