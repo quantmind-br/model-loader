@@ -1,0 +1,254 @@
+{
+  "skill_name": "rtx3090-inference-profiles",
+  "note": "Rewritten 2026-07-02, premises re-verified 2026-07-07 (installed builds: llama.cpp-stable b9847 / nightly b9869, beellama main@85e22ea0 b10102, buun b9792, vLLM 0.24.0, SGLang 0.5.9, exllamav3 0.0.43, lucebox 1b11c50; BUGS.md S1+S2 FIXED — spec-type chains/draft-dflash and sglang parsers validate directly in args). The previous eval set encoded stale premises (old catalog ids, 'split never speeds decode', buun/tabby unregistered, and the now-reversed S1 'curated enum blocks the chain'). 2026-07-09 added the ik-llama-cpp scenario (#17): the catalog now includes ik-llama-cpp/vllm-dflash/vllm-dspark (17 entries); ik shares llama-server's CLI but a hand-curated flag subset, split none/graph/layer only, cache-ram (not cache-reuse), free-string spec-type in the bare mtp/dflash dialect. 2026-07-10 added the validated-P2P scenarios (#18-#21): the rig now runs the patched NVIDIA driver 610.43.02 with CUDA/NCCL P2P validated (measured peer copies GPU0->GPU1 13.34 / GPU1->GPU0 13.15 GB/s; two-GPU NCCL all-reduce verified; still PHB / no NVLink; boot iommu=pt + ACS-redirect-disable, at the cost of DMA isolation). Premises: NCCL_P2P_DISABLE / disable-custom-all-reduce are now STALE fallback on this rig (P2P-on default; keep only as documented stock/diagnostic fallback); P2P / custom-AR engagement demands launch-log proof, never a throughput delta or the mere absence of a disable flag; GGML_CUDA_P2P is parsed only by llama.cpp-stable/nightly/beellama/buun (getenv in ggml/src/ggml-cuda/ggml-cuda.cu; NOT ik-llama-cpp, which uses its own default ggml_cuda_set_peer_access, and NOT lucebox, which uses --peer-access) so it must be source/binary-proven before any claim; and the split-mode tensor + external-draft prohibition (#22473/#24309) still stands - P2P is an interconnect win, not a code-path fix.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Crie um profile do unsloth/Qwen3.6-27B-MTP-GGUF Q4_K_M para usar com Claude Code, uns 200k de contexto.",
+      "expected_output": "Runs the model-research pass BEFORE writing: checks generation_config.json (temp 1.0) AND the card's sampling presets, and for a Claude Code AGENTIC profile uses the calibrated temp 1.0 / top-p 0.95 / top-k 20 / min-p 0 + top-n-sigma 1.0 (which holds MTP acceptance flat — measured 0.62 vs 0.63 at 0.6) rather than blindly copying the card's 0.6 'precise coding' usage-example preset; knows Claude Code overrides temperature via the Anthropic route, so top-n-sigma/repeat-penalty/min-p are the reliable launch levers. Anti-loop = repeat-penalty 1.05 + repeat-last-n 256, NO dry-* keys (user policy 2026-07-02). Tool-calling profile so KV q8_0/q8_0 (never q4_0; never asymmetric pairs — GPU-offload bug). backendId llama.cpp-stable; speculation is ideally the draft-mtp,ngram-mod chain placed DIRECTLY in args (spec-type is a list-valued enum — the chain and draft-dflash validate in args, BUGS.md S1 fixed; NOT routed through extraArgs), with spec-draft-n-max 3, confirming BOTH the nextn head and the ngram drafter load in the log; cache-reuse noted as ineffective on hybrid-recurrent Qwen3.6 (checkpoints/prefix cache instead is acceptable knowledge); ubatch 2048 for prefill acceptable. Pins GPU1 via launch.env CUDA_DEVICE_ORDER=PCI_BUS_ID + CUDA_VISIBLE_DEVICES=1. No port key. Validates, launches via instance start, near-full-ctx prompt + nvidia-smi, and runs the shell-hostile tool-call round trip (mkdir -p with spaces + && intact) before calling it done.",
+      "files": [],
+      "assertions": [
+        "Runs the model-research pass before writing (checks generation_config.json + card presets)",
+        "Uses the calibrated agentic sampling (temp 1.0 / top-p 0.95 / top-k 20 / min-p 0 + top-n-sigma 1.0), not the card's 0.6",
+        "Anti-loop = repeat-penalty 1.05 + repeat-last-n 256, NO dry-*",
+        "KV q8_0/q8_0 (never q4_0/asymmetric)",
+        "Puts the draft-mtp,ngram-mod chain DIRECTLY in args (does NOT claim the enum blocks it / does NOT use extraArgs)",
+        "Places single-GPU pinned to GPU1 (CUDA_DEVICE_ORDER=PCI_BUS_ID + CUDA_VISIBLE_DEVICES=1) if it fits <=23 GiB, else a JUSTIFIED symmetric 0.5,0.5 layer-split; no port key"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Meu modelo no vLLM entra em loop infinito quando uso pelo cliente de agente (repete a mesma tool call dezenas de vezes). Conserta isso.",
+      "expected_output": "Knows vLLM has NO DRY and no launch-side sampling flags — does NOT propose dry-* args. Identifies degenerate repetition; fixes on the request side (frequency_penalty/presence_penalty via extra_body, or the family's official presence_penalty) and/or --override-generation-config for server defaults. Knows the proxy's Anthropic route forwards ONLY temperature/top_p/top_k, so an Anthropic-API agent cannot send penalties — and that Claude Code's own temperature (~1.0) overrides the profile temp on every engine. Checks greedy/temp-0 is not in use (loops) and considers lowering temp toward the family coding preset. If ngram speculative is enabled, checks prompt_lookup_min >= 8 (issue #40875 corrupts tool calls). Does not blame the proxy or the client harness first.",
+      "files": [],
+      "assertions": [
+        "Knows vLLM has NO DRY / no launch-side sampling flags; does NOT propose dry-* args",
+        "Fixes on the request side (frequency/presence penalty via extra_body or override-generation-config)",
+        "Checks greedy/temp-0 is not causing loops; considers family coding preset",
+        "If ngram spec, checks prompt_lookup_min >= 8 (#40875)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Um finetune GGUF do Qwen3.5 está gerando tool calls Bash corrompidos no Claude Code — espaços no meio de paths, '&&' virando 'and'. Temp 0 não resolveu. Diagnostica e conserta.",
+      "expected_output": "Diagnoses the chat template FIRST (the rig-proven Ornith case): extracts the GGUF's embedded template (gguf-py GGUFReader / gguf-dump), diffs against the HF repo's official chat_template.jinja, checks the model card for 'modified template required'. Fix = --chat-template-file with the official template + --reasoning-format deepseek (both flags ARE present in the llama.cpp schema — set them in args; extraArgs is only for genuinely schema-absent flags). Also checks KV quant (q4_0 KV degrades tool calling — move to q8_0) and that anti-repetition isn't over-aggressive (aggressive DRY corrodes legitimate repeated shell tokens). Verifies with the shell-hostile round trip and reasoning accounting (no </think> leaking into content). Knows the proxy does NOT corrupt (fixJSON is a no-op on valid JSON). Does not hand-run the server binary.",
+      "files": [],
+      "assertions": [
+        "Diagnoses the chat template FIRST (extract embedded template, diff vs official jinja)",
+        "Fix = --chat-template-file + --reasoning-format deepseek IN ARGS (present in the schema, not extraArgs-because-blocked)",
+        "Moves KV to q8_0 (q4_0 degrades tool calling)",
+        "Verifies with the shell-hostile round trip; does not blame the proxy"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Vi que saiu o DSpark da DeepSeek. Configura ele pra acelerar meu Qwen3.6-27B.",
+      "expected_output": "Knows DSpark is real (DeepSeek DeepSpec, 2026-06-27; DFlash + Markov head + confidence head; coding is its strongest category) BUT that NOTHING installed on the rig runs it: vLLM support merged to main 2026-07-01 AFTER the installed 0.24.0; llama.cpp PR #25173 still open (verified 2026-07-07 — NOT in b9847 stable nor b9869 nightly); SGLang PR is DeepSeek-V4-only; and official drafters exist only for Qwen3-4B/8B/14B + Gemma4-12B — there is NO drafter for Qwen3.6-27B. Does not fabricate a config. Offers the adoption path (bump vllm-nightly venv past the merge for a Qwen3-8B/14B target, or wait for the llama.cpp merge + nightly rebuild) and, for the actual 27B today, points to the working alternatives: native MTP (vLLM mtp + fp8 KV = 256k, ~91% accept), DFlash (dense), or the Ex0bit EAGLE-3 head. Also does not confuse DSpark with Luce Spark (MoE expert residency).",
+      "files": [],
+      "assertions": [
+        "Knows DSpark is real but NOTHING installed runs it (PR #25173 open, not in b9847 nor b9869; vLLM merge after 0.24.0)",
+        "Does NOT fabricate a config",
+        "Offers the adoption path + working alternatives (native MTP/DFlash/EAGLE-3) for the 27B today",
+        "Does not confuse DSpark with Luce Spark"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Quero rodar o Qwen3.6-35B-A3B mas deixando uns 8-10 GiB de VRAM livres na placa pro meu modelo de embedding e um servidor de imagem. Dá?",
+      "expected_output": "Reaches for Luce Spark on lucebox-dflash — the sanctioned expert-offload path: --spark with --spark-vram <target GiB> (measured: Qwen3.6-35B-A3B in 13.3 GiB at ~100 tok/s, ~92% of all-GPU speed; placement profile persists in <model>.gguf.spark.csv and warms across restarts). Does NOT propose naive --n-cpu-moe (banned without explicit user request) and does not just say 'impossible'. Alternatively/additionally considers pin-per-GPU (embedding on GPU0, MoE on GPU1) with a second serve port. Notes Spark caveats: calibrate on the traffic served; profile from chat under-performs on pure code.",
+      "files": [],
+      "assertions": [
+        "Reaches for Luce Spark on lucebox-dflash (--spark --spark-vram) as the sanctioned expert-offload path",
+        "Does NOT propose naive --n-cpu-moe",
+        "Cites the measured Spark number and/or pin-per-GPU alternative"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "O TTFT está insuportável — prompts de agente com 100k+ tokens levam minutos até o primeiro token no meu profile GGUF 27B. Melhora isso sem trocar de modelo.",
+      "expected_output": "Multi-layered TTFT plan: (1) prefix/prompt caching so turns only prefill the delta — llama.cpp slot prefix reuse + cache-reuse 256 (knows mmproj/SWA/hybrid silent disablers) + cache-ram; (2) ubatch/batch 2048 for prefill throughput; (3) PFlash on lucebox-dflash for cold prompts (measured 24.8 s vs ~257 s at 128K = ~10.4x, NIAH preserved) via --prefill-drafter, explicitly NOT --prefill-compression for agents (lossy); (4) lucebox disk prefix cache (--kv-cache-dir, --disk-prefix-cache auto) or llama.cpp slot save/restore for cross-restart warmth; (5) keeping volatile content at the END of the prompt so caches survive. Does not propose tensor-split for TTFT (prefill REGRESSES under tensor mode).",
+      "files": [],
+      "assertions": [
+        "Multi-layered TTFT plan (prefix/prompt caching + cache-reuse 256 + cache-ram)",
+        "PFlash on lucebox-dflash for cold prompts (NOT prefill-compression for agents)",
+        "Does NOT propose tensor-split for TTFT (prefill regresses under tensor)"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Baixei o checkpoint FP8 oficial do Qwen3-32B. Roda ele no vLLM pra mim com 64k de contexto.",
+      "expected_output": "Does NOT refuse outright: knows vLLM 0.24 runs fp8 checkpoints on SM86 as Marlin W8A16 (weight-only, ~half BF16 size, no fp8 compute/speed) — but flags that ModelOpt-produced FP8 (quant_method modelopt) refuses to load on <SM89, so checks which flavor the repo is. Frames the tradeoff honestly: int4 AWQ (awq_marlin) is usually the better batch-1 pick at 32B on 24 GiB; FP8-W8A16 shines as the near-lossless choice on the 48 GiB TP2 tier. Keeps fp8 KV cache as a SEPARATE decision (storage-only, auto-switches attention to FLASHINFER). served-model-name = profile id; warm-measure; performance-mode interactivity.",
+      "files": [],
+      "assertions": [
+        "Does NOT refuse; knows vLLM 0.24 runs fp8 checkpoints as Marlin W8A16 (weight-only) on SM86",
+        "Frames fp8-on-SM86 as Marlin W8A16 weight-only (no fp8 compute) and int4 AWQ as usually-better batch-1 at 32B/24GiB (ideally also flags ModelOpt-FP8 refusing on <SM89)",
+        "fp8 KV cache is a separate storage-only decision; sets served-model-name; warm-measure"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Tenho o profile beellama do Qwen3.6-27B com DFlash rodando bem numa placa. Usa as duas GPUs pra ele ficar mais rápido.",
+      "expected_output": "Knows split-mode tensor CRASHES with any external draft (open upstream bugs #22473/#24309, beellama rejects it, no workaround) AND that keeping the draft wins anyway (measured: DFlash layer-split 79-83 tok/s > DFlash single 74.9 >> tensor-no-draft 48.2). Offers the real options: (a) layer split (+4..7%, keeps DFlash), (b) lucebox draft-split — target GPU1 + draft GPU0, 74 tok/s @256k with full KV freed, (c) tabby/EXL3 TP+DFlash (+32%, the only engine where TP coexists with drafts) with the quality-per-bpw tradeoff stated, (d) keep single-GPU and use card 2 for a second model. Never presents tensor-split as compatible with the draft; validates any 2-GPU choice with a long/non-English generation.",
+      "files": [],
+      "assertions": [
+        "Knows split-mode tensor CRASHES with any external draft (#22473/#24309)",
+        "Keeping the draft wins anyway (layer-split keeps DFlash; measured)",
+        "Offers real options (layer split / lucebox draft-split / tabby TP+DFlash / pin-per-GPU); validates 2-GPU with long non-English gen"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Create a profile for my Qwen3.6-27B Q4_K_M GGUF on the buun-llama-cpp backend, 32k context.",
+      "expected_output": "Knows buun IS registered in the catalog as buun-rtx3090 (does not claim it needs backend add) — an explicit user request counts as insisting, so it proceeds on buun-rtx3090 while recommending beellama-rtx3090 as the superseding fork in the description. Uses buun's OWN schema flag spellings and never mixes beellama (mtp/dflash) or upstream (draft-mtp/draft-dflash) spec dialects into buun args. Standard rules hold: pin GPU1, no port, validate, sampling from the model-research pass.",
+      "files": [],
+      "assertions": [
+        "Knows buun IS registered (buun-rtx3090); does not claim backend add needed",
+        "Proceeds on buun-rtx3090 while recommending beellama as the superseding fork",
+        "Uses buun's own schema spellings; never mixes beellama/upstream spec dialects",
+        "Pins GPU1, no port, validates"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Run Qwen3-235B-A22B on my dual 3090 setup.",
+      "expected_output": "Detects >=112 GiB even at extreme quants — exceeds the ~46 GiB pool; does NOT generate a profile and does NOT propose CPU expert offload (policy). Recommends fitting alternatives (27-32B dense at Q8/EXL3-high-bpw, 35B-A3B MoE, or 70B int4 layer-split with its ~15-21 tok/s expectation) with the VRAM math shown.",
+      "files": [],
+      "assertions": [
+        "Detects >=112 GiB even at extreme quants; exceeds the ~46 GiB pool",
+        "Does NOT generate a profile and does NOT propose CPU expert offload",
+        "Recommends fitting alternatives with the VRAM math"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "O modelo que eu quero só existe em EXL3 (turboderp). Monta um profile de máxima qualidade usando as duas placas, é um denso de 27B pra código.",
+      "expected_output": "Uses the registered tabby backend (model = EXL3 model DIRECTORY; wrapper handles model-dir/model-name). Knows turboderp publishes bpw as git BRANCHES (hf download --revision <N>bpw; main has no weights) and that 48 GiB allows a 5-6bpw branch. TP: tensor-parallel true + tensor-parallel-backend native (never nccl without NVLink), gpu-split giving GPU0 less; dense 27B TP measured +25..32% and coexists with MTP/DFlash. cache-mode is a 'k,v' pair — 8,8 (or 6,5 to stretch ctx), NEVER 4,4 for coding. tool-format is MANDATORY (qwen3_5/qwen3_coder) — blank means tool calls are never parsed. MTP: quants >= 0.0.41 embed the head; older need the add-on safetensors — verifies mtp.* tensors before enabling draft-mode mtp. Notes EXL3 on Ampere is the quality play, not peak tok/s (vLLM AWQ+MTP measured faster).",
+      "files": [],
+      "assertions": [
+        "Uses tabby (model = EXL3 directory); knows turboderp publishes bpw as git branches; 48 GiB -> 5-6bpw",
+        "TP: tensor-parallel true + tensor-parallel-backend native (never nccl without NVLink); gpu-split; dense 27B TP coexists with MTP/DFlash",
+        "cache-mode is a k,v pair (8,8 or 6,5), NEVER 4,4 for coding; tool-format mandatory"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Monta um profile SGLang do Qwen3.6-27B com EAGLE3 pra meu agente de código com 128k de contexto.",
+      "expected_output": "Flags the hybrid-arch trap on SGLang 0.5.9: enabling ANY speculative algorithm on Qwen3.5/3.6-class (GDN/mamba hybrid) DISABLES the radix cache entirely -> full re-prefill every agent turn, usually a net loss at 128k; and radix+overlap already conflict on hybrids. Recommends hosting this model on vLLM (mtp + fp8 KV, 256k) or llama.cpp instead; if the user insists on SGLang, uses the sglang-dflash build pattern (--mamba-scheduler-strategy extra_buffer, triton attention backend, SGLANG_ENABLE_SPEC_V2=1 topk=1) and the Ex0bit head, sets served-model-name AND (proceeding on sglang) puts tool-call-parser/reasoning-parser in args — they validate against the widened installed 0.5.9 detector-map enums (BUGS.md S2 fixed), not extraArgs, checks max_total_num_tokens vs context_len in the log (no fail-fast), and warm-measures before recording numbers.",
+      "files": [],
+      "assertions": [
+        "Flags the hybrid-arch trap: any spec on Qwen3.5/3.6 hybrid DISABLES the radix cache -> net loss at 128k",
+        "Recommends hosting on vLLM (mtp+fp8 KV 256k) or llama.cpp instead",
+        "For the SGLang-insist path, gives the sglang-dflash build pattern (--mamba-scheduler-strategy extra_buffer, triton backend, SPEC_V2 topk=1) and warm-measures; does NOT route parsers through extraArgs as a workaround"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "Baixei o Agents-A1 Q4_K_M GGUF em ~/models/huggingface/InternScience/. Sobe ele rápido pra eu testar, sem tuning pesado, uns 64k de contexto.",
+      "expected_output": "Routes to the quick-profile workflow (fast path, explicitly NOT full tuning). Recognizes Agents-A1 as a 35B-A3B MoE and applies the family/MoE defaults from llama-family: UD-Q4_K_XL-class quant fits one card, KV q8_0/q8_0, single-GPU pinned to GPU1 (launch.env CUDA_DEVICE_ORDER=PCI_BUS_ID + CUDA_VISIBLE_DEVICES=1), anti-loop repeat-penalty 1.05 + repeat-last-n 256 (NO dry-*), ctx ~64k from the quant-table band, backendId llama.cpp-stable, no port key. Asks at most model+ctx+purpose and pulls the family sampling seed (no deep web research pass). profile create -> validate -> instance start -> ONE proxy chat round trip. Description ENDS 'calibration pending — run full-tuning to promote'. Does NOT run the benchmark loop, the calibration loop, or a deep model-research web pass.",
+      "files": [],
+      "assertions": [
+        "Routes to the quick-profile workflow (fast path, NOT full tuning / NO benchmark / NO deep web research)",
+        "Applies 35B-A3B MoE defaults (fits one card), KV q8_0/q8_0, GPU1 pin, anti-loop, ctx ~64k, llama.cpp-stable",
+        "create -> validate -> instance start -> ONE proxy round trip",
+        "Description/notes convey the profile is uncalibrated ('calibration pending') and that full-tuning promotes it (exact wording not required)"
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "Audita meus profiles do model-loader contra as regras do rig e me diz o que está errado.",
+      "expected_output": "Routes to the audit-profile workflow (report-only, no mutations). Enumerates profiles via model-loader profile list/show --json and checks each against the rig rules: ctx-label = binary-k floored from ctx-size/max-model-len (flags qwythos-9b-mtp-q4km's MISSING ctx label at ctx 1048576); capability segments vs args (vision<->mmproj, mtp/dflash<->spec-type); KV type vs purpose (flags qwythos's q4_0 KV on a tool-calling profile, WITH the fit-vs-purpose nuance — q4_0 at 1M ctx is a fit tradeoff, so recommend an agent-safe q8_0 variant at a fitting ctx rather than calling it a plain bug); split symmetry (0.5,0.5 only) + tensor-mode vs ctx size; single-GPU pin env present; anti-loop flags present + DRY absent; port absent; served-model-name = id for vllm/sglang; sampling vs family preset; description honesty. Output = a per-profile markdown table (rule | severity | current | expected | suggested fix) + a summary ranking. Does NOT modify any profile; hands fixes to troubleshoot/full-tuning.",
+      "files": [],
+      "assertions": [
+        "Routes to the audit-profile workflow (report-only, no mutations)",
+        "Checks ctx-label binary-k, capability segments vs args, KV vs purpose, split symmetry, pin env, DRY absence, port absent, served-model-name",
+        "Flags qwythos-9b-mtp-q4km's missing ctx label AND q4_0 KV with the fit-vs-purpose nuance (variant, not overwrite)",
+        "Output = per-profile table (rule|severity|current|expected|fix) + ranking; does NOT modify profiles"
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "Qual dos meus profiles 35B-A3B é melhor pra código, o ornith-aeon ou o ravenx? Mede e me responde com números.",
+      "expected_output": "Routes to the benchmark-compare workflow. Picks the same-class pair (ornith-aeon-35b-a3b-a3b... vs ravenx-cyberagent-35b-a3b..., same quant/ctx tier) and runs model-loader benchmark on both: llama-bench (tok/s + TTFT) AND one code quality mode — codegen-bench (solve-rate is the primary quality metric). Applies fair-A/B: same ctx tier, warm-measure (discard the cold first vLLM request), notes the benchmark reloads the instance (pid change harmless), records acceptance % for the speculative profile. Uses --limit to cap items if a 35B codegen run runs long. Delivers a per-profile table (mode, primary metric, tok/s, TTFT, VRAM) + a one-paragraph recommendation, and updates the winner's description if the recommendation changes.",
+      "files": [],
+      "assertions": [
+        "Routes to benchmark-compare; picks the same-class 35B-A3B pair at the same ctx tier",
+        "Runs llama-bench (tok/s+TTFT) AND codegen-bench (solve-rate primary quality metric)",
+        "Fair-A/B: warm-measure (discard cold first request), records acceptance % for speculative",
+        "Delivers a per-profile table + one-paragraph recommendation"
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "Configura speculative decoding encadeado (draft-mtp com fallback ngram) no meu profile llama.cpp do Qwopus 27B.",
+      "expected_output": "KNOWS the llama.cpp spec-type is a LIST-VALUED enum (BUGS.md S1 fixed): sets \"spec-type\": \"draft-mtp,ngram-mod\" DIRECTLY in args and validates it there — does NOT claim the chain is blocked and does NOT route it through extraArgs. Confirms the MTP/nextn head AND the ngram drafter actually load from the launch log (config fields lie). Uses the upstream dialect (draft-mtp, not beellama's mtp). Keeps KV q8_0 for the agent profile, the anti-loop flags, and the GPU1 pin; validates the profile.",
+      "files": [],
+      "assertions": [
+        "KNOWS spec-type is list-valued: sets \"spec-type\": \"draft-mtp,ngram-mod\" DIRECTLY in args (S1 fixed)",
+        "Does NOT claim the chain is blocked and does NOT route it through extraArgs",
+        "Confirms the MTP head AND ngram drafter load from the launch log; uses upstream dialect (draft-mtp not mtp)",
+        "Keeps KV q8_0, anti-loop, GPU1 pin; validates"
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "Cria um profile ik-llama-cpp pro DeepSeek-V3.x (GGUF, MLA) rodar como agente de código com bastante contexto.",
+      "expected_output": "Routes to the ik-llama-cpp backend (DeepSeek-MLA arch is ik's reason to exist). Knows ik shares llama-server's CLI (emits --model first from the profile model field; GGUF path only — a bare HF repo id is rejected) and that its schema is HAND-CURATED (ik --help is never parsed), so flags outside the curated subset (--peg [a no-op here], --graph-reduce-type, --graph-attn-precision, -khad/-vhad, --cache-ram-n-min, and split-mode tensor/row) go in extraArgs, never in args. Sets curated ik flags in args: mla-use 3, flash-attn on, KV q8_0/q8_0 (never q4_0 for tool-calling, never asymmetric), and cache-ram raised (e.g. 16384) as the coding-agent prompt cache — knowing cache-reuse does NOT exist on ik. jinja true for tool calling. Sampling from the model-research pass (the ik binary defaults temp 0.8/top-k 40/top-p 0.95/min-p 0.05 are wrong for most models) + anti-loop repeat-penalty 1.05 / repeat-last-n 256, NO dry-*. Pins GPU1 (CUDA_DEVICE_ORDER=PCI_BUS_ID + CUDA_VISIBLE_DEVICES=1) if it fits; if it must split, layer or graph only (ik has NO tensor/row) with symmetric 0.5,0.5. Shrinks a too-big MoE on-GPU via -ser expert reduction / MLA, NOT naive --n-cpu-moe (rig policy). If speculating, uses the bare ik dialect (mtp/dflash, not upstream draft-mtp) in the free-string spec-type and confirms the head/drafter loads in the launch log. Validates and runs one proxy round trip.",
+      "files": [],
+      "assertions": [
+        "Routes to ik-llama-cpp for the DeepSeek-MLA GGUF; sets mla-use 3 + flash-attn on in args",
+        "Agent prompt cache = cache-ram (raised), knows cache-reuse does NOT exist on ik; KV q8_0/q8_0",
+        "Schema-absent ik flags (--peg/--graph-reduce-type/--graph-attn-precision/-khad/--cache-ram-n-min) and split tensor/row go in extraArgs / are not used; split is layer or graph only, symmetric 0.5,0.5 if split",
+        "Sampling from research + anti-loop (repeat-penalty 1.05/repeat-last-n 256, NO dry-*); does not rely on ik binary defaults",
+        "MoE shrink via -ser/MLA not naive --n-cpu-moe; if speculating uses the bare ik dialect (mtp/dflash) and confirms the head loads; validates"
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "Audita meu profile vllm-tp2 do Qwen3.6-27B: ele tem NCCL_P2P_DISABLE=1 no launch.env e disable-custom-all-reduce=true nos args. Está certo pro rig?",
+      "expected_output": "Knows THIS rig now runs the patched NVIDIA driver 610.43.02 with CUDA/NCCL P2P validated (measured peer copies GPU0->GPU1 13.34 / GPU1->GPU0 13.15 GB/s, two-GPU NCCL all-reduce verified; topology still PHB, no NVLink; boot iommu=pt + ACS-redirect-disable). So on this configured workstation NCCL_P2P_DISABLE=1 and disable-custom-all-reduce=true are STALE fallback flags, not the default — flags them (matching the rtx3090_p2p workstation performance policy: warnings, not schema errors). The P2P-on default: drop NCCL_P2P_DISABLE and treat custom all-reduce as an A/B decision (do NOT disable it preemptively). CRITICAL: engagement must be proven from the launch log (the NCCL P2P / custom-AR init line), never inferred from a throughput delta or from the mere absence of a disable flag. Keeps the disable flags ONLY as a documented stock-driver / diagnostic fallback. Still runs a long non-English (Portuguese) generation before trusting the TP2 profile (vLLM #40725 corruption class is NOT fixed by P2P) and warm-measures an A/B before claiming any speedup.",
+      "files": [],
+      "assertions": [
+        "Knows the patched driver 610.43.02 makes CUDA/NCCL P2P validated on this rig (measured ~13 GB/s peer copies, NCCL all-reduce OK; still PHB/no NVLink)",
+        "Flags NCCL_P2P_DISABLE=1 + disable-custom-all-reduce=true as STALE fallback on the patched rig (P2P-on is the default); keeps them only as a documented stock/diagnostic fallback",
+        "Requires launch-log PROOF the P2P/custom-AR path engaged (absence of a disable flag is NOT evidence); does not infer P2P from a perf delta",
+        "Still validates a long non-English generation (#40725 not fixed by P2P) and warm-measures an A/B before claiming a speedup"
+      ]
+    },
+    {
+      "id": 19,
+      "prompt": "Ativa GGML_CUDA_P2P=1 no meu profile llama.cpp de 2 GPUs pra acelerar, agora que o P2P do rig funciona.",
+      "expected_output": "Does NOT blindly enable it. Before asserting the backend supports the variable it verifies the exact checked-out backend parses it: GGML_CUDA_P2P is read via getenv in llama.cpp-stable/nightly, beellama and buun (ggml/src/ggml-cuda/ggml-cuda.cu; documented in docs/multi-gpu.md + docs/build.md) — but it is NOT parsed by ik-llama-cpp (ik enables peer access through its own default ggml_cuda_set_peer_access, no such env var) and NOT by lucebox-dflash (which uses the --peer-access flag). Knows the installed llama.cpp builds are compiled NCCL-ON (-DGGML_USE_NCCL), so peer access is already enabled for the NCCL comm path; GGML_CUDA_P2P mainly affects the non-NCCL VMM peer-copy path — making it an A/B lever for a GENUINE tensor/layer split on the patched rig, not a magic switch and not applicable to a fitting single-GPU pinned profile (no peer to access). Requires log/probe proof the peer path actually engaged and a warm A/B measurement, and carries the upstream caveat that P2P can still crash/corrupt on some IOMMU/BIOS configs (validate a long non-English generation). Does not fabricate a tok/s number and does not add it to a single-GPU profile.",
+      "files": [],
+      "assertions": [
+        "Does NOT blindly recommend GGML_CUDA_P2P; verifies the exact backend parses it (source/binary) before asserting support",
+        "Knows GGML_CUDA_P2P is parsed by llama.cpp-stable/nightly/beellama/buun but NOT ik-llama-cpp (own default peer-access) and NOT lucebox (--peer-access)",
+        "Treats it as an A/B lever for a genuine tensor/layer split on the patched rig (NCCL build already enables peer access; the env affects the VMM peer-copy path); not a single-GPU switch; states the IOMMU/BIOS crash caveat",
+        "Requires log/probe proof the peer path engaged + a warm A/B; does not fabricate a benchmark number"
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "Meu profile SGLang tp-size 2 do Qwen tem disable-custom-all-reduce. Com o P2P do rig ligado, o custom all-reduce passa a funcionar sozinho?",
+      "expected_output": "Knows custom all-reduce SELF-DISABLES silently when the runtime P2P probe fails, so on the old stock-driver path disable-custom-all-reduce was merely cosmetic/deterministic. On the patched rig P2P is validated, so custom-AR CAN now engage — but engagement must be PROVEN from the launch log (SGLang's custom-AR / P2P init line), never assumed from having removed the flag. Adds --enable-p2p-check (SGLang 0.5.9 assumes P2P is allowed without checking). Treats disable-custom-all-reduce as an A/B decision now (keep it only if the log or the A/B shows the custom kernel is unstable/slower), and NCCL_P2P_DISABLE=1 only as a diagnostic fallback for an init hang. Warm-measures and validates a long non-English (Portuguese) generation. Does NOT claim custom-AR is active just because the flag is gone.",
+      "files": [],
+      "assertions": [
+        "Knows custom all-reduce self-disables silently when the P2P probe fails (disable-custom-all-reduce was cosmetic on the stock path)",
+        "On the patched rig custom-AR CAN engage but engagement must be PROVEN from the launch log, not assumed from removing the flag; adds --enable-p2p-check",
+        "Treats disable-custom-all-reduce as an A/B decision; NCCL_P2P_DISABLE=1 only a diagnostic fallback for an init hang",
+        "Warm-measures + validates a long non-English generation; does not claim custom-AR active just because the flag is gone"
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "Agora que o P2P está validado no rig, posso finalmente usar split-mode tensor com meu drafter DFlash externo no beellama pra somar as duas coisas?",
+      "expected_output": "NO — P2P does not fix the split-mode tensor + external-draft crash (open upstream bugs #22473 silent stops / #24309 nextn-tensor load crash; beellama rejects tensor+draft explicitly; a model carrying a nextn head crashes AT LOAD). P2P is an interconnect win, not a code-path fix, so the tensor+external-draft prohibition stands regardless of P2P. Keeping the draft on layer-split still wins anyway (measured beellama DFlash layer 79-83 tok/s >> tensor-no-draft 48-49). Offers the real 2-GPU options that coexist with the draft: layer split (+4..7%, keeps DFlash), lucebox draft-split (target GPU1 + draft GPU0, ~74 tok/s @256k), or tabby EXL3 TP+draft. Notes that P2P (or GGML_CUDA_P2P on the llama family) may improve layer-split collective comm but must be A/B-proven with launch-log evidence + a long non-English generation; a model-internal MTP head under tensor stays model-dependent (validate per model), not 'fixed by P2P'.",
+      "files": [],
+      "assertions": [
+        "Says NO: P2P does not fix split-mode tensor + external-draft crash (#22473/#24309; beellama rejects it; nextn head crashes at load)",
+        "Keeps the tensor+external-draft prohibition regardless of P2P (interconnect win != code-path fix)",
+        "Keeping the draft on layer-split still wins (DFlash layer 79-83 >> tensor-no-draft 48-49); offers layer / lucebox draft-split / tabby TP+draft",
+        "Any P2P / GGML_CUDA_P2P layer-split gain must be A/B-proven with launch-log evidence + a long non-English gen"
+      ]
+    }
+  ]
+}
