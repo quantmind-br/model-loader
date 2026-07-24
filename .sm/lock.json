@@ -28,6 +28,13 @@
       "baseTree": "f342df64c0a356a82c46319ec7e0687d4cc0a2e7",
       "dirHash": "0eb5b6a19f69bdea01d7ee8d66fca06240f28d86703cccef49a799d6c581439f",
       "syncedAt": "2026-07-24T19:03:10.114938351Z"
+    },
+    "rtx3090-inference-profiles": {
+      "canonicalPath": "rtx3090-inference-profiles",
+      "baseCommit": "fa425896f74f0ecd716b8a553c3eab13c26bf972",
+      "baseTree": "9e12b7b5d0357383a03143206494e33b919a4c99",
+      "dirHash": "d0a33aa3fa25c6100ce37ea34425ebe4f25fce6355ad9e38110b26d4b82acc8c",
+      "syncedAt": "2026-07-24T19:03:11.788760193Z"
     }
   }
 }
