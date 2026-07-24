@@ -11,7 +11,7 @@ assets exist, and which engine exploits them best?
 |---|---|---|---|
 | **MTP / nextn** | causal head(s) shipped with the target | head tensors in the GGUF/quant (VERIFY they exist) | best effort/VRAM ratio; ~91% accept measured (Qwen3.6-27B AWQ vLLM); **causal → coexists with fp8 KV** |
 | **DFlash** (z-lab, arXiv 2602.06036) | ~2B block-diffusion drafter, 16-token block per forward, non-causal | drafter repo per family (see inventory) | deepest drafts; dense targets; **non-causal → blocks fp8 KV in vLLM on SM86** |
-| **DSpark** (DeepSeek DeepSpec, 2026-06-27) | DFlash + semi-autoregressive Markov head + confidence head | official drafters ONLY Qwen3-4B/8B/14B, Gemma4-12B | beats DFlash on all 11 SPEED-Bench categories (+21%); **coding strongest (2.12×)**. **NOT runnable on anything installed today** — see §DSpark |
+| **DSpark** (DeepSeek DeepSpec, 2026-06-27) | DFlash + semi-autoregressive Markov head + confidence head | official drafters ONLY Qwen3-4B/8B/14B, Gemma4-12B | beats DFlash on all 11 SPEED-Bench categories (+21%); **coding strongest (2.12×)**. Prisma-ml b9597 defines `draft-dspark` but the **server path fails at first draft round → NOT usable via model-loader** — see §DSpark |
 | **EAGLE-3** | 1-layer autoregressive head over target hidden states | trained head per target (SpecForge/speculators) | when no MTP/DFlash exists; agentic-trained heads best for agents |
 | **ngram / prompt-lookup** | zero-asset self-speculation from context | none | edit-heavy agent loops (re-emitted file content) — near-total accept on hits, zero VRAM |
 | **suffix decoding** (Snowflake) | cross-request suffix tree, adaptive drafts | `arctic-inference` pip pkg (**NOT installed**) | agent loops: 1.8–4.5× on SWE-bench agents; beats ngram at all concurrency |
@@ -22,7 +22,7 @@ SM86-clean (avoid only FP8/NVFP4 *asset builds*: pick bf16 heads + int4/GGUF tar
 
 ## Per-engine support (installed builds)
 
-### llama.cpp — stable b9847, nightly b9869 — chainable `--spec-type`
+### llama.cpp — stable b9934, nightly b10083 — chainable `--spec-type`
 `--spec-type` takes a comma list; **draftless implementations take precedence over draft-model
 ones when chained** — the ideal agent config chains lookup + model drafting:
 - Values: `none, draft-simple, draft-eagle3, draft-mtp, draft-dflash, ngram-simple, ngram-map-k,
@@ -43,31 +43,63 @@ ones when chained** — the ideal agent config chains lookup + model drafting:
   schema keys `cache-type-k-draft`/`cache-type-v-draft` set to `q8_0` directly in `args` (Type-4
   enums in the live llama.cpp schema; `spec-draft-type-k`/`-v` are accepted aliases that resolve via
   the validator's `Lookup`). extraArgs is only for genuinely schema-absent flags.
+- **External sidecar delivery is build-sensitive.** A local GGUF in `spec-draft-model` works on
+  both installed builds. On nightly b10083, `spec-draft-hf: <org>/<repo>[:quant]` resolves a
+  separate repo only when `spec-type` contains the matching type: `draft-mtp` → `mtp-*`,
+  `draft-dflash` → `dflash-*`, `draft-eagle3` → `eagle3-*`. Use exactly one model-based draft
+  type per `spec-draft-hf`; multiple matching sidecars enqueue parallel downloads and which
+  callback claims the single draft path is not a supported contract. Chaining that one type with
+  draftless `ngram-mod` is fine.
+  Stable b9934 predates consumption of a discovered sidecar from the separate draft plan and may
+  resolve the repo's main GGUF instead, so use local sidecars there. The profile's main `model`
+  remains a local GGUF path.
 - ngram-mod knobs: `spec-ngram-mod-n-match 24 / n-min 48 / n-max 64` (`--spec-default` = same).
-- EAGLE-3: `-md <head.gguf> --spec-type draft-eagle3 --spec-draft-n-max 8 --spec-draft-p-min 0.5`;
-  convert with `convert_hf_to_gguf.py <head repo> --target-model-dir <target repo>`, or use
-  pre-converted (`wimmmm/Ex0bit-Qwen3.6-27B-PRISM-EAGLE3-GGUF`).
-- DFlash upstream: `-md <upstream-schema drafter> --spec-type draft-dflash --spec-draft-n-max 15`
-  — flat chain only, no adaptive controller yet; **upstream-schema GGUF only**
-  (Alittlehammmer/williamliao repos, or convert yourself). `draft-dflash` **is in the curated
-  `spec-type` enum** (verified in `~/.config/model-loader/backends/schemas/llama.cpp-stable.json`)
-  → it validates directly in `args`. beellama stays the featured DFlash server (below) for its
-  adaptive `profit` controller, but the upstream flat path now configures cleanly here too.
+- EAGLE-3: local `spec-draft-model: <head.gguf>` + `spec-type: draft-eagle3` +
+  `spec-draft-n-max: 8` + `spec-draft-p-min: 0.5`; nightly b10083 may use `spec-draft-hf` when the
+  repo exposes an `eagle3-*` GGUF. Convert with `convert_hf_to_gguf.py <head repo>
+  --target-model-dir <target repo>`, or use pre-converted
+  (`wimmmm/Ex0bit-Qwen3.6-27B-PRISM-EAGLE3-GGUF`).
+- DFlash upstream: local `spec-draft-model: <upstream-schema drafter>` +
+  `spec-type: draft-dflash` + `spec-draft-n-max: 15` — flat chain only, no adaptive controller
+  yet; **upstream-schema GGUF only** (Alittlehammmer/williamliao repos, or convert yourself).
+  Nightly b10083 may instead use `spec-draft-hf` for a repo exposing `dflash-*`. `draft-dflash`
+  **is in the curated `spec-type` enum** → it validates directly in `args`. beellama stays the
+  featured DFlash server for its adaptive `profit` controller.
+- **Laguna-S-2.1 / Poolside fork exception:** the matched BF16 drafter required f16/f16 draft KV;
+  quantizing draft KV to q4_0 collapsed acceptance to ~1%. After the fix, repetitive code reached
+  82.2% acceptance, but tool-call, exact-answer, and 64K needle traffic remained ~2.7–4.3%.
+  Therefore run a workload matrix and compare end-to-end tok/s; do not promote from one templated
+  continuation. The general coding-agent profile remains non-DFlash until representative traffic wins.
 - Dual-GPU: `--spec-draft-device CUDA1` (schema-absent → set via `extraArgs`) parks the draft/head
-  off the weights card. `split-mode tensor` still crashes/hangs with any external draft — upstream
-  #24309 (open: `-sm tensor` + nextn/draft head → `GGML_ASSERT tensor_axis_0 != nullptr`) and
-  discussion #22473 (`-sm tensor` + spec silently stops generating, maintainer "WIP") are both open
-  as of 2026-07-07 (see dual-gpu.md) — chain `ngram-mod` under tensor-split instead, or use layer
-  split with `-md`.
+  off the weights card. **External draft models under `split-mode tensor` are unsafe** — discussion
+  #22473 (`-sm tensor` + external draft silently stops generating, maintainer "WIP", open) — use
+  layer split with `-md`, or chain draftless `ngram-mod` under tensor. **Embedded MTP/nextn heads
+  are per-model:** upstream merged MTP as "compatible with tensor/pipeline parallelism" (PR #22673)
+  but prefill regresses (D2H embedding transfers) and some targets still crash — #24309 (embedded
+  nextn `GGML_ASSERT tensor_axis_0 != nullptr` at load, open) and #24440/#24324 (`-sm tensor` +
+  draft-mtp `fattn.cu:579` on a checkpoint restore, open; workaround `LLAMA_GRAPH_REUSE_DISABLE=1`
+  or `-sm layer`). A successful load proves compatibility only; validate per model and gate any
+  tensor promotion (full-tuning.md).
 
-### beellama main@85e22ea0 (build b10102-dirty) — featured DFlash + TurboQuant KV
-`--spec-type dflash` (own dialect, ≠ upstream `draft-dflash`): flat + tree, adaptive `profit`
-depth controller (leave on), accepts BOTH drafter GGUF schemas (Anbeeld/Lucebox `dflash-draft`
-AND upstream). Key knobs: `spec-dflash-cross-ctx 1024` (default 512; 1024 better ≥100k),
-`spec-branch-budget 0` (flat recommended; tree auto-disabled on multi-GPU targets),
-`kv-unified true`. Drafter quant: **IQ4_XS/Q4_K_M — Q8 drafters measured net-negative.**
-Vision: mmproj forces flat DFlash and disables all non-DFlash spec. Also has `ngram-*`, eagle3,
-mtp, plus fork extras `copyspec` (purpose-built for re-emitted file content), `suffix`, `recycle`.
+### beellama v0.4.0-2-g7d43f840b (build b10829) — upstream draft-dflash + KVarN KV compression
+`--spec-type draft-dflash` (**renamed from the fork's old `dflash`** — v0.4.0 replaced the fork
+DFlash with upstream's implementation, so BeeLlama now spells and behaves like upstream `draft-dflash`).
+Requires an **upstream-format `dflash` draft GGUF** via `--spec-draft-model` — v0.4.0 mandates
+upstream's `dflash` architecture, metadata keys, tensor names, and tokenizer contract; other
+schemas are unsupported (obtain or reconvert an upstream-format drafter).
+BeeLlama retains its default-on adaptive `profit` depth controller (`spec-dm-controller`, now
+`{off,profit}`); without `--spec-draft-n-max` the draft limit comes from `dflash.block_size - 1`.
+**Gone in v0.4.0:** the fork DFlash ring and its `spec-dflash-cross-ctx`/`spec-dflash-max-slots`,
+DDTree (`spec-branch-budget`), the `fringe` controller, `spec-draft-temp`/`spec-draft-top-k`, and
+the `copyspec`/`suffix`/`recycle` spec types (all rejected at launch). BeeLlama's distinctive
+surface is now **KVarN target-context KV compression** (`cache-type-k`/`-v` = `kvarn2`..`kvarn6`,
+`kvarn8`, with SWA overrides `cache-type-k-swa`/`-v-swa`) and the **KV-cache precision tail**
+(`kv-tail-tokens`, `kv-tail-type`) that keeps the newest attention-visible entries exact.
+Legacy target `turbo2/3/4[_tcq]` names warn and redirect by width to `kvarn2/3/4` (draft aliases → `q2_0/q3_0/q4_0`); TurboQuant/TCQ GGUF cache formats themselves are unsupported. Drafter quant: **IQ4_XS/Q4_K_M
+— Q8 drafters measured net-negative.** Vision: mmproj
+forces flat DFlash and disables all non-DFlash spec. Also has `ngram-*`, `draft-eagle3`,
+`draft-mtp`. Deterministic anti-loop: `reasoning-loop-guard force-close` (defaults changed in
+v0.4.0: min-tokens 512, window 1024, max-period 128).
 
 ### vLLM 0.24.0 — `--speculative-config` JSON
 Methods verified in the installed wheel: `ngram, ngram_gpu, suffix, medusa, mlp_speculator,
@@ -120,7 +152,7 @@ ngram-map-k, ngram-map-k4v, ngram-mod, suffix`, payload `TYPE:k=v,...`; `--spec-
 Draft: `-md` model, `-cd` ctx, `-ngld` layers, `cache-type-k-draft`/`-v-draft` KV. See
 references/ik-llama.md.
 
-## DSpark — real, but not yet usable here (state 2026-07-02)
+## DSpark — real, but not usable through model-loader (state 2026-07-21)
 
 DSpark = DeepSeek's "Confidence-Scheduled Speculative Decoding with Semi-Autoregressive
 Generation" (repo `deepseek-ai/DeepSpec`, 2026-06-27; bundles DSpark/DFlash/Eagle3 training).
@@ -130,10 +162,15 @@ truncation; no OSS engine uses it yet). Numbers: llama.cpp PR bench 1.88× overa
 coding** on Qwen3-8B, beats DFlash on all 11 categories (+21%); vLLM PR: accept 3.42 vs 2.60 MTP,
 coding 3.90 (1.42×).
 
-- **Nothing installed runs it:** vLLM merged to main 2026-07-01 — AFTER 0.24.0 (2026-06-29);
-  llama.cpp PR #25173 still open (arch `dspark`, spec-type `draft-dspark`; verified open 2026-07-07,
-  last push 2026-07-04) — **not in b9847 stable nor b9869 nightly** (grepped the nightly checkout:
-  no `dspark` arch, no `draft-dspark`); SGLang PR #29538 is DeepSeek-V4-only; beellama/lucebox/tabby: nothing.
+- **Nothing runs it through model-loader:** installed vLLM stable/nightly remain 0.24.0 (before
+  its main-branch merge); the `vllm-dspark` build is a separate 2026-07-09 spec-decode vLLM.
+  **`llama.cpp-prisma-ml` (b9597) DOES define `draft-dspark`** (unlike stable b9934 / nightly
+  b10083, which have no such type — source-grepped 2026-07-21), but its server/CLI `--spec-type`
+  path **does not engage the required multi-layer capture and fails at the first draft round**
+  (`common/speculative.cpp:40-46`); only `tests/test-dspark-real-eval.cpp` drives it. Since
+  model-loader launches via the server, DSpark is **not usable here** on any backend. Upstream
+  llama.cpp PR #25173 is the mainline adoption path. SGLang PR #29538 is DeepSeek-V4-only;
+  beellama/lucebox/tabby provide no DSpark implementation.
 - **Drafters exist ONLY for Qwen3-4B/8B/14B + Gemma4-12B** (`deepseek-ai/dspark_qwen3_*_block7`),
   none for Qwen3.6-27B (the `Hikari07jp/DSpark-Qwen3.6-27B-AEON-draft` repo is an unvetted
   DFlash+Markov hybrid for AEON finetunes, 0 downloads — skip).
@@ -161,10 +198,11 @@ coding 3.90 (1.42×).
 Rules of thumb (measured on this rig): **MTP wins on MoE** (cheap verify, survives finetunes),
 **DFlash wins on dense** targets with a matched drafter; mismatched/cross-generation drafters
 collapse (30% vs 65% accept); finetunes drop DFlash acceptance unless a matched drafter exists
-(AEON-7) — prefer native MTP on finetunes. Confirm heads actually load: launch log `draft-mtp`/
-`dflash` lines (llama.cpp — **sparse at default verbosity; an absent line ≠ spec off**, raise
-`--log-verbosity`/`lv` or read a response's server `timings.draft_n_accepted` > 0 to confirm),
-`mtp.*` tensor count (exl3); never the config field alone.
+  (AEON-7) — prefer native MTP on finetunes. Confirm heads actually load: launch log `draft-mtp`/
+  `dflash` lines (llama.cpp — **sparse at default verbosity; an absent line ≠ spec off**, raise
+  `--log-verbosity`/`lv`, query the OpenAI endpoint directly for `timings.draft_n_accepted` > 0,
+  or use a benchmark; Claude Code's Anthropic route does not preserve `timings`), `mtp.*` tensor
+  count (exl3); never the config field alone.
 
 ## Sampling × speculation
 

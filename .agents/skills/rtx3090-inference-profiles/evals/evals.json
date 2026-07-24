@@ -1,6 +1,6 @@
 {
   "skill_name": "rtx3090-inference-profiles",
-  "note": "Rewritten 2026-07-02; premises re-verified 2026-07-07 (builds: llama.cpp-stable b9847 / nightly b9869, beellama main@85e22ea0 b10102, buun b9792, vLLM 0.24.0, SGLang 0.5.9, exllamav3 0.0.43, lucebox 1b11c50; BUGS.md S1+S2 fixed). 2026-07-09 added the ik-llama-cpp scenario (#17). 2026-07-10 P2P measured on this patched rig (driver 610.43.02): #18-#21 updated and #22-#23 added to encode the DECISIVE A/Bs - dropping NCCL_P2P_DISABLE on vLLM TP2 = +13.5% concurrent (proven), but custom all-reduce CRASHES on SM86 so disable-custom-all-reduce=true is MANDATORY (not a stale fallback); SGLang TP2 P2P inconclusive (treat as NCCL); native GGML_CUDA_P2P / lucebox --peer-access single-stream splits measured a TIE (keep defaults). 23 scenarios total; graded premises cited inside each eval. 2026-07-11 adds scenarios #24-#30 for Tabby NCCL, BeeLlama DDTree multi-GPU, ik graph/layer context bands, serial-vs-concurrent evidence, unproven transport, llama build drift, and Xid fallback.",
+  "note": "37 scenarios. Core premises were established 2026-07-02 through 2026-07-12; installed llama.cpp capabilities re-verified 2026-07-21 at stable b9934 and nightly b10083. Scenario #35 covers the separate-HF-sidecar capability split: shared flag names do not imply shared runtime behavior. Scenario #36 covers PrismML Bonsai Q2_0-g128 routing and format incompatibility. Scenario #24 was rewritten 2026-07-21 as a BeeLlama v0.4.0 migration/audit scenario (fork dflash rejected, DDTree/cross-ctx/max-slots removed, TurboQuant/TCQ formats removed; legacy target turbo names redirect to KVarN). Scenario #37 covers Laguna-S-2.1 backend routing, Poolside DFlash draft-KV precision, workload-dependent acceptance, and tensor-fit limits.",
   "evals": [
     {
       "id": 1,
@@ -31,7 +31,7 @@
     {
       "id": 3,
       "prompt": "Um finetune GGUF do Qwen3.5 está gerando tool calls Bash corrompidos no Claude Code — espaços no meio de paths, '&&' virando 'and'. Temp 0 não resolveu. Diagnostica e conserta.",
-      "expected_output": "Diagnoses the chat template FIRST (the rig-proven Ornith case): extracts the GGUF's embedded template (gguf-py GGUFReader / gguf-dump), diffs against the HF repo's official chat_template.jinja, checks the model card for 'modified template required'. Fix = --chat-template-file with the official template + --reasoning-format deepseek (both flags ARE present in the llama.cpp schema — set them in args; extraArgs is only for genuinely schema-absent flags). Also checks KV quant (q4_0 KV degrades tool calling — move to q8_0) and that anti-repetition isn't over-aggressive (aggressive DRY corrodes legitimate repeated shell tokens). Verifies with the shell-hostile round trip and reasoning accounting (no </think> leaking into content). Knows the proxy does NOT corrupt (fixJSON is a no-op on valid JSON). Does not hand-run the server binary.",
+      "expected_output": "Diagnoses the chat template FIRST (the rig-proven Ornith case): extracts the GGUF's embedded template (gguf-py GGUFReader / gguf-dump), diffs against the HF repo's official chat_template.jinja, checks the model card for 'modified template required'. Fix = --chat-template-file with the official template + --reasoning-format deepseek (both flags ARE present in the llama.cpp schema — set them in args; extraArgs is only for genuinely schema-absent flags). Also checks KV quant (q4_0 KV degrades tool calling — move to q8_0) and that anti-repetition isn't over-aggressive (aggressive DRY corrodes legitimate repeated shell tokens). Verifies with the shell-hostile round trip and reasoning accounting (no </think> leaking into content). Does not blame the proxy before proving the backend/template path.",
       "files": [],
       "assertions": [
         "Diagnoses the chat template FIRST (extract embedded template, diff vs official jinja)",
@@ -43,10 +43,11 @@
     {
       "id": 4,
       "prompt": "Vi que saiu o DSpark da DeepSeek. Configura ele pra acelerar meu Qwen3.6-27B.",
-      "expected_output": "Knows DSpark is real (DeepSeek DeepSpec, 2026-06-27; DFlash + Markov head + confidence head; coding is its strongest category) BUT that NOTHING installed on the rig runs it: vLLM support merged to main 2026-07-01 AFTER the installed 0.24.0; llama.cpp PR #25173 still open (verified 2026-07-07 — NOT in b9847 stable nor b9869 nightly); SGLang PR is DeepSeek-V4-only; and official drafters exist only for Qwen3-4B/8B/14B + Gemma4-12B — there is NO drafter for Qwen3.6-27B. Does not fabricate a config. Offers the adoption path (bump vllm-nightly venv past the merge for a Qwen3-8B/14B target, or wait for the llama.cpp merge + nightly rebuild) and, for the actual 27B today, points to the working alternatives: native MTP (vLLM mtp + fp8 KV = 256k, ~91% accept), DFlash (dense), or the Ex0bit EAGLE-3 head. Also does not confuse DSpark with Luce Spark (MoE expert residency).",
+      "expected_output": "Knows DSpark is real (DeepSeek DeepSpec: DFlash backbone + Markov/confidence heads) but is NOT usable through model-loader on this rig: installed vLLM stable/nightly are 0.24.0 (before the DSpark merge; vllm-dspark is a separate spec-decode build), and while llama.cpp-prisma-ml (b9597) DOES define the draft-dspark spec-type, its server/CLI path does not engage the required multi-layer capture and fails at the first draft round (only tests/test-dspark-real-eval.cpp drives it). Since model-loader launches via the server, DSpark cannot run. Does not fabricate a profile. Offers the adoption path (upstream llama.cpp PR #25173, or a future vLLM bump) and, for Qwen3.6-27B today, points to native MTP, DFlash, or EAGLE-3. Does not confuse DSpark with Luce Spark expert residency.",
       "files": [],
       "assertions": [
-        "Knows DSpark is real but NOTHING installed runs it (PR #25173 open, not in b9847 nor b9869; vLLM merge after 0.24.0)",
+        "Knows DSpark is real but NOT usable via model-loader (server path fails; vLLM 0.24.0 predates support)",
+        "Knows llama.cpp-prisma-ml defines draft-dspark but its server path fails at the first draft round",
         "Does NOT fabricate a config",
         "Offers the adoption path + working alternatives (native MTP/DFlash/EAGLE-3) for the 27B today",
         "Does not confuse DSpark with Luce Spark"
@@ -276,13 +277,15 @@
     },
     {
       "id": 24,
-      "prompt": "Meu BeeLlama usa DFlash + DDTree e o target agora faz layer split nas duas 3090. Posso manter spec-branch-budget positivo e esperar o mesmo DDTree?",
-      "expected_output": "Decision follows measured backend-specific P2P evidence and requires explicit proof plus correctness gates.",
+      "prompt": "Tenho um profile BeeLlama antigo (pré-v0.4.0) com spec-type dflash, spec-dflash-cross-ctx 1024, spec-branch-budget positivo (DDTree) e cache-type turbo3_tcq. Acabei de atualizar pro BeeLlama v0.4.0. O profile ainda sobe?",
+      "expected_output": "The profile does not migrate unchanged: the removed spec/tree flags are rejected at launch while the turbo cache name only warns and redirects. Migrates it to the upstream draft-dflash surface and KVarN cache, dropping the removed fork knobs.",
       "files": [],
       "assertions": [
-        "Says DDTree auto-disables on multi-GPU target and spec-branch-budget must be 0",
-        "Keeps flat DFlash fallback with equal layer split and cross-ctx",
-        "Requires launch-log evidence and does not treat P2P as correctness fix"
+        "Switches spec-type from the fork dflash to upstream draft-dflash (renamed in v0.4.0)",
+        "Removes spec-dflash-cross-ctx, spec-branch-budget (DDTree), and any spec-dflash-max-slots — removed with the fork DFlash/tree paths, no replacement",
+        "Leaves spec-draft-n-max unset to keep the default-on adaptive profit controller (omitted limit = dflash.block_size - 1)",
+        "Migrates the turbo3_tcq target cache to kvarn3 (turbo* target names warn+redirect by width to kvarnN; actual TurboQuant/TCQ GGUF formats are unsupported)",
+        "Requires the draft GGUF itself to be upstream dflash format (architecture, metadata keys, tensor names, tokenizer contract) — not just the renamed spec-type; a legacy fork-only drafter is rejected and must be obtained/reconverted in upstream format"
       ]
     },
     {
@@ -349,6 +352,89 @@
         "Rejects variant despite performance gain",
         "Restores no-P2P fallback and initially served profile",
         "Investigates PCIe link/cable and records variant unreliable"
+      ]
+    },
+    {
+      "id": 31,
+      "prompt": "O Ornith AEON 35B-A3B tem MTP embutido. Posso ligar split-mode tensor nas duas 3090 pra ele ir mais rapido, ja que o MTP e interno e nao e draft externo?",
+      "expected_output": "Distinguishes the embedded MTP/nextn head (baked into the GGUF, spec-type draft-mtp, no separate draft model) from an external draft: the external-draft tensor ban does NOT automatically apply, but embedded MTP under tensor is PER-MODEL - some load and run, some crash (#24309 nextn assert at load; #24440/#24324 fattn.cu:579 on checkpoint restore, workaround LLAMA_GRAPH_REUSE_DISABLE=1 or -sm layer). A successful load proves compatibility only, not speed. Require a complete one-knob A/B: equal-weight geometric mean of raw per-band median tensor/layer throughput ratios >=1.05, then TTFT/VRAM/draft/correctness/backend-log guardrails. The measured 2026-07-12 Ornith/Agents trio passed and uses tensor; unmeasured models remain layer by default.",
+      "files": [],
+      "assertions": [
+        "Distinguishes embedded MTP/nextn from an external draft (not a blanket tensor ban)",
+        "States embedded MTP under tensor is per-model: some run, some crash (#24309/#24440; LLAMA_GRAPH_REUSE_DISABLE=1 workaround)",
+        "A successful tensor load proves compatibility, not speed",
+        "Requires aggregate geomean >=5% plus TTFT/VRAM/draft/correctness guardrails; knows the measured trio passed"
+      ]
+    },
+    {
+      "id": 32,
+      "prompt": "Subi o profile 35B-A3B em split-mode tensor e carregou sem erro nas duas GPUs. Ja posso trocar o canonico de layer pra tensor?",
+      "expected_output": "No - a successful load is compatibility, not a performance benefit. A 35B-A3B MoE is model-dependent under tensor: the measured Ornith/Agents trio later won about 11.31-12.17% by equal-weight geometric mean across 5/25/50/90% fill, but that conclusion required five runs per variant plus TTFT, VRAM, draft, correctness, and backend-log gates. Run the full gated A/B; keep layer if the aggregate does not win or a guardrail fails.",
+      "files": [],
+      "assertions": [
+        "Says NO: a successful load is not a performance benefit",
+        "States 35B-A3B tensor performance is model-dependent and cites the measured aggregate wins",
+        "Requires the full aggregate A/B and external guardrails before promotion"
+      ]
+    },
+    {
+      "id": 33,
+      "prompt": "O benchmark deu +6% de mediana em tok/s pro tensor so no fill de 5%. Promovo pra tensor?",
+      "expected_output": "A single-band +6% median win is not enough. Compute the equal-weight geometric mean of the raw candidate/baseline median throughput ratios across every measured context band, with the complete expected sample count and zero errors. Promote only if that aggregate is >=5% and the separate TTFT, <=23 GiB/card, retained draft acceptance, correctness, and backend-log guardrails pass. Per-band overlap is reported as variance, not a veto; weak or losing bands affect the aggregate.",
+      "files": [],
+      "assertions": [
+        "Does NOT promote on a single-band median win",
+        "Requires equal-weight geometric mean across all measured bands with complete raw samples and zero errors",
+        "Treats overlap as a caveat and requires TTFT/VRAM/draft/correctness/backend guardrails"
+      ]
+    },
+    {
+      "id": 34,
+      "prompt": "Meu profile DFlash (draft externo) no beellama nao tem mmproj/visao. Como nao e o mmproj que trava, posso usar split-mode tensor agora?",
+      "expected_output": "No - mmproj/vision was never the cause; the no-mmproj control already failed. An external DFlash drafter under split-mode tensor silently stops/crashes regardless of mmproj (#22473, WIP upstream). Keep layer split, or use lucebox draft-split / tabby TP+DFlash / pin-per-GPU. External drafts stay on layer.",
+      "files": [],
+      "assertions": [
+        "Says NO: external DFlash draft stays on layer split even without mmproj",
+        "mmproj/vision was never the cause (the no-mmproj control already failed)",
+        "Offers layer / lucebox draft-split / tabby TP+DFlash / pin-per-GPU instead"
+      ]
+    },
+    {
+      "id": 35,
+      "prompt": "Tenho o modelo principal GGUF local e um repo HF separado com dflash-Qwen3.6-27B-Q4_K_M.gguf. Posso colocar spec-draft-hf nesse profile tanto no llama.cpp-stable b9934 quanto no nightly b10083?",
+      "expected_output": "Distinguishes schema/flag presence from runtime capability. Main profile model remains a local GGUF. Nightly b10083 resolves the separate draft repo only when spec-type contains the matching draft-dflash type, selecting a dflash-* sidecar. One HF draft repo must use exactly one model-based type: multiple sidecars download in parallel and no winner is guaranteed. Stable b9934 predates that separate-plan sidecar consumption, so download the sidecar and use local spec-draft-model. Requires proof after launch through a direct OpenAI response's timings.draft_n/draft_n_accepted, backend logs, or benchmark; Claude Code's Anthropic route does not preserve timings.",
+      "files": [],
+      "assertions": [
+        "Keeps the main profile model as a local GGUF path",
+        "Allows matching separate-repo spec-draft-hf sidecar resolution on nightly b10083",
+        "Requires matching spec-type and one model-based draft type per HF draft repo",
+        "Uses a downloaded local spec-draft-model fallback on stable b9934",
+        "Requires direct OpenAI timings, backend logs, or benchmark evidence to prove drafting; does not rely on Claude Code's Anthropic response"
+      ]
+    },
+    {
+      "id": 36,
+      "prompt": "Baixei um Bonsai *-Q2_0.gguf da PrismML. Cria um profile pra rodar ele.",
+      "expected_output": "Routes to the llama.cpp-prisma-ml backend (the PrismML fork, catalog id llama.cpp-prisma-ml), NOT llama.cpp-stable/nightly — Q2_0 (group size 128) is the fork's own weight format and does not load on mainline llama.cpp. Knows the *-Q2_0_g64.gguf variant is the mainline (CPU/Metal) format and is mutually incompatible with the fork's Q2_0. Does not add --kv-mean-center without a matched Q4_0 calibration file, and does not route speculation to draft-dspark (unusable via the server path). Builds a normal single-GPU or 0.5,0.5 split profile with the fork binary.",
+      "files": [],
+      "assertions": [
+        "Routes to llama.cpp-prisma-ml, not stable/nightly (Q2_0 g128 is fork-only)",
+        "Knows Q2_0 (g128, fork) and Q2_0_g64 (mainline) are mutually incompatible",
+        "Does NOT enable --kv-mean-center without a matched Q4_0 calibration file",
+        "Does NOT route speculation to draft-dspark (server path unusable)"
+      ]
+    },
+    {
+      "id": 37,
+      "prompt": "Crie o melhor profile para poolside/Laguna-S-2.1-GGUF Q4_K_M com 256k nas duas RTX 3090. Existe um DFlash BF16 oficial; compare DFlash e split-mode tensor antes de decidir.",
+      "expected_output": "Routes the Laguna GGUF by measured executable support rather than backend kind: installed stable/BeeLlama reject laguna and installed Lucebox has a 40-layer compiled cap versus the target 48, so uses a registered Poolside Laguna fork after live-schema/version checks. Starts with fitted layer placement because the 63.6 GiB target exceeds aggregate VRAM and this fork has no tensor auto-fit. Does not promote tensor: full tensor aborts; the only loading tensor variant used n-cpu-moe 48 and measured about 2.96 tok/s versus about 10.9 layer, which is a capacity/spill result rather than a pure split A/B. Tests the matched BF16 DFlash with f16 draft KV; knows q4_0 draft KV collapsed acceptance near 1%, and requires representative repetitive, short, tool-call, and long-context acceptance/tok-s probes before promotion. Keeps non-DFlash layer as the general agent profile because high repetitive acceptance did not generalize.",
+      "files": [],
+      "assertions": [
+        "Routes Laguna by live executable support; does not assume stable/BeeLlama/Lucebox can serve this 48-layer target",
+        "Uses fitted layer placement for the 63.6 GiB target and knows Poolside tensor auto-fit is not implemented",
+        "Does not promote tensor from a CPU-MoE spill result; cites full tensor failure and large decode regression",
+        "Uses f16/f16 draft KV for the matched BF16 DFlash and recognizes q4_0 draft KV acceptance collapse",
+        "Requires a representative workload acceptance/tok-s matrix and keeps non-DFlash layer for general agent traffic unless it wins"
       ]
     }
   ]

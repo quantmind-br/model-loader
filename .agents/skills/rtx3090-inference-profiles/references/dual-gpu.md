@@ -24,8 +24,13 @@ single-stream speed.** Measured split-mode ranking (batch-1, ≤31B dense, q4_0 
 - **`split-mode layer` — +4…+7%** (sequential pipeline, thermal relief). Safe, compatible with
   drafts/MoE/quantized KV — the default multi-GPU mode.
 - **`split-mode row` — −2.8×**, deprecated. Never.
-- **MoE under tensor: FLAT** (Ornith-35B-A3B +2%) — only ~3B active params/token to
-  parallelize. MoE → single-GPU or layer.
+- **MoE under tensor: per-model, gate it** - measured 2026-07-12 (35B-A3B MTP Q4_K_M, 5 runs/variant,
+  one-knob): all three profiles loaded clean under `-sm tensor`, decode +8...29% median at 25-90% fill
+  (grows with fill), TTFT better, ~16 GiB/card. Equal-weight geometric mean across 5/25/50/90% fill:
+  Ornith text **+12.17%**, Agents-A1 vision **+11.97%**, Ornith vision **+11.31%**. All three passed
+  fresh MTP/correctness/backend-log guardrails and were PROMOTED to tensor. Overlapping five-run ranges
+  remain a variance caveat, not a veto. (Supersedes both the old "flat +2%" and all-band-veto readings.)
+  Default remains `layer` for unmeasured MoE; A/B per model.
 - **exllama TP (native backend): dense +25…32%, A3B-MoE −20%** — and uniquely coexists with
   MTP/DFlash drafts (exllama-tabby.md).
 - **vLLM/SGLang TP=2 = capacity** (per-card KV ~doubles); batch-1 decode gain comes from
@@ -36,16 +41,23 @@ single-stream speed.** Measured split-mode ranking (batch-1, ≤31B dense, q4_0 
 > (concurrent vLLM TP2), not a single-stream split. It changes none of the model-class rules
 > (MoE/long-ctx/drafts) or the row/asymmetric bans, and never auto-splits a fitting single-GPU model.
 
-## llama.cpp `-sm tensor` — status (upstream PR #19378, merged 2026-04; in b9847, NCCL build ON)
+## llama.cpp `-sm tensor` — status (upstream PR #19378, merged 2026-04; installed b9934/b10083 NCCL builds ON)
 
-Hard caveats, all verified current at b9847 (2026-07):
-1. **Crashes/hangs with ANY external draft, MTP head or DFlash — no fix upstream** (#22473
-   silent stops, open; #24309 load-crash on nextn tensors, open; #24440; PR #22400 did NOT fix
-   it). beellama rejects it explicitly. Models carrying a nextn head crash **at load** —
-   strip with llama-quantize or don't use tensor. **And keeping the draft wins anyway:**
-   Qwen3.6-27B DFlash-layer 79–83 tok/s ≫ tensor-no-draft 48–49 (−36%). Internal MTP under
-   tensor is model-dependent: Qwythos-9B works (+22% @256k), Qwen3.6-27B-MTP crashes — validate
-   per model. Chainable draftless `ngram-mod` is the spec that survives tensor mode.
+Hard caveats introduced/verified from b9847 onward and re-checked against the current builds:
+1. **Speculative decoding under tensor splits into two cases — do not conflate them:**
+   (a) **External drafts** (`-md` draft model, DFlash drafter) **crash/hang — no fix upstream**
+   (#22473 silent stops, open; #24309 load-crash, open; #24440; PR #22400 did NOT fix it);
+   beellama rejects it explicitly. Use `layer`, and keeping the draft wins anyway (Qwen3.6-27B
+   DFlash-layer 79–83 tok/s ≫ tensor-no-draft 48–49, −36%). (b) **Embedded MTP/nextn heads**
+   (baked into the GGUF, `spec-type draft-mtp`, no separate model) are **PER-MODEL — validate,
+   never assume:** some load and run (Qwythos-9B +22% @256k; ornith-9B decode ~141, MTP
+   env-proven engaged), some crash at load (Qwen3.6-27B-MTP, the #24309 `tensor_axis_0 != nullptr`
+   nextn assert). A successful tensor load proves **compatibility only, not speed** - on 35B-A3B
+   MoE the decode gain is per-model and high-variance. The measured 2026-07-12 trio won +11.31...12.17%
+   by equal-weight geometric mean across all four fills and passed TTFT/VRAM/draft/correctness gates,
+   so those three canonical profiles use tensor. Unmeasured MoE stays `layer` until the same complete
+   one-knob aggregate A/B + external guardrails pass (full-tuning.md). Range overlap is a caveat,
+   not an independent veto. Chainable draftless `ngram-mod` survives tensor.
 2. **Forces CPU sampling** (`backend sampling not supported with SPLIT_MODE_TENSOR`) — still
    net faster.
 3. **No `--fit`** → set `n-gpu-layers` and `ctx-size` manually.
@@ -53,6 +65,13 @@ Hard caveats, all verified current at b9847 (2026-07):
    (9B @256k/768k/1M, 31B @32k, coherent output) — re-validate after every rebuild; if a new
    build rejects quantized KV, that's the documented upstream behavior arriving.
 5. `flash-attn on` required. Untested >31B here.
+6. **Poolside Laguna fork:** `common_fit_params` explicitly rejects `SPLIT_MODE_TENSOR`; no
+   automatic tensor sizing exists. The 63.6 GiB Laguna-S-2.1 Q4_K_M full tensor placement aborted,
+   and tensor only loaded with `n-cpu-moe 48`, where decode measured 2.96 tok/s versus ~10.9 for
+   fitted layer placement. Lower spill (`n-cpu-moe 20`) still did not fit. This proves tensor is not
+   a viable 256K placement for that target/build; it does not overturn the ≤31B dense tensor wins.
+   Never launch competing GPU benchmarks concurrently, and never compare tensor-with-CPU-spill to
+   full layer placement as a pure split-mode A/B.
 
 ```jsonc
 // pooling case (model overflows one card) — layer split, the default

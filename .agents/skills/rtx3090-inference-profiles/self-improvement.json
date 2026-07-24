@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "skillName": "rtx3090-inference-profiles",
+  "deploymentEntries": ["rtx3090-inference-profiles"],
+  "validationCommands": [
+    ["python3", "scripts/validate_self_improvement.py", "--check", "--root", "{skill_root}"],
+    ["python3", "scripts/test_summarize_p2p_matrix.py"],
+    ["python3", "scripts/test_openai_concurrency_probe.py"],
+    ["bash", "scripts/test_benchmark_p2p_matrix.sh"],
+    ["python3", "-m", "unittest", "discover", "-s", "scripts/self_improvement_lib/tests", "-p", "test_*.py"]
+  ],
+  "behavioral": {
+    "manifest": "evals/behavioral.json",
+    "runner": ["python3", "evals/run_behavioral.py", "--manifest", "{manifest}", "--skill-root", "{skill_root}", "--out", "{report}"],
+    "comparator": ["python3", "evals/eval_compare.py"]
+  },
+  "syncExcludes": [
+    ".agents/", ".agent-state/", ".git/", ".env", "node_modules/",
+    "__pycache__/", "*.pyc", "*.bak", "*.log", "*.tmp"
+  ]
+}

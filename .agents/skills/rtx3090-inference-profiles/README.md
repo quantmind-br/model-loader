@@ -5,16 +5,20 @@ notes only (kept out of the skill per user policy — nothing here loads into ag
 
 ## Maintenance notes
 
-- **Version-pinned facts (re-verified 2026-07-07).** Installed builds: llama.cpp-stable
-  **b9847** / nightly **b9869** (identical profile-relevant flag surface), beellama
-  **main@85e22ea0 / b10102-dirty**, buun **b9792**, lucebox-hub 1b11c50, vLLM **0.24.0 @
-  ee0da84ab — BOTH stock venvs** (the nightly was rebuilt from the broken editable build) +
-  flashinfer 0.6.12, sndr-vllm venv **0.23.1rc1.dev424** (dev714 = upstream pin, NOT installed),
-  SGLang 0.5.9 / 0.5.6-dev forks, TabbyAPI 3cf468c + exllamav2 0.3.2 / exllamav3 0.0.43,
-  unsloth **2026.6.7**, ik-llama-cpp **t0002-889-g3bb0e9f0** (2026-07-09), driver 610.43.02. After any backend upgrade, re-verify: spec-type
-  dialects, reasoning-parser token-accounting (vLLM), DFlash×fp8-KV (vLLM — still retest),
-  the asymmetric-KV offload bug (#20866), tensor-mode×draft crashes (#22473/#24309, still open),
-  DSpark availability (llama.cpp PR #25173 still open, not in b9869), and the sampling seed table.
+- **Version-pinned facts (re-verified 2026-07-21).** Installed builds: llama.cpp-stable
+  **b9934 (`32e41fa5b`)** / nightly **b10083 (`846e991ec`)** / prisma-ml **b9597 (`7529fdaaf`,
+  base b9594; PrismML fork)**; the three share a schema but not runtime behavior. BeeLlama is now
+  **v0.4.0-2-g7d43f840b / b10829** (upstream `draft-dflash` + KVarN KV compression + KVCPT tail;
+  fork DFlash/DDTree and TurboQuant/TCQ formats removed), buun **b9792**, lucebox-hub 1b11c50, vLLM **0.24.0 @
+  ee0da84ab — BOTH stock venvs** + flashinfer 0.6.12, sndr-vllm venv
+  **0.23.1rc1.dev424**, SGLang 0.5.9 / 0.5.6-dev forks, TabbyAPI 3cf468c + exllamav2 0.3.2 /
+  exllamav3 0.0.43, unsloth **2026.6.7**, ik-llama-cpp **t0002-889-g3bb0e9f0**, driver
+  610.43.02. After any backend upgrade, re-verify spec dialects, HF sidecar resolution,
+  reasoning-parser token accounting, DFlash×fp8-KV, asymmetric-KV offload (#20866),
+  tensor-mode×draft failures (#22473/#24309), DSpark availability (prisma-ml b9597 defines
+  `draft-dspark` but the server path fails at first draft round → unusable via model-loader;
+  absent from stable/nightly), prisma-ml Q2_0-g128 vs mainline Q2_0-g64 format split, and the
+  sampling seed table.
 - **Resolved this cycle (2026-07-07):** BUGS.md **S1** (chained / `draft-dflash` spec-type is
   list-valued → validates in `args`), **S2** (sglang parser enums widened to the installed 0.5.9
   detector maps + beellama/buun `spec-type` made list-valued), and the 2026-07-03
@@ -25,14 +29,71 @@ notes only (kept out of the skill per user policy — nothing here loads into ag
   no naive CPU expert offload (`--n-cpu-moe` on explicit request only; Luce Spark is the
   sanctioned path); VRAM cap ≤46 GiB; mmproj on CPU (`--no-mmproj-offload`); English-only
   UI/schema text in the repo.
-- Evals in `evals/evals.json` = **30 scenarios**: rewritten 2026-07-02 from verified premises,
+- Evals in `evals/evals.json` = **36 scenarios**: rewritten 2026-07-02 from verified premises,
   corrected + extended 2026-07-07 (S1/S2 reversal; quick-profile / audit / benchmark-compare /
   S1-regression), + the ik-llama-cpp scenario 2026-07-09, + the P2P scenarios #18–#23 (2026-07-10:
   #18–#21 measured-corrected, #22 custom-AR crash, #23 NCCL P2P +13.5% gain), + #24–#30 (2026-07-12:
   BeeLlama DDTree multi-GPU, ik graph-vs-layer by ctx band, Tabby native-vs-NCCL, serial-vs-concurrent,
-  unproven-transport, llama build drift, Xid/corruption fallback). Graded premises cited inside each eval.
+  unproven-transport, llama build drift, Xid/corruption fallback), + #31–#34 (2026-07-12:
+  embedded-MTP-vs-external-draft is model-specific, a 35B-A3B MoE is not promoted just because it
+  loads, the bundled tensor promotion gate, external DFlash stays layer without mmproj), + #35
+  (2026-07-21: stable-vs-nightly separate-HF-sidecar capability), + #36 (2026-07-21: prisma-ml
+  Q2_0-g128 routing + format incompatibility; #4 corrected for the prisma DSpark port). Graded
+  premises cited inside each eval.
+
 
 ## Changelog
+### 2026-07-21 — BeeLlama v0.4.0 sync
+- Backend upgraded main@85e22ea0/b10102 → **v0.4.0-2-g7d43f840b / b10829**. Fork `dflash` spec-type
+  now rejected → upstream `draft-dflash`; DDTree/fringe/cross-ctx/max-slots/spec-draft-temp/top-k
+  and copyspec/suffix/recycle removed. TurboQuant/TCQ cache formats removed/unsupported; legacy
+  target `turbo2/3/4[_tcq]` names warn+redirect by width to **KVarN** (draft-cache aliases →
+  `q2_0`/`q3_0`/`q4_0`). New **KVarN** compressed target-cache family; **KVCPT** exact-tail controls
+  (`kv-tail-tokens`/`kv-tail-type`) added independently (usable with standard quant caches or KVarN);
+  `reasoning-loop-guard` defaults changed. Mechanics live in references/{llama-family,speculative,
+  model-research}.md; SKILL +
+  workflows/{full-tuning,audit-profile,troubleshoot}.md + eval #24 (rewritten as a v0.4.0 migration
+  scenario) updated. buun (b9792) unchanged — keeps the fork dialect.
+
+### 2026-07-18 — controlled self-improvement retrofit
+- Added an L0/L1 proposal-first learning loop with a bundled control plane: external
+  state, sanitized candidates, immutable baselines, behavioral regression checks,
+  explicit approval, atomic dual-copy promotion, drift refusal, and rollback.
+- The protected `description` was reduced from 1219 to 795 characters to meet the Agent Skills
+  1024-character limit. A 12-case external trigger report (5 exact-rig positives, 7 near-miss
+  negatives) produced zero old/new classification changes and matched every expected label.
+  The raw report remains outside the portable skill package; `--trigger-report` now validates
+  its schema, per-case labels, positive/negative coverage, derived counts, and `noRegression`.
+- Integrated verification: structural validator; 7/7 deterministic behavioral cases; 29 P2P
+  summarizer tests; 11 fake-server concurrency tests; 54 sandboxed benchmark-runner checks;
+  bundled security/transaction tests; and an external wrapper smoke reaching `verified`
+  without touching active canonical/project copies.
+
+
+### 2026-07-12 (later) - embedded-MTP tensor-vs-layer campaign + ID normalization
+- **Guidance corrected:** SKILL/dual-gpu/speculative/llama-family/troubleshoot/full-tuning/audit now
+  separate EXTERNAL drafts (unsafe under tensor: #22473 silent stop; use layer) from EMBEDDED MTP/nextn
+  heads (per-model: some run, some crash - #24309 load / #24440/#24324 `fattn.cu:579` graph-reuse on a
+  checkpoint restore, workaround `LLAMA_GRAPH_REUSE_DISABLE=1`). A successful load proves compatibility,
+  not speed. Codified the tensor promotion gate in full-tuning.md: equal-weight geometric mean of raw
+  per-band median throughput ratios >=1.05, complete samples/zero errors, then separate TTFT/VRAM/draft/
+  correctness/backend-log guardrails. Range overlap is a variance caveat, not a veto. evals #31-34 added.
+- **Campaign (5 runs/variant, one-knob split-mode, restored served profile):** all three embedded-MTP
+  35B-A3B Q4_K_M profiles loaded and ran clean under `-sm tensor` at 256k, zero benchmark errors,
+  TTFT better at every band, ~16 GiB/card. Raw-run aggregate winners: Ornith text **+12.17%**,
+  Agents-A1 vision **+11.97%**, Ornith vision **+11.31%**. Fresh tensor probes for all three passed
+  MTP engagement, shell-hostile tool call, exactly-three-paragraph Portuguese generation, backend-log
+  scan, and vision OCR where applicable. The fresh scan covered graph/assert/backend/fatal signatures
+  in each probe's own server log; it did not include a kernel/Xid journal scan. All three were
+  **PROMOTED to tensor**; per-band overlap remains recorded as variance, not a veto.
+- **Original ID normalization:** `...-mtp-layer2-256k` -> `...-mtp-layer-256k`,
+  `...-mtp-vision-layer2-256k` -> `...-mtp-vision-layer-256k`,
+  `agents-a1-...-vision-llamacpp-256k` -> `agents-a1-...-vision-layer-256k`, and
+  `qwen3.6-27b-neo-code-dflash-layer-vision-256k` -> `...-dflash-vision-layer-256k`.
+- **Aggregate-rule promotion cutover:** the three current embedded-MTP `...-layer-256k` IDs ->
+  matching `...-tensor-256k` IDs, with a rollback bundle saved first. DFlash remains layer: it was not
+  in this A/B and its external drafter has a separate tensor safety defect. The model-research anchor
+  now points at the tensor profile; historical campaign records retain the IDs present when measured.
 
 ### 2026-07-12 — this-session P2P re-measurement + harness hardening
 - **Harness:** added `scripts/summarize-p2p-matrix.py` (median/min/max/dispersion, ≥5%+non-overlap

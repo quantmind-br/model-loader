@@ -1,0 +1,22 @@
+{
+  "overrides": {
+    "_comment": "Copy this file to overrides.json (in this same directory) and edit. Each key is a model-loader profile id. Fields are target-neutral (name/input/maxTokens/reasoning); a target whose native schema can't express a field silently ignores it. Applicability: pi, Feynman, omp, OpenCode, Crush, Factory Droid accept all four (name/input/maxTokens/reasoning). Forgecode ignores maxTokens (no output-limit field). Hermes honors only input (as supports_vision). ZeroClaw honors only reasoning (as think) and maxTokens (as max_tokens); name/input are ignored. Unknown ids are ignored. To bootstrap from an existing target's current entries, run: python3 sync.py --target <pi|feynman|omp|opencode|crush|forge|hermes|droid|zeroclaw> --seed-overrides",
+
+    "qwen3.6-27b-awq-dflash-vllm-tp2-128k": {
+      "_comment": "force reasoning/thinking on even when the profile carries no reasoning arg (applies everywhere reasoning is representable: pi, Feynman, omp, OpenCode, Crush, Forgecode, Factory Droid, ZeroClaw)",
+      "reasoning": true
+    },
+
+    "qwythos-9b-mtp-q4km": {
+      "_comment": "advertise a larger output budget and a friendlier name (maxTokens ignored by Forgecode/Hermes; name ignored by Hermes/ZeroClaw)",
+      "maxTokens": 65536,
+      "name": "Qwythos 9B (1M ctx, MTP)"
+    },
+
+    "agents-a1-35b-a3b-autoround-rtn-vllm-tp2-256k": {
+      "_comment": "override the derived modality if the heuristic is wrong (Hermes reads only this field, as supports_vision; ZeroClaw ignores input)",
+      "input": ["text", "image"],
+      "reasoning": true
+    }
+  }
+}

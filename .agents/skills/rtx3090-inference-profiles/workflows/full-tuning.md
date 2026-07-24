@@ -64,7 +64,8 @@ Run top to bottom. Steps 1–8 are pre-launch; 9–12 are the measured loop.
    `args`: the step-2 sampling + anti-loop flags (llama-family: `repeat-penalty 1.05`,
    `repeat-last-n 256`; **DRY banned**), the template flag if drifted, the speculative `spec-type`
    (list-valued enum — the `draft-mtp,ngram-mod` chain and `draft-dflash` validate directly in
-   `args`; beellama/buun spell it `dflash`/`mtp`), and the backend's **agent-serving** flags
+   `args`; beellama v0.4.0 uses upstream `draft-dflash`/`draft-mtp`, only buun spells it
+   `dflash`/`mtp`), and the backend's **agent-serving** flags
    (llama.cpp: `cache-reuse 256`, `ubatch 2048` — `references/llama-family.md` §Tuning by model
    type; vLLM: `performance-mode interactivity`, `served-model-name` = profile id —
    `references/vllm-sglang.md` §Both backends: profile musts).
@@ -77,9 +78,9 @@ Run top to bottom. Steps 1–8 are pre-launch; 9–12 are the measured loop.
 9. **Launch + calibrate.** `model-loader instance start <id>`, then
    `model-loader instance logs <id> | tail -50` and confirm: **model loaded**, **drafter/MTP head
    loaded** (config fields lie — the head *should* appear in the log; but llama.cpp-stable logs
-   sparsely at default verbosity, so if no draft/MTP line shows, raise `--log-verbosity`/`lv`, OR
-   verify the head is live from a response's server `timings` — `draft_n` / `draft_n_accepted`
-   prove drafting and give the acceptance %, and the GGUF's `nextn_predict_layers` /
+   sparsely at default verbosity, so if no draft/MTP line shows, raise `--log-verbosity`/`lv`, query
+   the OpenAI endpoint directly for `timings.draft_n` / `draft_n_accepted`, or use a benchmark;
+   Claude Code's Anthropic route does not preserve `timings`. The GGUF's `nextn_predict_layers` /
    `blk.N.nextn.*` tensors prove the asset exists), the **KV line** (types + pool
    size), the **chat format** (`peg-native` good, `Generic` = no tool syntax), and **which GPUs**
    are in use. Then `nvidia-smi --query-gpu=index,memory.used --format=csv` on **BOTH** cards.
@@ -101,10 +102,29 @@ Run top to bottom. Steps 1–8 are pre-launch; 9–12 are the measured loop.
    corruption only — it costs the +13.5%). Keep an `NCCL_P2P_DISABLE`-drop only if warm A/B is
    non-regressing (dual-gpu.md §P2P); it never relaxes the tensor+draft / row / asymmetric bans.
    For a rigorous one-knob A/B use `scripts/benchmark-p2p-matrix.sh --profile-a <A> --profile-b <B>
-   --label … --runs 5` (refuses >1-knob diffs, warmup-discards, A,B,B,A,A,B order, per-GPU telemetry,
-   restores the initially-loaded profile on exit) → `scripts/summarize-p2p-matrix.py <out-dir>` for
-   the median/range/≥5%-non-overlap verdict; concurrent throughput needs `scripts/openai-concurrency-probe.py`
-   (serial llama-bench cannot show the vLLM concurrent win).
+   --label ... --runs 5` (refuses >1-knob diffs, warmup-discards, A,B,B,A,A,B order, per-GPU telemetry,
+   restores the initially-loaded profile on exit) -> `scripts/summarize-p2p-matrix.py <out-dir>` for
+   per-band medians/ranges plus the equal-weight geometric mean of all candidate/baseline median
+   throughput ratios. `decision.overall`/`performance_winner` is the aggregate performance result;
+   `promotion_status: pending_external_guardrails` means benchmark data alone cannot authorize a
+   canonical change. Concurrent throughput needs `scripts/openai-concurrency-probe.py` (serial
+   llama-bench cannot show the vLLM concurrent win).
+
+   **Tensor-split promotion gate (embedded MTP/nextn or dense candidates only - external drafts
+   stay `layer`, no A/B).** A `split-mode: tensor` variant replaces the `layer` canonical ONLY when
+   a one-knob A/B (above) clears EVERY gate; a successful load proves compatibility, never a
+   promotion signal, and MoE defaults to single/layer:
+   - **Speed:** equal-weight geometric mean of the raw per-band median ratios is >=1.05, with complete
+     expected samples and zero errored/malformed runs. Per-band range overlap is reported as a
+     variance caveat, not a veto. Aggregate regression >=5% selects the baseline; sub-5% is a tie.
+   - **TTFT/prefill:** no TTFT regression at any measured fill; the 90% benchmark preset covers
+     near-full-context prefill (tensor can regress here - check it).
+   - **VRAM:** peak <=23 GiB/card (<=46 GiB total), no cap breach at near-full ctx.
+   - **Draft:** MTP/nextn still engages — direct OpenAI `draft_n`/`draft_n_accepted`, backend logs,
+     or benchmark evidence retained; no acceptance collapse.
+   - **Correctness:** shell-hostile tool call, long non-English generation, and (vision profiles) a
+     real image request pass; the probe backend log has no graph/assert/fatal fault.
+   A failed guardrail or aggregate non-win keeps `layer`; overlapping ranges alone do not.
 
 10. **Agent-readiness** (any tool-calling / coding-agent profile — non-negotiable for those).
     Run `references/model-research.md` §4 through the proxy: the **shell-hostile tool-call round

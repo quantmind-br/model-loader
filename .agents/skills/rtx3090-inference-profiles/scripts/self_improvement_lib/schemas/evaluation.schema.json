@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skills.local/shared/self_improvement/evaluation.schema.json",
+  "title": "Self-improvement candidate evaluation record",
+  "type": "object",
+  "required": ["candidate_id", "verified", "evaluated_at", "validators", "behavioral", "comparison", "checks"],
+  "properties": {
+    "candidate_id": {"type": "string", "pattern": "^CAND-[0-9a-f]{32}$"},
+    "verified": {"type": "boolean"},
+    "evaluated_at": {"type": "string", "minLength": 1},
+    "validators": {"type": "array"},
+    "behavioral": {"type": "object"},
+    "comparison": {"type": "object"},
+    "checks": {"type": "object"},
+    "reasons": {"type": "array"}
+  },
+  "additionalProperties": true
+}

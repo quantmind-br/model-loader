@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skills.local/shared/self_improvement/approval.schema.json",
+  "title": "Self-improvement approval record",
+  "type": "object",
+  "required": ["candidate_id", "decision", "approver", "decided_at"],
+  "properties": {
+    "candidate_id": {"type": "string", "pattern": "^CAND-[0-9a-f]{32}$"},
+    "decision": {"enum": ["approve", "reject"]},
+    "approver": {"type": "string", "minLength": 1, "maxLength": 256},
+    "note": {"type": "string", "maxLength": 4096},
+    "decided_at": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false
+}

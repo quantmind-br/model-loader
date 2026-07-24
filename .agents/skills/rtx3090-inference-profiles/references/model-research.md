@@ -4,9 +4,9 @@ Every new model gets this research pass **before** the profile is written. Sampl
 chat template, tool-call parser and speculative assets are per-model facts that live on the web
 (Hugging Face first) — never guess them from family resemblance, and never trust a GGUF's
 embedded defaults. Re-run §4 (template verification) after any backend upgrade or GGUF
-re-download. Facts below verified 2026-07-02, builds re-checked 2026-07-07 (llama.cpp-stable
-b9847 / nightly b9869, beellama main@85e22ea0 build b10102, vLLM 0.24.0, SGLang 0.5.9, TabbyAPI
-3cf468c, lucebox dflash_server 1b11c50).
+re-download. Facts below verified 2026-07-02; llama.cpp runtime capabilities re-checked
+2026-07-21 (stable b9934 / nightly b10083). Other installed pins: beellama
+v0.4.0 build b10829, vLLM 0.24.0, SGLang 0.5.9, TabbyAPI 3cf468c, lucebox 1b11c50.
 
 ## 1. The lookup protocol (start at Hugging Face)
 
@@ -45,10 +45,14 @@ usage-example temp for single-shot code completion. Card > **benchmark methodolo
 unsloth > community, where "card" now means the *source-model* card (deepest `base_model` link).
 
 **Also inventory speculative + template assets while you're on HF** (see references/speculative.md):
-- MTP/nextn head: does the GGUF/quant actually ship the tensors (launch log / safetensors index),
-  not just the config field?
-- DFlash drafter: search `<family> DFlash` (Anbeeld/*-DFlash-GGUF, Lucebox/*, z-lab/*, turboderp/*-DFlash-exl3).
-- EAGLE-3 head: search `<family> eagle3` / SpecForge; official heads exist for vanilla Qwen/Llama, not merges.
+- MTP/nextn head: does the GGUF/quant actually ship the tensors, or is it a separate `mtp-*`
+  sidecar? Record the exact repo and filename/prefix; config presence is not proof of loading.
+- DFlash drafter: search `<family> DFlash` and record whether the GGUF is named `dflash-*` and uses
+  upstream schema (Anbeeld/*-DFlash-GGUF, Lucebox/*, z-lab/*, turboderp/*-DFlash-exl3).
+- EAGLE-3 head: search `<family> eagle3` / SpecForge and record whether a pre-converted
+  `eagle3-*` GGUF exists; official heads favor vanilla Qwen/Llama, not merges.
+- Delivery decision: separate HF sidecar repo via `spec-draft-hf` only on llama.cpp nightly b10083;
+  stable b9934 uses a downloaded local GGUF in `spec-draft-model`. Main `model` stays local.
 - Official template: repo's `chat_template.jinja` or `tokenizer_config.json` `chat_template` key.
 
 ## 2. Official sampling presets per family (seed table — fetched 2026-07-02, RE-VERIFY on HF)
@@ -121,8 +125,8 @@ Lowering temp on these *degrades* output; Qwen3.6 reserves 0.6 for "precise codi
 - **vLLM / SGLang / dflash_server have no DRY and no launch-side sampling flags** — anti-loop
   there is per-request only: `frequency_penalty`/`presence_penalty` (OpenAI-standard, any client)
   or the family's official `presence_penalty` via `--override-generation-config` (vLLM).
-- **beellama deterministic alternative:** `reasoning-loop-guard force-close` (+ defaults:
-  min-tokens 1024, window 2048, max-period 512) kills periodic loops inside think blocks without
+- **beellama deterministic alternative:** `reasoning-loop-guard force-close` (+ v0.4.0 defaults:
+  min-tokens 512, window 1024, max-period 128) kills periodic loops inside think blocks without
   touching sampling — safe for tool calls, per-request overridable.
 
 ### Who actually controls sampling at runtime (verified in proxy + engine sources)
@@ -149,13 +153,13 @@ Lowering temp on these *degrades* output; Qwen3.6 reserves 0.6 for "precise codi
 
 ## 4. Chat template & tool-calling verification (mandatory for agent profiles)
 
-Background (b9847): `--jinja` is **default-on**; the **autoparser** derives the reasoning/tool-call
-parser + GBNF grammar *from the template itself* (log: `Chat format: peg-native`). A wrong or
-stale template no longer just changes the prompt — it silently mis-generates the output parser.
+Background (introduced by b9847 and still current on b9934/b10083): `--jinja` is **default-on**;
+the **autoparser** derives the reasoning/tool-call parser + GBNF grammar *from the template itself*
+(log: `Chat format: peg-native`). A wrong/stale template silently mis-generates the output parser.
 `--reasoning-format` values: `none|auto|deepseek|deepseek-legacy` (auto = deepseek = extract to
 `reasoning_content`, the default; the proxy maps that to Anthropic thinking blocks). Thinking
-toggle: `--reasoning on|off|auto` (setting `enable_thinking` via `--chat-template-kwargs` is
-deprecated at b9847). Escape hatch: `--skip-chat-parsing` (raw content, client parses).
+toggle: `--reasoning on|off|auto`; setting `enable_thinking` through chat-template kwargs is
+deprecated. Escape hatch: `--skip-chat-parsing` (raw content, client parses).
 
 Checklist for a NEW model profile (steps 1–3 pre-launch, 4–8 post-launch):
 
@@ -238,13 +242,13 @@ detector-map union (tool-call: 30 values incl. `qwen3_coder`/`glm47`; reasoning:
   repeat-last-n 256` (the calibrated gen_config temp; `top-n-sigma 1.0` holds MTP/DFlash
   acceptance flat — measured). For **single-shot** code completion where you want the "precise"
   preset: `temperature 0.6` (drop `top-n-sigma`). (+ beellama: `reasoning-loop-guard force-close`.)
-- **Ornith AEON 35B-A3B (agentic-coding, llama.cpp, layer-split 2×3090):** same as Qwen3.6
-  agentic above — temp 1.0 / top-p 0.95 / top-k 20 / min-p 0 / top-n-sigma 1.0 / repeat-penalty
+- **Ornith AEON 35B-A3B (agentic-coding, llama.cpp, tensor-split 2x3090):** same as Qwen3.6
+  agentic above - temp 1.0 / top-p 0.95 / top-k 20 / min-p 0 / top-n-sigma 1.0 / repeat-penalty
   1.05 / repeat-last-n 256. Source: `deepreinforce-ai/Ornith-1.0-35B` benchmark methodology
   (Terminal-Bench 2.1, SWE-Bench Verified/Pro, SWE-Atlas all at temp 1.0) + gen_config=1.0; the
   card's temp-0.6 examples are the ClawEval/single-shot preset. Official Ornith chat template +
   `--reasoning-format deepseek` mandatory (stock-Qwen GGUF template corrupts Claude Code Bash
-  calls). Profile `ornith-aeon-35b-a3b-q4km-mtp-vision-layer2-256k` is the anchor.
+  calls). Profile `ornith-aeon-35b-a3b-q4km-mtp-vision-tensor-256k` is the anchor.
 - **Qwen3.6 instruct (no-think):** `temperature 0.7, top-p 0.8, top-k 20, min-p 0,
   presence-penalty 1.5` + `--reasoning off`.
 - **Gemma 4 (llama.cpp):** `temperature 1.0, top-k 64, top-p 0.95, min-p 0` — never lower temp for code.

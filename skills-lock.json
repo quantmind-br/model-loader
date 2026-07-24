@@ -1,42 +1,42 @@
 {
-  "version": 1,
   "skills": {
     "caveman-compress": {
-      "source": "juliusbrussee/caveman",
-      "sourceType": "github",
-      "skillPath": "skills/caveman-compress/SKILL.md",
-      "computedHash": "1e9b3e2bf68b75dc0252c4328c8514bea79d4d8f7d7259da616ba7d12cad6865"
+      "computedHash": "83824a2b94e37c83cc8af10b0e852136a88920df6eb4c1d5bc267502d6ed13a5",
+      "skillPath": "caveman-compress/SKILL.md",
+      "source": "/home/diogo/dev/skills",
+      "sourceType": "local"
     },
     "grill-me": {
-      "source": "mattpocock/skills",
-      "sourceType": "github",
+      "computedHash": "784f0dbb7403b0f00324bce9a112f715342777a0daee7bbb7385f9c6f0a170ea",
       "skillPath": "skills/productivity/grill-me/SKILL.md",
-      "computedHash": "784f0dbb7403b0f00324bce9a112f715342777a0daee7bbb7385f9c6f0a170ea"
+      "source": "mattpocock/skills",
+      "sourceType": "github"
     },
     "llamacpp": {
+      "computedHash": "d99b92723cc416c4b2c8c984dd5b61b605118e0f0df4d2592a320f45db7b71fe",
       "source": "/home/diogo/dev/skills/llamacpp",
-      "sourceType": "local",
-      "computedHash": "d99b92723cc416c4b2c8c984dd5b61b605118e0f0df4d2592a320f45db7b71fe"
+      "sourceType": "local"
     },
     "shotgun-ignore": {
+      "computedHash": "bbcf37f8eeb08cac889ee9bfad39fffad705fe88d54c15de3420f957a2a091c2",
       "source": "/home/diogo/dev/skills/shotgun-ignore",
-      "sourceType": "local",
-      "computedHash": "bbcf37f8eeb08cac889ee9bfad39fffad705fe88d54c15de3420f957a2a091c2"
+      "sourceType": "local"
     },
     "tui-design": {
+      "computedHash": "89f44d99a5cc9a30ada80ba9e7607aa34526f6c15541821a38aa294b46d915d0",
       "source": "/home/diogo/dev/skills/tui-design",
-      "sourceType": "local",
-      "computedHash": "f57002f0386c7b97a3137b980ccaf4a037929e326d72664c2a4577741bef17b0"
+      "sourceType": "local"
     },
     "tui-refactor": {
+      "computedHash": "1bea98c11f67def3716b2c62a86097b1bbd541887caf13289695a039f665e480",
       "source": "/home/diogo/dev/skills/tui-refactor",
-      "sourceType": "local",
-      "computedHash": "e4ffdc74b62876ac4784113a1cdd9de0cb1a6f58c65e253ce56958828061fb02"
+      "sourceType": "local"
     },
     "tui-validator": {
+      "computedHash": "a8cbcd1a9e6b4fe5937cbf8cab5fda96e17a5698894782171cae756a9632a52c",
       "source": "/home/diogo/dev/skills/tui-validator",
-      "sourceType": "local",
-      "computedHash": "d3ef90919d2adb68c2aab9dbdc5e6001ed0d8bbf5529efd44505d72dd5035337"
+      "sourceType": "local"
     }
-  }
+  },
+  "version": 1
 }

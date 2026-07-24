@@ -58,8 +58,9 @@ benchmark/audit decide.
 - **Fixes (one step per iteration, re-measure):** walk the backend's OOM ladder, cheapest lever
   first (the §Context adjustment rule move is usually step 1):
   - llama family → references/llama-family.md §OOM sacrifice ladder (ctx ↓ within band → KV one bpv
-    step, **never below `q8_0` on tool-calling profiles** → quant tier ↓ → `spec-dflash-cross-ctx`
-    1024→512 → ubatch 2048→1024→512). MoE that must shrink below its all-GPU footprint → Luce Spark
+    step, **never below `q8_0` on tool-calling profiles** → quant tier ↓ → ubatch 2048→1024→512;
+    **non-agent only**, tighten KVarN one `kvarn*` step, beellama v0.4.0 — tool-calling keeps the
+    q8_0 floor, cut ctx or ship a lower-ctx variant). MoE that must shrink below its all-GPU footprint → Luce Spark
     (references/dflash.md), never naive `--n-cpu-moe`.
   - vLLM/SGLang → the OOM ladders in references/vllm-sglang.md §vLLM 0.24.0 knobs / §SGLang 0.5.9
     knobs (printed max-model-len → util ↓ → `max-num-batched-tokens`/`chunked-prefill-size` 4096 →
@@ -116,27 +117,35 @@ load is a **real load failure**, never a validator block. Do not "work around" i
   launch log at load.
 - **Diagnose:** is the spec actually drafting? **llama.cpp-stable logs sparsely at default
   verbosity — an absent `draft-mtp`/`dflash` line in the launch log does NOT prove the spec is
-  off** (measured: a healthy chain shows no line). Confirm the ground truth via a response's server
-  `timings` (`draft_n` / `draft_n_accepted` > 0 = drafting live, and gives the acceptance %), or
-  raise `--log-verbosity`/`lv` to force the line. Also verify the asset exists (GGUF
-  `nextn_predict_layers` / `blk.N.nextn.*` tensors, or the external drafter path) →
-  references/speculative.md §Asset inventory. Only if `timings` shows no drafting is the spec truly
-  not engaged.
+  off** (measured: a healthy chain shows no line). Confirm through a direct OpenAI response's server
+  `timings` (`draft_n` / `draft_n_accepted` > 0 = drafting live and gives the acceptance %), raise
+  `--log-verbosity`/`lv` to force the line, or use a benchmark. Claude Code's Anthropic route does
+  not preserve `timings`. Also verify the asset exists (GGUF `nextn_predict_layers` /
+  `blk.N.nextn.*` tensors, or the external drafter path) → references/speculative.md §Asset
+  inventory. Only absent drafting across those observable surfaces proves the spec is not engaged.
 - **Fixes (one per iteration):**
-  1. **Dialect mismatch** — the spelling must match the backend: **upstream llama.cpp =
-     `draft-mtp`/`draft-dflash`**, **beellama/buun = `mtp`/`dflash`** (full matrix →
+  1. **Dialect mismatch** — the spelling must match the backend: **upstream llama.cpp + beellama
+     v0.4.0 = `draft-mtp`/`draft-dflash`**, **only buun = `mtp`/`dflash`** (full matrix →
      references/speculative.md §Per-engine support). A valid-but-wrong-dialect value loads nothing.
-  2. **Missing assets** — the GGUF/quant must actually ship the MTP/nextn tensors, or the external
-     drafter path must exist (references/speculative.md §Asset inventory). Config field ≠ tensors.
-  3. **`split-mode tensor` + any external draft/MTP head crashes at load** (#24309/#22473, open) —
-     switch to `split-mode layer`, or chain draftless `ngram-mod` which survives tensor
-     (references/dual-gpu.md §llama.cpp `-sm tensor`).
+  2. **Missing/wrong asset resolution** — the GGUF/quant must ship the MTP/nextn tensors, or the
+     external drafter must resolve to the matching sidecar. On nightly b10083, `spec-draft-hf`
+     requires the corresponding `spec-type` (`draft-mtp`→`mtp-*`, `draft-dflash`→`dflash-*`,
+     `draft-eagle3`→`eagle3-*`); use one model-based type per HF repo because multiple sidecars
+     download in parallel with no guaranteed winner. Stable b9934 may select the repo's main GGUF
+     instead, so download the sidecar and use local `spec-draft-model`. Config field ≠ loaded file.
+  3. **`split-mode tensor` + speculation — split the diagnosis:** an **external draft** silently
+     stops/hangs (#22473, open) → use `split-mode layer` or chain draftless `ngram-mod` which
+     survives tensor. An **embedded MTP/nextn head** is per-model — some load and run, some crash
+     (#24309 nextn at load; #24440/#24324 `fattn.cu:579` on a checkpoint restore) → try
+     `LLAMA_GRAPH_REUSE_DISABLE=1`, else `split-mode layer`; never read a successful load as proof
+     tensor is faster (references/dual-gpu.md §llama.cpp `-sm tensor`).
   4. **Loads but no speedup = low acceptance** — high sampling entropy without `top-n-sigma 1.0`, or a
      mismatched/cross-generation drafter (30% vs 65% accept). On llama.cpp/beellama run the calibrated
      temp + `top-n-sigma 1.0` (references/speculative.md §Sampling × speculation). Judge tok/s, not
      acceptance alone.
-- **Verify:** drafting confirmed live — a response's `timings.draft_n_accepted` > 0 (or the
-  head/drafter line at raised verbosity) — AND warm-measured tok/s beats the no-spec baseline.
+- **Verify:** drafting confirmed live — direct OpenAI `timings.draft_n_accepted` > 0, the
+  head/drafter line at raised verbosity, or benchmark evidence — AND warm-measured tok/s beats the
+  no-spec baseline.
 
 ## Split / multi-GPU problems
 

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "skills": {
+    "caveman-compress": {
+      "canonicalPath": "caveman-compress",
+      "baseCommit": "fa425896f74f0ecd716b8a553c3eab13c26bf972",
+      "baseTree": "314b0cbf7069162a1af4138bfceb18aaac0ac502",
+      "dirHash": "e3b1f5c2a7c8d21cfdc03d3b241db0bbb776b9225f0e9bccbf8adc4bd8988b61",
+      "syncedAt": "2026-07-24T19:02:52.051168784Z"
+    }
+  }
+}

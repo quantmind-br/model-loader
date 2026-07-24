@@ -1,10 +1,12 @@
-# llama family on the dual-3090 rig — llama-server (b9847 stable / b9869 nightly), beellama-cpp (main@85e22ea0, b10102-dirty), buun-llama-cpp (b9792)
+# llama family on the dual-3090 rig — mainline, Poolside Laguna, BeeLlama, buun, PrismaML
 
-Catalog ids: **`llama.cpp-stable`** (b9847, `e495d1e74`) and **`llama.cpp-nightly`** (b9869,
-`d4cff114c` — 22 commits past b9847; profile-relevant flag surface is IDENTICAL, verified by
-diffing `common/arg.cpp`: 410 registered flags each, empty diff) for kind `llama-server`;
-**`beellama-rtx3090`** (beellama fork, `main@85e22ea0`, build **b10102-dirty** — "-dirty" =
-local build-tree patches, documented as-is; past the v0.3.1 tag); **`buun-rtx3090`** (buun fork,
+Catalog ids: **`llama.cpp-stable`** (b9934, `32e41fa5b`), **`llama.cpp-nightly`** (b10083,
+`846e991ec`), and **`llama.cpp-prisma-ml`** (PrismML fork b9597, `7529fdaaf`, base b9594 — see
+§llama.cpp-prisma-ml). Their profile flag names overlap, but runtime capability is no longer identical:
+nightly adds correct separate-HF-draft-repo sidecar resolution plus DFlash/EAGLE-3 discovery;
+**`beellama-rtx3090`** (beellama fork, `v0.4.0-2-g7d43f840b`, build **b10829**; past the v0.3.1
+tag — v0.4.0 swapped the fork DFlash for upstream `draft-dflash` and added KVarN KV compression +
+the KV precision tail); **`buun-rtx3090`** (buun fork,
 b9792 `87c351d28`, superseded — recommend beellama unless the user insists). All take local GGUF
 paths (`--model` emitted from the profile `model` field; HF repo ids REJECTED by the validator
 for these kinds) and share canonical flag mapping (`ngl` → `n-gpu-layers`). On-disk schemas are
@@ -21,15 +23,55 @@ to its canonical schema flag and validates.
 | Situation | Backend | Why |
 |---|---|---|
 | GGUF with native MTP head (`*-MTP`, nextn) | llama.cpp-stable, `spec-type: draft-mtp` (or the `draft-mtp,ngram-mod` chain) | MTP ~180–208 tok/s @70%+ accept on MoE; the `draft-mtp,ngram-mod` chain adds free hits on re-emitted code and **validates directly in `args`** — `spec-type` is a list-valued enum (schema `"list": true`, `checkEnum` splits on comma; S1 fixed); confirm both the MTP head and the ngram drafter load from the launch log |
-| Dense GGUF + DFlash drafter | beellama-rtx3090 (`spec-type: dflash`, adaptive controller, both drafter schemas) — upstream `draft-dflash` on llama.cpp-stable now validates in `args` too (it is in the list-valued `spec-type` enum; S1 fixed), flat only | DFlash beats draft-mtp on dense (measured); beellama's adaptive `dflash` is the measured-better path, upstream flat `draft-dflash` is a reachable alternative |
+| Dense GGUF + DFlash drafter | beellama-rtx3090 (`spec-type: draft-dflash`, default-on adaptive `profit` controller, upstream-format drafter) — same `draft-dflash` on llama.cpp-stable also validates in `args` (list-valued `spec-type` enum; S1 fixed), flat only | DFlash beats draft-mtp on dense (measured); beellama adds its adaptive depth controller on top of the same upstream DFlash, llama.cpp-stable runs it flat |
 | Plain GGUF, no spec assets | llama.cpp-stable + `spec-type: ngram-mod` | free speedup on agent/code loops (~16 MB, zero VRAM) |
 | Finetunes (abliterated/heretic/NEO) | prefer native MTP | DFlash acceptance collapses on finetunes (57%→~24%) unless a matched drafter exists (e.g. AEON-7); MTP heads survive finetuning |
 | EAGLE-3 head exists, no MTP/DFlash | llama.cpp-stable `spec-type: draft-eagle3` + converted head | Qwen3.5/3.6-hybrid fixes are in b9847; agentic-trained heads (Ex0bit) best |
 
+### HF speculative sidecars: installed-build matrix
+
+- The profile's main `model` remains a local GGUF path; model-loader validation does not accept a
+  bare HF repo as the llama-family model.
+- **stable b9934:** supports all listed speculative modes and local external drafter GGUFs. Its
+  downloader can discover `mtp-*` beside a model selected through llama.cpp's own `--hf-repo`
+  path, but a separate `spec-draft-hf` plan does not consume the discovered sidecar reliably; use
+  a downloaded local GGUF in `spec-draft-model` for separate MTP/DFlash/EAGLE-3 repos.
+- **nightly b10083:** `spec-draft-hf` resolves a separate draft repo when `spec-type` contains the
+  matching type (`draft-mtp`→`mtp-*`, `draft-dflash`→`dflash-*`, `draft-eagle3`→`eagle3-*`),
+  avoids duplicate speculative downloads, and excludes sidecars from primary-model selection.
+  Use exactly one model-based draft type with one HF draft repo; multiple sidecars are downloaded
+  in parallel and no winner is guaranteed. Chaining with draftless `ngram-mod` remains supported.
+  Repo naming must follow the matching prefix.
+- The shared schema proves argument spelling only. Check the executable version and requested
+  type before choosing the HF-repo path. After launch, prove drafting through a direct OpenAI
+  response's `timings.draft_n`/`draft_n_accepted`, or backend logs/benchmark; Claude Code's
+  Anthropic route does not preserve `timings`.
+
+### Laguna-S-2.1 support matrix (measured 2026-07-24)
+
+- **Poolside llama.cpp `laguna` branch (`04b2b72`)** is the current working host for the official
+  Laguna-S-2.1 GGUF and its matched `laguna-s-2.1-DFlash-BF16.gguf`. Its CUDA 13.3/sm_86 build
+  needed `<cmath>` in `common/speculative.cpp` for `std::isfinite`; treat that as a source-build
+  compatibility fix, not a profile flag.
+- Installed `llama.cpp-stable` b9934 and BeeLlama b10829 reject `general.architecture=laguna`.
+  Backend kind and shared flags do not prove model-architecture support. Re-test after upgrades.
+- Installed Lucebox recognizes Laguna but rejects Laguna-S-2.1 because its compiled `n_head_arr`
+  capacity is 40 layers; this target has 48. A future Lucebox rebuild may change that boundary.
+- Official Q4_K_M is 63.6 GiB: larger than aggregate VRAM. Poolside `fit on` + `fit-ctx 262144`
+  + `fit-target 1536` selected a working dual-GPU `layer` placement with mmap-backed CPU tensors;
+  measured idle VRAM was about 22.4/22.3 GiB and decode about 10.9 tok/s on the calibration probe.
+  This is an explicit Laguna exception to the usual no-CPU-weights policy because no ≥Q4 target
+  fits 46 GiB; document the tradeoff and do not generalize it to other MoE models.
+- Matched DFlash needs **f16 draft KV** here. `q4_0/q4_0` draft KV produced ~1.2% acceptance;
+  f16/f16 recovered 82.2% on repetitive code. That did not generalize: tool-call, short-answer,
+  and 64K needle probes stayed around 2.7–4.3%. Keep DFlash as a workload-specific variant and
+  select the non-DFlash layer profile for general coding agents unless a representative corpus wins.
+
+
 Speculative details + asset inventory: **references/speculative.md**. Sampling/template/tool-call
 setup: **references/model-research.md** (mandatory research pass).
 
-## b9847 features that change profile-writing (vs older builds)
+## Features introduced by b9847 and still relevant on b9934/b10083
 
 - **`--fit` is default ON** (`fit-target` 1024 MiB/device, `fit-ctx` 4096): with `n-gpu-layers`
   and `ctx-size` unset it auto-sizes ctx and layer/expert placement. **Rig policy: pin
@@ -59,13 +101,13 @@ setup: **references/model-research.md** (mandatory research pass).
 - **Flash attention** default `auto`; pin `"flash-attn": "on"` when using quantized KV or
   split-mode tensor. CUDA graphs + graph reuse are on by default.
 - **Draft/spec flag surface:** `--draft`/`--draft-n`/`--draft-max` (→ `draft.n_max`) and
-  `--draft-min`/`--draft-n-min` are STILL live aliases on b9847/b9869 (`common/arg.cpp`
-  L3907/L3914) — not removed; the canonical spec-family names are `--spec-draft-n-max` /
-  `--spec-draft-n-min`, prefer those. Dialects DO differ by backend (`common/speculative.cpp`
-  type maps): `mtp` and `dflash` are beellama/buun-only `spec-type` spellings — upstream uses
-  `draft-mtp` and `draft-dflash`, upstream has NO `dflash` and beellama/buun have NO
-  `draft-dflash` (beellama's DFlash is its own `dflash` implementation). Never mix spellings
-  across the three backends; trust each backend's schema.
+  `--draft-min`/`--draft-n-min` remain live aliases on b9934/b10083; the canonical names are
+  `--spec-draft-n-max` / `--spec-draft-n-min`, prefer those. Dialects DO differ by backend
+  (`common/speculative.cpp` type maps): `mtp` and `dflash` are the **buun-only** fork `spec-type`
+  spellings — upstream and BeeLlama v0.4.0 use `draft-mtp` and `draft-dflash`. **BeeLlama v0.4.0
+  switched to the upstream `draft-dflash` spelling** (its old fork `dflash` is gone); only **buun**
+  (b9792, not upgraded) still uses the fork `dflash`/`mtp` dialect and has NO `draft-dflash`. Never
+  mix spellings across the three backends; trust each backend's schema.
 - `--defrag-thold` deprecated/no-op. `--no-host`: AMX-specific, skip on this rig.
 - mmap default ON is what makes proxy hot-swaps fast (page cache). The library's anchors use
   `--no-mmap --mlock --no-host` (avoids page-cache eviction stalls mid-session; mlock may log a
@@ -78,8 +120,12 @@ setup: **references/model-research.md** (mandatory research pass).
 - KV bytes ≈ `ctx × n_layer × n_kv_heads × head_dim × (bpv_K + bpv_V) / 8` — **dense
   full-attention only**. Hybrid/SWA (Gemma, qwen3.5/3.6) cost far less (measured: Qwen3.6-27B
   q4_0 ≈ 22.5 KiB/token vs 72 by formula). Scale from an anchor or read the KV line in the log.
-- bpv ladder: f16 16 · q8_0 8.5 · q5_1 6.0 · q5_0 5.5 · q4_1 5.0 · q4_0/iq4_nl 4.5 ·
-  turbo4 4.125 · turbo3_tcq 3.25 · turbo3 3.125 · turbo2_tcq 2.25 (turbo* = beellama, CUDA only).
+- bpv ladder: f16 16 · q8_0 8.5 · q6_0 6.5 · q5_1 6.0 · q5_0 5.5 · q4_1 5.0 · q4_0/iq4_nl 4.5.
+  v0.4.0 added standard `q6_1`/`q3_1`/`q3_0`/`q2_1`/`q2_0` (widths track their labels; verify the
+  KV line in the log). beellama v0.4.0 KVarN (target-context compression, CUDA only): `kvarn8`
+  down to `kvarn2` are progressively smaller with independent K/V widths — read the measured KV
+  buffer from the launch log rather than a formula; `kv-tail-tokens auto` keeps the newest
+  entries exact.
 - Compute buffers scale with `ubatch × ctx`. **Long-prompt prefill grows the CUDA pool at
   runtime** — idle fit ≠ fit. Always test a near-full-ctx prompt + re-check nvidia-smi.
 
@@ -89,7 +135,7 @@ setup: **references/model-research.md** (mandatory research pass).
 |---|---|---|---|---|
 | Precision (coding/agents) | Q5_K_S / Q5_K_M (or Q6/Q8 if it fits) | Q4_K_M / IQ4_XS | **q8_0/q8_0** | tool-calling profiles NEVER q4_0 KV (official caution + measured corruption here); K more sensitive than V — q5_0/q4_1 is the compromise pair |
 | Balanced / max context | Q4_K_M / UD-Q4_K_XL | Q4_K_M | q4_0/q4_0 | proven: 27B + drafter @204800 ≈ 22.4 GiB idle; 262144 fits at peak 23723 MiB — razor-thin |
-| Extreme squeeze | IQ4_XS | IQ4_XS | turbo3_tcq (beellama) | real quality cost — explicit request only |
+| Extreme squeeze (**non-agent only** — never tool-calling) | IQ4_XS | IQ4_XS | kvarn3/kvarn2 (beellama v0.4.0) | real quality cost — explicit request only; KVarN replaces the removed TurboQuant types. Tool-calling profiles keep the q8_0 KV floor — cut ctx or ship a lower-ctx variant instead |
 
 Short ctx (≤32k) with headroom → keep KV f16/q8_0. **Q8 drafters are never better than Q4_K_M**
 (measured; drafting doesn't need precision). Unsloth UD (Dynamic 2.0) quants are the
@@ -102,24 +148,36 @@ quality-per-GB pick within GGUF when available.
   chain the free ngram drafter: `"spec-type": "draft-mtp,ngram-mod"` — this **validates directly
   in `args`** on llama.cpp-stable/nightly (`spec-type` is list-valued, `"list": true`;
   `checkEnum` splits the comma-list; S1 fixed), so ship the chain, do NOT route it through
-  extraArgs; confirm both the MTP head and the ngram drafter load from the launch log (sparse at default verbosity — if no draft line shows, raise `--log-verbosity`/`lv` or read a response's server `timings.draft_n`/`draft_n_accepted`). MTP draft
+  extraArgs; confirm both the MTP head and the ngram drafter load from the launch log (sparse at default verbosity — if no draft line shows, raise `--log-verbosity`/`lv`, query the OpenAI endpoint directly for `timings.draft_n`/`draft_n_accepted`, or use a benchmark; Claude Code's Anthropic route does not preserve `timings`). MTP draft
   ctx defaults f16 KV — set `"cache-type-k-draft": "q8_0", "cache-type-v-draft": "q8_0"` in
   `args` (schema keys; `--spec-draft-type-k`/`-v` are accepted aliases that resolve to the same
   flags via `Lookup`).
-- **DFlash (beellama):** `"spec-type": "dflash"`, `"spec-draft-model": "/abs/drafter.gguf"`,
-  `"spec-draft-ngl": 99`, `"spec-dflash-cross-ctx": 1024`, `"kv-unified": true`, `"cache-ram": 0`
-  (beellama's own doc default) — leave `spec-draft-n-max` unset (adaptive `profit` controller).
-  Drafters: Anbeeld/Lucebox/spiritbuun GGUFs (beellama takes both schemas). Watch acceptance in
-  the log; ~0.86 on templated code vs ~0.21–0.27 on prose — judge tok/s, not acceptance.
-- **DFlash (upstream llama.cpp):** spec-type `draft-dflash` + `-md` upstream-schema drafter
-  (Alittlehammmer/williamliao), `"spec-draft-n-max": 15`. New in b9847 — flat only; calibrate
-  against beellama before switching. `draft-dflash` IS in the curated list-valued `spec-type`
-  enum (schema `llama.cpp-stable.json`; S1 fixed) — it **validates in `args`**. beellama's
-  adaptive `dflash` dialect stays the measured-better DFlash path on dense; upstream flat
-  `draft-dflash` is the reachable alternative when beellama is not wanted.
+- **DFlash (beellama v0.4.0):** `"spec-type": "draft-dflash"` (**renamed from the old `dflash`** —
+  v0.4.0 adopted upstream's implementation and spelling), `"spec-draft-model": "/abs/drafter.gguf"`,
+  `"spec-draft-ngl": 99`, `"kv-unified": true` — leave `spec-draft-n-max` unset (default-on adaptive
+  `profit` controller; omitted limit = `dflash.block_size - 1`). The old fork knobs
+  `spec-dflash-cross-ctx`/`spec-dflash-max-slots`/`spec-branch-budget` are **removed** (rejected at
+  launch). `--spec-draft-model` requires an **upstream-format `dflash` draft GGUF** — v0.4.0
+  mandates upstream's `dflash` architecture, metadata keys, tensor names, and tokenizer contract;
+  other schemas are unsupported (obtain or reconvert an upstream-format drafter). Watch acceptance
+  in the log; ~0.86 on templated code vs ~0.21–0.27 on prose — judge tok/s, not acceptance.
+- **DFlash (upstream llama.cpp-stable/nightly):** same `spec-type: draft-dflash` + local
+  upstream-schema drafter (Alittlehammmer/williamliao), `spec-draft-n-max: 15`. Flat only, no
+  adaptive controller. `draft-dflash` IS in the curated list-valued enum (schema
+  `llama.cpp-stable.json`; S1 fixed) — it **validates in `args`**. BeeLlama v0.4.0 now runs the
+  same upstream DFlash but adds its default-on `profit` depth controller on top.
+- **DFlash (Poolside Laguna fork):** use the matched Poolside BF16 draft, `draft-dflash`, n-max 15,
+  and f16/f16 draft KV. Measure `draft_n_accepted/draft_n` on representative traffic; a repetitive
+  templated-code win is not sufficient for an agent-profile promotion.
+- **KVarN KV compression (beellama v0.4.0 only):** set `"cache-type-k"`/`"cache-type-v"` to
+  `kvarn2`..`kvarn6`/`kvarn8` for target-context compression; optional SWA-layer overrides
+  `"cache-type-k-swa"`/`"cache-type-v-swa"` (kvarnN only) and precision tail `"kv-tail-tokens": "auto"`
+  + `"kv-tail-type"` (f16/bf16) keep the newest attention-visible entries exact. Legacy target
+  `turbo2/3/4[_tcq]` cache names warn and redirect by width to `kvarn2/3/4` (draft-cache turbo
+  aliases redirect to `q2_0/q3_0/q4_0`); actual TurboQuant/TCQ GGUF cache formats are unsupported.
 - **ngram (zero-asset):** `"spec-type": "ngram-mod"` (defaults n-match 24 / n-min 48 / n-max 64).
 - Dual-GPU: `--spec-draft-device CUDA1` (or CUDA0) parks the draft on the other card.
-  **`split-mode tensor` crashes with ANY external draft** — layer split only (dual-gpu.md).
+  **External drafts under `split-mode tensor` are unsafe** (silent stop, #22473) — layer split only. **Embedded MTP/nextn is per-model** (some run, some crash #24309/#24440; workaround `LLAMA_GRAPH_REUSE_DISABLE=1` / `-sm layer`): a load proves compatibility, not speed — gate any promotion (dual-gpu.md, full-tuning.md).
 
 ## MoE specifics (35B-A3B class)
 
@@ -175,7 +233,7 @@ Same GGUF engine, different knob priorities on Ampere/SM86. Every knob below val
 Fitting model → pin GPU1 (`launch.env`: `CUDA_DEVICE_ORDER=PCI_BUS_ID`, `CUDA_VISIBLE_DEVICES=1`)
 — on a 2-GPU box llama.cpp auto-splits when both cards are visible, silently changing proven
 numbers. `split-mode tensor` = fastest dense batch-1 at short ctx (+22…39%, reverses ≥512k;
-no external drafts; no fit; set ngl+ctx manually); `layer` = safe/compatible (+4…7%);
+external drafts unsafe, embedded MTP/nextn per-model; no fit; set ngl+ctx manually); `layer` = safe/compatible (+4…7%);
 `row` = deprecated, −2.8×. **`tensor-split` MUST be `"0.5,0.5"`** when splitting (never asymmetric ratios); `main-gpu 1`, no CUDA_VISIBLE_DEVICES mask when splitting.
 
 **P2P (patched rig):** `GGML_CUDA_P2P=1` is **source-verified for this family** (`getenv` in
@@ -244,10 +302,52 @@ and kills cache-reuse/context-shift (upstream) — expected, don't "fix" it.
 ## OOM sacrifice ladder (one step per iteration, re-measure)
 
 Dense: ctx ↓ → KV one bpv step down (never below q8_0 on tool-calling profiles) → target quant
-one tier down → `spec-dflash-cross-ctx` 1024→512 → ubatch 2048→1024→512 (halves the prefill
-transient; costs prefill speed).
+one tier down → ubatch 2048→1024→512 (halves the prefill transient; costs prefill speed).
+**Non-agent only** (caption/OCR/prose, never tool-calling): tighten KVarN one `kvarn*` step
+(beellama v0.4.0 `cache-type-k`/`-v`) as an alternative to the quant/ubatch steps. On tool-calling
+profiles the q8_0 floor holds — cut ctx or ship a lower-context variant instead.
 MoE: consider Spark on lucebox-dflash (dflash.md) → draft KV q8_0 via `--spec-draft-type-*` →
 ubatch down → dense ladder. (`--n-cpu-moe` only on explicit user request.)
+
+## llama.cpp-prisma-ml
+
+Registered as **`llama.cpp-prisma-ml`** (PrismML fork of llama.cpp, b9597 `7529fdaaf`, base
+b9594, remote `PrismML-Eng/llama.cpp`). Same `llama-server` kind and canonical flag mapping as
+stable/nightly; its on-disk schema is live-parsed from the fork binary and **enrich-only** — the
+shared `CuratedLlamaSchema()` overlay is applied for metadata but never appends upstream-only
+flags the fork lacks (so `--cors-*`, `--reasoning-preserve`, `--mtmd-batch-max-tokens` are absent
+from the prisma schema, matching the binary; S8). Fork deltas:
+
+- **Q2_0 2-bit ternary weights** — the reason the fork exists (the [Bonsai](https://huggingface.co/collections/prism-ml/bonsai)
+  models), plus `Q1_0`. This is a **weight** quant type (`--model` GGUF), NOT a KV-cache type.
+  **Format gotcha:** the fork loads `*-Q2_0.gguf` (group size 128); mainline llama.cpp uses
+  `*-Q2_0_g64.gguf` (group 64, CPU/Metal only) and the two are **mutually incompatible** —
+  `Q2_0_g64` does not load on the fork, `Q2_0` (g128) does not load on mainline. `*-PQ2_0.gguf`
+  is a planned fork format, unsupported anywhere yet. Never mix this fork's `ggml-*` libraries
+  into a stock build (ABI/format mismatch).
+- **`draft-dspark`** — the fork exposes DSpark (DeepSpec block-diffusion / Markov) as a
+  `spec-type` value (full list: `none,draft-simple,draft-eagle3,draft-mtp,draft-dspark,ngram-*`),
+  but it is an **experimental port not usable via model-loader**. The drafter needs the driver to
+  engage multi-layer target-context capture (`llama_set_capture_layers` + per-row logits) before
+  drafting; **the server/CLI `--spec-type` path does NOT engage capture and fails at the first
+  draft round** with a clear error (`backends/llama.cpp-prisma-ml/common/speculative.cpp:40-46`).
+  Only the reference driver `tests/test-dspark-real-eval.cpp` runs it. model-loader launches via
+  the server, so **never route production speculation to `draft-dspark`** — use MTP/DFlash. It is
+  also unproven vs MTP per the fork's own docs.
+- **`--kv-mean-center FNAME`** — loads a precomputed per-(kv-head, channel) K-cache bias GGUF
+  that subtracts a fixed mean before Q4_0 quantization, improving K-cache fidelity at
+  **zero decode cost** (softmax-invariant). **Requires `--cache-type-k q4_0`** (context creation
+  fails otherwise). Generate the bias with the fork's `tools/kv-mean-center`; the bias records
+  its rotation basis and the loader rejects a mismatch, so calibrate with the same `-ctk q4_0`
+  (and Hadamard-rotation) settings you serve with. Scope: standard dense/GQA + SWA + hybrid
+  attention caches only — not MLA/DSA or recurrent-only. Do **not** set it without a matched
+  calibration file for the exact model.
+- CUDA fast paths gate on GPU arch (Hopper-only wgmma, Blackwell rejected from that gate) —
+  **neither applies to this SM86 Ampere rig (RTX 3090)**: the fork runs its ordinary CPU/CUDA
+  Q2_0/Q1_0 kernels on Ampere, with no Hopper-class acceleration to expect here.
+
+Route here only for a Bonsai/Q2_0 (g128) GGUF; otherwise stable/nightly remain the default
+llama-server backends. Do not pick prisma-ml for DSpark (unusable via server, above).
 
 ## buun-llama-cpp
 
@@ -255,15 +355,18 @@ Registered as **`buun-rtx3090`** in the catalog (predecessor fork, superseded by
 every use case — recommend beellama and record that in the description if the user insists on
 buun). Buun (b9792) keeps buun-era DFlash/draft names — `--spec-dflash-default`,
 `--dflash-max-slots`, `--draft-max`, `--draft-model`, `--draft-topk`, `--tree-budget`
-(`backends/buun-llama-cpp/common/arg.cpp`) — that beellama v0.3.x dropped or renamed to
-`--spec-*`/`--spec-dflash-*` (upstream keeps `--draft-max` as a live alias but has none of the
-DFlash-slot controls). Never mix spellings across the three backends; trust each one's own schema.
+(`backends/buun-llama-cpp/common/arg.cpp`). BeeLlama v0.3.x renamed these to `--spec-*`, and
+**v0.4.0 then removed the whole `--spec-dflash-*` family entirely** (adopting upstream flat
+`draft-dflash`; upstream keeps `--draft-max` as a live alias but has none of the DFlash-slot
+controls). Never mix spellings across the three backends; trust each one's own schema.
 
 ## Gotchas
 
-- beellama v0.3.x removed old aliases (`--draft`, `--draft-model`, `--draft-topk`,
-  `--tree-budget`, …) — canonical `--spec-*` only (`backends/beellama.cpp/docs/beellama-args.md`).
-- `top-k` (sampling) ≠ `spec-draft-top-k` (beellama tree drafting).
+- beellama v0.4.0 exposes canonical `--spec-*` only (old `--draft`, `--draft-model`,
+  `--draft-topk`, `--tree-budget` aliases and the fork's `--spec-dflash-*` knobs are both gone;
+  `backends/beellama.cpp/docs/beellama-args.md`).
+- `top-k` is sampling; beellama v0.4.0 removed the fork's `spec-draft-top-k`/`spec-draft-temp`
+  tree-drafting knobs (upstream flat `draft-dflash` has no per-draft top-k/temp).
 - `--kv-unified` stays on for beellama single-user long-ctx (idle-slot caching needs it).
 - Launch log lines to read every time: `n_ctx_seq (…) < n_ctx_train (…)`, KV buffer sizes,
   `Chat format: peg-native` (template parser OK), draft/MTP/dflash load + acceptance lines,
