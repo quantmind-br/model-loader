@@ -49,6 +49,13 @@
       "baseTree": "57ef02dfc6e3aa815f8344810de7d0678fea274f",
       "dirHash": "01d44da805f3fc93c7d65833571fe0538cfa05f1377c18c9431d6f58bd7adf6d",
       "syncedAt": "2026-07-24T19:03:16.251883046Z"
+    },
+    "tui-validator": {
+      "canonicalPath": "tui-validator",
+      "baseCommit": "fa425896f74f0ecd716b8a553c3eab13c26bf972",
+      "baseTree": "8d2eb81ddd230a206cd8efaff42d49a0893fbc56",
+      "dirHash": "b5ce1b2220e39a3637c1798edfdca9661299c1de9448a19a34822ecf8cd6dc36",
+      "syncedAt": "2026-07-24T19:03:17.660730414Z"
     }
   }
 }

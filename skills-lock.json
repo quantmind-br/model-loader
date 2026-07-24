@@ -59,8 +59,9 @@
       "sourceType": "local"
     },
     "tui-validator": {
-      "computedHash": "a8cbcd1a9e6b4fe5937cbf8cab5fda96e17a5698894782171cae756a9632a52c",
-      "source": "/home/diogo/dev/skills/tui-validator",
+      "computedHash": "30cf61cd505df8ec2f5d341e1560a81dd04170cee60ea2c6e70974949904e9e3",
+      "skillPath": "tui-validator/SKILL.md",
+      "source": "/home/diogo/dev/skills",
       "sourceType": "local"
     }
   },
