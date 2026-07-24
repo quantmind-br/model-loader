@@ -26,8 +26,8 @@
 #       only react to key events.
 #
 #   tui-send.sh <session> --paste-bracketed "multi-line block"
-#       Wraps the paste in \e[200~ ... \e[201~ so the TUI sees a bracketed
-#       paste. Use this specifically to test bracketed-paste handling.
+#       tmux adds bracket markers only when the application has enabled bracketed
+#       paste mode; otherwise it intentionally degrades to a plain paste.
 #
 # After sending, waits for the redraw to settle. Override with TUIV_REDRAW_MS.
 
@@ -76,12 +76,8 @@ PY
     shift
     text="$*"
     bufname="tuiv-paste-$$"
-    {
-      printf '\033[200~'
-      printf '%s' "$text"
-      printf '\033[201~'
-    } | tmux load-buffer -b "$bufname" -
-    tmux paste-buffer -b "$bufname" -t "$session" -d
+    printf '%s' "$text" | tmux load-buffer -b "$bufname" -
+    tmux paste-buffer -p -b "$bufname" -t "$session" -d
     ;;
   "")
     die "usage: tui-send.sh <session> <key>... | --literal [--delay MS] TEXT | --paste TEXT | --paste-bracketed TEXT"
