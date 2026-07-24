@@ -42,6 +42,13 @@
       "baseTree": "37aa74e78fb95297a31595051c460b753aacc418",
       "dirHash": "533e92f56729638b306cb06f8d95857bd09ae9dd17a767dcd3ebb270163caa45",
       "syncedAt": "2026-07-24T19:03:14.328716351Z"
+    },
+    "tui-refactor": {
+      "canonicalPath": "tui-refactor",
+      "baseCommit": "fa425896f74f0ecd716b8a553c3eab13c26bf972",
+      "baseTree": "57ef02dfc6e3aa815f8344810de7d0678fea274f",
+      "dirHash": "01d44da805f3fc93c7d65833571fe0538cfa05f1377c18c9431d6f58bd7adf6d",
+      "syncedAt": "2026-07-24T19:03:16.251883046Z"
     }
   }
 }

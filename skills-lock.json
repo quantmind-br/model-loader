@@ -53,8 +53,9 @@
       "sourceType": "local"
     },
     "tui-refactor": {
-      "computedHash": "1bea98c11f67def3716b2c62a86097b1bbd541887caf13289695a039f665e480",
-      "source": "/home/diogo/dev/skills/tui-refactor",
+      "computedHash": "451343926b0aa55140106a09256ddfaf9f7ffba1ff01f0dd8a075d1faaccbd83",
+      "skillPath": "tui-refactor/SKILL.md",
+      "source": "/home/diogo/dev/skills",
       "sourceType": "local"
     },
     "tui-validator": {
