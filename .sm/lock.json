@@ -14,6 +14,13 @@
       "baseTree": "0f9d621c99ed7609486f0aa5a6faf46fa2911fa5",
       "dirHash": "beb19b006f1c78e034ba4787e7f1c10fec33347b8e43afc5cb5a835854772986",
       "syncedAt": "2026-07-24T19:03:00.741265481Z"
+    },
+    "model-loader-agents-sync": {
+      "canonicalPath": "model-loader-agents-sync",
+      "baseCommit": "fa425896f74f0ecd716b8a553c3eab13c26bf972",
+      "baseTree": "35816a2740e85ffaa57a7362c980197a80cba11e",
+      "dirHash": "970bbc01b1de7fe3bc677f7803872d0c6b955b324f407522e42b4690bc2855a5",
+      "syncedAt": "2026-07-24T19:03:07.932332653Z"
     }
   }
 }

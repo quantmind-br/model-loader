@@ -23,6 +23,12 @@
       "source": "/home/diogo/dev/skills/llamacpp",
       "sourceType": "local"
     },
+    "model-loader-agents-sync": {
+      "computedHash": "ac55d1ed577f754b9547b6d6c342e08b051eccf179daea8ea9f9588a57199893",
+      "skillPath": "model-loader-agents-sync/SKILL.md",
+      "source": "/home/diogo/dev/skills",
+      "sourceType": "local"
+    },
     "shotgun-ignore": {
       "computedHash": "bbcf37f8eeb08cac889ee9bfad39fffad705fe88d54c15de3420f957a2a091c2",
       "source": "/home/diogo/dev/skills/shotgun-ignore",
