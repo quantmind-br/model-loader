@@ -47,8 +47,9 @@
       "sourceType": "local"
     },
     "tui-design": {
-      "computedHash": "89f44d99a5cc9a30ada80ba9e7607aa34526f6c15541821a38aa294b46d915d0",
-      "source": "/home/diogo/dev/skills/tui-design",
+      "computedHash": "2d23867ddda530eb134dfa8c4acf05bf206a8ff3d8e26b0122b15dccdd42217f",
+      "skillPath": "tui-design/SKILL.md",
+      "source": "/home/diogo/dev/skills",
       "sourceType": "local"
     },
     "tui-refactor": {

@@ -35,6 +35,13 @@
       "baseTree": "9e12b7b5d0357383a03143206494e33b919a4c99",
       "dirHash": "d0a33aa3fa25c6100ce37ea34425ebe4f25fce6355ad9e38110b26d4b82acc8c",
       "syncedAt": "2026-07-24T19:03:11.788760193Z"
+    },
+    "tui-design": {
+      "canonicalPath": "tui-design",
+      "baseCommit": "fa425896f74f0ecd716b8a553c3eab13c26bf972",
+      "baseTree": "37aa74e78fb95297a31595051c460b753aacc418",
+      "dirHash": "533e92f56729638b306cb06f8d95857bd09ae9dd17a767dcd3ebb270163caa45",
+      "syncedAt": "2026-07-24T19:03:14.328716351Z"
     }
   }
 }
