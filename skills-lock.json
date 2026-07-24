@@ -12,6 +12,12 @@
       "source": "mattpocock/skills",
       "sourceType": "github"
     },
+    "huggingface-download": {
+      "computedHash": "e2d20400bfbad89cc6d263a0cb3a841ac746d3c52a65b4012ffc849919a5c29a",
+      "skillPath": "huggingface-download/SKILL.md",
+      "source": "/home/diogo/dev/skills",
+      "sourceType": "local"
+    },
     "llamacpp": {
       "computedHash": "d99b92723cc416c4b2c8c984dd5b61b605118e0f0df4d2592a320f45db7b71fe",
       "source": "/home/diogo/dev/skills/llamacpp",
