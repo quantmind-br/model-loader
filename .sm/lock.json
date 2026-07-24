@@ -21,6 +21,13 @@
       "baseTree": "35816a2740e85ffaa57a7362c980197a80cba11e",
       "dirHash": "970bbc01b1de7fe3bc677f7803872d0c6b955b324f407522e42b4690bc2855a5",
       "syncedAt": "2026-07-24T19:03:07.932332653Z"
+    },
+    "model-loader-clean-up": {
+      "canonicalPath": "model-loader-clean-up",
+      "baseCommit": "fa425896f74f0ecd716b8a553c3eab13c26bf972",
+      "baseTree": "f342df64c0a356a82c46319ec7e0687d4cc0a2e7",
+      "dirHash": "0eb5b6a19f69bdea01d7ee8d66fca06240f28d86703cccef49a799d6c581439f",
+      "syncedAt": "2026-07-24T19:03:10.114938351Z"
     }
   }
 }

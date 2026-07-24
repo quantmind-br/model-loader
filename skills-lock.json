@@ -29,6 +29,12 @@
       "source": "/home/diogo/dev/skills",
       "sourceType": "local"
     },
+    "model-loader-clean-up": {
+      "computedHash": "ee4c82028cb351efec5601f6c1c9a69e4e2ef8423416007865b8b20155cb3584",
+      "skillPath": "model-loader-clean-up/SKILL.md",
+      "source": "/home/diogo/dev/skills",
+      "sourceType": "local"
+    },
     "shotgun-ignore": {
       "computedHash": "bbcf37f8eeb08cac889ee9bfad39fffad705fe88d54c15de3420f957a2a091c2",
       "source": "/home/diogo/dev/skills/shotgun-ignore",
