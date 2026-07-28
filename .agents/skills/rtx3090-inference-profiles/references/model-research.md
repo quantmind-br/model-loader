@@ -6,7 +6,8 @@ chat template, tool-call parser and speculative assets are per-model facts that 
 embedded defaults. Re-run §4 (template verification) after any backend upgrade or GGUF
 re-download. Facts below verified 2026-07-02; llama.cpp runtime capabilities re-checked
 2026-07-21 (stable b9934 / nightly b10083). Other installed pins: beellama
-v0.4.0 build b10829, vLLM 0.24.0, SGLang 0.5.9, TabbyAPI 3cf468c, lucebox 1b11c50.
+v0.4.1 build b10856 (re-pinned 2026-07-27; no flag change vs b10829), vLLM 0.24.0, SGLang 0.5.9,
+TabbyAPI 3cf468c, lucebox 1b11c50.
 
 ## 1. The lookup protocol (start at Hugging Face)
 

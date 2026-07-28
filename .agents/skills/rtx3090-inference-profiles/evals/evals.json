@@ -285,7 +285,9 @@
         "Removes spec-dflash-cross-ctx, spec-branch-budget (DDTree), and any spec-dflash-max-slots — removed with the fork DFlash/tree paths, no replacement",
         "Leaves spec-draft-n-max unset to keep the default-on adaptive profit controller (omitted limit = dflash.block_size - 1)",
         "Migrates the turbo3_tcq target cache to kvarn3 (turbo* target names warn+redirect by width to kvarnN; actual TurboQuant/TCQ GGUF formats are unsupported)",
-        "Requires the draft GGUF itself to be upstream dflash format (architecture, metadata keys, tensor names, tokenizer contract) — not just the renamed spec-type; a legacy fork-only drafter is rejected and must be obtained/reconverted in upstream format"
+        "Requires the draft GGUF itself to be upstream dflash format (architecture, metadata keys, tensor names, tokenizer contract) — not just the renamed spec-type; a legacy fork-only drafter (general.architecture=dflash-draft) is rejected at load",
+        "Before proposing a conversion, re-checks the drafter's HF repo for an upstream-format re-upload (publishers are re-publishing; Anbeeld/Qwen3.6-27B-DFlash-GGUF was re-published 2026-07-19) and range-fetches the remote GGUF header to confirm general.architecture=dflash rather than downloading or converting blind; knows a re-publish can also shift dflash.target_layers, so the publisher's artifact beats a hand conversion",
+        "Treats the migration as done only after a real launch shows the drafter engage in the log (acceptance / n_max lines) — profile validate passing is not sufficient (BUGS.md S7)"
       ]
     },
     {

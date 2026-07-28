@@ -3,67 +3,67 @@
   "skills": {
     "caveman-compress": {
       "canonicalPath": "caveman-compress",
-      "baseCommit": "acaf4a5352b0170b13e5ef1146928b73c8e4ad5f",
+      "baseCommit": "4c39c13fdc167476b5e44fe2d3d28513993e50d7",
       "baseTree": "314b0cbf7069162a1af4138bfceb18aaac0ac502",
-      "baseTreeHash": null,
+      "baseTreeHash": "e3b1f5c2a7c8d21cfdc03d3b241db0bbb776b9225f0e9bccbf8adc4bd8988b61",
       "dirHash": "e3b1f5c2a7c8d21cfdc03d3b241db0bbb776b9225f0e9bccbf8adc4bd8988b61",
-      "syncedAt": "2026-07-24T19:27:05.199908354Z"
+      "syncedAt": "2026-07-27T19:47:16.944247017Z"
     },
     "huggingface-download": {
       "canonicalPath": "huggingface-download",
-      "baseCommit": "acaf4a5352b0170b13e5ef1146928b73c8e4ad5f",
+      "baseCommit": "4c39c13fdc167476b5e44fe2d3d28513993e50d7",
       "baseTree": "0f9d621c99ed7609486f0aa5a6faf46fa2911fa5",
-      "baseTreeHash": null,
+      "baseTreeHash": "beb19b006f1c78e034ba4787e7f1c10fec33347b8e43afc5cb5a835854772986",
       "dirHash": "beb19b006f1c78e034ba4787e7f1c10fec33347b8e43afc5cb5a835854772986",
-      "syncedAt": "2026-07-24T19:27:05.202717046Z"
+      "syncedAt": "2026-07-27T19:47:16.950426707Z"
     },
     "model-loader-agents-sync": {
       "canonicalPath": "model-loader-agents-sync",
-      "baseCommit": "acaf4a5352b0170b13e5ef1146928b73c8e4ad5f",
+      "baseCommit": "4c39c13fdc167476b5e44fe2d3d28513993e50d7",
       "baseTree": "35816a2740e85ffaa57a7362c980197a80cba11e",
-      "baseTreeHash": null,
+      "baseTreeHash": "9947b396593caccf13372f25e0cdeb13ad8b07c8ba86af622e078c93aa19fc3b",
       "dirHash": "970bbc01b1de7fe3bc677f7803872d0c6b955b324f407522e42b4690bc2855a5",
-      "syncedAt": "2026-07-24T19:27:05.207222073Z"
+      "syncedAt": "2026-07-27T19:47:16.958445184Z"
     },
     "model-loader-clean-up": {
       "canonicalPath": "model-loader-clean-up",
-      "baseCommit": "acaf4a5352b0170b13e5ef1146928b73c8e4ad5f",
+      "baseCommit": "4c39c13fdc167476b5e44fe2d3d28513993e50d7",
       "baseTree": "f342df64c0a356a82c46319ec7e0687d4cc0a2e7",
-      "baseTreeHash": null,
+      "baseTreeHash": "0a571b903df023cbf47189ae8243a8090b18909ce1649d3bc493866fc9a26750",
       "dirHash": "0eb5b6a19f69bdea01d7ee8d66fca06240f28d86703cccef49a799d6c581439f",
-      "syncedAt": "2026-07-24T19:27:05.211428489Z"
+      "syncedAt": "2026-07-27T19:47:16.965841828Z"
     },
     "rtx3090-inference-profiles": {
       "canonicalPath": "rtx3090-inference-profiles",
-      "baseCommit": "acaf4a5352b0170b13e5ef1146928b73c8e4ad5f",
-      "baseTree": "13d364b5797fca7864e42872af1be51523ab9472",
-      "baseTreeHash": null,
-      "dirHash": "d0a33aa3fa25c6100ce37ea34425ebe4f25fce6355ad9e38110b26d4b82acc8c",
-      "syncedAt": "2026-07-24T19:27:05.233982546Z"
+      "baseCommit": "b517c38d7b7c6d1e3a21c7027e54378e4b776d14",
+      "baseTree": "e7aba0755f96193fe25d8b91f10b3a9ca754aa62",
+      "baseTreeHash": "53d2e1802f69247868ca965db6863d489b06b3d9dd2320c9307c7f944b96891d",
+      "dirHash": "59536f772c2f026cb6114086bf60db93441c9fffbb9867d4ea9b47a29b983ae9",
+      "syncedAt": "2026-07-27T19:47:17.016103256Z"
     },
     "tui-design": {
       "canonicalPath": "tui-design",
-      "baseCommit": "acaf4a5352b0170b13e5ef1146928b73c8e4ad5f",
+      "baseCommit": "b517c38d7b7c6d1e3a21c7027e54378e4b776d14",
       "baseTree": "37aa74e78fb95297a31595051c460b753aacc418",
-      "baseTreeHash": null,
+      "baseTreeHash": "e6e05d295bc7c58b2f2b064ad4c6134447a28834284c19bc3ca761dfa660e426",
       "dirHash": "533e92f56729638b306cb06f8d95857bd09ae9dd17a767dcd3ebb270163caa45",
-      "syncedAt": "2026-07-24T19:27:05.239238963Z"
+      "syncedAt": "2026-07-27T19:47:17.025995004Z"
     },
     "tui-refactor": {
       "canonicalPath": "tui-refactor",
-      "baseCommit": "acaf4a5352b0170b13e5ef1146928b73c8e4ad5f",
+      "baseCommit": "b517c38d7b7c6d1e3a21c7027e54378e4b776d14",
       "baseTree": "57ef02dfc6e3aa815f8344810de7d0678fea274f",
-      "baseTreeHash": null,
+      "baseTreeHash": "01d44da805f3fc93c7d65833571fe0538cfa05f1377c18c9431d6f58bd7adf6d",
       "dirHash": "01d44da805f3fc93c7d65833571fe0538cfa05f1377c18c9431d6f58bd7adf6d",
-      "syncedAt": "2026-07-24T19:27:05.247674527Z"
+      "syncedAt": "2026-07-27T19:47:17.034775645Z"
     },
     "tui-validator": {
       "canonicalPath": "tui-validator",
-      "baseCommit": "4e39a2446ed2aadbb46661b11c6ff3fceba88f84",
-      "baseTree": "36aa2dffa4525cecb0b7c13025a50a5d2f5133a4",
-      "baseTreeHash": "4fa47d964dbca1e4d7805ea10a1163ac9b087a0250ef83f2f527495a16893f52",
-      "dirHash": "fca6f99f8f6b426594e44aca435b313cd05e19990499e542664eecd3825e1380",
-      "syncedAt": "2026-07-25T11:44:44.393406999Z"
+      "baseCommit": "b517c38d7b7c6d1e3a21c7027e54378e4b776d14",
+      "baseTree": "4ec22b2cbad9d7b2bc899f37c69154f78ecfda6e",
+      "baseTreeHash": "88495226feb171329307c235468722cda5ad8cc4c60616d6cddc0c0a36ff9bc9",
+      "dirHash": "3c38ab06084b1c1eef5275e4d86f1d269b8ed54a16ba60c233172898e2f457c6",
+      "syncedAt": "2026-07-27T19:47:17.043054548Z"
     }
   }
 }

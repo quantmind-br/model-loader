@@ -81,12 +81,21 @@ ones when chained** — the ideal agent config chains lookup + model drafting:
   or `-sm layer`). A successful load proves compatibility only; validate per model and gate any
   tensor promotion (full-tuning.md).
 
-### beellama v0.4.0-2-g7d43f840b (build b10829) — upstream draft-dflash + KVarN KV compression
+### beellama v0.4.1-1-g94605e9fe (build b10856) — upstream draft-dflash + KVarN KV compression
 `--spec-type draft-dflash` (**renamed from the fork's old `dflash`** — v0.4.0 replaced the fork
 DFlash with upstream's implementation, so BeeLlama now spells and behaves like upstream `draft-dflash`).
-Requires an **upstream-format `dflash` draft GGUF** via `--spec-draft-model` — v0.4.0 mandates
+v0.4.1 changed **no flags** vs b10829 (KVarN/HIP/Vulkan + compact-SWA-tail work only).
+Requires an **upstream-format `dflash` draft GGUF** via `--spec-draft-model` — v0.4.x mandates
 upstream's `dflash` architecture, metadata keys, tensor names, and tokenizer contract; other
-schemas are unsupported (obtain or reconvert an upstream-format drafter).
+schemas are unsupported. **Before converting, re-check the drafter repo** — publishers are
+re-uploading in upstream format (`Anbeeld/Qwen3.6-27B-DFlash-GGUF` was re-published 2026-07-19 as
+upstream `dflash`; installed and verified here 2026-07-27). Probe the remote header for free with
+`curl -H "Range: bytes=0-25000000"` on the `resolve/main/<file>.gguf` URL and read the GGUF KV
+block: `general.architecture` must be `dflash`, not the removed fork `dflash-draft`.
+⚠ **A re-published drafter is not just a relabel.** The upstream Anbeeld file also moved
+`dflash.target_layers` from `[1,16,31,46,61]` to `[2,17,32,47,62]` (an off-by-one fix), so
+hand-converting the legacy GGUF would have produced a silently mis-targeted drafter that loads
+clean and drafts badly. Prefer the publisher's upstream artifact over any local conversion.
 BeeLlama retains its default-on adaptive `profit` depth controller (`spec-dm-controller`, now
 `{off,profit}`); without `--spec-draft-n-max` the draft limit comes from `dflash.block_size - 1`.
 **Gone in v0.4.0:** the fork DFlash ring and its `spec-dflash-cross-ctx`/`spec-dflash-max-slots`,

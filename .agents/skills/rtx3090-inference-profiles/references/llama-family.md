@@ -4,13 +4,14 @@ Catalog ids: **`llama.cpp-stable`** (b9934, `32e41fa5b`), **`llama.cpp-nightly`*
 `846e991ec`), and **`llama.cpp-prisma-ml`** (PrismML fork b9597, `7529fdaaf`, base b9594 — see
 §llama.cpp-prisma-ml). Their profile flag names overlap, but runtime capability is no longer identical:
 nightly adds correct separate-HF-draft-repo sidecar resolution plus DFlash/EAGLE-3 discovery;
-**`beellama-rtx3090`** (beellama fork, `v0.4.0-2-g7d43f840b`, build **b10829**; past the v0.3.1
+**`beellama-rtx3090`** (beellama fork, `v0.4.1-1-g94605e9fe`, build **b10856**; past the v0.3.1
 tag — v0.4.0 swapped the fork DFlash for upstream `draft-dflash` and added KVarN KV compression +
-the KV precision tail); **`buun-rtx3090`** (buun fork,
+the KV precision tail; v0.4.1 is KVarN/HIP/Vulkan + compact-SWA-tail work with **no flag-surface
+change** vs b10829); **`buun-rtx3090`** (buun fork,
 b9792 `87c351d28`, superseded — recommend beellama unless the user insists). All take local GGUF
 paths (`--model` emitted from the profile `model` field; HF repo ids REJECTED by the validator
 for these kinds) and share canonical flag mapping (`ngl` → `n-gpu-layers`). On-disk schemas are
-curated and `source.editable` (242 flags llama.cpp-stable/nightly, 271 beellama, 251 buun) — a
+curated and `source.editable` (249 flags llama.cpp-stable/nightly, 265 beellama, 251 buun) — a
 flag the binary supports but the schema lacks goes verbatim in `extraArgs`, a **raw passthrough**
 whose values are never enum/type-checked (`internal/service/validator/rules.go`
 `applyExtraArgsRules`); it is for schema-absent flags only, NOT a workaround for "enum-blocked"
@@ -55,6 +56,15 @@ to its canonical schema flag and validates.
   compatibility fix, not a profile flag.
 - Installed `llama.cpp-stable` b9934 and BeeLlama b10829 reject `general.architecture=laguna`.
   Backend kind and shared flags do not prove model-architecture support. Re-test after upgrades.
+  ⚠ **Pending re-pin (noted 2026-07-27):** this holds at the documented pins — `laguna` is absent
+  from `src/llama-arch.cpp` at both **b9934** (stable, `32e41fa5b`) and **b10083** (nightly,
+  `846e991ec`). PR **#25165** ("Add support for Laguna XS.2 & M.1") is an ancestor of neither
+  pin. It landed in **nightly** after b10083 (nightly HEAD 0324696b8 ships `LLM_ARCH_LAGUNA` +
+  `src/models/laguna.cpp`); the stable checkout has also drifted forward to b10148 and picked it
+  up, but that is a drift artifact, not a tested pin. Mainline Laguna routing is therefore a
+  nightly-upgrade concern. **Not load-verified here** (a CPU-only arch probe on the 68 GB Q4_K_M
+  did not finish), and PR #25165 names XS.2/M.1, not S-2.1 — re-test before moving any Laguna
+  profile off the poolside fork. BeeLlama b10856 still has no `laguna` arch.
 - Installed Lucebox recognizes Laguna but rejects Laguna-S-2.1 because its compiled `n_head_arr`
   capacity is 40 layers; this target has 48. A future Lucebox rebuild may change that boundary.
 - Official Q4_K_M is 63.6 GiB: larger than aggregate VRAM. Poolside `fit on` + `fit-ctx 262144`
@@ -152,15 +162,23 @@ quality-per-GB pick within GGUF when available.
   ctx defaults f16 KV — set `"cache-type-k-draft": "q8_0", "cache-type-v-draft": "q8_0"` in
   `args` (schema keys; `--spec-draft-type-k`/`-v` are accepted aliases that resolve to the same
   flags via `Lookup`).
-- **DFlash (beellama v0.4.0):** `"spec-type": "draft-dflash"` (**renamed from the old `dflash`** —
+- **DFlash (beellama v0.4.x):** `"spec-type": "draft-dflash"` (**renamed from the old `dflash`** —
   v0.4.0 adopted upstream's implementation and spelling), `"spec-draft-model": "/abs/drafter.gguf"`,
   `"spec-draft-ngl": 99`, `"kv-unified": true` — leave `spec-draft-n-max` unset (default-on adaptive
-  `profit` controller; omitted limit = `dflash.block_size - 1`). The old fork knobs
-  `spec-dflash-cross-ctx`/`spec-dflash-max-slots`/`spec-branch-budget` are **removed** (rejected at
-  launch). `--spec-draft-model` requires an **upstream-format `dflash` draft GGUF** — v0.4.0
-  mandates upstream's `dflash` architecture, metadata keys, tensor names, and tokenizer contract;
-  other schemas are unsupported (obtain or reconvert an upstream-format drafter). Watch acceptance
-  in the log; ~0.86 on templated code vs ~0.21–0.27 on prose — judge tok/s, not acceptance.
+  `profit` controller; omitted limit = `dflash.block_size - 1`; verified 2026-07-27 — the log prints
+  `omitted --spec-draft-n-max defaults to the drafter block depth (15)` for a block-16 drafter). The
+  old fork knobs `spec-dflash-cross-ctx`/`spec-dflash-max-slots`/`spec-branch-budget` are **removed**
+  (rejected at launch). `--spec-draft-model` requires an **upstream-format `dflash` draft GGUF** —
+  v0.4.x mandates upstream's `dflash` architecture, metadata keys, tensor names, and tokenizer
+  contract. **Check the drafter repo before converting anything** (2026-07-27): publishers are
+  re-uploading in upstream format, so a repo that shipped a legacy fork drafter months ago may
+  already be fixed. `Anbeeld/Qwen3.6-27B-DFlash-GGUF` was re-published 2026-07-19 as upstream
+  `dflash` and is installed + verified on this rig. Read the remote header without downloading the
+  weights: `curl -H "Range: bytes=0-25000000"` the `resolve/main/<file>.gguf` URL and parse the GGUF
+  KV block — confirm `general.architecture=dflash` (not `dflash-draft`) and upstream tensor names
+  (`fc.weight`, `enc.output_norm.weight`, `blk.N.ffn_norm.weight`). Watch acceptance in the log;
+  ~0.86 on templated code vs ~0.21–0.27 on prose (measured 0.245, mean accepted len 4.47, 68.3 tok/s
+  on Qwen3.6-27B NEO-CODE + vision @262144, 2026-07-27) — judge tok/s, not acceptance.
 - **DFlash (upstream llama.cpp-stable/nightly):** same `spec-type: draft-dflash` + local
   upstream-schema drafter (Alittlehammmer/williamliao), `spec-draft-n-max: 15`. Flat only, no
   adaptive controller. `draft-dflash` IS in the curated list-valued enum (schema

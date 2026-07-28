@@ -8,7 +8,7 @@ notes only (kept out of the skill per user policy — nothing here loads into ag
 - **Version-pinned facts (re-verified 2026-07-21).** Installed builds: llama.cpp-stable
   **b9934 (`32e41fa5b`)** / nightly **b10083 (`846e991ec`)** / prisma-ml **b9597 (`7529fdaaf`,
   base b9594; PrismML fork)**; the three share a schema but not runtime behavior. BeeLlama is now
-  **v0.4.0-2-g7d43f840b / b10829** (upstream `draft-dflash` + KVarN KV compression + KVCPT tail;
+  **v0.4.1-1-g94605e9fe / b10856** (upstream `draft-dflash` + KVarN KV compression + KVCPT tail;
   fork DFlash/DDTree and TurboQuant/TCQ formats removed), buun **b9792**, lucebox-hub 1b11c50, vLLM **0.24.0 @
   ee0da84ab — BOTH stock venvs** + flashinfer 0.6.12, sndr-vllm venv
   **0.23.1rc1.dev424**, SGLang 0.5.9 / 0.5.6-dev forks, TabbyAPI 3cf468c + exllamav2 0.3.2 /
@@ -29,7 +29,7 @@ notes only (kept out of the skill per user policy — nothing here loads into ag
   no naive CPU expert offload (`--n-cpu-moe` on explicit request only; Luce Spark is the
   sanctioned path); VRAM cap ≤46 GiB; mmproj on CPU (`--no-mmproj-offload`); English-only
   UI/schema text in the repo.
-- Evals in `evals/evals.json` = **36 scenarios**: rewritten 2026-07-02 from verified premises,
+- Evals in `evals/evals.json` = **37 scenarios**: rewritten 2026-07-02 from verified premises,
   corrected + extended 2026-07-07 (S1/S2 reversal; quick-profile / audit / benchmark-compare /
   S1-regression), + the ik-llama-cpp scenario 2026-07-09, + the P2P scenarios #18–#23 (2026-07-10:
   #18–#21 measured-corrected, #22 custom-AR crash, #23 NCCL P2P +13.5% gain), + #24–#30 (2026-07-12:
@@ -43,6 +43,37 @@ notes only (kept out of the skill per user policy — nothing here loads into ag
 
 
 ## Changelog
+### 2026-07-27 — BeeLlama v0.4.1 re-pin + the DFlash migration actually completed
+- Backend re-pinned b10829 → **v0.4.1-1-g94605e9fe / b10856**. `git diff 7d43f840b..HEAD --
+  common/arg.cpp` is **empty**: v0.4.1 is KVarN/HIP/Vulkan + compact-SWA-tail work with **no
+  flag-surface change**, so every v0.4.0 flag claim in this skill stands. On-disk
+  `beellama-rtx3090.json` refreshed (265 flags, unchanged count).
+- **The v0.4.0 sync's open item is closed.** BUGS.md **S7/DF13** (a BeeLlama profile that validated
+  but could not launch, because the installed Anbeeld drafter was the removed fork
+  `general.architecture=dflash-draft`) is fixed: the publisher **re-published the repo in upstream
+  format on 2026-07-19**, so no conversion was needed. Profile
+  `qwen3.6-27b-neo-code-dflash-vision-layer-256k` migrated (`dflash`→`draft-dflash`,
+  `spec-dflash-cross-ctx` dropped) and verified live through the proxy: drafter registered
+  (`n_max=15, block_size=16, n_extract=5`), acceptance 0.245 / mean len 4.47, 68.3 tok/s, mmproj
+  loaded. Legacy GGUF kept as `*.gguf.legacy-dflash-draft`.
+- **New trap recorded** (speculative.md + SKILL red flag): the re-published drafter also moved
+  `dflash.target_layers` `[1,16,31,46,61]` → `[2,17,32,47,62]`, so hand-converting the legacy file
+  would have yielded a drafter that loads clean and drafts badly. Always range-fetch the remote
+  GGUF header (`curl -H "Range: bytes=0-25000000"`) and re-check the repo before converting.
+- **New CLI trap** (SKILL Common mistakes): BUGS.md **PV4** — `profile edit --file` merges `args`
+  maps instead of replacing them, so it can never REMOVE a flag; use a direct atomic write.
+- Corrected stale flag counts in llama-family.md: llama.cpp-stable/nightly 242→**249**,
+  beellama 271→**265** (buun 251 was right).
+- **Follow-up flagged, deliberately NOT done here (scope was BeeLlama):** PR **#25165** ("Laguna
+  XS.2 & M.1") adds `LLM_ARCH_LAGUNA` + `src/models/laguna.cpp` to llama.cpp. It is **not** an
+  ancestor of the documented stable pin b9934 nor the nightly pin b10083 — it landed in
+  **nightly** after b10083 (nightly HEAD 0324696b8 ships it). The stable checkout also drifted to
+  b10148 and picked it up, but that's a drift artifact, not a tested pin. Verified `laguna` is
+  genuinely absent at both documented pins, so the existing "mainline rejects laguna" claim is
+  still true *at its pins*; llama-family.md now carries a ⚠ pending-re-pin note attributing it to
+  nightly. A full re-pin (re-verify Laguna routing, sidecar behavior, measured anchors) is its
+  own pass — upgrading nightly is the lower-friction path since the checkout is already there.
+
 ### 2026-07-21 — BeeLlama v0.4.0 sync
 - Backend upgraded main@85e22ea0/b10102 → **v0.4.0-2-g7d43f840b / b10829**. Fork `dflash` spec-type
   now rejected → upstream `draft-dflash`; DDTree/fringe/cross-ctx/max-slots/spec-draft-temp/top-k
