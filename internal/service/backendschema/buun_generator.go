@@ -22,7 +22,7 @@ func (g *BuunServerGenerator) Generate(backend domain.Backend) (domain.BackendVa
 
 	ref := schemaStoreRef(backend.SchemaRef)
 	existing, err := g.schemaStore.Load(ref)
-	if err == nil && existing.Source.Editable {
+	if err == nil && existing.Source.Customized {
 		return existing, nil
 	}
 

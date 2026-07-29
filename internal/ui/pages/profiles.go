@@ -78,6 +78,7 @@ func NewProfilesPage(store profilestore.Store, schema domain.FlagSchema) Profile
 	l.Title = "Profiles"
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
+	l.SetShowPagination(false)
 
 	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
 	return ProfilesPage{
@@ -169,7 +170,11 @@ func (p ProfilesPage) View() string {
 		return p.renderWebEditModal()
 	}
 	mode, listW, detailW := theme.ResponsiveSplit(p.width)
-	left := lipgloss.NewStyle().Width(listW).Render(p.list.View())
+	listBody := p.list.View()
+	if pl := listPaginationLine(p.list, "profiles"); pl != "" {
+		listBody = lipgloss.JoinVertical(lipgloss.Left, listBody, pl)
+	}
+	left := lipgloss.NewStyle().Width(listW).Render(listBody)
 	right := lipgloss.NewStyle().Width(detailW).Render(p.detailView(detailW))
 	var body string
 	if mode == theme.LayoutStacked {
@@ -286,10 +291,22 @@ func (p ProfilesPage) StatusMessage() (string, components.StatusLevel) {
 // (export, pin, import, undo) is documented in the [?] help screen.
 func (p ProfilesPage) Hints() string {
 	switch {
+	case p.webEditing:
+		return "editing in browser…  [esc] cancel"
+	case p.killConfirm.Active():
+		return components.ConfirmHints
+	case p.importPickerActive:
+		return "[↑↓] move  [←→] dir  [enter] select  [esc] cancel"
 	case p.picker.active:
 		return "[↑↓] move  [enter] pick  [esc] cancel"
+	case p.conflictModal.Active():
+		return "[↑↓] choose  [enter] confirm  [esc] cancel"
+	case p.undoModal.Active():
+		return "[enter] apply  [esc] cancel"
 	case p.deleteConfirm.Active():
 		return components.ConfirmHints
+	case p.list.FilterState() == list.Filtering:
+		return filteringHints
 	default:
 		return "[enter] launch  [e] edit  [n] new  [d] dup  [X] del  [K] unload  [/] filter"
 	}

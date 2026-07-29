@@ -1,7 +1,9 @@
 package benchmark
 
 import (
+	"bufio"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -464,6 +466,117 @@ func filterSWEAPPatches(src string, keep []string, dst string) (int, error) {
 		return 0, fmt.Errorf("write filtered patches %s: %w", dst, err)
 	}
 	return len(kept), nil
+}
+
+// SampleSWEAPInstances deterministically samples n instance_ids from the
+// SWE-bench Pro raw sample (CSV or JSONL; relative paths resolve against
+// harnessDir, matching the harness working directory). It backs the CLI's
+// --limit knob for --mode swe-bench-pro: the eval script has no count flag, so
+// the reduced run is expressed as an explicit instance filter.
+func SampleSWEAPInstances(harnessDir, rawSamplePath string, n, seed int) ([]string, error) {
+	if rawSamplePath == "" {
+		return nil, fmt.Errorf("benchmark.swebenchpro.raw_sample_path is not configured (see docs/swe-bench-pro.md)")
+	}
+	p := sweapResolve(harnessDir, rawSamplePath)
+	f, err := os.Open(p)
+	if err != nil {
+		return nil, fmt.Errorf("open raw sample %s: %w", p, err)
+	}
+	defer f.Close()
+
+	var ids []string
+	if strings.EqualFold(filepath.Ext(p), ".csv") {
+		ids, err = sweapReadCSVInstanceIDs(f, p)
+	} else {
+		ids, err = sweapReadJSONLInstanceIDs(f)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{}, len(ids))
+	uniq := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		uniq = append(uniq, id)
+	}
+	if len(uniq) == 0 {
+		return nil, fmt.Errorf("raw sample %s contains no instances", p)
+	}
+	return sampleIDs(uniq, n, int64(seed)), nil
+}
+
+// sweapReadCSVInstanceIDs collects the instance_id column from a CSV raw sample.
+// Ragged rows are tolerated; rows shorter than the column index are skipped.
+func sweapReadCSVInstanceIDs(f *os.File, path string) ([]string, error) {
+	r := csv.NewReader(f)
+	r.FieldsPerRecord = -1
+	header, err := r.Read()
+	if err != nil {
+		return nil, fmt.Errorf("read raw sample %s: %w", path, err)
+	}
+	col := -1
+	for i, h := range header {
+		if h == "instance_id" {
+			col = i
+			break
+		}
+	}
+	if col < 0 {
+		return nil, fmt.Errorf("raw sample %s has no instance_id column", path)
+	}
+	var ids []string
+	for {
+		rec, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read raw sample %s: %w", path, err)
+		}
+		if col >= len(rec) {
+			continue
+		}
+		if id := strings.TrimSpace(rec[col]); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids, nil
+}
+
+// sweapReadJSONLInstanceIDs collects instance_id from a JSONL raw sample. It
+// reads with a buffered reader (not bufio.Scanner): raw-sample lines embed
+// patches/test lists that overflow the 64KB scanner token limit. A parse
+// failure or a parsed line missing instance_id fails loud with its line number
+// — a silently-garbled raw sample is this mode's known failure trap.
+func sweapReadJSONLInstanceIDs(f *os.File) ([]string, error) {
+	br := bufio.NewReader(f)
+	var ids []string
+	for line := 1; ; line++ {
+		s, rerr := br.ReadString('\n')
+		if trimmed := strings.TrimSpace(s); trimmed != "" {
+			var rec struct {
+				InstanceID string `json:"instance_id"`
+			}
+			if err := json.Unmarshal([]byte(trimmed), &rec); err != nil {
+				return nil, fmt.Errorf("line %d: parse raw sample: %w", line, err)
+			}
+			if rec.InstanceID == "" {
+				return nil, fmt.Errorf("line %d: missing instance_id", line)
+			}
+			ids = append(ids, rec.InstanceID)
+		}
+		if rerr != nil {
+			if rerr == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("read raw sample: %w", rerr)
+		}
+	}
+	return ids, nil
 }
 
 // --- progress ---------------------------------------------------------------

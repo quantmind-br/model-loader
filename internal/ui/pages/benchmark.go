@@ -187,6 +187,9 @@ func (p BenchmarkPage) Hints() string {
 	if p.deleteConfirm.Active() {
 		return components.ConfirmHints
 	}
+	if p.cancelConfirm.Active() {
+		return components.ConfirmHints
+	}
 	switch p.view {
 	case bvWizard:
 		switch p.wizStep {

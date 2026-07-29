@@ -43,6 +43,11 @@
   --sp-6:1.5rem;
   --sp-8:2rem;
   --sp-10:2.5rem;
+  /* Topbar geometry. The sticky sidebar offset and the layout min-height both
+     derive from --topbar-height so the wrapped narrow-viewport bar changes it
+     in exactly one place. */
+  --topbar-row:44px;
+  --topbar-height:60px;
   /* Radii */
   --radius-sm:4px;
   --radius-md:8px;
@@ -103,7 +108,7 @@ body{
   z-index:100;
   display:flex;
   align-items:center;
-  height:60px;
+  height:var(--topbar-height);
   padding:0 var(--sp-6);
   gap:var(--sp-5);
   background:var(--panel);
@@ -201,7 +206,7 @@ button.ghost:hover{
 .layout{
   display:grid;
   grid-template-columns:260px 1fr;
-  min-height:calc(100vh - 60px - 52px);
+  min-height:calc(100vh - var(--topbar-height) - 52px);
 }
 
 /* Customize mode hides the sidebar; collapse to a single column so the
@@ -446,6 +451,13 @@ form{
   margin:0;
   padding:0;
   accent-color:var(--accent);
+  cursor:pointer;
+}
+.toggle-field .toggle-hit{
+  display:inline-flex;
+  align-items:center;
+  gap:var(--sp-3);
+  min-height:44px;
   cursor:pointer;
 }
 .toggle-field .toggle-state{
@@ -899,6 +911,20 @@ button.secondary:hover{
 .tab-btn.hl .star::before{content:"★ ";color:var(--warn)}
 .tab-btn.hl{font-weight:600}
 
+/* ── Inline field warning (advisory; never blocks Save) ── */
+/* :not(.has-error) — a field carrying both keeps the blocking red treatment. */
+.field.has-warning:not(.has-error) .field-error{
+  display:block;
+  color:var(--warn);
+}
+.field.has-warning:not(.has-error) input,
+.field.has-warning:not(.has-error) select,
+.field.has-warning:not(.has-error) textarea{
+  border-color:var(--warn);
+  box-shadow:0 0 0 3px var(--warn-dim);
+}
+
+
 /* ── Inline field error ── */
 .field.has-error .field-error{
   display:block;
@@ -1017,6 +1043,25 @@ button[disabled]{opacity:.6;cursor:not-allowed}
 
 /* ── Responsive: collapse 2-col grids on narrow viewports ── */
 @media (max-width:720px){
+  /* Wrapped bar: a full-width title row above a row holding the mode strip and
+     the actions, so Save/Cancel stay inside the viewport. */
+  :root{--topbar-height:calc(2 * var(--topbar-row) + var(--sp-2));}
+  .topbar{
+    flex-wrap:wrap;
+    align-content:center;
+    row-gap:var(--sp-2);
+    padding:0 var(--sp-4);
+  }
+  .topbar .title{
+    flex:1 1 100%;
+    min-width:0;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  /* Same overflow-x chip treatment .sidebar gets below. */
+  .topbar .modes{flex:1 1 auto;min-width:0;overflow-x:auto;}
+  .topbar .actions{flex:0 0 auto;}
   .top-fields,.fields-grid,.flag-fields-grid{grid-template-columns:1fr!important}
   /* display:block, not a 1fr grid: a sticky grid item is pinned within its
      own grid area (its own row here), which gives it zero travel — in block
@@ -1024,10 +1069,10 @@ button[disabled]{opacity:.6;cursor:not-allowed}
      scrolls. */
   .layout{display:block!important}
   /* The group sidebar becomes a horizontal scrollable chip row pinned just
-     below the 60px topbar instead of disappearing entirely. */
+     below the topbar instead of disappearing entirely. */
   .sidebar{
     position:sticky;
-    top:60px;
+    top:var(--topbar-height);
     z-index:80;
     width:100%;
     display:flex;

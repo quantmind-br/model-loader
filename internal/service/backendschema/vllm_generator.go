@@ -18,7 +18,8 @@ func NewVLLMGenerator(schemaStore backendcatalog.SchemaStore) *VLLMGenerator {
 }
 
 // Generate returns the hand-curated vLLM schema without runtime --help parsing.
-// If the existing schema has source.editable=true, generation is skipped to preserve manual edits.
+// If the existing schema has source.customized=true, generation is skipped so an
+// operator's edits survive incidental re-runs.
 func (g *VLLMGenerator) Generate(backend domain.Backend) (domain.BackendValidationSchema, error) {
 	if backend.Kind != domain.BackendKindVLLM {
 		return domain.BackendValidationSchema{}, fmt.Errorf("unsupported backend kind: %s", backend.Kind)
@@ -26,7 +27,7 @@ func (g *VLLMGenerator) Generate(backend domain.Backend) (domain.BackendValidati
 
 	ref := schemaStoreRef(backend.SchemaRef)
 	existing, err := g.schemaStore.Load(ref)
-	if err == nil && existing.Source.Editable {
+	if err == nil && existing.Source.Customized {
 		return existing, nil
 	}
 

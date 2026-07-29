@@ -9,10 +9,10 @@ import (
 )
 
 // TestCuratedBeeLlama_SpecTypeEnum pins the spec-type enum to the BeeLlama
-// v0.3.x binary surface (build 10102), which added the native draft-simple,
-// draft-eagle3, and draft-mtp speculative types. The curated enum overrides
-// the parsed one in mergeWithCurated, so a stale list here rejects valid
-// profiles (real MTP profiles use spec-type=draft-mtp).
+// v0.4.0 binary surface (build 10829), which renamed the fork's dflash to the
+// upstream draft-dflash and removed the suffix/copyspec/recycle types. The
+// curated enum overrides the parsed one in mergeWithCurated, so a stale list
+// here rejects valid profiles (real DFlash profiles use spec-type=draft-dflash).
 func TestCuratedBeeLlama_SpecTypeEnum(t *testing.T) {
 	schema := CuratedBeeLlamaSchema().ToFlagSchema()
 	spec, ok := schema.Lookup("spec-type")
@@ -20,9 +20,9 @@ func TestCuratedBeeLlama_SpecTypeEnum(t *testing.T) {
 		t.Fatal("spec-type missing from curated schema")
 	}
 	want := []string{
-		"none", "draft-simple", "draft-eagle3", "draft-mtp",
+		"none", "draft-simple", "draft-eagle3", "draft-mtp", "draft-dflash",
 		"ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod",
-		"ngram-cache", "suffix", "copyspec", "recycle", "dflash",
+		"ngram-cache",
 	}
 	if !reflect.DeepEqual(spec.EnumValues, want) {
 		t.Fatalf("spec-type enum = %v, want %v", spec.EnumValues, want)
@@ -121,7 +121,9 @@ func TestCuratedBeeLlama_ServerInvisibleDraftFlagsAbsent(t *testing.T) {
 }
 
 // TestCuratedBeeLlama_CheckpointMinStep guards the v0.3.0 replacement of
-// --checkpoint-every-n-tokens with --checkpoint-min-step (-cms, default 256).
+// --checkpoint-every-n-tokens with --checkpoint-min-step (-cms). The default is
+// 8192 (common.h::checkpoint_min_step); curated Default overrides the parsed one
+// in mergeWithCurated, so a stale value here misreports the binary to operators.
 func TestCuratedBeeLlama_CheckpointMinStep(t *testing.T) {
 	curated := CuratedBeeLlamaSchema()
 	spec, ok := curated.ToFlagSchema().Lookup("checkpoint-min-step")
@@ -131,8 +133,8 @@ func TestCuratedBeeLlama_CheckpointMinStep(t *testing.T) {
 	if spec.Short != "cms" {
 		t.Errorf("checkpoint-min-step short = %q, want cms", spec.Short)
 	}
-	if spec.Default != 256 {
-		t.Errorf("checkpoint-min-step default = %v, want 256", spec.Default)
+	if spec.Default != 8192 {
+		t.Errorf("checkpoint-min-step default = %v, want 8192", spec.Default)
 	}
 
 	listed := false
@@ -163,28 +165,14 @@ func TestCuratedBeeLlama_SpecDraftNMaxDefault(t *testing.T) {
 	}
 }
 
-// TestCuratedBeeLlama_SpecDraftTempIsString pins spec-draft-temp to string:
-// since v0.3.0 it accepts 'auto' (mirror target temperature) besides a float,
-// and the live --help parser already types it as string in merged schemas.
-func TestCuratedBeeLlama_SpecDraftTempIsString(t *testing.T) {
-	schema := CuratedBeeLlamaSchema().ToFlagSchema()
-	spec, ok := schema.Lookup("spec-draft-temp")
-	if !ok {
-		t.Fatal("spec-draft-temp missing from curated schema")
-	}
-	if spec.Type != domain.FlagTypeString {
-		t.Fatalf("spec-draft-temp should be FlagTypeString, got %v", spec.Type)
-	}
-}
-
 // TestCuratedBeeLlama_ValidatesMTPProfile guards that the curated fallback
-// schema validates a realistic BeeLlama v0.3.x MTP profile, including the
-// draft-mtp spec-type, the new checkpoint-min-step flag, the q6_0 cache type,
-// and spec-draft-temp=auto.
+// schema validates a realistic BeeLlama MTP profile, including the draft-mtp
+// spec-type, the checkpoint-min-step flag, and the q6_0 cache type.
 func TestCuratedBeeLlama_ValidatesMTPProfile(t *testing.T) {
 	schema := CuratedBeeLlamaSchema().ToFlagSchema()
 
 	p := domain.Profile{
+		Model: existingModelPath(t),
 		Args: map[string]any{
 			"batch-size":          float64(2048),
 			"ubatch-size":         float64(1024),
@@ -200,7 +188,6 @@ func TestCuratedBeeLlama_ValidatesMTPProfile(t *testing.T) {
 			"checkpoint-min-step": float64(256),
 			"spec-type":           "draft-mtp",
 			"spec-draft-n-max":    float64(3),
-			"spec-draft-temp":     "auto",
 		},
 	}
 

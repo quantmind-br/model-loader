@@ -1,2 +1,0 @@
-- DownloadProgress emits components.DownloadCancelMsg; ModelsPage handles it by calling downloadmgr.Manager.Cancel.
-- Verification saved at .sisyphus/evidence/task-15-build.txt: go build/vet/test ./internal/ui/pages/... all exit 0.

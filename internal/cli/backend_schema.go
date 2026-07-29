@@ -65,7 +65,7 @@ func init() {
 	var applyFile string
 	applyCmd := &cobra.Command{
 		Use:   "apply <backend-id> -f <file>",
-		Short: "Apply a hand-edited schema JSON, marking it editable so refresh preserves it",
+		Short: "Apply a hand-edited schema JSON, marking it customized so refresh keeps its layout",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load()
@@ -101,6 +101,7 @@ func showSchema(out io.Writer, mgr backendManager, store backendcatalog.SchemaSt
 	fmt.Fprintf(out, "Kind:      %s\n", schema.BackendKind)
 	fmt.Fprintf(out, "Version:   %d\n", schema.SchemaVersion)
 	fmt.Fprintf(out, "Editable:  %t\n", schema.Source.Editable)
+	fmt.Fprintf(out, "Customized:%t\n", schema.Source.Customized)
 	if schema.Source.SourceVersion != "" {
 		fmt.Fprintf(out, "Source:    %s\n", schema.Source.SourceVersion)
 	}
@@ -166,12 +167,15 @@ func applySchema(out io.Writer, mgr backendManager, store backendcatalog.SchemaS
 	}
 	schema.BackendID = b.ID
 	schema.BackendKind = b.Kind
+	// An operator-supplied schema file is a customization: RefreshSchema must
+	// carry its presentation and rules across a regeneration.
 	schema.Source.Editable = true
+	schema.Source.Customized = true
 
 	ref := backendcatalog.SchemaStoreRef(b.SchemaRef)
 	if err := store.Save(ref, schema); err != nil {
 		return fmt.Errorf("save schema: %w", err)
 	}
-	fmt.Fprintf(out, "applied schema for %s (editable=true, %d flags)\n", b.ID, len(schema.Flags))
+	fmt.Fprintf(out, "applied schema for %s (customized=true, %d flags)\n", b.ID, len(schema.Flags))
 	return nil
 }

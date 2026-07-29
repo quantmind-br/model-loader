@@ -38,7 +38,7 @@ func TestExecParser_ParseUsesPATH(t *testing.T) {
 	if _, ok := schema.Flags["ctx-size"]; !ok {
 		t.Errorf("missing ctx-size in schema parsed via fake binary")
 	}
-	if v, err := parser.DetectVersion(ctx); err != nil || !strings.Contains(v, "9761") {
-		t.Errorf("DetectVersion = %q, err=%v; want substring 9761", v, err)
+	if v, err := parser.DetectVersion(ctx); err != nil || !strings.Contains(v, "10152") {
+		t.Errorf("DetectVersion = %q, err=%v; want substring 10152", v, err)
 	}
 }

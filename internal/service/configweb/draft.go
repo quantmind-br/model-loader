@@ -3,7 +3,9 @@ package configweb
 
 import (
 	"maps"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
@@ -29,6 +31,7 @@ type Draft struct {
 // ToProfile builds a fresh Profile from the draft, coercing arg values by type.
 func (d Draft) ToProfile(schema domain.FlagSchema) domain.Profile {
 	now := time.Now().UTC()
+	args, routed := coerceArgs(d.Args, schema)
 	return domain.Profile{
 		SchemaVersion: domain.SchemaVersion,
 		ID:            d.ID,
@@ -36,8 +39,8 @@ func (d Draft) ToProfile(schema domain.FlagSchema) domain.Profile {
 		Description:   d.Description,
 		Tags:          d.Tags,
 		Model:         d.Model,
-		Args:          coerceArgs(d.Args, schema),
-		ExtraArgs:     d.ExtraArgs,
+		Args:          args,
+		ExtraArgs:     mergeExtraArgs(d.ExtraArgs, routed),
 		Launch:        domain.LaunchConfig{BackendID: d.BackendID, Env: d.Env},
 		Meta:          domain.ProfileMeta{CreatedAt: now, UpdatedAt: now},
 	}
@@ -55,8 +58,9 @@ func (d Draft) ApplyTo(existing domain.Profile, schema domain.FlagSchema, surfac
 	existing.Description = d.Description
 	existing.Tags = d.Tags
 	existing.Model = d.Model
-	existing.Args = mergeArgs(existing.Args, d.Args, schema, surfaced)
-	existing.ExtraArgs = d.ExtraArgs
+	args, routed := mergeArgs(existing.Args, d.Args, schema, surfaced)
+	existing.Args = args
+	existing.ExtraArgs = mergeExtraArgs(d.ExtraArgs, routed)
 	existing.Launch.BackendID = d.BackendID
 	existing.Launch.Env = d.Env
 	existing.Meta.UpdatedAt = time.Now().UTC()
@@ -69,7 +73,7 @@ func (d Draft) ApplyTo(existing domain.Profile, schema domain.FlagSchema, surfac
 // the editor never surfaced are preserved verbatim with their original type, so
 // a save can never silently drop a flag the schema's presentation omits.
 // Reserved (manager-owned) flags are always excluded.
-func mergeArgs(existing map[string]any, form map[string]string, schema domain.FlagSchema, surfaced map[string]bool) map[string]any {
+func mergeArgs(existing map[string]any, form map[string]string, schema domain.FlagSchema, surfaced map[string]bool) (map[string]any, map[string][]string) {
 	out := map[string]any{}
 	for k, v := range existing {
 		if reservedFlags[k] {
@@ -82,12 +86,18 @@ func mergeArgs(existing map[string]any, form map[string]string, schema domain.Fl
 		}
 		out[k] = v
 	}
-	maps.Copy(out, coerceArgs(form, schema))
-	return out
+	formArgs, routed := coerceArgs(form, schema)
+	maps.Copy(out, formArgs)
+	return out, routed
 }
 
-func coerceArgs(in map[string]string, schema domain.FlagSchema) map[string]any {
+// coerceArgs converts form strings into typed Args. Flags whose value spans
+// several argv tokens are returned separately, as ready-to-emit argv tokens for
+// ExtraArgs: Args holds one token per key, so that is the only representation
+// the backend parses correctly (BUGS.md S15).
+func coerceArgs(in map[string]string, schema domain.FlagSchema) (map[string]any, map[string][]string) {
 	out := map[string]any{}
+	routed := map[string][]string{}
 	for k, v := range in {
 		if reservedFlags[k] {
 			// Manager-owned launch parameter (e.g. port): never persisted to a
@@ -96,6 +106,17 @@ func coerceArgs(in map[string]string, schema domain.FlagSchema) map[string]any {
 		}
 		spec, ok := schema.Lookup(domain.CanonicalFlag(k))
 		if !ok {
+			out[k] = v
+			continue
+		}
+		if spec.Arity > 1 {
+			// Route to ExtraArgs only when the field really holds that many
+			// values; a wrong count stays in Args so the validator reports it
+			// rather than the launch mis-parsing silently.
+			if fields := strings.Fields(v); len(fields) == spec.Arity {
+				routed[spec.Long] = fields
+				continue
+			}
 			out[k] = v
 			continue
 		}
@@ -117,6 +138,42 @@ func coerceArgs(in map[string]string, schema domain.FlagSchema) map[string]any {
 		default:
 			out[k] = v
 		}
+	}
+	return out, routed
+}
+
+// mergeExtraArgs appends routed multi-token flags to the operator's raw extra
+// args, dropping any earlier occurrence of the same flag so repeated saves
+// cannot stack duplicates. Only as many bare values as the flag consumes are
+// dropped with it, and never a dash-prefixed token: `-ngl 30` sitting after a
+// re-routed `--lora-scaled f.gguf 0.5` belongs to another flag and must survive.
+func mergeExtraArgs(raw []string, routed map[string][]string) []string {
+	if len(routed) == 0 {
+		return raw
+	}
+	out := make([]string, 0, len(raw)+len(routed)*3)
+	for i := 0; i < len(raw); i++ {
+		tok := raw[i]
+		name, _, hasEq := strings.Cut(strings.TrimPrefix(tok, "--"), "=")
+		vals, stale := routed[name]
+		if !stale || !strings.HasPrefix(tok, "--") {
+			out = append(out, tok)
+			continue
+		}
+		if hasEq {
+			continue
+		}
+		for range vals {
+			if i+1 >= len(raw) || strings.HasPrefix(raw[i+1], "-") {
+				break
+			}
+			i++
+		}
+	}
+	// Sorted so a re-save of an unchanged form produces identical JSON.
+	for _, long := range slices.Sorted(maps.Keys(routed)) {
+		out = append(out, "--"+long)
+		out = append(out, routed[long]...)
 	}
 	return out
 }

@@ -110,6 +110,9 @@ func (p *ServerPage) renderStatusLine() string {
 // metrics, or history) for the currently-selected instance, or a fallback
 // string when no subscription state is available.
 func (p *ServerPage) renderSubViewBody() string {
+	if p.subView == SubViewHistory {
+		return p.renderHistory()
+	}
 	pid := p.selectedPID()
 	st := p.subs[pid]
 	if st == nil {
@@ -122,8 +125,6 @@ func (p *ServerPage) renderSubViewBody() string {
 		return p.renderSlots(st)
 	case SubViewMetrics:
 		return p.renderMetrics(st)
-	case SubViewHistory:
-		return p.renderHistory()
 	}
 	return components.EmptyState("Waiting for monitor data", "Monitor attaches a moment after launch — [R] restarts the instance if this persists")
 }
@@ -134,7 +135,7 @@ func (p *ServerPage) renderLogs(st *subState) string {
 	if st.subErr != "" {
 		return theme.Error.Render("Logs unavailable: " + st.subErr)
 	}
-	visible := p.height - (serverTableHeight(p.height) + 8)
+	visible := p.height - (tableHeightForRows(p.height, len(p.tbl.Rows())) + 8)
 	if visible < 3 {
 		visible = 3
 	}
@@ -271,10 +272,7 @@ func (p *ServerPage) renderHistory() string {
 // active sub-view styled via theme.TabActive. Cycled by the [v] key.
 func renderSubViewTabs(active SubViewKind) string {
 	render := func(k SubViewKind, label string) string {
-		if k == active {
-			return theme.TabActive.Render(label)
-		}
-		return theme.TabInactive.Render(label)
+		return components.ActiveLabel(label, k == active)
 	}
 	parts := []string{
 		render(SubViewLogs, "Logs"),
@@ -385,10 +383,10 @@ func (p *ServerPage) selectedPID() int {
 		return 0
 	}
 	row := p.tbl.SelectedRow()
-	if len(row) == 0 {
+	if len(row) < 2 {
 		return 0
 	}
-	pidCol := strings.TrimPrefix(stripANSI(row[0]), "✗ ")
+	pidCol := strings.TrimPrefix(stripANSI(row[1]), "✗ ")
 	var pid int
 	_, _ = fmt.Sscanf(pidCol, "%d", &pid)
 	return pid

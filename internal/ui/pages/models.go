@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/quantmind-br/model-loader/internal/config"
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/downloadmgr"
 	"github.com/quantmind-br/model-loader/internal/service/hfhub"
@@ -119,6 +120,7 @@ func (p ModelsPage) StatusMessage() (string, components.StatusLevel) {
 // NewModelsPage builds a page wired to a Scanner and configured search paths.
 func NewModelsPage(scanner modelscanner.Scanner, paths []string) ModelsPage {
 	cols := []table.Column{
+		{Title: "", Width: markerColumnWidth},
 		{Title: "Name", Width: 36},
 		{Title: "Size", Width: 10},
 		{Title: "Quant", Width: 10},
@@ -158,6 +160,19 @@ func (p ModelsPage) WithProfileStore(store profilestore.Store) ModelsPage {
 func (p ModelsPage) WithSearchPathPersister(fn func([]string) error) ModelsPage {
 	p.persistSearchPaths = fn
 	return p
+}
+
+// configTarget names the operator's config file for the empty-state hints. It
+// asks config.DefaultConfigPath rather than restating "~/.config/model-loader"
+// here: os.UserConfigDir honours $XDG_CONFIG_HOME, so a hardcoded hint pointed
+// operators at a tree the running process never reads (CFG1). One base, one
+// literal. Degrades to a path-free wording if the lookup fails.
+func configTarget() string {
+	path, err := config.DefaultConfigPath()
+	if err != nil {
+		return "your model-loader config.toml"
+	}
+	return path
 }
 
 // WithHFClient injects a Hugging Face Hub client so the page can offer
@@ -233,10 +248,7 @@ func (p ModelsPage) View() string {
 // in-flight transfers so the user notices background activity from any tab.
 func (p ModelsPage) renderSubTabs() string {
 	label := func(v modelsSubView, text string) string {
-		if v == p.subView {
-			return theme.TabActive.Render(text)
-		}
-		return theme.TabInactive.Render(text)
+		return components.ActiveLabel(text, v == p.subView)
 	}
 	dl := "Downloads"
 	if n := p.activeDownloadCount(); n > 0 {
@@ -272,12 +284,12 @@ func (p ModelsPage) renderLibraryView() string {
 	case len(p.files) == 0 && p.hasErrorRoot():
 		// Zero files with a failed root is an error artifact, not an empty
 		// library — say so instead of the misleading "No .gguf files" copy.
-		emptyMsg := components.EmptyState("Scan failed for one or more paths", "Press [R] to retry or edit ~/.config/model-loader/config.toml")
+		emptyMsg := components.EmptyState("Scan failed for one or more paths", "Press [R] to retry or edit "+configTarget())
 		content = lipgloss.JoinVertical(lipgloss.Left, statusLine, emptyMsg, filterLine)
 	case len(p.files) == 0 && p.isScanning():
 		content = lipgloss.JoinVertical(lipgloss.Left, statusLine, theme.Subtitle.Render("Scanning configured paths…"), filterLine)
 	case len(p.files) == 0 && (len(p.paths) == 0 || p.hasScannedRoot()):
-		emptyMsg := components.EmptyState("No .gguf files in configured search paths", "Press [R] to rescan, or edit ~/.config/model-loader/config.toml")
+		emptyMsg := components.EmptyState("No .gguf files in configured search paths", "Press [R] to rescan, or edit "+configTarget())
 		content = lipgloss.JoinVertical(lipgloss.Left, statusLine, emptyMsg, filterLine)
 	case len(p.visibleFiles()) == 0 && p.filter != "":
 		emptyMsg := components.EmptyState("No models match the current filter", "Press [esc] to clear filter, or [/] to edit filter")

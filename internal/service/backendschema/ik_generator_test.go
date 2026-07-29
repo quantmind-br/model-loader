@@ -48,7 +48,7 @@ func TestIkLlamaGenerator_CuratedWhenBinaryMissing(t *testing.T) {
 	}
 }
 
-func TestIkLlamaGenerator_SkipsWhenEditable(t *testing.T) {
+func TestIkLlamaGenerator_SkipsWhenCustomized(t *testing.T) {
 	dir := t.TempDir()
 	store := backendcatalog.NewFSSchemaStore(dir)
 	g := NewIkLlamaServerGenerator(store)
@@ -62,13 +62,13 @@ func TestIkLlamaGenerator_SkipsWhenEditable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first generate: %v", err)
 	}
-	schema.Source.Editable = true
+	schema.Source.Customized = true
 	_ = store.Save("ik-edit.json", schema)
 	schema2, err := g.Generate(backend)
 	if err != nil {
 		t.Fatalf("second generate: %v", err)
 	}
-	if !schema2.Source.Editable {
-		t.Fatal("expected editable schema to be preserved")
+	if !schema2.Source.Customized {
+		t.Fatal("expected customized schema to be preserved")
 	}
 }

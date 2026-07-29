@@ -161,6 +161,8 @@ func (p *ServerPage) appendMetricsCmd(pid int, ts time.Time, metrics monitor.Met
 func (p *ServerPage) applyInstances(insts []domain.RunningInstance) tea.Cmd {
 	p.tbl.SetRows(p.renderRows(insts))
 	p.clampCursor(len(insts))
+	p.applyTableHeight()
+	p.refreshRowMarkers()
 	cmds := p.ensureSubscriptions(insts)
 	if c := p.noteCrashes(insts); c != nil {
 		cmds = append(cmds, c)
@@ -195,7 +197,7 @@ func (p *ServerPage) noteCrashes(insts []domain.RunningInstance) tea.Cmd {
 }
 
 // renderRows formats one table row per instance. Crashed instances are
-// marked with a "✗ " prefix on the PID column and " (crashed)" suffix on
+// marked with a "✗ " prefix on the PID column and an exit-class suffix on
 // the profile column — both plain ASCII, never wrapped in ANSI styles.
 //
 // Why no per-cell theme.Error.Render: bubbles/table.renderRow truncates each
@@ -214,7 +216,7 @@ func (p *ServerPage) renderRows(insts []domain.RunningInstance) []table.Row {
 		profileCol := ri.ProfileID
 		if ri.Crashed {
 			pidCol = "✗ " + pidCol
-			profileCol = ri.ProfileID + " (crashed)"
+			profileCol = ri.ProfileID + " (" + domain.ExitClass(ri) + ")"
 		}
 		uptime, vram, toks := "--", "--", "--"
 		if !ri.StartedAt.IsZero() {
@@ -232,6 +234,7 @@ func (p *ServerPage) renderRows(insts []domain.RunningInstance) []table.Row {
 		}
 		portCol := fmt.Sprintf("%d", ri.Port)
 		rows = append(rows, table.Row{
+			rowMarker(len(rows) == p.tbl.Cursor()),
 			pidCol,
 			portCol,
 			profileCol,
@@ -249,7 +252,7 @@ func (p *ServerPage) dropInstanceRow(pid int) {
 	rows := p.tbl.Rows()
 	kept := make([]table.Row, 0, len(rows))
 	for _, r := range rows {
-		pidCol := strings.TrimPrefix(stripANSI(r[0]), "✗ ")
+		pidCol := strings.TrimPrefix(stripANSI(r[1]), "✗ ")
 		var rowPID int
 		_, _ = fmt.Sscanf(pidCol, "%d", &rowPID)
 		if rowPID == pid {
@@ -259,6 +262,8 @@ func (p *ServerPage) dropInstanceRow(pid int) {
 	}
 	p.tbl.SetRows(kept)
 	p.clampCursor(len(kept))
+	p.applyTableHeight()
+	p.refreshRowMarkers()
 }
 
 // clampCursor pulls the table cursor back into range when the row count
@@ -323,12 +328,27 @@ func (p *ServerPage) reapDeadSubscriptions(insts []domain.RunningInstance) {
 func (p *ServerPage) selectRow(pid int) {
 	rows := p.tbl.Rows()
 	for i, r := range rows {
-		pidCol := strings.TrimPrefix(stripANSI(r[0]), "✗ ")
+		pidCol := strings.TrimPrefix(stripANSI(r[1]), "✗ ")
 		var rowPID int
 		_, _ = fmt.Sscanf(pidCol, "%d", &rowPID)
 		if rowPID == pid {
 			p.tbl.SetCursor(i)
+			p.refreshRowMarkers()
 			return
 		}
 	}
+}
+
+// refreshRowMarkers rewrites the gutter cell of every row so the marker tracks
+// the current cursor. Mutates the live row slice and re-renders in place —
+// SetRows would clamp the cursor and churn the viewport.
+func (p *ServerPage) refreshRowMarkers() {
+	rows := p.tbl.Rows()
+	cur := p.tbl.Cursor()
+	for i := range rows {
+		if len(rows[i]) > 0 {
+			rows[i][0] = rowMarker(i == cur)
+		}
+	}
+	p.tbl.UpdateViewport()
 }

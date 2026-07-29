@@ -126,6 +126,7 @@ func (p *ModelsPage) refreshRows() {
 	rows := make([]table.Row, 0, len(files))
 	for _, f := range files {
 		rows = append(rows, table.Row{
+			rowMarker(len(rows) == p.table.Cursor()),
 			truncate(f.Name, nameW),
 			humanSize(f.SizeBytes),
 			f.Quant,
@@ -144,6 +145,7 @@ func (p *ModelsPage) refreshRows() {
 			p.table.SetCursor(0)
 		}
 	}
+	p.refreshRowMarkers()
 }
 
 // resizeColumns recomputes the Name/Path column widths so the table fits
@@ -173,7 +175,7 @@ func (p *ModelsPage) resizeColumns(width int) {
 	// Reserve fixed columns plus per-column cell padding. bubbletea's table
 	// cell style adds Padding(0,1) = 2 cols per column (5 cols = 10); reserve
 	// that plus a small safety margin so a truncated Path never wraps (RENDER-01).
-	flex := avail - (sizeW + quantW + paramsW) - 12
+	flex := avail - (sizeW + quantW + paramsW) - 12 - (markerColumnWidth + tableCellPadding)
 	if flex < 16 {
 		flex = 16
 	}
@@ -187,6 +189,7 @@ func (p *ModelsPage) resizeColumns(width int) {
 	}
 	p.nameColW, p.pathColW = nameW, pathW
 	p.table.SetColumns([]table.Column{
+		{Title: "", Width: markerColumnWidth},
 		{Title: "Name", Width: nameW},
 		{Title: "Size", Width: sizeW},
 		{Title: "Quant", Width: quantW},
@@ -353,4 +356,15 @@ func truncFront(s string, n int) string {
 		return s
 	}
 	return "…" + s[len(s)-(n-1):]
+}
+
+func (p *ModelsPage) refreshRowMarkers() {
+	rows := p.table.Rows()
+	cur := p.table.Cursor()
+	for i := range rows {
+		if len(rows[i]) > 0 {
+			rows[i][0] = rowMarker(i == cur)
+		}
+	}
+	p.table.UpdateViewport()
 }

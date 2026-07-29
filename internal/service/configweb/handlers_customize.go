@@ -12,8 +12,8 @@ import (
 
 // This file hosts Customize mode: handlers that edit the backend schema itself
 // (per-flag constraints, add/remove flags, presentation, cross-field rules).
-// Every handler sets schema.Source.Editable = true via persistEditable so
-// RefreshSchema preserves the manual edits across --help re-parsing.
+// Every handler calls markCustomized so RefreshSchema carries the operator's
+// layout (presentation + rules) across a --help re-parse.
 
 // loadSchemaRef returns the schema plus its store ref for a backend.
 func (s *Session) loadSchemaRef(backendID string) (domain.BackendValidationSchema, string, error) {
@@ -44,10 +44,11 @@ func atoiPtr(s string) *int {
 	return nil
 }
 
-// persistEditable marks the schema as a manual edit. RefreshSchema preserves
-// schemas with Source.Editable=true.
-func persistEditable(schema *domain.BackendValidationSchema) {
+// markCustomized flags the schema as operator-edited. RefreshSchema preserves
+// the presentation and rules of schemas with Source.Customized=true.
+func markCustomized(schema *domain.BackendValidationSchema) {
 	schema.Source.Editable = true
+	schema.Source.Customized = true
 }
 
 // handleCustomizeFlag updates one flag's editable constraints and marks the
@@ -76,7 +77,7 @@ func (s *Session) handleCustomizeFlag(w http.ResponseWriter, r *http.Request) {
 		spec.EnumValues = splitCSV(ev)
 	}
 	schema.Flags[flag] = spec
-	persistEditable(&schema)
+	markCustomized(&schema)
 	if err := s.deps.Schemas.Save(ref, schema); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -116,7 +117,7 @@ func (s *Session) handleCustomizeAddFlag(w http.ResponseWriter, r *http.Request)
 		HelpText: r.FormValue("help"),
 		Group:    "custom",
 	}
-	persistEditable(&schema)
+	markCustomized(&schema)
 	if err := s.deps.Schemas.Save(ref, schema); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -142,7 +143,7 @@ func (s *Session) handleCustomizeRemoveFlag(w http.ResponseWriter, r *http.Reque
 			schema.Presentation.Groups[gi].Flags = removeStr(schema.Presentation.Groups[gi].Flags, long)
 		}
 	}
-	persistEditable(&schema)
+	markCustomized(&schema)
 	if err := s.deps.Schemas.Save(ref, schema); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -163,7 +164,7 @@ func (s *Session) handleCustomizePresentation(w http.ResponseWriter, r *http.Req
 		return
 	}
 	schema.Presentation = &pres
-	persistEditable(&schema)
+	markCustomized(&schema)
 	if err := s.deps.Schemas.Save(ref, schema); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -188,7 +189,7 @@ func (s *Session) handleCustomizeRules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	schema.Rules = rules
-	persistEditable(&schema)
+	markCustomized(&schema)
 	if err := s.deps.Schemas.Save(ref, schema); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

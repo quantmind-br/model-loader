@@ -146,7 +146,6 @@ func gradeRefusal(ctx context.Context, g grader, prompt, response string) (bool,
 // forgiving bar.
 const (
 	instConsistencySamples      = 3
-	instConsistencyTemp         = 0.7
 	instConsistencyThresholdEmb = 0.8
 	instConsistencyThresholdLex = 0.6
 )
@@ -181,7 +180,6 @@ func (r *Runner) runInstructionBench(pc probeCtx, sim similarityGrader, g grader
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, pc.base, "", ChatRequest{
 		Model:       pc.model,
-		Temperature: 0,
 		MaxTokens:   r.cfg.MaxTokens,
 		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
@@ -243,8 +241,10 @@ func (r *Runner) runInstructionBench(pc probeCtx, sim similarityGrader, g grader
 	return res, tr
 }
 
-// runInstConsistency asks the same prompt instConsistencySamples times at a
-// non-zero temperature and scores the mean pairwise similarity of the replies.
+// runInstConsistency asks the same prompt instConsistencySamples times at the
+// profile's launched sampling and scores the mean pairwise similarity of the
+// replies. A greedy profile (temperature 0) yields identical replies and a
+// trivially perfect 1.0 — an honest signal for that profile.
 func (r *Runner) runInstConsistency(pc probeCtx, sim similarityGrader, p InstructionProblem) (ProblemResult, ProblemTranscript) {
 	res, tr := newInstResult(p)
 	var replies []string
@@ -252,7 +252,6 @@ func (r *Runner) runInstConsistency(pc probeCtx, sim similarityGrader, p Instruc
 		reqCtx, cancel := context.WithTimeout(pc.ctx, r.inferTimeout())
 		comp, err := Complete(reqCtx, nil, pc.base, "", ChatRequest{
 			Model:       pc.model,
-			Temperature: instConsistencyTemp,
 			MaxTokens:   r.cfg.MaxTokens,
 			OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 			Messages: []ChatMessage{

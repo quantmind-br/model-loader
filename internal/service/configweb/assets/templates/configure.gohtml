@@ -22,7 +22,7 @@
 </button>{{end}}{{end}}
 
 {{define "configure"}}
-<form id="profile-form" hx-post="/validate" hx-trigger="input changed delay:300ms" hx-target="#issues">
+<form id="profile-form" novalidate hx-post="/validate" hx-trigger="input delay:300ms" hx-target="#issues">
   <input type="hidden" name="origId" value="{{.Draft.OrigID}}">
   <input type="hidden" name="isNew" value="{{if .Draft.IsNew}}true{{else}}false{{end}}">
   <input type="hidden" name="prevBackendId" value="{{.Draft.BackendID}}">
@@ -126,23 +126,29 @@
           </select>
         {{else if eq .Widget "toggle"}}
           {{/* Tri-state: unset (default) / on / off. The hidden input owns the
-               form name and carries ""|"on"|"off"; the input event is dispatched
-               from it because htmx's `input changed` filter tracks
-               event.target.value and a checkbox's .value never changes. */}}
+               form name and carries ""|"on"|"off"; the input event is
+               dispatched from it because the Reset button changes the value
+               without producing any native input event. */}}
           <div class="toggle-field" x-data="{v:'{{.Value}}'}">
             <input type="hidden" name="arg.{{.Flag}}" value="{{.Value}}" x-ref="val" :value="v">
+            {{/* The label makes the checkbox + state text one pointer target;
+                 the checkbox alone is 20x20. Reset stays outside it so clicking
+                 Reset does not also toggle the checkbox. The flag name above
+                 is already a <label for="arg-…"> and keeps working. */}}
             {{/* aria-required only: HTML `required` on a checkbox means
                  "must be checked", which misstates a tri-state where off is
                  a valid configured value. */}}
-            <input type="checkbox" id="arg-{{.Flag}}" class="toggle-check" x-ref="check"
-              {{if .Required}}aria-required="true"{{end}}
-              {{if .Help}}aria-describedby="arg-{{.Flag}}-help"{{end}}
-              :checked="v==='on'"
-              x-effect="$el.indeterminate = (v==='')"
-              @change="v = $event.target.checked ? 'on' : 'off';
-                       $nextTick(()=>$refs.val.dispatchEvent(new Event('input',{bubbles:true})))">
-            <span class="toggle-state muted"
-              x-text="v==='' ? 'default{{if .Default}} ({{.Default}}){{end}}' : v"></span>
+            <label class="toggle-hit">
+              <input type="checkbox" id="arg-{{.Flag}}" class="toggle-check" x-ref="check"
+                {{if .Required}}aria-required="true"{{end}}
+                {{if .Help}}aria-describedby="arg-{{.Flag}}-help"{{end}}
+                :checked="v==='on'"
+                x-effect="$el.indeterminate = (v==='')"
+                @change="v = $event.target.checked ? 'on' : 'off';
+                         $nextTick(()=>$refs.val.dispatchEvent(new Event('input',{bubbles:true})))">
+              <span class="toggle-state muted"
+                x-text="v==='' ? 'default{{if .Default}} ({{.Default}}){{end}}' : v"></span>
+            </label>
             <button type="button" class="ghost toggle-reset" x-show="v!==''" x-cloak
               aria-label="Reset {{.Label}} to default"
               @click="v='';

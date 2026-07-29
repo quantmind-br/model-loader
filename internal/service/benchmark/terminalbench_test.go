@@ -135,6 +135,7 @@ func TestBuildTBArgs_Defaults(t *testing.T) {
 }
 
 func TestBuildTBArgs_Overrides(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir()) // empty cache → --n-tasks fallback
 	cfg := Config{
 		TerminalBenchAgent:      "terminus-2",
 		TerminalBenchDataset:    "terminal-bench-core==0.2.0",
@@ -159,6 +160,63 @@ func TestBuildTBArgs_Overrides(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("argv mismatch\n got: %v\nwant: %v", got, want)
+	}
+}
+
+func TestBuildTBArgs_NTasksExpandsDeterministicTaskIDs(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", tmp)
+	dir := filepath.Join(tmp, "terminal-bench", "terminal-bench-core", "0.1.1")
+	for _, name := range []string{"task-a", "task-b", "task-c", "task-d"} {
+		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustWrite(t, filepath.Join(dir, "README.md"), "not a task") // non-dirs skipped
+
+	countTaskIDs := func(args []string) (ids []string, nTasks bool) {
+		for i := 0; i < len(args); i++ {
+			switch args[i] {
+			case "--task-id":
+				if i+1 < len(args) {
+					ids = append(ids, args[i+1])
+				}
+			case "--n-tasks":
+				nTasks = true
+			}
+		}
+		return ids, nTasks
+	}
+
+	cfg := Config{TerminalBenchNTasks: 2}
+	got := buildTBArgs(cfg, "rid", "http://h:1/v1", "p", "/o")
+	ids, hasNTasks := countTaskIDs(got)
+	if hasNTasks {
+		t.Fatalf("--n-tasks emitted alongside expansion: %v", got)
+	}
+	if len(ids) != 2 {
+		t.Fatalf("expected 2 --task-id, got %d: %v", len(ids), got)
+	}
+	for _, id := range ids {
+		if !strings.HasPrefix(id, "task-") {
+			t.Fatalf("sampled non-task dir %q: %v", id, got)
+		}
+	}
+
+	if again := buildTBArgs(cfg, "rid", "http://h:1/v1", "p", "/o"); !reflect.DeepEqual(got, again) {
+		t.Fatalf("non-deterministic expansion\n first: %v\nsecond: %v", got, again)
+	}
+
+	// Explicit Tasks suppress cache expansion: --task-id comes from Tasks only
+	// (the both-set case keeps today's behavior — --n-tasks also emitted).
+	explicit := Config{TerminalBenchNTasks: 2, TerminalBenchTasks: []string{"only-me"}}
+	gotExplicit := buildTBArgs(explicit, "rid", "http://h:1/v1", "p", "/o")
+	eIDs, eNTasks := countTaskIDs(gotExplicit)
+	if !eNTasks {
+		t.Fatalf("expected --n-tasks fallback when Tasks set: %v", gotExplicit)
+	}
+	if len(eIDs) != 1 || eIDs[0] != "only-me" {
+		t.Fatalf("explicit Tasks not preserved verbatim: %v", gotExplicit)
 	}
 }
 

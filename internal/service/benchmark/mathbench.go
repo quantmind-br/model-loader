@@ -78,7 +78,7 @@ func matchAnswer(expected, response string) bool {
 }
 
 // runMathBench asks the model one math question and scores an exact numeric
-// match. Objective (no grader). Temperature 0 for determinism.
+// match. Objective (no grader). Runs at the profile's launched sampling.
 func (r *Runner) runMathBench(ctx context.Context, base, model string, p MathProblem) (ProblemResult, ProblemTranscript) {
 	res := ProblemResult{ProblemID: p.ID, ProblemName: truncateQuestion(p.Question)}
 	tr := ProblemTranscript{ProblemID: p.ID, ProblemName: res.ProblemName}
@@ -87,7 +87,6 @@ func (r *Runner) runMathBench(ctx context.Context, base, model string, p MathPro
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
 		Model:       model,
-		Temperature: 0,
 		MaxTokens:   r.cfg.MaxTokens,
 		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{

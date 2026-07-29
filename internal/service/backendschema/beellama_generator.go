@@ -27,7 +27,7 @@ func (g *BeeLlamaServerGenerator) Generate(backend domain.Backend) (domain.Backe
 
 	ref := schemaStoreRef(backend.SchemaRef)
 	existing, err := g.schemaStore.Load(ref)
-	if err == nil && existing.Source.Editable {
+	if err == nil && existing.Source.Customized {
 		return existing, nil
 	}
 

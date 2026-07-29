@@ -437,6 +437,77 @@ func TestValidateHandler_ReportsUnknownFlag(t *testing.T) {
 	}
 }
 
+// UIUX-031: an empty model is a blocking error, not a model-existence warning.
+func TestValidateHandler_EmptyModelIsBlockingError(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer,
+		BackendID:   "llama",
+	}
+	s := &Session{deps: Deps{Schemas: stubSchemaStore{schema: schema}, Catalog: stubCatalog{id: "llama", ref: "llama.json"}}}
+	form := url.Values{"backendId": {"llama"}, "model": {""}}
+	req := httptest.NewRequest("POST", "/validate", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleValidate(rec, req)
+	body := rec.Body.String()
+	if !strings.Contains(body, `class="issue error" data-field="model"`) || !strings.Contains(body, "model: required") {
+		t.Fatalf("expected blocking model-required issue, got: %s", body)
+	}
+	if strings.Contains(body, "✓ valid") {
+		t.Fatalf("empty model must not be valid: %s", body)
+	}
+}
+
+// UIUX-031: saving an empty model must not persist a profile.
+func TestSaveHandler_BlocksOnEmptyModel(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer,
+		BackendID:   "llama",
+	}
+	ps := newMemProfileStore()
+	s := &Session{
+		deps: Deps{Profiles: ps, Schemas: stubSchemaStore{schema: schema}, Catalog: stubCatalog{id: "llama", ref: "llama.json"}},
+		done: make(chan Result, 1),
+	}
+	form := url.Values{
+		"isNew": {"true"}, "id": {"no-model"}, "name": {"No Model"},
+		"backendId": {"llama"}, "model": {""},
+	}
+	req := httptest.NewRequest("POST", "/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleSave(rec, req)
+	if got := rec.Header().Get("HX-Redirect"); got != "" {
+		t.Fatalf("expected no HX-Redirect on blocked save, got %q", got)
+	}
+	if _, err := ps.Get("no-model"); err == nil {
+		t.Fatal("profile should not have been persisted with an empty model")
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "model: required") {
+		t.Fatalf("expected model-required issue, got: %s", body)
+	}
+}
+
+func TestValidateHandler_MissingModelFileStaysWarning(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer,
+		BackendID:   "llama",
+	}
+	s := &Session{deps: Deps{Schemas: stubSchemaStore{schema: schema}, Catalog: stubCatalog{id: "llama", ref: "llama.json"}}}
+	form := url.Values{"backendId": {"llama"}, "model": {"/nope/missing.gguf"}}
+	req := httptest.NewRequest("POST", "/validate", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handleValidate(rec, req)
+	body := rec.Body.String()
+	if !strings.Contains(body, `class="issue warn" data-field="model"`) || !strings.Contains(body, "model file does not exist") {
+		t.Fatalf("expected model-existence warning, got: %s", body)
+	}
+	if strings.Contains(body, `class="issue error" data-field="model"`) {
+		t.Fatalf("model-existence issue must remain a warning: %s", body)
+	}
+}
+
 func TestSaveHandler_BlocksOnValidationError(t *testing.T) {
 	// Schema has a required flag "port"; form omits it → validator fires SeverityError.
 	schema := domain.BackendValidationSchema{

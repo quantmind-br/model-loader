@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -555,4 +556,130 @@ exit 0
 		t.Fatal(err)
 	}
 	return script
+}
+
+func TestSampleSWEAPInstances(t *testing.T) {
+	inSet := func(id string, ids []string) bool {
+		for _, x := range ids {
+			if x == id {
+				return true
+			}
+		}
+		return false
+	}
+	jsonlLines := func(ids ...string) string {
+		var b strings.Builder
+		for _, id := range ids {
+			b.WriteString(`{"instance_id":"` + id + `"}` + "\n")
+		}
+		return b.String()
+	}
+	big := strings.Repeat("x", 70_000) // one JSONL line over bufio.Scanner's 64KB limit
+
+	tests := []struct {
+		name    string
+		files   map[string]string // relative path → content, written under the harness tmp dir
+		rawPath string
+		n       int
+		want    []string // exact sorted result (n<=0 / n>=len)
+		subset  []string // universe a length-n subset must be drawn from
+		wantErr string
+	}{
+		{
+			name:    "jsonl subset deterministic",
+			files:   map[string]string{"s.jsonl": jsonlLines("inst-a", "inst-b", "inst-c", "inst-d", "inst-e")},
+			rawPath: "s.jsonl",
+			n:       2,
+			subset:  []string{"inst-a", "inst-b", "inst-c", "inst-d", "inst-e"},
+		},
+		{
+			name:    "jsonl line over 64KB parsed",
+			files:   map[string]string{"big.jsonl": `{"instance_id":"huge","blob":"` + big + `"}` + "\n" + `{"instance_id":"small"}` + "\n"},
+			rawPath: "big.jsonl",
+			want:    []string{"huge", "small"},
+		},
+		{
+			name:    "jsonl final line without newline",
+			files:   map[string]string{"nonl.jsonl": `{"instance_id":"only"}`},
+			rawPath: "nonl.jsonl",
+			want:    []string{"only"},
+		},
+		{
+			name:    "csv extracted",
+			files:   map[string]string{"s.csv": "repo,instance_id,base\nr1,cid-2,b\nr2,cid-1,b\n"},
+			rawPath: "s.csv",
+			want:    []string{"cid-1", "cid-2"},
+		},
+		{
+			name:    "csv without instance_id column errors",
+			files:   map[string]string{"bad.csv": "repo,base\nr1,b\n"},
+			rawPath: "bad.csv",
+			wantErr: "no instance_id column",
+		},
+		{
+			name:    "relative path resolves against harnessDir",
+			files:   map[string]string{"data/s.jsonl": `{"instance_id":"rel"}` + "\n"},
+			rawPath: filepath.Join("data", "s.jsonl"),
+			want:    []string{"rel"},
+		},
+		{
+			name:    "duplicate ids collapsed",
+			files:   map[string]string{"dups.jsonl": jsonlLines("dup", "dup", "other")},
+			rawPath: "dups.jsonl",
+			want:    []string{"dup", "other"},
+		},
+		{
+			name:    "missing file errors",
+			rawPath: "nope.jsonl",
+			wantErr: "open raw sample",
+		},
+		{
+			name:    "empty path errors",
+			rawPath: "",
+			wantErr: "raw_sample_path is not configured",
+		},
+		{
+			name:    "line missing instance_id errors with line number",
+			files:   map[string]string{"missing.jsonl": `{"instance_id":"ok"}` + "\n" + `{"foo":"bar"}` + "\n"},
+			rawPath: "missing.jsonl",
+			wantErr: "line 2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for rel, content := range tt.files {
+				mustWrite(t, filepath.Join(dir, rel), content)
+			}
+			got, err := SampleSWEAPInstances(dir, tt.rawPath, tt.n, 0)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("err = %v, want containing %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			// Determinism: same inputs → identical result.
+			if again, aerr := SampleSWEAPInstances(dir, tt.rawPath, tt.n, 0); aerr != nil || !reflect.DeepEqual(got, again) {
+				t.Fatalf("non-deterministic: %v vs %v (err %v)", got, again, aerr)
+			}
+			if tt.subset != nil {
+				if len(got) != tt.n {
+					t.Fatalf("len = %d, want %d: %v", len(got), tt.n, got)
+				}
+				for _, id := range got {
+					if !inSet(id, tt.subset) {
+						t.Fatalf("sampled %q not in %v", id, tt.subset)
+					}
+				}
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

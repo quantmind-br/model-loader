@@ -117,7 +117,7 @@ type judgeVerdict struct {
 func (j judgeScorer) callOnce(ctx context.Context, user string, temp float64) (judgeVerdict, string, error) {
 	res, err := Complete(ctx, j.doer, j.base, j.apiKey, ChatRequest{
 		Model:       j.model,
-		Temperature: temp,
+		Temperature: new(temp),
 		MaxTokens:   j.maxTok,
 		OnDelta:     j.activity,
 		Messages: []ChatMessage{

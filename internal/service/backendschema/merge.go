@@ -4,12 +4,25 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
-// mergeWithCurated overlays curated metadata onto a full flag schema.
-// The full schema provides the complete flag set; the curated schema
-// provides richer descriptions, groups, aliases, defaults, and the
-// presentation layout.  Flags present only in the full schema keep
-// their parsed metadata.
+// mergeWithCurated overlays curated metadata onto a full flag schema and
+// appends curated-only flags absent from the full set. Used for the embedded
+// golden fallback and the Bee/Buun forks, whose curated overlays intentionally
+// supply fork-only flags the parsed --help omits.
 func mergeWithCurated(full domain.BackendValidationSchema, curated domain.BackendValidationSchema) domain.BackendValidationSchema {
+	return mergeCurated(full, curated, true)
+}
+
+// mergeWithCuratedEnrich overlays curated metadata but never appends
+// curated-only flags, so the parsed backend surface stays authoritative on flag
+// existence. Used for the llama-server live-parse path: forks that trail
+// upstream must not inherit curated flags their binary rejects at launch.
+func mergeWithCuratedEnrich(full domain.BackendValidationSchema, curated domain.BackendValidationSchema) domain.BackendValidationSchema {
+	return mergeCurated(full, curated, false)
+}
+
+// mergeCurated is the shared implementation. When appendMissing is false,
+// curated flags with no match in full are dropped rather than injected.
+func mergeCurated(full domain.BackendValidationSchema, curated domain.BackendValidationSchema, appendMissing bool) domain.BackendValidationSchema {
 	merged := full
 	merged.Presentation = curated.Presentation
 	merged.Rules = curated.Rules
@@ -59,7 +72,18 @@ func mergeWithCurated(full domain.BackendValidationSchema, curated domain.Backen
 				fullSpec.Group = curatedSpec.Group
 			}
 			if len(curatedSpec.Aliases) > 0 {
-				fullSpec.Aliases = curatedSpec.Aliases
+				for _, alias := range curatedSpec.Aliases {
+					seen := false
+					for _, existing := range fullSpec.Aliases {
+						if existing == alias {
+							seen = true
+							break
+						}
+					}
+					if !seen {
+						fullSpec.Aliases = append(fullSpec.Aliases, alias)
+					}
+				}
 			}
 			if curatedSpec.Short != "" {
 				fullSpec.Short = curatedSpec.Short
@@ -94,11 +118,43 @@ func mergeWithCurated(full domain.BackendValidationSchema, curated domain.Backen
 			fullSpec.IsPort = curatedSpec.IsPort
 			fullSpec.Required = curatedSpec.Required
 			fullSpec.List = curatedSpec.List
+			fullSpec.Keywords = curatedSpec.Keywords
+			// Arity is per-binary: the live --help metavar count is authoritative
+			// when it found one, so a curated 0 (unset) must not erase it. A
+			// curated value only overrides when it actually declares multi-token.
+			if curatedSpec.Arity > 1 {
+				fullSpec.Arity = curatedSpec.Arity
+			}
 			merged.Flags[matchKey] = fullSpec
-		} else {
+		} else if appendMissing {
 			merged.Flags[key] = curatedSpec
 		}
 	}
 
+	if !appendMissing {
+		merged.Presentation = prunePresentation(merged.Presentation, merged.Flags)
+	}
+
 	return merged
+}
+
+// prunePresentation returns a copy of pres with every group's flag list
+// filtered to names present in flags, dropping references the authoritative
+// backend surface does not define. Group order and highlighting are preserved.
+func prunePresentation(pres *domain.Presentation, flags map[string]domain.FlagSpec) *domain.Presentation {
+	if pres == nil {
+		return nil
+	}
+	groups := make([]domain.PresentationGroup, 0, len(pres.Groups))
+	for _, g := range pres.Groups {
+		kept := make([]string, 0, len(g.Flags))
+		for _, long := range g.Flags {
+			if _, ok := flags[long]; ok {
+				kept = append(kept, long)
+			}
+		}
+		g.Flags = kept
+		groups = append(groups, g)
+	}
+	return &domain.Presentation{Groups: groups}
 }

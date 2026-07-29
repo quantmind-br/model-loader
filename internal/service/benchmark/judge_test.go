@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -224,5 +225,55 @@ func TestJudgeExecute_CancelDoesNotHang(t *testing.T) {
 	}
 	if len(results) == 0 {
 		t.Fatal("expected partial results from the cancelled run")
+	}
+}
+
+// BM3: the judge serial loop must checkpoint after every item so a crash
+// mid-run keeps the work already completed. The pre-fix Execute never called
+// the hook, so assertion 1 catches a regression to zero checkpoints.
+func TestJudgeExecute_CheckpointsPerItem(t *testing.T) {
+	srv := sseModelServer(nil)
+	defer srv.Close()
+
+	scorer := fakeScorer{fn: func(ctx context.Context, p Problem, response string) (ProblemScore, error) {
+		return ProblemScore{Resolved: true, Score: 1, Detail: "judged " + p.ID}, nil
+	}}
+
+	problems := []Problem{{ID: "p1", Name: "p1"}, {ID: "p2", Name: "p2"}, {ID: "p3", Name: "p3"}}
+	r := &Runner{
+		cfg:      Config{MaxTokens: 64, Timeout: 5 * time.Second, Judge: JudgeEndpoint{Samples: 1}},
+		problems: problems,
+	}
+
+	// Copy each snapshot under our own mutex so a later in-place mutation of the
+	// shared result slice can never alias what we captured.
+	var mu sync.Mutex
+	var snaps [][]ProblemResult
+	r.checkpoint = func(res []ProblemResult) {
+		mu.Lock()
+		snaps = append(snaps, append([]ProblemResult(nil), res...))
+		mu.Unlock()
+	}
+
+	if _, _, err := (judgeHandler{}).Execute(context.Background(), r, srv.URL, "m", scorer, nil); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	// Execute has returned, so every scoring goroutine has drained (wg.Wait);
+	// the lock only keeps -race honest about the shared slice.
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(snaps) < len(problems) {
+		t.Fatalf("got %d checkpoints, want >= %d (one per item)", len(snaps), len(problems))
+	}
+	largest := 0
+	for _, s := range snaps {
+		if len(s) > largest {
+			largest = len(s)
+		}
+	}
+	if largest != len(problems) {
+		t.Fatalf("largest checkpoint had %d results, want %d (grows to the full set)", largest, len(problems))
 	}
 }

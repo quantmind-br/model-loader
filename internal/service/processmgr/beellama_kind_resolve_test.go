@@ -62,9 +62,9 @@ func TestBuildArgsForBackend_BeeLlamaEqualsLlama(t *testing.T) {
 			"flash-attn":            "on",
 			"cache-type-k":          "q5_0",
 			"cache-type-v":          "q4_1",
-			"spec-type":             "dflash",
+			"spec-type":             "draft-dflash",
 			"spec-draft-hf":         "Anbeeld/Qwen3.6-27B-DFlash-GGUF:Q4_K_M",
-			"spec-dflash-cross-ctx": 1024,
+			"kv-tail-tokens":        "auto",
 		},
 		ExtraArgs: []string{"--no-mmap", "--mlock"},
 	}

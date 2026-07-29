@@ -61,6 +61,36 @@ type ExitedInstance struct {
 	StderrTail      []string  `json:"stderrTail,omitempty"`
 }
 
+// ExitReasonOperatorStop is written to ExitReason when a backend was terminated
+// deliberately (processmgr.Kill), so exit classification can distinguish it from
+// a crash without changing Crashed's liveness meaning.
+const ExitReasonOperatorStop = "operator-stop"
+
+// ExitClass is the operator-facing label for a terminated instance. Crashed
+// keeps its existing meaning ("no longer live") and is not consulted here.
+//
+// Precedence:
+//
+//	ExitReason == ExitReasonOperatorStop -> "stopped"
+//	ExitSignal != ""                     -> "crashed"
+//	ExitCode != nil && *ExitCode != 0    -> "crashed"
+//	ExitCode != nil && *ExitCode == 0    -> "exited"
+//	otherwise                            -> "crashed"
+func ExitClass(ri RunningInstance) string {
+	switch {
+	case ri.ExitReason == ExitReasonOperatorStop:
+		return "stopped"
+	case ri.ExitSignal != "":
+		return "crashed"
+	case ri.ExitCode != nil && *ri.ExitCode != 0:
+		return "crashed"
+	case ri.ExitCode != nil:
+		return "exited"
+	default:
+		return "crashed"
+	}
+}
+
 // LogLine is a single line of llama-server output.
 type LogLine struct {
 	Timestamp time.Time

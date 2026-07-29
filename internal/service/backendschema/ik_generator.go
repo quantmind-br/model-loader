@@ -21,8 +21,8 @@ func NewIkLlamaServerGenerator(schemaStore backendcatalog.SchemaStore) *IkLlamaS
 }
 
 // Generate returns the hand-curated ik-llama-cpp schema without runtime --help
-// parsing. If the existing schema has source.editable=true, generation is
-// skipped to preserve manual edits.
+// parsing. If the existing schema has source.customized=true, generation is
+// skipped so an operator's edits survive incidental re-runs.
 func (g *IkLlamaServerGenerator) Generate(backend domain.Backend) (domain.BackendValidationSchema, error) {
 	if backend.Kind != domain.BackendKindIkLlamaCpp {
 		return domain.BackendValidationSchema{}, fmt.Errorf("unsupported backend kind: %s", backend.Kind)
@@ -30,7 +30,7 @@ func (g *IkLlamaServerGenerator) Generate(backend domain.Backend) (domain.Backen
 
 	ref := schemaStoreRef(backend.SchemaRef)
 	existing, err := g.schemaStore.Load(ref)
-	if err == nil && existing.Source.Editable {
+	if err == nil && existing.Source.Customized {
 		return existing, nil
 	}
 

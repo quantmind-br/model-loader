@@ -70,9 +70,9 @@ func (c ConflictModal) View() string {
 	b.WriteString("File: " + c.path + "\n\n")
 	for i, label := range conflictLabels {
 		if i == c.selected {
-			b.WriteString(theme.Selected.Render(label) + "\n")
+			b.WriteString(theme.Selected.Render("> "+label) + "\n")
 		} else {
-			b.WriteString(label + "\n")
+			b.WriteString("  " + label + "\n")
 		}
 	}
 	b.WriteString("\n[←→] choose  [enter] confirm  [esc] cancel")

@@ -405,7 +405,6 @@ func (r *Runner) inferProblem(ctx context.Context, base, model string, p Problem
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
 		Model:       model,
-		Temperature: r.cfg.Temperature,
 		MaxTokens:   r.cfg.MaxTokens,
 		OnDelta:     r.streamHeartbeat(p.ID, p.Name),
 		Messages:    BuildPrompt(p),
@@ -430,8 +429,10 @@ func (r *Runner) inferProblem(ctx context.Context, base, model string, p Problem
 }
 
 // scoreProblem judges a completed inference, mutating res/tr in place. A
-// scoring failure becomes a per-problem error, never a run abort.
-func (r *Runner) scoreProblem(ctx context.Context, scorer Scorer, p Problem, content string, res *ProblemResult, tr *ProblemTranscript) {
+// scoring failure becomes a per-problem error, never a run abort. The judge
+// network call runs WITHOUT mu so scoring stays overlapped; only the result
+// mutations are serialized (against the judge loop's checkpoint snapshot).
+func (r *Runner) scoreProblem(ctx context.Context, scorer Scorer, p Problem, content string, res *ProblemResult, tr *ProblemTranscript, mu *sync.Mutex) {
 	// A run cancelled before this slot starts scoring must not issue a doomed
 	// judge call: leave the inference result untouched (no per-problem error).
 	if ctx.Err() != nil {
@@ -442,6 +443,8 @@ func (r *Runner) scoreProblem(ctx context.Context, scorer Scorer, p Problem, con
 	scoreCtx, scancel := context.WithTimeout(ctx, time.Duration(max(r.cfg.Judge.Samples, 1))*r.cfg.Timeout)
 	score, err := scorer.Score(scoreCtx, p, content)
 	scancel()
+	mu.Lock()
+	defer mu.Unlock()
 	tr.JudgeRaw = score.Raw
 	if err != nil {
 		res.Err = err.Error()

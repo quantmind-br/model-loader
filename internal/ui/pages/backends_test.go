@@ -720,3 +720,25 @@ func TestBackendsPage_ResponsiveLayout(t *testing.T) {
 		t.Fatalf("executable should truncate at narrow width; got:\n%s", detail)
 	}
 }
+
+// UIUX-038: while bubbles/list owns the filter input every page key is
+// swallowed, so the footer must drop the list actions.
+func TestBackendsPage_HintsDuringFilter(t *testing.T) {
+	p, mgr, _ := newBackendsPageHarness(t)
+	addBackendForPage(t, mgr, "Llama Main", "/bin/echo")
+	p = loadBackendsPage(t, p)
+
+	updated, _ := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	p = updated.(BackendsPage)
+	if p.list.FilterState() != list.Filtering {
+		t.Fatalf("'/' did not enter filter mode; state = %v", p.list.FilterState())
+	}
+
+	got := p.Hints()
+	if got != filteringHints {
+		t.Fatalf("Hints() = %q, want %q", got, filteringHints)
+	}
+	if strings.Contains(got, "[R] refresh") {
+		t.Fatalf("filter-mode hints leak the default list tail: %q", got)
+	}
+}

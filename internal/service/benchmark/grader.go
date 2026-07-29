@@ -58,7 +58,7 @@ func (g llmGrader) Grade(ctx context.Context, req gradeRequest) (gradeResult, er
 	user := buildGraderUser(req)
 	comp, err := Complete(ctx, g.doer, g.base, g.apiKey, ChatRequest{
 		Model:       g.model,
-		Temperature: 0,
+		Temperature: new(0.0),
 		MaxTokens:   g.maxTok,
 		OnDelta:     g.activity,
 		Messages: []ChatMessage{

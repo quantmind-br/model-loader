@@ -29,6 +29,12 @@ type Manager interface {
 	// emits for this PID. Empty attemptID is permitted but breaks grep-ability.
 	Launch(p domain.Profile, mode LaunchMode, attemptID string) (domain.RunningInstance, error)
 	Kill(pid int) error
+	// MarkOperatorStop records that pid's imminent termination is
+	// operator-initiated, for a backend this process did not launch and will
+	// not signal itself (the TUI stopping the detached proxy). The liveness
+	// sweep then labels the exit domain.ExitReasonOperatorStop and skips the
+	// restart policy. No-op for an unknown pid.
+	MarkOperatorStop(pid int)
 	List() []domain.RunningInstance
 	// WaitHealthy polls the /health endpoint until 200 OK or timeout.
 	// attemptID matches the one passed to Launch so the two log streams

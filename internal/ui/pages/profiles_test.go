@@ -1400,3 +1400,62 @@ func TestProfilesPage_ResponsiveLayout(t *testing.T) {
 		}
 	}
 }
+
+// UIUX-038: every capture state must advertise only keys its own handler
+// consumes, so the default list tail may never leak into a modal footer.
+func TestProfilesPage_HintsMatchCaptureState(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*ProfilesPage)
+		want   string
+	}{
+		{"web editing", func(p *ProfilesPage) { p.webEditing = true }, "editing in browser…  [esc] cancel"},
+		{"kill confirm", func(p *ProfilesPage) {
+			p.killConfirm, _ = setupConfirm("Unload demo?", "Unload", "Cancel", func() tea.Cmd { return nil })
+		}, components.ConfirmHints},
+		{"import picker", func(p *ProfilesPage) { p.importPickerActive = true }, "[↑↓] move  [←→] dir  [enter] select  [esc] cancel"},
+		{"model picker", func(p *ProfilesPage) { p.picker.active = true }, "[↑↓] move  [enter] pick  [esc] cancel"},
+		{"conflict modal", func(p *ProfilesPage) {
+			p.conflictModal = components.NewConflictModal("/tmp/profiles.json", nil, nil)
+		}, "[↑↓] choose  [enter] confirm  [esc] cancel"},
+		{"undo modal", func(p *ProfilesPage) {
+			p.undoModal = components.NewUndoModal(nil, nil, nil)
+		}, "[enter] apply  [esc] cancel"},
+		{"delete confirm", func(p *ProfilesPage) {
+			p.deleteConfirm, _ = setupConfirm("Delete demo?", "Delete", "Cancel", func() tea.Cmd { return nil })
+		}, components.ConfirmHints},
+		{"filtering", func(p *ProfilesPage) {
+			updated, _ := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+			*p = updated.(ProfilesPage)
+			if p.list.FilterState() != list.Filtering {
+				t.Fatalf("'/' did not enter filter mode; state = %v", p.list.FilterState())
+			}
+		}, filteringHints},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store, err := profilestore.NewFSStore(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			page := NewProfilesPage(store, domain.FlagSchema{})
+			page.width, page.height = 120, 30
+			page.list.SetSize(80, 12)
+			updated, _ := page.Update(loadedMsg{profiles: []domain.Profile{{ID: "demo", Name: "Demo", Model: "/m.gguf"}}})
+			page = updated.(ProfilesPage)
+
+			tt.mutate(&page)
+
+			if !page.IsCapturingInput() {
+				t.Fatalf("%s is not a capture state; its hint branch would be unreachable", tt.name)
+			}
+			got := page.Hints()
+			if got != tt.want {
+				t.Fatalf("Hints() = %q, want %q", got, tt.want)
+			}
+			if strings.Contains(got, "[enter] launch") {
+				t.Fatalf("capture-mode hints leak the default list tail: %q", got)
+			}
+		})
+	}
+}

@@ -5,6 +5,30 @@ import (
 	"github.com/quantmind-br/model-loader/internal/ui/components"
 )
 
+// markerColumnWidth is the cell budget reserved for the cursor gutter in
+// bubbles tables, matching the list delegate's "> " indent.
+const markerColumnWidth = 2
+
+// tableCellPadding is the horizontal padding bubbles/table adds per cell
+// (table.DefaultStyles → Cell.Padding(0, 1)); a marker column therefore costs
+// markerColumnWidth + tableCellPadding cells of the width budget.
+const tableCellPadding = 2
+
+// filteringHints lists the keys bubbles/list honours while its filter input is
+// live: printable runes edit the query, KeyMap.AcceptWhileFiltering applies it,
+// CancelWhileFiltering discards it. Every other page key is swallowed by
+// list.Update in that state, so the normal list hints must not be shown.
+const filteringHints = "[type] filter  [enter] apply  [esc] cancel"
+
+// rowMarker returns the cursor gutter for a table row: "> " when selected,
+// two spaces otherwise.
+func rowMarker(selected bool) string {
+	if selected {
+		return "> "
+	}
+	return "  "
+}
+
 func flashSuccess(f components.Flash, msg string) (components.Flash, tea.Cmd) {
 	var cmd tea.Cmd
 	f, cmd = f.Set(msg)

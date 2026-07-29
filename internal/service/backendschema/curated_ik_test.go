@@ -56,7 +56,7 @@ func TestCuratedIkLlama_SplitModeAndCacheTypes(t *testing.T) {
 	if !ok {
 		t.Fatal("split-mode missing")
 	}
-	wantSplit := []string{"none", "graph", "layer"}
+	wantSplit := []string{"none", "graph", "layer", "attn"}
 	if !slices.Equal(split.EnumValues, wantSplit) {
 		t.Fatalf("split-mode enum = %v, want %v", split.EnumValues, wantSplit)
 	}

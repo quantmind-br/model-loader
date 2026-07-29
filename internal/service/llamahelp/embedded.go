@@ -7,7 +7,7 @@ import (
 
 // EmbeddedSchema returns the compile-time fallback FlagSchema covering the
 // curated essential flags listed in the design spec. The schema is pinned to
-// llama.cpp build "v9761 (721354fbd)" — last validated on 2026-06-22.
+// llama.cpp build "v10152 (0324696b8)" — last validated on 2026-07-27.
 //
 // To refresh against a newer llama.cpp build:
 //   1. capture the help into testdata: llama-server --help > testdata/help-vXXXX.txt
@@ -16,13 +16,13 @@ import (
 //   4. bump the Version field below to "embedded-vXXXX"
 
 func EmbeddedSchema() domain.FlagSchema {
-	return domain.BuildFlagSchema("embedded-v9761", llamaRows)
+	return domain.BuildFlagSchema("embedded-v10152", llamaRows)
 }
 
 var llamaRows = []domain.FlagSpecRow{
 	{Long: "model", Short: "m", Type: domain.FlagTypeString, HelpText: "model path (.gguf)", Group: "embedded"},
-	{Long: "n-gpu-layers", Short: "ngl", Aliases: []string{"gpu-layers"}, Type: domain.FlagTypeInt, Default: -1, Min: ptrutil.Ptr(-1), Max: ptrutil.Ptr(9999), HelpText: "max number of layers to store in VRAM", Group: "embedded"},
-	{Long: "ctx-size", Short: "c", Type: domain.FlagTypeInt, Default: 4096, Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(1024 * 1024), HelpText: "size of the prompt context", Group: "embedded"},
+	{Long: "n-gpu-layers", Short: "ngl", Aliases: []string{"gpu-layers"}, Type: domain.FlagTypeInt, Keywords: []string{"auto", "all"}, Default: -1, Min: ptrutil.Ptr(-2), Max: ptrutil.Ptr(9999), HelpText: "max number of layers to store in VRAM; accepts an exact integer, auto (-1), or all (-2)", Group: "embedded"},
+	{Long: "ctx-size", Short: "c", Type: domain.FlagTypeInt, Default: 0, Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(1024 * 1024), HelpText: "size of the prompt context; 0 = loaded from model", Group: "embedded"},
 	{Long: "batch-size", Short: "b", Type: domain.FlagTypeInt, Default: 2048, Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(1024 * 1024), HelpText: "logical maximum batch size", Group: "embedded"},
 	{Long: "ubatch-size", Short: "ub", Type: domain.FlagTypeInt, Default: 512, Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(1024 * 1024), HelpText: "physical maximum batch size", Group: "embedded"},
 	{Long: "flash-attn", Short: "fa", Type: domain.FlagTypeEnum, EnumValues: []string{"on", "off", "auto"}, Default: "auto", HelpText: "Flash Attention mode", Group: "embedded"},

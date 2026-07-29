@@ -19,7 +19,6 @@ func BenchmarkConfig(cfg config.AppConfig) benchmark.Config {
 	return benchmark.Config{
 		MaxTokens:         b.MaxTokens,
 		Limit:             b.Limit,
-		Temperature:       b.Temperature,
 		Timeout:           time.Duration(b.TimeoutSec) * time.Second,
 		LongContextTokens: b.LongContextTokens,
 		SaveTranscripts:   b.SaveTranscripts,
@@ -42,6 +41,7 @@ func BenchmarkConfig(cfg config.AppConfig) benchmark.Config {
 		TerminalBenchProvider:     b.TerminalBench.Provider,
 		TerminalBenchTasks:        b.TerminalBench.Tasks,
 		TerminalBenchNTasks:       b.TerminalBench.NTasks,
+		TerminalBenchSampleSeed:   b.TerminalBench.SampleSeed,
 		TerminalBenchConcurrent:   b.TerminalBench.Concurrent,
 		TerminalBenchTimeout:      time.Duration(b.TerminalBench.TimeoutSec) * time.Second,
 		TerminalBenchStallTimeout: time.Duration(b.TerminalBench.StallTimeoutSec) * time.Second,
@@ -55,6 +55,7 @@ func BenchmarkConfig(cfg config.AppConfig) benchmark.Config {
 		SweBenchProNumWorkers:    b.SweBenchPro.NumWorkers,
 		SweBenchProUseModal:      b.SweBenchPro.UseModal,
 		SweBenchProInstances:     b.SweBenchPro.Instances,
+		SweBenchProSampleSeed:    b.SweBenchPro.SampleSeed,
 		SweBenchProPatchPath:     b.SweBenchPro.PatchPath,
 		SweBenchProAgentCmd:      b.SweBenchPro.AgentCmd,
 		SweBenchProTimeout:       time.Duration(b.SweBenchPro.TimeoutSec) * time.Second,

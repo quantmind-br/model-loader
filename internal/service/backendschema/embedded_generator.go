@@ -18,8 +18,9 @@ type embeddedGenerator struct {
 }
 
 // Generate creates a BackendValidationSchema from the embedded catalog
-// and persists it via schemaStore. If the existing schema has source.editable=true,
-// generation is skipped to preserve manual edits.
+// and persists it via schemaStore. If the existing schema has
+// source.customized=true, generation is skipped so an operator's edits survive
+// incidental re-runs.
 func (g *embeddedGenerator) Generate(backend domain.Backend) (domain.BackendValidationSchema, error) {
 	if backend.Kind != g.kind {
 		return domain.BackendValidationSchema{}, fmt.Errorf("unsupported backend kind: %s", backend.Kind)
@@ -27,7 +28,7 @@ func (g *embeddedGenerator) Generate(backend domain.Backend) (domain.BackendVali
 
 	ref := schemaStoreRef(backend.SchemaRef)
 	existing, err := g.schemaStore.Load(ref)
-	if err == nil && existing.Source.Editable {
+	if err == nil && existing.Source.Customized {
 		return existing, nil
 	}
 

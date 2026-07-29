@@ -13,6 +13,8 @@ import (
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 	"github.com/quantmind-br/model-loader/internal/service/processmgr"
 	"github.com/quantmind-br/model-loader/internal/service/proxysupervisor"
+	"github.com/quantmind-br/model-loader/internal/ui/components"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 // monitorKillConfirmedMsg is emitted by killConfirm.onYes when the user
@@ -24,6 +26,11 @@ type monitorKillConfirmedMsg struct{ pid int }
 // user accepts force-stopping a degraded proxy so a stranded backend can be
 // killed directly (audit A13).
 type monitorForceKillConfirmedMsg struct{ pid int }
+
+// serverProxyStopConfirmedMsg is emitted by stopProxyConfirm.onYes once the
+// operator accepts stopping the proxy and its loaded backend. pid is the loaded
+// backend, 0 when nothing was loaded.
+type serverProxyStopConfirmedMsg struct{ pid int }
 
 // monitorRestartConfirmedMsg is emitted by restartConfirm.onYes when the user
 // confirms a restart. Carries the captured profile so the async unload+load
@@ -85,11 +92,46 @@ func (p *ServerPage) handleKillResult(m killResultMsg) (tea.Model, tea.Cmd) {
 // askConfirmForceKill arms the force-stop confirmation. onYes emits
 // monitorForceKillConfirmedMsg; the ForceStop + Kill happen off the UI thread.
 func (p *ServerPage) askConfirmForceKill(pid int) tea.Cmd {
+	const degradedPrefix = "Proxy degraded — "
+	msg := fmt.Sprintf("Proxy degraded — force-stop proxy and kill pid %d?", pid)
+	if ri, ok := p.instanceByPID(pid); ok {
+		msg = degradedPrefix + killConfirmMessage(ri, "Force-kill", p.width-8-theme.RuneWidth(degradedPrefix))
+	}
 	var cmd tea.Cmd
 	p.forceKillConfirm, cmd = setupConfirm(
-		fmt.Sprintf("Proxy degraded — force-stop proxy and kill pid %d?", pid),
+		msg,
 		"Force", "Cancel",
 		func() tea.Cmd { return func() tea.Msg { return monitorForceKillConfirmedMsg{pid: pid} } })
+	return cmd
+}
+
+// killConfirmMessage renders the confirm prompt for a destructive action against
+// one instance, naming the profile and endpoint rather than the bare pid. The
+// result is clipped to width with the shared truncate helper.
+func killConfirmMessage(ri domain.RunningInstance, verb string, width int) string {
+	if width < 24 {
+		width = 24
+	}
+	return truncate(fmt.Sprintf("%s %s (pid %d, port %d)?", verb, ri.ProfileID, ri.PID, ri.Port), width)
+}
+
+// instanceByPID returns the tracked instance for pid, or ok=false.
+func (p *ServerPage) instanceByPID(pid int) (domain.RunningInstance, bool) {
+	for _, ri := range p.pm.List() {
+		if ri.PID == pid {
+			return ri, true
+		}
+	}
+	return domain.RunningInstance{}, false
+}
+
+func (p *ServerPage) askConfirmStopProxy(m components.ProxyStopRequestMsg) tea.Cmd {
+	msg := truncate(fmt.Sprintf("Stop proxy? kills %s (pid %d) and drops 127.0.0.1:%d",
+		m.ProfileID, m.PID, m.Port), max(24, p.width-8))
+	pid := m.PID
+	var cmd tea.Cmd
+	p.stopProxyConfirm, cmd = setupConfirm(msg, "Stop", "Cancel",
+		func() tea.Cmd { return func() tea.Msg { return serverProxyStopConfirmedMsg{pid: pid} } })
 	return cmd
 }
 
@@ -169,8 +211,12 @@ func (p *ServerPage) handleRestartConfirmed(m monitorRestartConfirmedMsg) (tea.M
 // onYes emits monitorKillConfirmedMsg; the actual Kill happens in Update so
 // manager I/O stays on the page.
 func (p *ServerPage) askConfirmKill(pid int) tea.Cmd {
+	msg := fmt.Sprintf("Kill pid=%d?", pid)
+	if ri, ok := p.instanceByPID(pid); ok {
+		msg = killConfirmMessage(ri, "Kill", p.width-8)
+	}
 	var cmd tea.Cmd
-	p.killConfirm, cmd = setupConfirm(fmt.Sprintf("Kill pid=%d?", pid), "Kill", "Cancel",
+	p.killConfirm, cmd = setupConfirm(msg, "Kill", "Cancel",
 		func() tea.Cmd { return func() tea.Msg { return monitorKillConfirmedMsg{pid: pid} } })
 	return cmd
 }

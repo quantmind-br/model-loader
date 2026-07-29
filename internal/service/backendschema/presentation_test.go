@@ -60,7 +60,7 @@ func TestEssentialSeed_MatchesCuratedBackends(t *testing.T) {
 			t.Fatalf("buun seed missing curated flag %q", want)
 		}
 	}
-	for _, want := range []string{"spec-type", "spec-dflash-cross-ctx", "flash-attn"} {
+	for _, want := range []string{"spec-type", "kv-tail-tokens", "flash-attn"} {
 		found := false
 		for _, f := range essentialSeed[domain.BackendKindBeeLlamaCpp] {
 			if f == want {
@@ -161,4 +161,67 @@ func flagInAnyGroup(p domain.Presentation, flag string) bool {
 		}
 	}
 	return false
+}
+
+// S14: ReconcilePresentation is what lets a customized layout survive a
+// regeneration without hiding newly added backend flags or naming removed ones.
+func TestReconcilePresentation_KeepsOrderDropsRemovedAppendsAdded(t *testing.T) {
+	prev := domain.Presentation{Groups: []domain.PresentationGroup{
+		{Name: "MyEssentials", Highlighted: true, Flags: []string{"ctx-size", "gone", "threads"}},
+		{Name: "Empty", Flags: []string{"also-gone"}},
+	}}
+	next := domain.BackendValidationSchema{
+		Flags: map[string]domain.FlagSpec{
+			"ctx-size":  {Long: "ctx-size", Group: "common"},
+			"threads":   {Long: "threads", Group: "common"},
+			"brand-new": {Long: "brand-new", Group: "sampling"},
+			"ungrouped": {Long: "ungrouped"},
+		},
+		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{
+			{Name: "MyEssentials", Flags: []string{"brand-new"}},
+		}},
+	}
+
+	got := ReconcilePresentation(prev, next)
+
+	if len(got.Groups) != 2 {
+		t.Fatalf("want the surviving group plus one for the ungrouped flag: %+v", got.Groups)
+	}
+	first := got.Groups[0]
+	if first.Name != "MyEssentials" || !first.Highlighted {
+		t.Fatalf("custom group identity lost: %+v", first)
+	}
+	// Order preserved, removed flags dropped, and the flag the regenerated
+	// presentation assigns to this group appended.
+	want := []string{"ctx-size", "threads", "brand-new"}
+	if len(first.Flags) != len(want) {
+		t.Fatalf("flags = %v, want %v", first.Flags, want)
+	}
+	for i, f := range want {
+		if first.Flags[i] != f {
+			t.Fatalf("flags = %v, want %v", first.Flags, want)
+		}
+	}
+	if got.Groups[1].Name != "other" || !containsStr(got.Groups[1].Flags, "ungrouped") {
+		t.Fatalf("a flag with no group must land in \"other\": %+v", got.Groups[1])
+	}
+	if flagInAnyGroup(got, "gone") || flagInAnyGroup(got, "also-gone") {
+		t.Fatalf("removed flags must not survive: %+v", got.Groups)
+	}
+}
+
+// S14: rules referencing a flag the regeneration dropped must not survive —
+// configweb's rule editor refuses to save a schema containing one.
+func TestReconcileRules_DropsRulesNamingRemovedFlags(t *testing.T) {
+	next := domain.BackendValidationSchema{Flags: map[string]domain.FlagSpec{
+		"ctx-size": {Long: "ctx-size"},
+	}}
+	got := ReconcileRules([]domain.CrossFieldRule{
+		{ID: "keep", When: domain.Cond{Flag: "ctx-size"}},
+		{ID: "drop-when", When: domain.Cond{Flag: "threads"}},
+		{ID: "drop-then", When: domain.Cond{Flag: "ctx-size"}, Then: domain.Effect{Flag: "threads"}},
+	}, next)
+	if len(got) != 1 || got[0].ID != "keep" {
+		t.Fatalf("rules = %+v, want only \"keep\"", got)
+	}
 }

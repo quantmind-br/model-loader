@@ -15,7 +15,7 @@ func TestTabbyGenerator_WrongKind(t *testing.T) {
 	}
 }
 
-func TestTabbyGenerator_GeneratesAndSkipsWhenEditable(t *testing.T) {
+func TestTabbyGenerator_GeneratesAndSkipsWhenCustomized(t *testing.T) {
 	dir := t.TempDir()
 	store := backendcatalog.NewFSSchemaStore(dir)
 	g := NewTabbyGenerator(store)
@@ -38,13 +38,13 @@ func TestTabbyGenerator_GeneratesAndSkipsWhenEditable(t *testing.T) {
 	if _, ok := schema.Flags["tensor-parallel"]; !ok {
 		t.Fatal("expected tensor-parallel flag in generated schema")
 	}
-	schema.Source.Editable = true
+	schema.Source.Customized = true
 	_ = store.Save("tabby-test.json", schema)
 	schema2, err := g.Generate(backend)
 	if err != nil {
 		t.Fatalf("second generate: %v", err)
 	}
-	if !schema2.Source.Editable {
-		t.Fatal("expected editable schema to be preserved")
+	if !schema2.Source.Customized {
+		t.Fatal("expected customized schema to be preserved")
 	}
 }

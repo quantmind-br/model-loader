@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -341,31 +342,39 @@ func tbDatasetNameVersion(dataset string) (name, version string) {
 	return dataset, ""
 }
 
+// tbCachedDatasetTaskIDs lists the task directory names under tb's dataset
+// cache (~/.cache/terminal-bench/<name>/<version>), sorted. Nil when the cache
+// is missing (tb downloads on first run).
+func tbCachedDatasetTaskIDs(dataset string) []string {
+	name, version := tbDatasetNameVersion(dataset)
+	if name == "" || version == "" {
+		return nil
+	}
+	root, err := os.UserCacheDir()
+	if err != nil {
+		return nil
+	}
+	dir := filepath.Join(root, tbCacheDatasetRoot, name, version)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var ids []string
+	for _, e := range entries {
+		if e.IsDir() {
+			ids = append(ids, e.Name())
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
 // tbCachedDatasetTaskCount counts task directories under tb's default dataset
 // cache (~/.cache/terminal-bench/<name>/<version>). Returns 0 when the cache is
 // missing (tb will download on first run; progress may show an unknown total
 // until aggregate results.json appears).
 func tbCachedDatasetTaskCount(dataset string) int {
-	name, version := tbDatasetNameVersion(dataset)
-	if name == "" || version == "" {
-		return 0
-	}
-	root, err := os.UserCacheDir()
-	if err != nil {
-		return 0
-	}
-	dir := filepath.Join(root, tbCacheDatasetRoot, name, version)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return 0
-	}
-	n := 0
-	for _, e := range entries {
-		if e.IsDir() {
-			n++
-		}
-	}
-	return n
+	return len(tbCachedDatasetTaskIDs(dataset))
 }
 
 // tbReadAggregateResultsTotal reads len(results) from the run's aggregate
@@ -418,7 +427,21 @@ func buildTBArgs(cfg Config, runID, apiBase, model, outDir string) []string {
 	for _, t := range cfg.TerminalBenchTasks {
 		args = append(args, "--task-id", t)
 	}
-	if cfg.TerminalBenchNTasks > 0 {
+	if cfg.TerminalBenchNTasks > 0 && len(cfg.TerminalBenchTasks) == 0 {
+		// tb --n-tasks slices an unordered set upstream (no seed flag exists),
+		// so repeat reduced runs would cover different tasks. Expand N into an
+		// explicit, deterministically sampled --task-id list from the local
+		// dataset cache instead; fall back to --n-tasks only when the cache is
+		// absent (first run — tb downloads it). tb rejects --task-id combined
+		// with --n-tasks, so exactly one form is emitted.
+		if ids := tbCachedDatasetTaskIDs(tbOrDefault(cfg.TerminalBenchDataset, tbDefaultDataset)); len(ids) > 0 {
+			for _, t := range sampleIDs(ids, cfg.TerminalBenchNTasks, int64(cfg.TerminalBenchSampleSeed)) {
+				args = append(args, "--task-id", t)
+			}
+		} else {
+			args = append(args, "--n-tasks", strconv.Itoa(cfg.TerminalBenchNTasks))
+		}
+	} else if cfg.TerminalBenchNTasks > 0 {
 		args = append(args, "--n-tasks", strconv.Itoa(cfg.TerminalBenchNTasks))
 	}
 	return append(args, cfg.TerminalBenchExtraArgs...)

@@ -9,6 +9,7 @@ type FlagSpecRow struct {
 	Type       FlagType
 	EnumValues []string
 	List       bool
+	Keywords   []string
 	Default    any
 	HelpText   string
 	Group      string
@@ -30,6 +31,7 @@ func BuildFlagSchema(version string, rows []FlagSpecRow) FlagSchema {
 			Type:       r.Type,
 			EnumValues: r.EnumValues,
 			List:       r.List,
+			Keywords:   r.Keywords,
 			Default:    r.Default,
 			HelpText:   r.HelpText,
 			Group:      r.Group,

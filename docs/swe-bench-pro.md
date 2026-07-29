@@ -108,10 +108,24 @@ model-loader benchmark run --profile <id> --mode swe-bench-pro \
 
 # Full pipeline (agent_cmd + raw_sample_path configured in TOML):
 model-loader benchmark run --profile <id> --mode swe-bench-pro --sweap-instance <id>
+
+# Reduced deterministic run: sample 2 instance_ids from raw_sample_path:
+model-loader benchmark run --profile <id> --mode swe-bench-pro --limit 2
 ```
 
 CLI overrides: `--sweap-harness`, `--sweap-patches`, `--sweap-instance`
 (repeatable). The TUI Benchmark tab runs the configured settings.
+
+### The reduced mode (`--limit`)
+
+`--limit N` is the uniform reduced-run knob shared by every mode. swe-bench-pro's
+eval script has no count flag, so `--limit N` samples N `instance_id`s
+deterministically from `raw_sample_path` (seeded by `swebenchpro.sample_seed`,
+default 0) and runs them as the instance filter — the same N instances on every
+repeat. The agent receives the sampled set via the `{instances}` placeholder, and
+the gathered patches are filtered to it. An explicit `--sweap-instance` wins over
+`--limit`; otherwise `--limit` replaces any TOML `instances` list with the sampled
+subset.
 
 ## Smoke test (gold patches)
 

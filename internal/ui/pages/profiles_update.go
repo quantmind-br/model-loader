@@ -90,7 +90,7 @@ func (p ProfilesPage) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	if mode == theme.LayoutStacked {
 		listH = (msg.Height - 2) / 2
 	}
-	p.list.SetSize(listW, max(3, listH))
+	p.list.SetSize(listW, max(3, listH-1))
 	return p, nil
 }
 

@@ -585,6 +585,10 @@ func (h hintingPage) Update(tea.Msg) (tea.Model, tea.Cmd) { return h, nil }
 func (h hintingPage) View() string                        { return h.name }
 func (h hintingPage) Hints() string                       { return "[x] do-x  [y] do-y" }
 
+type captureHintingPage struct{ hintingPage }
+
+func (captureHintingPage) IsCapturingInput() bool { return true }
+
 func TestRoot_StatusBarIncludesActivePageHints(t *testing.T) {
 	r := NewRoot(TabProfiles).
 		WithProfilesPage(hintingPage{name: "P"})
@@ -610,6 +614,25 @@ func TestRoot_StatusBarIncludesActivePageHints(t *testing.T) {
 	}
 	if !strings.Contains(view, "[?] help") {
 		t.Errorf("global help token missing after tab switch; view:\n%s", view)
+	}
+}
+
+func TestRoot_StatusBarSuppressesGlobalHintsDuringCapture(t *testing.T) {
+	r := NewRoot(TabProfiles).
+		WithProfilesPage(captureHintingPage{hintingPage{name: "P"}})
+	r.width = 120
+	r.recomputeHints()
+
+	view := r.View()
+	for _, want := range []string{"[ctrl+c] quit", "[x] do-x"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("capture status bar missing %q; view:\n%s", want, view)
+		}
+	}
+	for _, unwanted := range []string{"[1-5] tabs", "[?] help"} {
+		if strings.Contains(view, unwanted) {
+			t.Errorf("capture status bar advertises inert %q; view:\n%s", unwanted, view)
+		}
 	}
 }
 
@@ -806,6 +829,7 @@ func TestRoot_SwitchToServerMsgClearsServerBadge(t *testing.T) {
 		t.Error("Server badge still set after SwitchToServerMsg navigation")
 	}
 }
+
 // TUI-RESP: root renders a notice when the terminal is below MinTermWidth/Height.
 func TestRoot_TerminalTooSmallNotice(t *testing.T) {
 	r := NewRoot(TabProfiles)

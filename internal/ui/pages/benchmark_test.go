@@ -415,6 +415,11 @@ func TestRunning_EscArmsCancelConfirm(t *testing.T) {
 	if cancelled {
 		t.Fatal("esc must NOT cancel directly — only the confirm's affirmative path does")
 	}
+	// UIUX-038: handleKey diverts every key into the confirm, so the footer
+	// must advertise the confirm's keys instead of "running… [esc] cancel".
+	if got := page.Hints(); got != components.ConfirmHints {
+		t.Fatalf("Hints() = %q, want %q", got, components.ConfirmHints)
+	}
 }
 
 // TestBenchmarkPage_CleanupCancelsRun guards audit N-C15: Cleanup on a page with

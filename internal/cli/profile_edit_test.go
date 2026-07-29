@@ -199,3 +199,66 @@ func TestRunProfileWrite_EditFile_PinsID(t *testing.T) {
 		t.Fatalf("a profile with id 'other' must NOT exist")
 	}
 }
+
+// PV4: a --file/stdin JSON carrying an "args" object replaces the existing args
+// wholesale, so an operator can remove a key. Unmarshalling into the loaded
+// profile's non-nil map used to merge, making removal impossible from the CLI.
+// A file that omits "args" entirely must still leave them intact — the
+// top-level struct overlay is deliberately additive.
+func TestRunProfileWrite_EditFile_ArgsReplaceNotMerge(t *testing.T) {
+	s := newTempStore(t)
+	dir := s.Dir()
+	deps := profileWriteDeps{store: s, val: noopValidator{}, dir: dir}
+	var out, errw strings.Builder
+
+	code := runProfileWrite(&out, &errw, profileWriteDeps{store: s, dir: dir}, false, "", "",
+		profileInput{id: "p1", name: "P1", setName: true,
+			args: map[string]string{"ctx-size": "4096", "flash-attn": "on"}})
+	if code != 0 {
+		t.Fatalf("setup create code=%d err=%q", code, errw.String())
+	}
+
+	writeOverlay := func(overlay map[string]any) string {
+		raw, err := json.Marshal(overlay)
+		if err != nil {
+			t.Fatalf("marshal overlay: %v", err)
+		}
+		path := filepath.Join(t.TempDir(), "overlay.json")
+		if err := os.WriteFile(path, raw, 0o600); err != nil {
+			t.Fatalf("write overlay: %v", err)
+		}
+		return path
+	}
+
+	// A file omitting "args" keeps both keys.
+	out.Reset()
+	errw.Reset()
+	if code := runProfileWrite(&out, &errw, deps, true, "p1", writeOverlay(map[string]any{"description": "d"}), profileInput{}); code != 0 {
+		t.Fatalf("edit without args code=%d err=%q", code, errw.String())
+	}
+	got, err := s.Get("p1")
+	if err != nil {
+		t.Fatalf("get p1: %v", err)
+	}
+	if len(got.Args) != 2 {
+		t.Fatalf("args must survive a file that omits them, got %+v", got.Args)
+	}
+
+	// A file carrying only one key drops the other.
+	out.Reset()
+	errw.Reset()
+	if code := runProfileWrite(&out, &errw, deps, true, "p1",
+		writeOverlay(map[string]any{"args": map[string]any{"ctx-size": 8192}}), profileInput{}); code != 0 {
+		t.Fatalf("edit with args code=%d err=%q", code, errw.String())
+	}
+	got, err = s.Get("p1")
+	if err != nil {
+		t.Fatalf("get p1: %v", err)
+	}
+	if _, ok := got.Args["flash-attn"]; ok {
+		t.Fatalf("flash-attn must be removed by a replacing args object, got %+v", got.Args)
+	}
+	if len(got.Args) != 1 {
+		t.Fatalf("args = %+v, want only ctx-size", got.Args)
+	}
+}

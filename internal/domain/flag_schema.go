@@ -19,6 +19,20 @@ type FlagSpec struct {
 	Type       FlagType
 	EnumValues []string
 	List       bool `json:"list,omitempty"` // true => EnumValues is a comma-separated list (e.g. --spec-type); validator splits on "," and checks each element
+	// Keywords lists non-numeric literals a numeric flag also accepts, e.g.
+	// --n-gpu-layers takes an exact integer, "auto", or "all". When a value is a
+	// string equal to one of these, the validator skips the type and range
+	// checks for that flag. Empty for every flag that is purely numeric.
+	Keywords []string `json:"keywords,omitempty"`
+	// Arity is the number of whitespace-separated argv tokens the flag's value
+	// occupies, e.g. 2 for `--control-vector-layer-range START END`. Zero and
+	// one both mean the ordinary single-token form. It is per-backend, not per
+	// flag name: ik-llama.cpp parses `--lora-scaled FNAME S` as two tokens
+	// while llama-server takes one `FNAME:SCALE` token. Profile.Args values are
+	// emitted as a single token, so a flag with Arity > 1 is rejected there and
+	// must go through Profile.ExtraArgs, which is passed through verbatim
+	// (BUGS.md S15).
+	Arity int `json:"arity,omitempty"`
 	Default    any
 	HelpText   string
 	Group      string // "common" | "sampling" | "example-specific" | "embedded"

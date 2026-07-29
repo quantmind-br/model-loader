@@ -18,9 +18,8 @@ var cacheTypeEnum = []string{"f32", "f16", "bf16", "q8_0", "q4_0", "q4_1", "iq4_
 
 // ParseHelp scans the full --help output and returns a FlagSchema.
 // Lines before the first section header are skipped (CUDA banner etc).
-// When a flag's alias chunk fills the whole line (no description on the
-// same line), the next non-empty continuation line is used as the
-// description before parsing. Subsequent continuation lines are ignored.
+// Flag descriptions include every indented continuation line up to the next
+// flag, section header, or environment annotation.
 func ParseHelp(data []byte) (domain.FlagSchema, error) {
 	schema := domain.FlagSchema{Flags: make(map[string]domain.FlagSpec)}
 	scanner := bufio.NewScanner(bytes.NewReader(data))
@@ -43,19 +42,25 @@ func ParseHelp(data []byte) (domain.FlagSchema, error) {
 		if currentGroup == "" {
 			continue
 		}
+		if !isFlagDefLine(line) {
+			continue
+		}
+		continuations := flagContinuations(lines, i+1)
 		spec, ok := parseFlagLine(line)
-		if !ok && isFlagDefLine(line) {
-			for j := i + 1; j < len(lines); j++ {
-				next := strings.TrimSpace(lines[j])
-				if next == "" {
-					continue
-				}
-				if strings.HasPrefix(next, "(env:") {
-					break
-				}
-				spec, ok = parseFlagLine(line + "  " + next)
-				break
+		if !ok && len(continuations) > 0 {
+			spec, ok = parseFlagLine(line + "  " + continuations[0])
+			continuations = continuations[1:]
+		}
+		if ok && len(continuations) > 0 {
+			spec.HelpText = strings.TrimSpace(strings.Join(append([]string{spec.HelpText}, continuations...), " "))
+			rawDefault := extractDefault(spec.HelpText)
+			if spec.Type == domain.FlagTypeInt && looksFloat(rawDefault) {
+				spec.Type = domain.FlagTypeFloat
 			}
+			if rawDefault != nil {
+				spec.Default = coerceDefault(spec.Type, rawDefault)
+			}
+			spec = hardcodedFlagOverrides(spec)
 		}
 		if !ok {
 			continue
@@ -68,6 +73,32 @@ func ParseHelp(data []byte) (domain.FlagSchema, error) {
 		schema.Flags[spec.Long] = spec
 	}
 	return schema, nil
+}
+
+func flagContinuations(lines []string, start int) []string {
+	var out []string
+	skippingAllowedValues := false
+	for j := start; j < len(lines); j++ {
+		line := lines[j]
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case trimmed == "":
+			continue
+		case isFlagDefLine(line), parseSectionHeader(line) != "":
+			return out
+		case strings.HasPrefix(trimmed, "(env:"):
+			return out
+		case strings.HasPrefix(trimmed, allowedValuesPrefix):
+			skippingAllowedValues = true
+			continue
+		case skippingAllowedValues && strings.HasPrefix(trimmed, "(default:"):
+			skippingAllowedValues = false
+		case skippingAllowedValues:
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	return out
 }
 
 // isFlagDefLine reports whether the line begins a flag definition: a token at
@@ -120,6 +151,11 @@ func hardcodedFlagOverrides(spec domain.FlagSpec) domain.FlagSpec {
 	case "defrag-thold":
 		// llama-server --help uses placeholder N but the flag accepts float values (0.0–1.0).
 		spec.Type = domain.FlagTypeFloat
+	case "cors-methods":
+		// The documented default is a comma-list ("GET, POST, DELETE, OPTIONS");
+		// defaultRe stops at the first comma (intentional for explanatory defaults
+		// like ctx-size "0, 0 = loaded from model"), so restore the full value here.
+		spec.Default = "GET, POST, DELETE, OPTIONS"
 	}
 	return spec
 }
@@ -163,6 +199,9 @@ func parseFlagLine(line string) (domain.FlagSpec, bool) {
 		spec.Aliases = aliases
 	}
 	spec.Type = inferType(placeholder)
+	if n := metavarArity(aliasChunk); n > 1 {
+		spec.Arity = n
+	}
 	if spec.Type == domain.FlagTypeEnum {
 		spec.EnumValues = parseEnumPlaceholder(placeholder)
 	}
@@ -207,6 +246,27 @@ func splitAliases(chunk string) (short string, longs []string, placeholder strin
 		}
 	}
 	return short, longs, placeholder
+}
+
+// metavarRe matches a standalone metavar token: START, END, FNAME, N, SEED.
+var metavarRe = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
+
+// metavarArity counts the trailing standalone metavars in an alias chunk, i.e.
+// how many argv tokens the flag's value occupies: 2 for
+// "--control-vector-layer-range START END", 1 for "--ctx-size N". Punctuated
+// placeholders are a single argv token even when they contain spaces
+// ("<tensor name pattern>=<buffer type>,...", "FNAME:SCALE,..."), so the
+// backwards scan stops at the first token that is not metavar-shaped.
+func metavarArity(chunk string) int {
+	parts := strings.Fields(chunk)
+	n := 0
+	for i := len(parts) - 1; i >= 0; i-- {
+		if !metavarRe.MatchString(parts[i]) {
+			break
+		}
+		n++
+	}
+	return n
 }
 
 // parseEnumPlaceholder returns the enum values when placeholder is "[a|b|c]"

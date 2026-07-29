@@ -1159,3 +1159,24 @@ func TestModelsPage_RelayoutWideKeepsFullBudget(t *testing.T) {
 		t.Errorf("table.Height() = %d, want 23 (full budget minus header)", got)
 	}
 }
+
+func TestModelsPage_CursorMarkerTracksSelection(t *testing.T) {
+	page := NewModelsPage(nil, nil)
+	page.files = []domain.ModelFile{
+		{Path: "/m/a.gguf", Name: "a.gguf"},
+		{Path: "/m/b.gguf", Name: "b.gguf"},
+		{Path: "/m/c.gguf", Name: "c.gguf"},
+	}
+	page.refreshRows()
+	if got := page.table.Rows()[0][0]; got != "> " {
+		t.Fatalf("first row marker = %q, want %q", got, "> ")
+	}
+	updated, _ := page.Update(tea.KeyMsg{Type: tea.KeyDown})
+	page = updated.(ModelsPage)
+	if got := page.table.Rows()[0][0]; got != "  " {
+		t.Errorf("first row marker after down = %q, want two spaces", got)
+	}
+	if got := page.table.Rows()[1][0]; got != "> " {
+		t.Errorf("second row marker after down = %q, want %q", got, "> ")
+	}
+}

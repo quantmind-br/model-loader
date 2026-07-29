@@ -24,7 +24,6 @@ type AppConfig struct {
 type BenchmarkConfig struct {
 	MaxTokens         int                 `mapstructure:"max_tokens"`          // generation cap per problem
 	Limit             int                 `mapstructure:"limit"`               // cap items per reducible mode (0 → full set); a uniform reduced-run knob
-	Temperature       float64             `mapstructure:"temperature"`         // sampling temperature
 	TimeoutSec        int                 `mapstructure:"timeout_sec"`         // per-problem inference timeout
 	LongContextTokens int                 `mapstructure:"long_context_tokens"` // target prompt size for needle probe (0 → 8000)
 	SaveTranscripts   bool                `mapstructure:"save_transcripts"`    // capture raw model/judge I/O per run for debugging
@@ -50,6 +49,7 @@ type SweBenchProConfig struct {
 	NumWorkers    int      `mapstructure:"num_workers"`     // eval --num_workers; <=0 → 4 (single workstation)
 	UseModal      bool     `mapstructure:"use_modal"`       // false → --use_local_docker; true → Modal cloud
 	Instances     []string `mapstructure:"instances"`       // subset of instance_ids to evaluate; empty → all in the patch set
+	SampleSeed    int      `mapstructure:"sample_seed"`     // seeds the deterministic --limit instance sampling
 	PatchPath     string   `mapstructure:"patch_path"`      // pre-generated patches JSON or preds dir; takes precedence over agent_cmd; empty → require agent_cmd
 	AgentCmd      []string `mapstructure:"agent_cmd"`       // patch-generation command ({model}/{api_base}/{output}/{instances}/{harness}); used only when patch_path is empty
 	TimeoutSec    int      `mapstructure:"timeout_sec"`     // whole-pipeline cap (seconds); 0 → no model-loader-side cap
@@ -66,6 +66,7 @@ type TerminalBenchConfig struct {
 	Provider        string   `mapstructure:"provider"`          // LiteLLM provider prefix for --model; empty → "openai"
 	Tasks           []string `mapstructure:"tasks"`             // --task-id ids/globs; empty → whole dataset
 	NTasks          int      `mapstructure:"n_tasks"`           // --n-tasks cap; 0 → omit
+	SampleSeed      int      `mapstructure:"sample_seed"`       // seeds the deterministic --n-tasks→--task-id expansion (with n_tasks / --limit)
 	Concurrent      int      `mapstructure:"concurrent"`        // --n-concurrent; <=0 → 1 (single-GPU rig)
 	TimeoutSec      int      `mapstructure:"timeout_sec"`       // whole-run cap (seconds); 0 → no model-loader-side cap
 	StallTimeoutSec int      `mapstructure:"stall_timeout_sec"` // group-kill tb when no new task is scored for this long (wedged agent/Docker); 0 → built-in default
@@ -157,13 +158,28 @@ type UIConfig struct {
 	Keybindings string `mapstructure:"keybindings"`
 }
 
-// DefaultConfigPath returns ~/.config/model-loader/config.toml.
+// DefaultConfigPath returns <user-config-dir>/model-loader/config.toml, i.e.
+// ~/.config/model-loader/config.toml unless $XDG_CONFIG_HOME redirects it.
 func DefaultConfigPath() (string, error) {
-	home, err := os.UserConfigDir()
+	dir, err := userConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("locate user config dir: %w", err)
 	}
-	return filepath.Join(home, "model-loader", "config.toml"), nil
+	return filepath.Join(dir, "config.toml"), nil
+}
+
+// userConfigDir returns the model-loader config directory. Every config-tree
+// default derives from this one base so the config file and the state it points
+// at can never land in different trees: os.UserConfigDir honours
+// $XDG_CONFIG_HOME, and hardcoding $HOME/.config for the paths.* defaults made
+// a redirected XDG_CONFIG_HOME read config.toml from one tree while profiles and
+// the backend catalog silently defaulted to the other (CFG1).
+func userConfigDir() (string, error) {
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "model-loader"), nil
 }
 
 // Load reads the config from the default location, creating defaults if missing.
@@ -273,10 +289,16 @@ func expandTilde(path string) string {
 
 func applyDefaults(v *viper.Viper) {
 	home, _ := os.UserHomeDir()
-	v.SetDefault("paths.profiles_dir", filepath.Join(home, ".config", "model-loader", "profiles"))
+	// Config-tree defaults follow DefaultConfigPath's base (CFG1); the state
+	// tree stays under $HOME/.local/state.
+	cfgDir, err := userConfigDir()
+	if err != nil {
+		cfgDir = filepath.Join(home, ".config", "model-loader")
+	}
+	v.SetDefault("paths.profiles_dir", filepath.Join(cfgDir, "profiles"))
 	v.SetDefault("paths.log_dir", filepath.Join(home, ".local", "state", "model-loader", "logs"))
 	v.SetDefault("paths.state_dir", filepath.Join(home, ".local", "state", "model-loader"))
-	v.SetDefault("paths.backends_dir", filepath.Join(home, ".config", "model-loader", "backends"))
+	v.SetDefault("paths.backends_dir", filepath.Join(cfgDir, "backends"))
 	v.SetDefault("models.search_paths", []string{
 		filepath.Join(home, ".lmstudio", "models"),
 		filepath.Join(home, "models"),
@@ -287,7 +309,6 @@ func applyDefaults(v *viper.Viper) {
 	v.SetDefault("serve.host", "127.0.0.1")
 	v.SetDefault("serve.port", 4321)
 	v.SetDefault("benchmark.max_tokens", 32768)
-	v.SetDefault("benchmark.temperature", 0.0)
 	v.SetDefault("benchmark.timeout_sec", 120)
 	v.SetDefault("benchmark.long_context_tokens", 0)
 	v.SetDefault("benchmark.save_transcripts", true)

@@ -271,6 +271,7 @@ func (p ModelsPage) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	t, cmd := p.table.Update(msg)
 	p.table = t
+	p.refreshRowMarkers()
 	return p, cmd
 }
 

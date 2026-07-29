@@ -3,6 +3,7 @@ package components
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
@@ -15,6 +16,33 @@ const ConfirmHints = "[←→] choose  [enter] confirm  [esc] cancel"
 // confirmFocusStyle styles the focus-hint footer beneath a Confirm so it
 // reads as auxiliary text rather than competing with the button row.
 var confirmFocusStyle = theme.Subtitle.Bold(true)
+
+// confirmTheme builds the huh theme shared by every Confirm dialog. The focused
+// button renders theme.ColorSelectedFG on theme.ColorSelectedBG and is wrapped in
+// ">" / "<" markers so the armed action is identifiable in colour, under
+// NO_COLOR, and piped to a screen reader. The blurred button keeps its contrast
+// and is padded to the same cell width so the row does not reflow on focus change.
+func confirmTheme() *huh.Theme {
+	t := huh.ThemeCharm()
+	marker := lipgloss.Border{Left: ">", Right: "<"}
+	focused := t.Focused.FocusedButton.
+		Border(marker, false, true).
+		Foreground(theme.ColorSelectedFG).
+		Background(theme.ColorSelectedBG).
+		BorderForeground(theme.ColorSelectedFG).
+		BorderBackground(theme.ColorSelectedBG)
+	blurred := t.Focused.BlurredButton.Padding(0, 3)
+	if theme.NoColor() {
+		focused = focused.
+			UnsetForeground().UnsetBackground().
+			UnsetBorderForeground().UnsetBorderBackground().
+			Bold(true)
+		blurred = blurred.UnsetForeground().UnsetBackground()
+	}
+	t.Focused.FocusedButton, t.Focused.BlurredButton = focused, blurred
+	t.Blurred.FocusedButton, t.Blurred.BlurredButton = focused, blurred
+	return t
+}
 
 // Confirm is a yes/no dialog wrapping a *huh.Form. It is a value type so it
 // can be embedded by-value in pages with value receivers; the inner form,
@@ -51,7 +79,7 @@ func NewConfirm(title string, payload any, onYes func(any) tea.Cmd, affirmative,
 			Affirmative(affirmativeLabel).
 			Negative(negativeLabel).
 			Value(&answer),
-	)).WithShowHelp(false).WithShowErrors(false)
+	)).WithShowHelp(false).WithShowErrors(false).WithTheme(confirmTheme())
 	return Confirm{
 		form:    form,
 		answer:  &answer,
@@ -84,7 +112,7 @@ func (c Confirm) View() string {
 			focus = "[→ Enter cancels]"
 		}
 	}
-	hint := confirmFocusStyle.Render(focus + "   ←/→ switch · esc cancel")
+	hint := confirmFocusStyle.Render(focus)
 	return base + "\n" + hint
 }
 

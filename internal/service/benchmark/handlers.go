@@ -29,7 +29,11 @@ const judgeScoreConcurrency = 2
 // the server under test (so speed metrics aren't polluted by concurrent
 // load), while scoring — which talks to a separate judge endpoint — runs in
 // background goroutines overlapped with the next problem's inference.
-// Results are written by index, so ordering matches the dataset.
+// Results are written by index, so ordering matches the dataset. A checkpoint
+// (T7/BM3) is emitted from this serial loop after each item so a crash mid-run
+// keeps what completed; mu makes the snapshot copy race-free against the
+// in-flight scoring goroutines, and confining r.checkpoint to the loop keeps
+// its throttle state single-writer.
 func (judgeHandler) Execute(ctx context.Context, r *Runner, base, model string, scorer Scorer, progress chan<- Progress) ([]ProblemResult, []ProblemTranscript, error) {
 	total := r.capCount(len(r.problems))
 	// Capacity MUST cover every append: scoring goroutines hold &results[idx],
@@ -37,12 +41,30 @@ func (judgeHandler) Execute(ctx context.Context, r *Runner, base, model string, 
 	results := make([]ProblemResult, 0, total)
 	trs := make([]ProblemTranscript, 0, total)
 
+	// mu guards the result elements shared with the scoring goroutines: their
+	// in-place writes (scoreProblem) and the checkpoint snapshot copy.
+	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, judgeScoreConcurrency)
 	// All scoring goroutines must finish before Execute returns: the caller
 	// closes the progress channel right after Run returns, and the result
 	// slices must be fully written.
 	defer wg.Wait()
+
+	// checkpoint persists the partial run so far (T7). Called only from this
+	// serial loop, so r.checkpoint's throttle state stays single-writer; mu
+	// makes the element copy race-free against the in-flight scoring goroutines.
+	// In-flight (not-yet-scored) items appear with their pre-score state and are
+	// finalized by a later checkpoint or the caller's final save.
+	checkpoint := func() {
+		if r.checkpoint == nil {
+			return
+		}
+		mu.Lock()
+		snap := append([]ProblemResult(nil), results...)
+		mu.Unlock()
+		r.checkpoint(snap)
+	}
 
 	done := false
 	for i, p := range r.problems[:total] {
@@ -61,6 +83,7 @@ func (judgeHandler) Execute(ctx context.Context, r *Runner, base, model string, 
 		if !scoreIt {
 			send(progress, Progress{Index: i + 1, Total: total, ProblemID: p.ID, ProblemName: p.Name,
 				Phase: "item_done", Outcome: outcomeOf(pr), Score: pr.Score, ItemMs: pr.TotalMs, Detail: pr.Err})
+			checkpoint()
 			continue
 		}
 		send(progress, Progress{Index: i + 1, Total: total, ProblemID: p.ID, ProblemName: p.Name, Phase: "score"})
@@ -78,15 +101,19 @@ func (judgeHandler) Execute(ctx context.Context, r *Runner, base, model string, 
 				return
 			}
 			defer func() { <-sem }()
-			// Distinct slots: each goroutine writes only its own problem.
-			r.scoreProblem(ctx, scorer, p, content, resPtr, trPtr)
+			// Distinct slots: each goroutine writes only its own problem, under mu.
+			r.scoreProblem(ctx, scorer, p, content, resPtr, trPtr, &mu)
 			// Emit the finish event from the scoring goroutine: the slot's final
 			// outcome is only known after scoreProblem returns. It may arrive after
 			// a later item's infer event (overlapped scoring) — RunFeed matches by
 			// id and uses ItemMs, so out-of-order finishes fold correctly.
+			mu.Lock()
+			fin := *resPtr
+			mu.Unlock()
 			send(progress, Progress{Index: idx + 1, Total: total, ProblemID: p.ID, ProblemName: p.Name,
-				Phase: "item_done", Outcome: outcomeOf(*resPtr), Score: resPtr.Score, ItemMs: resPtr.TotalMs, Detail: resPtr.Err})
+				Phase: "item_done", Outcome: outcomeOf(fin), Score: fin.Score, ItemMs: fin.TotalMs, Detail: fin.Err})
 		}(i, p, comp.Content)
+		checkpoint()
 	}
 	wg.Wait()
 	return results, transcripts(r, trs), nil

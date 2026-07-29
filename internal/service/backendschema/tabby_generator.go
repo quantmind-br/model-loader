@@ -19,8 +19,8 @@ func NewTabbyGenerator(schemaStore backendcatalog.SchemaStore) *TabbyGenerator {
 }
 
 // Generate returns the curated tabby schema without runtime --help parsing.
-// If the existing schema has source.editable=true, generation is skipped to
-// preserve manual edits (web Customize mode).
+// If the existing schema has source.customized=true, generation is skipped so
+// an operator's edits (web Customize mode) survive incidental re-runs.
 func (g *TabbyGenerator) Generate(backend domain.Backend) (domain.BackendValidationSchema, error) {
 	if backend.Kind != domain.BackendKindTabby {
 		return domain.BackendValidationSchema{}, fmt.Errorf("unsupported backend kind: %s", backend.Kind)
@@ -28,7 +28,7 @@ func (g *TabbyGenerator) Generate(backend domain.Backend) (domain.BackendValidat
 
 	ref := schemaStoreRef(backend.SchemaRef)
 	existing, err := g.schemaStore.Load(ref)
-	if err == nil && existing.Source.Editable {
+	if err == nil && existing.Source.Customized {
 		return existing, nil
 	}
 

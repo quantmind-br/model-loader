@@ -1,2 +1,0 @@
-Build: PASS
-Vet: PASS

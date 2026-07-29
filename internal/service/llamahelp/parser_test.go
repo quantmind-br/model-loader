@@ -294,6 +294,21 @@ func TestParseFlagLine_CacheTypeHardcodedEnum(t *testing.T) {
 	}
 }
 
+// cors-methods documents a comma-list default ("GET, POST, DELETE, OPTIONS").
+// defaultRe stops at the first comma (intentional for explanatory defaults such
+// as ctx-size "0, 0 = loaded from model"), so hardcodedFlagOverrides restores
+// the full source-true default. Guards against the golden regressing to "GET".
+func TestParseFlagLine_CorsMethodsFullDefault(t *testing.T) {
+	line := "--cors-methods METHODS                  comma-separated list of allowed methods for CORS (default: GET, POST, DELETE, OPTIONS)"
+	got, ok := parseFlagLine(line)
+	if !ok {
+		t.Fatalf("!ok for %q", line)
+	}
+	if got.Default != "GET, POST, DELETE, OPTIONS" {
+		t.Fatalf("cors-methods default = %q, want full comma-list", got.Default)
+	}
+}
+
 func TestParseHelp_CacheTypeAllowedValuesContinuation(t *testing.T) {
 	help := []byte(`----- common params -----
 -ctkd, --cache-type-k-draft TYPE        KV cache data type for K for the draft model
@@ -337,6 +352,54 @@ func TestParseFlagLine_MultiAlias(t *testing.T) {
 	}
 }
 
+// S15: a flag documenting two metavars consumes two argv tokens, and a
+// punctuated placeholder stays a single token even though it contains spaces
+// ("--override-tensor <tensor name pattern>=<buffer type>,...").
+func TestParseFlagLine_Arity(t *testing.T) {
+	tests := []struct {
+		name      string
+		line      string
+		wantArity int
+	}{
+		{
+			name:      "two metavars",
+			line:      "--control-vector-layer-range START END   layer range to apply the control vector(s) to",
+			wantArity: 2,
+		},
+		{
+			name:      "single metavar",
+			line:      "-c,    --ctx-size N                     size of the prompt context (default: 4096)",
+			wantArity: 0,
+		},
+		{
+			name:      "spaced angle-bracket placeholder is one token",
+			line:      "-ot,   --override-tensor <tensor name pattern>=<buffer type>,...   override tensor buffer type",
+			wantArity: 0,
+		},
+		{
+			name:      "colon placeholder is one token",
+			line:      "--lora-scaled FNAME:SCALE,...          path to LoRA adapter with user defined scaling",
+			wantArity: 0,
+		},
+		{
+			name:      "bool flag has no value",
+			line:      "--mlock                                 force system to keep model in RAM",
+			wantArity: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := parseFlagLine(tt.line)
+			if !ok {
+				t.Fatalf("!ok for %q", tt.line)
+			}
+			if got.Arity != tt.wantArity {
+				t.Fatalf("Arity = %d, want %d (spec %+v)", got.Arity, tt.wantArity, got)
+			}
+		})
+	}
+}
+
 func TestParseFlagLine_NegationPairCanonicalIsPositive(t *testing.T) {
 	cases := []struct {
 		line     string
@@ -376,7 +439,7 @@ func TestParseFlagLine_NegationPairCanonicalIsPositive(t *testing.T) {
 }
 
 func TestParseHelp_SmokeOnFixture(t *testing.T) {
-	data, err := os.ReadFile("../../../testdata/help-v9761.txt")
+	data, err := os.ReadFile("../../../testdata/help-v10152.txt")
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
@@ -450,6 +513,58 @@ func TestParseHelp_WrappedFlagDescription(t *testing.T) {
 	}
 }
 
+func TestParseHelp_JoinsAllDescriptionContinuations(t *testing.T) {
+	in := `----- example-specific params -----
+--tools TOOL1,TOOL2,...                 experimental: whether to enable built-in tools for AI agents - do not
+                                        enable in untrusted environments (default: no tools)
+                                        specify "all" to enable all tools
+                                        note: for security reasons, this will limit --cors-origins to
+                                        localhost by default
+                                        (env: LLAMA_ARG_TOOLS)
+--ctx-size N                            size of the prompt context (default: 0, 0 = loaded from model)
+                                        (env: LLAMA_ARG_CTX_SIZE)
+`
+	schema, err := ParseHelp([]byte(in))
+	if err != nil {
+		t.Fatalf("ParseHelp: %v", err)
+	}
+
+	tools := schema.Flags["tools"]
+	wantHelp := `experimental: whether to enable built-in tools for AI agents - do not enable in untrusted environments (default: no tools) specify "all" to enable all tools note: for security reasons, this will limit --cors-origins to localhost by default`
+	if tools.HelpText != wantHelp {
+		t.Fatalf("tools help = %q, want %q", tools.HelpText, wantHelp)
+	}
+	if tools.Default != "no tools" {
+		t.Fatalf("tools default = %#v, want %q", tools.Default, "no tools")
+	}
+	if got := schema.Flags["ctx-size"].Default; got != 0 {
+		t.Fatalf("ctx-size default = %#v, want 0", got)
+	}
+}
+
+func TestParseHelp_ContinuationMentionDoesNotBecomeFlag(t *testing.T) {
+	in := `----- example-specific params -----
+--chat-template JINJA                  set custom chat template
+                                        only commonly used templates are accepted unless --jinja is set before this flag
+--jinja, --no-jinja                    whether to use jinja template engine for chat (default: enabled)
+                                        (env: LLAMA_ARG_JINJA)
+`
+	schema, err := ParseHelp([]byte(in))
+	if err != nil {
+		t.Fatalf("ParseHelp: %v", err)
+	}
+	jinja, ok := schema.Flags["jinja"]
+	if !ok {
+		t.Fatal("jinja missing")
+	}
+	if jinja.Type != domain.FlagTypeBool {
+		t.Fatalf("jinja type = %v, want bool", jinja.Type)
+	}
+	if jinja.HelpText != "whether to use jinja template engine for chat (default: enabled)" {
+		t.Fatalf("jinja help = %q", jinja.HelpText)
+	}
+}
+
 func flagKeys(s domain.FlagSchema) []string {
 	keys := make([]string, 0, len(s.Flags))
 	for k := range s.Flags {
@@ -472,7 +587,7 @@ func contains(ss []string, want string) bool {
 var updateGolden = flag.Bool("update", false, "regenerate golden files")
 
 func TestParseHelp_Golden(t *testing.T) {
-	data, err := os.ReadFile("../../../testdata/help-v9761.txt")
+	data, err := os.ReadFile("../../../testdata/help-v10152.txt")
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
@@ -484,7 +599,7 @@ func TestParseHelp_Golden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	goldenPath := "../../../testdata/help-v9761.golden.json"
+	goldenPath := "../../../testdata/help-v10152.golden.json"
 	if *updateGolden {
 		if err := os.WriteFile(goldenPath, got, 0o644); err != nil {
 			t.Fatalf("write golden: %v", err)

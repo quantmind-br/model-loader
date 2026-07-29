@@ -75,17 +75,7 @@ func renderTabLabels(opts TabBarOptions) []string {
 		if i < len(opts.Badges) && opts.Badges[i] != "" {
 			label += " " + opts.Badges[i]
 		}
-		if i == opts.ActiveIndex {
-			if theme.NoColor() {
-				// Color can't mark the active tab; brackets do. Wrapped
-				// before styling so downstream width math (lipgloss.Width
-				// over rendered labels) stays correct.
-				label = "[" + label + "]"
-			}
-			labels[i] = theme.TabActive.Render(label)
-		} else {
-			labels[i] = theme.TabInactive.Render(label)
-		}
+		labels[i] = ActiveLabel(label, i == opts.ActiveIndex)
 	}
 	return labels
 }

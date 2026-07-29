@@ -15,7 +15,7 @@ func TestUnslothGenerator_WrongKind(t *testing.T) {
 	}
 }
 
-func TestUnslothGenerator_GeneratesAndSkipsWhenEditable(t *testing.T) {
+func TestUnslothGenerator_GeneratesAndSkipsWhenCustomized(t *testing.T) {
 	dir := t.TempDir()
 	store := backendcatalog.NewFSSchemaStore(dir)
 	g := NewUnslothGenerator(store)
@@ -35,13 +35,13 @@ func TestUnslothGenerator_GeneratesAndSkipsWhenEditable(t *testing.T) {
 	if _, ok := schema.Flags["gguf-variant"]; !ok {
 		t.Fatal("expected gguf-variant flag in generated schema")
 	}
-	schema.Source.Editable = true
+	schema.Source.Customized = true
 	_ = store.Save("unsloth-test.json", schema)
 	schema2, err := g.Generate(backend)
 	if err != nil {
 		t.Fatalf("second generate: %v", err)
 	}
-	if !schema2.Source.Editable {
-		t.Fatal("expected editable schema to be preserved")
+	if !schema2.Source.Customized {
+		t.Fatal("expected customized schema to be preserved")
 	}
 }

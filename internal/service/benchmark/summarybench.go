@@ -95,7 +95,6 @@ func (r *Runner) runSummary(ctx context.Context, base, model string, g grader, p
 	reqCtx, cancel := context.WithTimeout(ctx, r.inferTimeout())
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
 		Model:       model,
-		Temperature: 0,
 		MaxTokens:   r.cfg.MaxTokens,
 		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{

@@ -91,9 +91,10 @@ func newBenchRunCmd() *cobra.Command {
 			}
 			// --limit is the uniform reduced-run knob: it caps the in-process
 			// dataset modes + llama-bench presets (benchmark.Config.Limit) and,
-			// for the agentic terminal-bench/deep-swe modes, doubles as --n-tasks
-			// when no mode-specific task flag was given (they have no shared
-			// problem slice). swe-bench-pro keeps its instance filter.
+			// for the agentic modes, produces a deterministic reduced subset when
+			// no mode-specific task/instance flag was given — terminal-bench and
+			// deep-swe via --n-tasks here, swe-bench-pro via sampled instance_ids
+			// (below, after the harness override so relative raw-sample paths resolve).
 			if limit > 0 {
 				cfg.Benchmark.Limit = limit
 				if len(tbTasks) == 0 && tbNTasks == 0 {
@@ -125,6 +126,22 @@ func newBenchRunCmd() *cobra.Command {
 			}
 			if deepTasksDir != "" {
 				cfg.Benchmark.DeepSWE.TasksDir = deepTasksDir
+			}
+			// --limit for swe-bench-pro: the eval script has no count flag, so
+			// sample N instance_ids deterministically from the raw sample and run
+			// them as an instance filter. An explicit --sweap-instance wins,
+			// mirroring how --tb-task/--deepswe-task win over --limit for the other
+			// agentic modes.
+			if limit > 0 && mode == benchmark.ModeSweBenchPro && len(sweapInstance) == 0 {
+				ids, err := benchmark.SampleSWEAPInstances(
+					cfg.Benchmark.SweBenchPro.HarnessDir,
+					cfg.Benchmark.SweBenchPro.RawSamplePath,
+					limit, cfg.Benchmark.SweBenchPro.SampleSeed)
+				if err != nil {
+					fmt.Fprintf(errw, "swe-bench-pro --limit: %v\n", err)
+					return &ExitError{Code: 1}
+				}
+				cfg.Benchmark.SweBenchPro.Instances = ids
 			}
 
 			svc, release, err := bootstrapWithLock(errw, logLevel)
@@ -181,7 +198,7 @@ func newBenchRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&modeStr, "mode", "judge", "scoring mode: "+benchModeList())
 	cmd.Flags().StringArrayVar(&tbTasks, "tb-task", nil, "terminal-bench: task id or glob to run (repeatable; overrides config.benchmark.terminalbench.tasks); only used with --mode terminal-bench")
 	cmd.Flags().IntVar(&tbNTasks, "tb-n-tasks", 0, "terminal-bench: cap number of tasks (tb --n-tasks); overrides config when >0; only used with --mode terminal-bench")
-	cmd.Flags().IntVar(&limit, "limit", 0, "reduced run: cap items per mode (dataset problems + llama-bench presets; also terminal-bench/deep-swe --n-tasks when no mode-specific task flag); 0 → full set")
+	cmd.Flags().IntVar(&limit, "limit", 0, "reduced run: cap items per mode (dataset problems + llama-bench presets; terminal-bench/deep-swe --n-tasks and a sampled swe-bench-pro instance subset when no mode-specific flag is given); 0 → full set")
 	cmd.Flags().StringArrayVar(&sweapInstance, "sweap-instance", nil, "swe-bench-pro: instance_id to evaluate (repeatable; overrides config.benchmark.swebenchpro.instances); only used with --mode swe-bench-pro")
 	cmd.Flags().StringVar(&sweapHarness, "sweap-harness", "", "swe-bench-pro: path to a cloned SWE-bench_Pro-os harness (overrides config.benchmark.swebenchpro.harness_dir)")
 	cmd.Flags().StringVar(&sweapPatches, "sweap-patches", "", "swe-bench-pro: patches JSON or preds dir to evaluate (overrides config.benchmark.swebenchpro.patch_path)")

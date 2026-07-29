@@ -113,6 +113,14 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request) {
 				"no model loaded; specify one via the JSON \"model\" field or ?model= query param")
 			return
 		}
+		if cur.unavailable.Load() {
+			var err error
+			cur, err = s.ensureLoaded(r.Context(), cur.profileID)
+			if err != nil {
+				writeSwapError(w, err)
+				return
+			}
+		}
 		s.serving.Add(1)
 		cur.proxy.ServeHTTP(w, r)
 		s.serving.Add(-1)
@@ -148,11 +156,14 @@ func (s *Server) ensureLoaded(ctx context.Context, profileID string) (*loadedBac
 	s.stateMu.RUnlock()
 	if cur != nil && cur.profileID == profileID {
 		if procutil.SameProcess(cur.pid, cur.startTicks) {
-			return cur, nil
+			if !cur.unavailable.Load() {
+				return cur, nil
+			}
+		} else {
+			// Loaded backend for our target died out-of-band; relaunch (audit A6).
+			s.handleBackendCrash(cur)
+			cur = nil
 		}
-		// Loaded backend for our target died out-of-band; relaunch (audit A6).
-		s.handleBackendCrash(cur)
-		cur = nil
 	}
 
 	// Serialize swaps.
@@ -165,10 +176,13 @@ func (s *Server) ensureLoaded(ctx context.Context, profileID string) (*loadedBac
 	s.stateMu.RUnlock()
 	if cur != nil && cur.profileID == profileID {
 		if procutil.SameProcess(cur.pid, cur.startTicks) {
-			return cur, nil
+			if !cur.unavailable.Load() {
+				return cur, nil
+			}
+		} else {
+			s.handleBackendCrash(cur)
+			cur = nil
 		}
-		s.handleBackendCrash(cur)
-		cur = nil
 	}
 
 	// Respect upstream cancellation before doing real work.
@@ -214,6 +228,18 @@ func (s *Server) handleBackendCrash(cur *loadedBackend) {
 		s.current = nil
 	}
 	s.stateMu.Unlock()
+}
+
+func (s *Server) markBackendUnavailable(cur *loadedBackend, err error) {
+	s.stateMu.RLock()
+	isCurrent := s.current == cur
+	s.stateMu.RUnlock()
+	if !isCurrent || !cur.unavailable.CompareAndSwap(false, true) {
+		return
+	}
+	s.recordError(fmt.Sprintf("backend_unavailable: profile %s pid %d port %d: %v", cur.profileID, cur.pid, cur.port, err))
+	s.logger.Warn("proxy_backend_unavailable",
+		"profile_id", cur.profileID, "pid", cur.pid, "port", cur.port, "err", err)
 }
 
 // resolveProfile loads the requested profile, translating store errors into the
@@ -289,8 +315,10 @@ func (s *Server) launchNewBackend(profile domain.Profile, profileID, attemptID s
 		logPath:    inst.LogPath,
 		authToken:  token,
 		startTicks: inst.StartTicks,
-		proxy:      newReverseProxy(inst.Port, token, s.cfg.MaxBodyBuffer),
 	}
+	loaded.proxy = newReverseProxy(inst.Port, token, s.cfg.MaxBodyBuffer, func(err error) {
+		s.markBackendUnavailable(loaded, err)
+	})
 	s.stateMu.Lock()
 	s.current = loaded
 	s.stateMu.Unlock()

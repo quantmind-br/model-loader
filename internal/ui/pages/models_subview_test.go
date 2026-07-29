@@ -11,6 +11,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/service/downloadmgr"
 	"github.com/quantmind-br/model-loader/internal/service/hfhub"
 	"github.com/quantmind-br/model-loader/internal/ui/components"
+	"github.com/quantmind-br/model-loader/internal/ui/theme"
 )
 
 func TestModelsPage_SubViewNavigationCycles(t *testing.T) {
@@ -35,6 +36,22 @@ func TestModelsPage_SubViewNavigationCycles(t *testing.T) {
 	updated, _ := cur.Update(tea.KeyMsg{Type: tea.KeyLeft})
 	if mp := updated.(ModelsPage); mp.subView != mvDiscover {
 		t.Fatalf("left from Library: subView = %v, want mvDiscover", mp.subView)
+	}
+}
+
+func TestModelsPage_SubViewTabsHaveColorlessActiveMarker(t *testing.T) {
+	t.Cleanup(theme.RebuildStyles)
+	t.Setenv("NO_COLOR", "1")
+	theme.RebuildStyles()
+
+	page := NewModelsPage(&fakeScanner{}, nil)
+	if out := page.View(); !strings.Contains(out, "[Library]") {
+		t.Fatalf("Library is not bracketed under NO_COLOR:\n%s", out)
+	}
+	page.subView = mvDownloads
+	out := page.View()
+	if !strings.Contains(out, "[Downloads") || strings.Contains(out, "[Library]") {
+		t.Fatalf("Downloads is not the sole active marker under NO_COLOR:\n%s", out)
 	}
 }
 

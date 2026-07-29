@@ -82,11 +82,20 @@ func (m *Manager) AddBackend(ctx context.Context, name, executable string, kind 
 
 // RefreshSchema re-generates the schema for an existing backend.
 //
-// Generators skip regeneration when an existing schema is marked editable,
-// to preserve manual edits during incidental re-runs (catalog ensure paths,
-// AddBackend retries, etc.). RefreshSchema is the explicit user-driven path,
-// so it deletes the existing schema first to force a fresh regeneration
-// from the backend's --help output. A missing schema is not an error.
+// Generators skip regeneration when the existing schema is marked
+// source.customized=true, so incidental re-runs (catalog ensure paths,
+// AddBackend retries) never clobber an operator's edits. RefreshSchema is the
+// explicit user-driven path, so it deletes the existing schema first to force a
+// fresh regeneration from the backend's --help output — and then restores the
+// operator's layout on top when the previous schema was customized:
+// Presentation and Rules are both reconciled against the regenerated flag set,
+// so neither can reference a flag the backend no longer exposes.
+//
+// Scope boundary: a refresh re-derives flag *facts* from the backend, so
+// per-flag constraint edits and operator-added flags are intentionally
+// replaced. Only layout (presentation) and rules survive.
+//
+// A missing schema is not an error.
 func (m *Manager) RefreshSchema(backendID string) error {
 	catalog, err := m.catalogStore.Load()
 	if err != nil {
@@ -104,12 +113,28 @@ func (m *Manager) RefreshSchema(backendID string) error {
 	}
 
 	ref := schemaStoreRef(backend.SchemaRef)
+	prev, prevErr := m.schemaStore.Load(ref)
 	if err := m.schemaStore.Delete(ref); err != nil && !errors.Is(err, backendcatalog.ErrSchemaNotFound) {
 		return fmt.Errorf("delete schema: %w", err)
 	}
 
-	if _, err := g.Generate(backend); err != nil {
+	next, err := g.Generate(backend)
+	if err != nil {
 		return fmt.Errorf("generate schema: %w", err)
+	}
+	if prevErr != nil || !prev.Source.Customized {
+		return nil
+	}
+
+	if prev.Presentation != nil {
+		pres := ReconcilePresentation(*prev.Presentation, next)
+		next.Presentation = &pres
+	}
+	next.Rules = ReconcileRules(prev.Rules, next)
+	next.Source.Editable = true
+	next.Source.Customized = true
+	if err := m.schemaStore.Save(ref, next); err != nil {
+		return fmt.Errorf("save schema: %w", err)
 	}
 	return nil
 }

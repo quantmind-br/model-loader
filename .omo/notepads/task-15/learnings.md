@@ -1,2 +1,0 @@
-- T15: ModelsPage.Update now polls downloadEvents non-blockingly, wraps events as downloadEventMsg, and handles HF search/file picker component messages plus DownloadCancelMsg.
-- Component HF async messages needed exported aliases/fields so pages package can forward results across package boundary.

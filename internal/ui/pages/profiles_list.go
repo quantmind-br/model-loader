@@ -105,6 +105,7 @@ type profileItemDelegate struct {
 func newProfileItemDelegate() profileItemDelegate {
 	d := list.NewDefaultDelegate()
 	d.ShowDescription = false
+	d.SetSpacing(0)
 	return profileItemDelegate{DefaultDelegate: d}
 }
 

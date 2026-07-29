@@ -2,18 +2,28 @@ package validator
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/log"
 )
 
+func existingModel(t *testing.T) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "m.gguf")
+	if err := os.WriteFile(p, []byte("g"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
 func TestValidator_EmptySchemaProducesNoTypeIssues(t *testing.T) {
 	v := New(log.Nop())
 	p := domain.Profile{
 		ID:    "x",
 		Name:  "X",
-		Model: "", // Fixed: was /tmp/nonexistent.gguf, now trips existence rule
+		Model: existingModel(t),
 		Args:  map[string]any{},
 	}
 	rep := v.Validate(p, domain.FlagSchema{Flags: map[string]domain.FlagSpec{}}, domain.BackendKindLlamaServer)
@@ -46,9 +56,10 @@ func TestValidator_TypeRule(t *testing.T) {
 		{"unknown flag is error", map[string]any{"unheard-of": 1}, 1, "unheard-of"},
 	}
 	v := New(log.Nop())
+	model := existingModel(t)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			p := domain.Profile{ID: "x", Args: tc.args}
+			p := domain.Profile{ID: "x", Model: model, Args: tc.args}
 			rep := v.Validate(p, schema, domain.BackendKindLlamaServer)
 			if got := len(rep.Errors); got != tc.wantErrs {
 				t.Fatalf("Errors=%d (%v), want %d", got, rep.Errors, tc.wantErrs)
@@ -72,7 +83,7 @@ func TestValidator_ModelExistence(t *testing.T) {
 		model    string
 		wantErrs int
 	}{
-		{"empty path no error (rule only applies when set)", "", 0},
+		{"empty path is a required error", "", 1},
 		{"existing path no error", existing, 0},
 		{"missing path errors", tmp + "/nope.gguf", 1},
 	}
@@ -199,7 +210,7 @@ func TestValidate_RequiredFlagMissing(t *testing.T) {
 			"port": {Long: "port", Type: domain.FlagTypeInt, Required: true},
 		},
 	}
-	p := domain.Profile{Args: map[string]any{}} // port absent
+	p := domain.Profile{Model: existingModel(t), Args: map[string]any{}} // port absent
 	rep := New(nil).Validate(p, sch, domain.BackendKindLlamaServer)
 	if !rep.HasBlockingErrors() {
 		t.Fatalf("expected error for missing required flag")
@@ -212,7 +223,7 @@ func TestValidate_RequiredFlagPresent(t *testing.T) {
 			"port": {Long: "port", Type: domain.FlagTypeInt, Required: true},
 		},
 	}
-	p := domain.Profile{Args: map[string]any{"port": 4321}}
+	p := domain.Profile{Model: existingModel(t), Args: map[string]any{"port": 4321}}
 	rep := New(nil).Validate(p, sch, domain.BackendKindLlamaServer)
 	if rep.HasBlockingErrors() {
 		t.Fatalf("unexpected errors: %+v", rep.Errors)
@@ -223,7 +234,7 @@ func TestValidate_RequiredFlagInExtraArgs(t *testing.T) {
 	sch := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
 		"port": {Long: "port", Type: domain.FlagTypeInt, Required: true},
 	}}
-	p := domain.Profile{Args: map[string]any{}, ExtraArgs: []string{"--port=8080"}}
+	p := domain.Profile{Model: existingModel(t), Args: map[string]any{}, ExtraArgs: []string{"--port=8080"}}
 	rep := New(nil).Validate(p, sch, domain.BackendKindLlamaServer)
 	if rep.HasBlockingErrors() {
 		t.Fatalf("unexpected errors: %+v", rep.Errors)
@@ -262,9 +273,10 @@ func TestValidator_ListEnum(t *testing.T) {
 		{"scalar enum still rejects unknown", map[string]any{"flash-attn": "maybe"}, 1, "flash-attn"},
 	}
 	v := New(log.Nop())
+	model := existingModel(t)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			p := domain.Profile{ID: "x", Args: tc.args}
+			p := domain.Profile{ID: "x", Model: model, Args: tc.args}
 			rep := v.Validate(p, schema, domain.BackendKindLlamaServer)
 			if got := len(rep.Errors); got != tc.wantErrs {
 				t.Fatalf("Errors=%d (%v), want %d", got, rep.Errors, tc.wantErrs)
@@ -306,15 +318,108 @@ func TestValidate_ExtraArgsKnownFlagPassthrough(t *testing.T) {
 		{"bare value still errors", []string{"bare-token"}, 1, 0},
 	}
 	v := New(log.Nop())
+	model := existingModel(t)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			p := domain.Profile{ID: "x", Args: map[string]any{}, ExtraArgs: tc.extra}
+			p := domain.Profile{ID: "x", Model: model, Args: map[string]any{}, ExtraArgs: tc.extra}
 			rep := v.Validate(p, sch, domain.BackendKindLlamaServer)
 			if got := len(rep.Errors); got != tc.wantErrs {
 				t.Fatalf("Errors=%d (%v), want %d", got, rep.Errors, tc.wantErrs)
 			}
 			if got := len(rep.Warnings); got != tc.wantWarns {
 				t.Errorf("Warnings=%d (%v), want %d", got, rep.Warnings, tc.wantWarns)
+			}
+		})
+	}
+}
+
+// UIUX-031: an empty model must block. Whitespace-only counts as empty; it also
+// trips the existence rule (applyExistenceRules only early-returns on ""), so
+// assert on the presence of the required issue, not on the error count.
+func TestValidate_ModelRequired(t *testing.T) {
+	v := New(log.Nop())
+	cases := []struct {
+		name  string
+		model string
+		want  bool
+	}{
+		{"empty", "", true},
+		{"spaces only", "   ", true},
+		{"tab and newline", "\t\n", true},
+		{"set", existingModel(t), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rep := v.Validate(domain.Profile{ID: "x", Model: tc.model},
+				domain.FlagSchema{}, domain.BackendKindLlamaServer)
+			var got bool
+			for _, e := range rep.Errors {
+				if e.Field == "model" && e.Message == "required" {
+					got = true
+				}
+			}
+			if got != tc.want {
+				t.Fatalf("model=%q required-error=%v, want %v (errors: %+v)", tc.model, got, tc.want, rep.Errors)
+			}
+		})
+	}
+}
+
+// S15: a flag whose value spans several argv tokens cannot be emitted from
+// Args (one token per key), so it must be refused there and accepted — with
+// all its bare values — in the verbatim extraArgs passthrough.
+func TestValidate_MultiTokenFlagArity(t *testing.T) {
+	sch := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"control-vector-layer-range": {Long: "control-vector-layer-range", Type: domain.FlagTypeString, Arity: 2},
+		"ctx-size":                   {Long: "ctx-size", Type: domain.FlagTypeInt},
+	}}
+	v := New(log.Nop())
+	model := existingModel(t)
+	tests := []struct {
+		name      string
+		args      map[string]any
+		extra     []string
+		wantErrs  int
+		wantWarns int
+	}{
+		{
+			name:     "args rejects a multi-token flag",
+			args:     map[string]any{"control-vector-layer-range": "0 31"},
+			wantErrs: 1,
+		},
+		{
+			name:  "extra args accepts both values",
+			extra: []string{"--control-vector-layer-range", "0", "31"},
+		},
+		{
+			name:  "following flag after both values still parses",
+			extra: []string{"--control-vector-layer-range", "0", "31", "--mlock"},
+			// --mlock is absent from this schema, so it warns but must not error.
+			wantWarns: 1,
+		},
+		{
+			name:     "a third bare value is still a stray token",
+			extra:    []string{"--control-vector-layer-range", "0", "31", "99"},
+			wantErrs: 1,
+		},
+		{
+			name: "single-token flags keep consuming exactly one value",
+			args: map[string]any{"ctx-size": 4096},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := tt.args
+			if args == nil {
+				args = map[string]any{}
+			}
+			p := domain.Profile{ID: "x", Model: model, Args: args, ExtraArgs: tt.extra}
+			rep := v.Validate(p, sch, domain.BackendKindLlamaServer)
+			if got := len(rep.Errors); got != tt.wantErrs {
+				t.Fatalf("Errors=%d (%v), want %d", got, rep.Errors, tt.wantErrs)
+			}
+			if got := len(rep.Warnings); got != tt.wantWarns {
+				t.Errorf("Warnings=%d (%v), want %d", got, rep.Warnings, tt.wantWarns)
 			}
 		})
 	}

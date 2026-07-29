@@ -173,7 +173,7 @@ func TestNormalizeRequestModel(t *testing.T) {
 		"":               "",
 		"  qwen-7b  ":    "qwen-7b",
 		"openai/qwen-7b": "qwen-7b",
-		"openai/ornith-aeon-35b-a3b-q4km-mtp-vision-layer2-256k": "ornith-aeon-35b-a3b-q4km-mtp-vision-layer2-256k",
+		"openai/example-profile-256k": "example-profile-256k",
 		"hosted_vllm/my-profile":                                 "my-profile",
 		"no-slash-id":                                            "no-slash-id",
 	}

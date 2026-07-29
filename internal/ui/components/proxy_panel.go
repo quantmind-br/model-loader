@@ -38,6 +38,14 @@ type ProxyActionResultMsg struct {
 	err    error
 }
 
+// ProxyStopRequestMsg asks the owning page to confirm a proxy stop that would
+// also kill the loaded backend. Emitted instead of stopping immediately.
+type ProxyStopRequestMsg struct {
+	ProfileID string
+	PID       int
+	Port      int
+}
+
 // ProxyPanel is a self-contained widget that renders the HTTP proxy status
 // line(s) and owns the Start/Stop action state. It does not draw a frame —
 // the owning page composes it above whatever content follows.
@@ -108,6 +116,14 @@ func (p *ProxyPanel) Update(msg tea.Msg) (tea.Cmd, bool) {
 			if p.pending != pendingNone {
 				return nil, true
 			}
+			if p.status.LoadedPID > 0 {
+				req := ProxyStopRequestMsg{
+					ProfileID: p.status.LoadedProfileID,
+					PID:       p.status.LoadedPID,
+					Port:      p.status.LoadedPort,
+				}
+				return func() tea.Msg { return req }, true
+			}
 			p.pending = pendingStop
 			return p.stopCmd(), true
 		}
@@ -137,6 +153,16 @@ func (p *ProxyPanel) stopCmd() tea.Cmd {
 		defer cancel()
 		return ProxyActionResultMsg{action: "stop", err: srv.Stop(ctx)}
 	}
+}
+
+// ConfirmedStopCmd runs the stop the owning page just confirmed. No-op while an
+// action is already pending.
+func (p *ProxyPanel) ConfirmedStopCmd() tea.Cmd {
+	if p.pending != pendingNone {
+		return nil
+	}
+	p.pending = pendingStop
+	return p.stopCmd()
 }
 
 // View renders the proxy status block as 2–5 lines, each fitting within

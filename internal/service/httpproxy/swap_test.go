@@ -3,7 +3,10 @@ package httpproxy
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -193,5 +196,180 @@ func TestEnsureLoaded_RelaunchesCrashedBackend(t *testing.T) {
 	}
 	if loaded == nil || loaded.pid == 1<<22 {
 		t.Fatalf("ensureLoaded returned the dead backend: %+v", loaded)
+	}
+}
+
+func refusedPort(t *testing.T) int {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	if err := ln.Close(); err != nil {
+		t.Fatalf("close listener: %v", err)
+	}
+	return port
+}
+
+// P8: a backend can keep its parent PID alive after its API listener dies.
+// The first transport failure must preserve the loaded pointer for a safe
+// kill; the next request must kill it before relaunching the same profile.
+func TestHandleForward_LivePIDRefusedPortRelaunchesOnRetry(t *testing.T) {
+	failedPort := refusedPort(t)
+	recovered := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"recovered"}}]}`))
+	}))
+	defer recovered.Close()
+	store := newStubStore(makeProfile("alpha", failedPort))
+	mgr := newStubManager()
+	mgr.launchPorts = []int{failedPort, portOf(t, recovered)}
+	srv := newTestServer(t, store, mgr)
+	mux := http.NewServeMux()
+	srv.registerRoutes(mux)
+
+	request := func(body string) *httptest.ResponseRecorder {
+		t.Helper()
+		rr := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		mux.ServeHTTP(rr, r)
+		return rr
+	}
+
+	if rr := request(`{"model":"alpha","messages":[{"role":"user","content":"hi"}]}`); rr.Code != http.StatusBadGateway {
+		t.Fatalf("first status = %d, want 502 (body: %s)", rr.Code, rr.Body.String())
+	}
+	if got := srv.Status().LoadedProfileID; got != "alpha" {
+		t.Fatalf("loaded profile after transport failure = %q, want alpha preserved for safe kill", got)
+	}
+
+	if rr := request(`{"model":"alpha","messages":[{"role":"user","content":"retry"}]}`); rr.Code != http.StatusOK {
+		t.Fatalf("retry status = %d, want 200 (body: %s)", rr.Code, rr.Body.String())
+	}
+	if got := strings.Join(mgr.eventSequence(), ","); got != "launch,kill,launch" {
+		t.Fatalf("lifecycle order = %q, want launch,kill,launch", got)
+	}
+}
+
+func TestHandleForward_NoModelLivePIDRefusedPortRelaunchesOnRetry(t *testing.T) {
+	failedPort := refusedPort(t)
+	recovered := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"recovered"}}]}`))
+	}))
+	defer recovered.Close()
+	store := newStubStore(makeProfile("alpha", failedPort))
+	mgr := newStubManager()
+	mgr.launchPorts = []int{failedPort, portOf(t, recovered)}
+	srv := newTestServer(t, store, mgr)
+	if _, err := srv.ensureLoaded(context.Background(), "alpha"); err != nil {
+		t.Fatalf("load alpha: %v", err)
+	}
+	mux := http.NewServeMux()
+	srv.registerRoutes(mux)
+
+	request := func() *httptest.ResponseRecorder {
+		t.Helper()
+		rr := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/v1/chat/completions",
+			strings.NewReader(`{"messages":[{"role":"user","content":"hi"}]}`))
+		r.Header.Set("Content-Type", "application/json")
+		mux.ServeHTTP(rr, r)
+		return rr
+	}
+	if rr := request(); rr.Code != http.StatusBadGateway {
+		t.Fatalf("detection status = %d, want 502 (body: %s)", rr.Code, rr.Body.String())
+	}
+	if rr := request(); rr.Code != http.StatusOK {
+		t.Fatalf("retry status = %d, want 200 (body: %s)", rr.Code, rr.Body.String())
+	}
+	if got := strings.Join(mgr.eventSequence(), ","); got != "launch,kill,launch" {
+		t.Fatalf("lifecycle order = %q, want launch,kill,launch", got)
+	}
+}
+
+func TestPostUpstreamChat_LivePIDRefusedPortRelaunchesOnRetry(t *testing.T) {
+	failedPort := refusedPort(t)
+	recovered := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"recovered"}}]}`))
+	}))
+	defer recovered.Close()
+	store := newStubStore(makeProfile("alpha", failedPort))
+	mgr := newStubManager()
+	mgr.launchPorts = []int{failedPort, portOf(t, recovered)}
+	srv := newTestServer(t, store, mgr)
+	loaded, err := srv.ensureLoaded(context.Background(), "alpha")
+	if err != nil {
+		t.Fatalf("load alpha: %v", err)
+	}
+
+	if _, aerr := srv.postUpstreamChat(context.Background(), loaded, &oaiChatRequest{Model: "alpha"}); aerr == nil || aerr.Status != http.StatusBadGateway {
+		t.Fatalf("direct upstream error = %#v, want 502", aerr)
+	}
+	loaded, err = srv.ensureLoaded(context.Background(), "alpha")
+	if err != nil {
+		t.Fatalf("relaunch alpha: %v", err)
+	}
+	resp, aerr := srv.postUpstreamChat(context.Background(), loaded, &oaiChatRequest{Model: "alpha"})
+	if aerr != nil {
+		t.Fatalf("recovered upstream request: %v", aerr)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("recovered upstream status = %d, want 200", resp.StatusCode)
+	}
+	if got := strings.Join(mgr.eventSequence(), ","); got != "launch,kill,launch" {
+		t.Fatalf("direct lifecycle order = %q, want launch,kill,launch", got)
+	}
+}
+
+func TestPostUpstreamChat_CanceledRequestDoesNotRelaunch(t *testing.T) {
+	store := newStubStore(makeProfile("alpha", refusedPort(t)))
+	mgr := newStubManager()
+	srv := newTestServer(t, store, mgr)
+	loaded, err := srv.ensureLoaded(context.Background(), "alpha")
+	if err != nil {
+		t.Fatalf("load alpha: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, aerr := srv.postUpstreamChat(ctx, loaded, &oaiChatRequest{Model: "alpha"}); aerr == nil {
+		t.Fatal("expected canceled upstream request to fail")
+	}
+	if _, err := srv.ensureLoaded(context.Background(), "alpha"); err != nil {
+		t.Fatalf("alpha hot path after cancellation: %v", err)
+	}
+	if mgr.launchCount() != 1 || mgr.killCount() != 0 {
+		t.Fatalf("after cancellation: launches=%d kills=%d, want 1/0", mgr.launchCount(), mgr.killCount())
+	}
+}
+
+func TestEnsureLoaded_UnavailableBackendKillFailureAbortsRelaunch(t *testing.T) {
+	port := refusedPort(t)
+	store := newStubStore(makeProfile("alpha", port))
+	mgr := newStubManager()
+	srv := newTestServer(t, store, mgr)
+	loaded, err := srv.ensureLoaded(context.Background(), "alpha")
+	if err != nil {
+		t.Fatalf("load alpha: %v", err)
+	}
+	if _, aerr := srv.postUpstreamChat(context.Background(), loaded, &oaiChatRequest{Model: "alpha"}); aerr == nil {
+		t.Fatal("expected upstream transport failure")
+	}
+	mgr.killFn = func(int) error { return errors.New("process still alive after SIGKILL") }
+
+	_, err = srv.ensureLoaded(context.Background(), "alpha")
+	if err == nil || swapStatus(t, err) != http.StatusServiceUnavailable {
+		t.Fatalf("relaunch error = %v, want 503", err)
+	}
+	if mgr.launchCount() != 1 {
+		t.Fatalf("launches=%d, want 1 (must not relaunch into occupied VRAM)", mgr.launchCount())
+	}
+	if got := srv.Status().LoadedProfileID; got != "alpha" {
+		t.Fatalf("loaded profile = %q, want alpha preserved", got)
 	}
 }

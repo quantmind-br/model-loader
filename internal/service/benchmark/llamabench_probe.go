@@ -123,7 +123,7 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 		}
 		warmCtx, warmCancel := context.WithTimeout(ctx, repTimeout)
 		if _, err := Complete(warmCtx, nil, base, "", ChatRequest{
-			Model: model, Temperature: 0, MaxTokens: ps.GenTokens, IgnoreEOS: true, Messages: msgs,
+			Model: model, MaxTokens: ps.GenTokens, IgnoreEOS: true, Messages: msgs,
 		}); err != nil {
 			// A failing warmup predicts failing reps; keep a trace instead of
 			// discarding it (BR6) — it lands in Detail below.
@@ -160,7 +160,6 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 		reqCtx, cancel := context.WithTimeout(ctx, repTimeout)
 		comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
 			Model:       model,
-			Temperature: 0,
 			MaxTokens:   ps.GenTokens,
 			OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 			IgnoreEOS:   true, // ask for exactly tg tokens where honored; real code still hits EOS earlier

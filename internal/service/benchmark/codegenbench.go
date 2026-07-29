@@ -146,7 +146,6 @@ func (r *Runner) runCodeGenBench(ctx context.Context, base, model string, p Code
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
 		Model:       model,
-		Temperature: 0,
 		MaxTokens:   r.cfg.MaxTokens,
 		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{

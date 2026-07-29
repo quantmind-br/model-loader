@@ -1,0 +1,21 @@
+# backends/ = 19 checkouts de llama.cpp/sglang/vllm (123 GB, 1,18 M arquivos).
+# Indexá-lo esgota a RAM e trava a máquina — indexe cada backend individualmente se preciso.
+backends/
+
+# Ambientes virtuais e artefatos pesados
+.venv/
+venv/
+site-packages/
+node_modules/
+build/
+build-*/
+_deps/
+
+# Modelos e binários
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.so
+*.so.*

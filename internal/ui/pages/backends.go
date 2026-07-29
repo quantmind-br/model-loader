@@ -100,10 +100,13 @@ type backendsReloadMsg struct{}
 // NewBackendsPage constructs the page wired to a backendschema.Manager.
 func NewBackendsPage(manager *backendschema.Manager) BackendsPage {
 	delegate := list.NewDefaultDelegate()
+	delegate.ShowDescription = false
+	delegate.SetSpacing(0)
 	l := list.New(nil, delegate, 0, 0)
 	l.Title = "Backends"
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
+	l.SetShowPagination(false)
 	l.SetFilteringEnabled(true)
 	return BackendsPage{
 		manager:      manager,
@@ -159,7 +162,7 @@ func (p BackendsPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if mode == theme.LayoutStacked {
 			listH = (m.Height - 2) / 2
 		}
-		p.list.SetSize(listW, max(3, listH))
+		p.list.SetSize(listW, max(3, listH-1))
 		return p, nil
 	case components.FlashClearMsg:
 		p.flash, _ = p.flash.Update(m)
@@ -309,6 +312,8 @@ func (p BackendsPage) Hints() string {
 		return components.ConfirmHints
 	case p.deleteConfirm.Active():
 		return components.ConfirmHints
+	case p.list.FilterState() == list.Filtering:
+		return filteringHints
 	default:
 		hints := "[e] edit  [n] new  [X] del  [D] default  [R] refresh"
 		if p.prober != nil {

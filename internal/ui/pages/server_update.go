@@ -35,7 +35,7 @@ func (p *ServerPage) Reload() tea.Cmd {
 func (p *ServerPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.KeyMsg:
-		if p.proxy != nil {
+		if p.proxy != nil && !p.anyConfirmActive() {
 			cmd, consumed := p.proxy.Update(m)
 			if consumed {
 				return p, cmd
@@ -51,6 +51,16 @@ func (p *ServerPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, p.forwardToConfirms(m))
 		return p, tea.Batch(cmds...)
+	case components.ProxyStopRequestMsg:
+		return p, p.askConfirmStopProxy(m)
+	case serverProxyStopConfirmedMsg:
+		if p.proxy != nil {
+			if m.pid > 0 {
+				p.pm.MarkOperatorStop(m.pid)
+			}
+			return p, p.proxy.ConfirmedStopCmd()
+		}
+		return p, nil
 	case monitorInstancesRefreshedMsg:
 		return p.handleInstancesRefreshed(m)
 	case restartResultMsg:
@@ -106,6 +116,11 @@ func (p *ServerPage) handleKey(m tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if p.forceKillConfirm.Active() {
 		return p, p.handleConfirmForceKillKey(m)
 	}
+	if p.stopProxyConfirm.Active() {
+		var cmd tea.Cmd
+		p.stopProxyConfirm, cmd = p.stopProxyConfirm.Update(m)
+		return p, cmd
+	}
 	if p.restartConfirm.Active() {
 		return p, p.handleConfirmRestartKey(m)
 	}
@@ -143,6 +158,10 @@ func (p *ServerPage) withFlashError(msg string) (tea.Model, tea.Cmd) {
 	return p, cmd
 }
 
+func (p *ServerPage) anyConfirmActive() bool {
+	return p.killConfirm.Active() || p.forceKillConfirm.Active() || p.restartConfirm.Active() || p.stopProxyConfirm.Active()
+}
+
 // forwardToConfirms forwards msg to active confirm forms (so huh's Init /
 // validation Cmds land) and to the underlying table (so navigation keys
 // reach it). Returned by every handler that does NOT short-circuit.
@@ -169,8 +188,16 @@ func (p *ServerPage) forwardToConfirms(msg tea.Msg) tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	}
+	if p.stopProxyConfirm.Active() {
+		var cmd tea.Cmd
+		p.stopProxyConfirm, cmd = p.stopProxyConfirm.Update(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
 	t, tc := p.tbl.Update(msg)
 	p.tbl = t
+	p.refreshRowMarkers()
 	if tc != nil {
 		cmds = append(cmds, tc)
 	}

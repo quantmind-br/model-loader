@@ -129,3 +129,65 @@ func TestConfirm_NoColorStripsForeground(t *testing.T) {
 		t.Errorf("confirm output contains color SGR under NO_COLOR: %q", out)
 	}
 }
+
+// focusConfirm drives the Init Cmd→Msg handshake so huh finishes focusing a
+// button before the view is rendered.
+func focusConfirm(c Confirm) Confirm {
+	if cmd := c.Init(); cmd != nil {
+		if msg := cmd(); msg != nil {
+			c, _ = c.Update(msg)
+		}
+	}
+	return c
+}
+
+func TestConfirm_FocusedButtonCarriesMarkers(t *testing.T) {
+	c := focusConfirm(NewConfirm("ok?", nil, nil, "Kill", "Cancel"))
+	out := c.View()
+	if got := strings.Count(out, ">"); got != 1 {
+		t.Errorf("focused-button open marker count = %d, want 1 in %q", got, out)
+	}
+	if got := strings.Count(out, "<"); got != 1 {
+		t.Errorf("focused-button close marker count = %d, want 1 in %q", got, out)
+	}
+}
+
+func TestConfirmTheme_FocusedButtonUsesSelectedPalette(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	th := confirmTheme()
+	if got := th.Focused.FocusedButton.GetForeground(); got != theme.ColorSelectedFG {
+		t.Errorf("focused button foreground = %v, want %v", got, theme.ColorSelectedFG)
+	}
+	if got := th.Focused.FocusedButton.GetBackground(); got != theme.ColorSelectedBG {
+		t.Errorf("focused button background = %v, want %v", got, theme.ColorSelectedBG)
+	}
+}
+
+func TestConfirm_FooterHasNoKeyList(t *testing.T) {
+	c := focusConfirm(NewConfirm("ok?", nil, nil, "Kill", "Cancel"))
+	out := c.View()
+	if strings.Contains(out, "switch") {
+		t.Errorf("footer still lists the switch key: %q", out)
+	}
+	if strings.Contains(out, "esc cancel") {
+		t.Errorf("footer still lists the esc key: %q", out)
+	}
+	if !strings.Contains(out, "Enter") {
+		t.Errorf("footer lost the Enter focus hint: %q", out)
+	}
+}
+
+func TestConfirm_MarkersSurviveNoColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	theme.RebuildStyles()
+	t.Cleanup(func() {
+		t.Setenv("NO_COLOR", "")
+		theme.RebuildStyles()
+	})
+
+	c := focusConfirm(NewConfirm("ok?", nil, nil, "Kill", "Cancel"))
+	out := c.View()
+	if !strings.Contains(out, ">") || !strings.Contains(out, "<") {
+		t.Errorf("markers dropped under NO_COLOR: %q", out)
+	}
+}

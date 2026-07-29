@@ -130,8 +130,9 @@ type loadedBackend struct {
 	// startTicks is the backend PID's /proc start time, captured at launch.
 	// ensureLoaded uses it (via procutil.SameProcess) to detect a crashed or
 	// PID-recycled backend and relaunch instead of proxying to a corpse (A6).
-	startTicks uint64
-	proxy      *httputil.ReverseProxy
+	startTicks  uint64
+	unavailable atomic.Bool
+	proxy       *httputil.ReverseProxy
 }
 
 // Server is the HTTP proxy. Construct with New; drive via Start/Stop;

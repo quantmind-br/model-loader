@@ -50,10 +50,23 @@ func (m *fsManager) startLivenessWithProbe(interval time.Duration, probe func(do
 					ts := nowUTC
 					inst.Crashed = true
 					inst.ExitedAt = &ts
+					// Operator-intended stop (MarkOperatorStop or Kill). Label so
+					// ExitClass reports "stopped". Consume the flag only for
+					// adopted deaths: owned pids still need killRequested for
+					// waitEnrichment's reason rewrite and maybeScheduleRestart's
+					// A4 guard — Kill deletes it after its own grace window.
+					_, owned := m.hasReaper[pid]
+					_, intentional := m.killRequested[pid]
+					if intentional {
+						inst.ExitReason = domain.ExitReasonOperatorStop
+						if !owned {
+							delete(m.killRequested, pid)
+						}
+					}
 					m.tracked[pid] = inst
 					crashed = append(crashed, inst)
 					// Adopted instances have no reaper to apply restart policy.
-					if _, owned := m.hasReaper[pid]; !owned {
+					if !owned && !intentional {
 						adopted = append(adopted, inst)
 					}
 				}

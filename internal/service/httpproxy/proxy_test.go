@@ -1,12 +1,15 @@
 package httpproxy
 
 import (
+	"context"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -25,7 +28,7 @@ func TestNewReverseProxy_InjectsAuthorization(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	rp := newReverseProxy(backendPort(t, upstream), "sk-unsloth-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", defaultMaxBodyBuffer)
+	rp := newReverseProxy(backendPort(t, upstream), "sk-unsloth-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", defaultMaxBodyBuffer, nil)
 	rec := httptest.NewRecorder()
 	rp.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil))
 
@@ -42,7 +45,7 @@ func TestNewReverseProxy_NoTokenNoHeader(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	rp := newReverseProxy(backendPort(t, upstream), "", defaultMaxBodyBuffer)
+	rp := newReverseProxy(backendPort(t, upstream), "", defaultMaxBodyBuffer, nil)
 	rec := httptest.NewRecorder()
 	rp.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil))
 
@@ -66,7 +69,7 @@ func TestReverseProxy_OversizedResponseNotTruncated(t *testing.T) {
 
 	// maxBodyBuffer = 64 < payload: the normalizer must NOT truncate; the
 	// oversized body streams through untouched.
-	rp := newReverseProxy(backendPort(t, upstream), "", 64)
+	rp := newReverseProxy(backendPort(t, upstream), "", 64, nil)
 	rec := httptest.NewRecorder()
 	rp.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil))
 
@@ -92,7 +95,7 @@ func TestReverseProxy_StreamMirrorsReasoningOnly(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	rp := newReverseProxy(backendPort(t, upstream), "", defaultMaxBodyBuffer)
+	rp := newReverseProxy(backendPort(t, upstream), "", defaultMaxBodyBuffer, nil)
 	rec := httptest.NewRecorder()
 	rp.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil))
 
@@ -105,5 +108,31 @@ func TestReverseProxy_StreamMirrorsReasoningOnly(t *testing.T) {
 	}
 	if !strings.Contains(body, `"finish_reason":"length"`) {
 		t.Fatalf("stream lost original finish reason: %s", body)
+	}
+}
+
+func TestIsBackendUnavailableError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "connection refused",
+			err: &url.Error{Op: "Post", URL: "http://127.0.0.1:1", Err: &net.OpError{
+				Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED,
+			}},
+			want: true,
+		},
+		{name: "EOF before response", err: io.EOF, want: true},
+		{name: "request canceled", err: context.Canceled, want: false},
+		{name: "request deadline", err: context.DeadlineExceeded, want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isBackendUnavailableError(tc.err); got != tc.want {
+				t.Errorf("isBackendUnavailableError(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
 	}
 }

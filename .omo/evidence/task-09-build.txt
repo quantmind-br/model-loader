@@ -1,2 +1,0 @@
-Build: PASS (no errors)
-Vet: PASS (no errors)

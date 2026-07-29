@@ -41,7 +41,6 @@ llamacpp/**/build/
 thoughts/
 
 # Agent / IDE scratch dirs
-.agents/
 .claw/
 .pi/
 
@@ -62,8 +61,8 @@ TUI_AUDIT.md
 # Local config files
 .gitnexusignore
 
-# Auto-generated agent skills
-.claude/skills/gitnexus/
+# Agent skills (managed by tools, not project code)
+.claude/skills
 
 # Temp / logs
 tmp/
@@ -72,3 +71,18 @@ tmp/
 .gitnexus/
 .sisyphus/
 .worktrees
+.agents/
+.omo/
+.hermes/
+.understand-anything/
+
+# Agent / tooling scratch artifacts
+WATCHDOG.yml
+
+# Build artifacts (temporary binaries)
+renameprofile
+# Local Pi runtime state
+.atl/
+
+# Local deepwork progress
+.slim/deepwork/

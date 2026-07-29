@@ -21,6 +21,19 @@ func applyTypeRules(p domain.Profile, schema domain.FlagSchema, rep Report) Repo
 			})
 			continue
 		}
+		// Args values are emitted as a single argv token, so a flag whose value
+		// spans several tokens (`--control-vector-layer-range START END`) can
+		// never be launched correctly from here: the backend reads the next
+		// flag as the missing value. Refuse it with the working alternative
+		// instead of letting the launch fail on the backend side (BUGS.md S15).
+		if spec.Arity > 1 {
+			rep = appendIssue(rep, FieldIssue{
+				Field:    key,
+				Message:  fmt.Sprintf("takes %d space-separated values; supply all %d (the editor then emits them through extra args) or list --%s in extra args, which are passed through verbatim", spec.Arity, spec.Arity, spec.Long),
+				Severity: SeverityError,
+			})
+			continue
+		}
 		if msg := checkType(spec, val); msg != "" {
 			rep = appendIssue(rep, FieldIssue{Field: key, Message: msg, Severity: SeverityError})
 		}
@@ -145,7 +158,25 @@ func splitTrim(s, sep string) []string {
 	return out
 }
 
+// matchesKeyword reports whether val is a string listed in spec.Keywords, i.e.
+// one of the non-numeric literals a numeric flag also accepts ("auto", "all").
+func matchesKeyword(spec domain.FlagSpec, val any) bool {
+	s, ok := val.(string)
+	if !ok {
+		return false
+	}
+	for _, kw := range spec.Keywords {
+		if s == kw {
+			return true
+		}
+	}
+	return false
+}
+
 func checkType(spec domain.FlagSpec, val any) string {
+	if matchesKeyword(spec, val) {
+		return ""
+	}
 	switch spec.Type {
 	case domain.FlagTypeInt:
 		if msg := checkInt(val); msg != "" {
@@ -245,11 +276,25 @@ func applyExtraArgsRules(p domain.Profile, schema domain.FlagSchema, rep Report)
 		}
 
 		flag, _, hasValue := parseExtraArg(arg)
-		// Consume a value supplied as "--flag value" (rather than "--flag=value")
-		// so the next token is not misread as a bare value on the next iteration.
-		// The value itself is not validated — see the passthrough note below.
-		if !hasValue && i+1 < len(p.ExtraArgs) && !strings.HasPrefix(p.ExtraArgs[i+1], "--") {
-			i++
+		spec, known := schema.Lookup(domain.CanonicalFlag(flag))
+		// Consume the value(s) supplied as "--flag value" (rather than
+		// "--flag=value") so the following tokens are not misread as bare values
+		// on the next iteration. A flag with Arity > 1 legitimately owns that
+		// many bare tokens (`--control-vector-layer-range 0 31`) — extra args is
+		// the only path that can express it, so it must not be reported as a
+		// stray bare value (BUGS.md S15). The values themselves are not
+		// validated — see the passthrough note below.
+		if !hasValue {
+			want := 1
+			if known && spec.Arity > 1 {
+				want = spec.Arity
+			}
+			for range want {
+				if i+1 >= len(p.ExtraArgs) || strings.HasPrefix(p.ExtraArgs[i+1], "--") {
+					break
+				}
+				i++
+			}
 		}
 
 		// extraArgs is a raw passthrough to the backend binary: it is emitted
@@ -261,7 +306,7 @@ func applyExtraArgsRules(p domain.Profile, schema domain.FlagSchema, rep Report)
 		// non-blocking warning for flags the schema does not recognize (likely
 		// typos); the args path (applyTypeRules) still fully validates typed
 		// flags, so validation is not weakened for the common case.
-		if _, ok := schema.Lookup(domain.CanonicalFlag(flag)); !ok {
+		if !known {
 			rep = appendIssue(rep, FieldIssue{
 				Field:    flag,
 				Message:  "unknown flag in extra args (not in backend schema)",
@@ -326,9 +371,16 @@ func supportsHFRepo(kind domain.BackendKind) bool {
 	return false
 }
 
-// applyRequiredRules flags any schema flag marked Required that is absent from
-// both Args and ExtraArgs.
+// applyRequiredRules flags a profile with no Model, plus any schema flag marked
+// Required that is absent from both Args and ExtraArgs.
 func applyRequiredRules(p domain.Profile, schema domain.FlagSchema, rep Report) Report {
+	if strings.TrimSpace(p.Model) == "" {
+		rep = appendIssue(rep, FieldIssue{
+			Field:    "model",
+			Message:  "required",
+			Severity: SeverityError,
+		})
+	}
 	for long, spec := range schema.Flags {
 		if !spec.Required {
 			continue

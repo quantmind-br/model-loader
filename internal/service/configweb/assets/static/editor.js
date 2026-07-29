@@ -32,19 +32,23 @@ function toastHost() {
 
 // Read the server-rendered #issues partial and decorate matching fields inline.
 function decorateIssues() {
-  document.querySelectorAll('.field.has-error').forEach(function (f) {
+  document.querySelectorAll('.field.has-error, .field.has-warning').forEach(function (f) {
     f.classList.remove('has-error');
+    f.classList.remove('has-warning');
     var slot = f.querySelector('.field-error');
     if (slot) slot.textContent = '';
   });
   var issues = document.querySelectorAll('#issues .issue[data-field]');
   issues.forEach(function (el) {
     var field = el.getAttribute('data-field');
-    var isErr = el.classList.contains('error');
-    if (!field || !isErr) return;
+    if (!field) return;
+    var cls = el.classList.contains('error') ? 'has-error'
+      : el.classList.contains('warn') ? 'has-warning'
+        : '';
+    if (!cls) return;
     var wrap = document.querySelector('.field[data-field="' + CSS.escape(field) + '"]');
     if (!wrap) return;
-    wrap.classList.add('has-error');
+    wrap.classList.add(cls);
     var slot = wrap.querySelector('.field-error');
     if (slot && !slot.textContent) slot.textContent = el.textContent.replace(/^[^:]*:\s*/, '');
   });

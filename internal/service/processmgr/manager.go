@@ -163,6 +163,20 @@ func (m *fsManager) Close() error {
 	return nil
 }
 
+// MarkOperatorStop records that pid's imminent termination is operator-initiated.
+// Reuses the killRequested intent map, so the death is labelled
+// domain.ExitReasonOperatorStop and the restart policy never resurrects it —
+// exactly as Kill does for a termination this process performs itself. Gated on
+// tracked so a stale flag can never attach to a PID this manager does not know.
+func (m *fsManager) MarkOperatorStop(pid int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.tracked[pid]; !ok {
+		return
+	}
+	m.killRequested[pid] = struct{}{}
+}
+
 // Kill terminates pid and its process group (SIGTERM, 10s grace, then SIGKILL),
 // removes the entry from tracking, and deletes it from the registry via a
 // flock-guarded delta. It is identity-checked (audit A11): a recycled PID is
@@ -219,7 +233,7 @@ func (m *fsManager) Kill(pid int) error {
 		inst.ExitedAt = &now
 		inst.Crashed = true
 		if inst.ExitReason == "" {
-			inst.ExitReason = "killed"
+			inst.ExitReason = domain.ExitReasonOperatorStop
 		}
 		m.appendHistoryLocked(inst, inst.ExitReason, now)
 	}

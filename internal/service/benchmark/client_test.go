@@ -2,6 +2,7 @@ package benchmark
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -280,5 +281,71 @@ func TestComplete_OnDeltaThrottle(t *testing.T) {
 	}
 	if n := calls.Load(); n != 1 {
 		t.Errorf("OnDelta calls = %d, want 1 (throttled within 1s)", n)
+	}
+}
+
+// TestComplete_TemperatureWireContract locks the JSON wire behavior of
+// ChatRequest.Temperature: a nil pointer omits the "temperature" key entirely
+// (so the backend keeps the profile's launched sampling), while a non-nil
+// pointer sends the explicit value — including 0. Flipping completeOnce back to
+// always emitting "temperature" would fail the nil case.
+func TestComplete_TemperatureWireContract(t *testing.T) {
+	var body []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	cases := []struct {
+		name    string
+		temp    *float64
+		wantKey bool
+		wantVal float64
+	}{
+		{name: "nil_omits_key", temp: nil, wantKey: false},
+		{name: "zero_sent_explicitly", temp: new(0.0), wantKey: true, wantVal: 0},
+		{name: "value_sent", temp: new(0.7), wantKey: true, wantVal: 0.7},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body = nil
+			_, err := Complete(context.Background(), srv.Client(), srv.URL, "", ChatRequest{
+				Model:       "m",
+				MaxTokens:   128,
+				Messages:    []ChatMessage{{Role: "user", Content: "hi"}},
+				Temperature: tc.temp,
+			})
+			if err != nil {
+				t.Fatalf("Complete: %v", err)
+			}
+			var m map[string]any
+			if err := json.Unmarshal(body, &m); err != nil {
+				t.Fatalf("decode request body: %v (body=%s)", err, body)
+			}
+			got, ok := m["temperature"]
+			if ok != tc.wantKey {
+				t.Fatalf("temperature present = %v, want %v (body=%s)", ok, tc.wantKey, body)
+			}
+			if !tc.wantKey {
+				// Omission must be temperature-specific: the always-present keys stay,
+				// proving completeOnce dropped only "temperature" and not the whole body.
+				if _, ok := m["max_tokens"]; !ok {
+					t.Errorf("max_tokens missing from body %s", body)
+				}
+				if _, ok := m["model"]; !ok {
+					t.Errorf("model missing from body %s", body)
+				}
+				return
+			}
+			f, isNum := got.(float64)
+			if !isNum {
+				t.Fatalf("temperature = %v (%T), want a JSON number", got, got)
+			}
+			if diff := f - tc.wantVal; diff > 1e-9 || diff < -1e-9 {
+				t.Errorf("temperature = %v, want %v", f, tc.wantVal)
+			}
+		})
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/configweb/assets"
 )
 
 func TestCustomizeModeRendersFlagEditors(t *testing.T) {
@@ -332,5 +333,58 @@ func TestBasePageRendersSavePathAndEditorJS(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("base page missing %s", want)
 		}
+	}
+}
+
+// UIUX-032: htmx's `changed` modifier compares against the triggering element's
+// cached value and suppresses the request when a field is cleared, so #issues
+// kept rendering the verdict for the previous non-empty value.
+func TestEditorFormsRevalidateOnClear(t *testing.T) {
+	for _, name := range []string{"templates/configure.gohtml", "templates/backend.gohtml"} {
+		b, err := assets.FS.ReadFile(name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		src := string(b)
+		if !strings.Contains(src, `novalidate hx-post=`) {
+			t.Errorf("%s: native constraint validation suppresses invalid-field requests", name)
+		}
+		if !strings.Contains(src, `hx-trigger="input delay:300ms"`) {
+			t.Errorf("%s: missing debounced input trigger", name)
+		}
+		if strings.Contains(src, "input changed") {
+			t.Errorf("%s: `changed` modifier suppresses validation when a field is cleared", name)
+		}
+	}
+}
+
+// UIUX-048: the checkbox alone is a 20x20 pointer target. The label must wrap
+// the checkbox and its state text, and must NOT wrap Reset.
+func TestConfigureToggleWrapsCheckboxInLabel(t *testing.T) {
+	s := toggleTestSession(map[string]string{})
+	rec := httptest.NewRecorder()
+	s.handleIndex(rec, httptest.NewRequest("GET", "/", nil))
+	body := rec.Body.String()
+	start := strings.Index(body, `<div class="toggle-field"`)
+	if start < 0 {
+		t.Fatalf("toggle-field wrapper missing: %s", body)
+	}
+	end := strings.Index(body[start:], "</div>")
+	if end < 0 {
+		t.Fatalf("toggle-field wrapper unterminated: %s", body[start:])
+	}
+	block := body[start : start+end]
+	label := strings.Index(block, `<label class="toggle-hit">`)
+	check := strings.Index(block, `type="checkbox"`)
+	closeLabel := strings.Index(block, `</label>`)
+	reset := strings.Index(block, `toggle-reset`)
+	if label < 0 || check < 0 || closeLabel < 0 || reset < 0 {
+		t.Fatalf("toggle markup incomplete: %s", block)
+	}
+	if !(label < check && check < closeLabel) {
+		t.Fatalf("checkbox must sit inside the toggle-hit label: %s", block)
+	}
+	if reset < closeLabel {
+		t.Fatalf("Reset must stay outside the label: %s", block)
 	}
 }

@@ -45,6 +45,15 @@ func main() {
 		ok++
 	}
 
+	// Pattern-C generators emit Presentation: nil, so a regeneration leaves those
+	// schemas without a layout until the next app bootstrap. Reseed here, exactly
+	// as `backend schema refresh` does.
+	if n, err := backendschema.EnsurePresentations(catalogStore, schemaStore); err != nil {
+		logger.Warn("ensure_presentations_failed", "err", err)
+	} else if n > 0 {
+		logger.Info("seeded_presentations", "count", n)
+	}
+
 	fmt.Printf("\nDone: %d OK, %d FAILED out of %d backends\n", ok, fail, len(catalog.Backends))
 	if fail > 0 {
 		os.Exit(1)

@@ -23,7 +23,12 @@ type ChatMessage struct {
 type ChatRequest struct {
 	Model       string        `json:"model"`
 	Messages    []ChatMessage `json:"messages"`
-	Temperature float64       `json:"temperature"`
+	// Temperature is the sampling temperature. Nil omits the field from the
+	// request so the model-under-test inherits the sampling the profile
+	// launched with (llama-server applies its CLI --temperature/--top-p/… to
+	// any omitted field). Non-nil sends an explicit value — used only for the
+	// judge/grader endpoints, which stay deterministic.
+	Temperature *float64      `json:"temperature,omitempty"`
 	MaxTokens   int           `json:"max_tokens"`
 	// IgnoreEOS asks the backend to keep generating until MaxTokens is reached,
 	// suppressing the end-of-sequence stop. llama.cpp, vLLM and SGLang all honor
@@ -87,12 +92,14 @@ func completeOnce(ctx context.Context, doer httpDoer, base, apiKey string, req C
 	payload := map[string]any{
 		"model":       req.Model,
 		"messages":    req.Messages,
-		"temperature": req.Temperature,
 		"max_tokens":  req.MaxTokens,
 		"stream":      true,
 		"stream_options": map[string]any{
 			"include_usage": true,
 		},
+	}
+	if req.Temperature != nil {
+		payload["temperature"] = *req.Temperature
 	}
 	if req.IgnoreEOS {
 		// llama.cpp / vLLM / SGLang all read "ignore_eos"; vLLM additionally honors

@@ -161,7 +161,6 @@ func (r *Runner) runLongContext(ctx context.Context, base, model string) (Proble
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
 		Model:       model,
-		Temperature: 0,
 		MaxTokens:   128,
 		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{

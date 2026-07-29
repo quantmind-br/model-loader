@@ -55,6 +55,7 @@ func (f *fakeManager) GetExitInfo(pid int) (processmgr.ExitInfo, bool) {
 }
 func (f *fakeManager) History() []domain.ExitedInstance { return f.exited }
 func (f *fakeManager) RefreshFromDisk() error           { return nil }
+func (f *fakeManager) MarkOperatorStop(int)             {}
 
 func TestListInstances_TableAndJSON(t *testing.T) {
 	m := &fakeManager{running: []domain.RunningInstance{
@@ -126,5 +127,32 @@ func TestHistory_JSON(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "alpha") {
 		t.Fatalf("history json missing: %q", buf.String())
+	}
+}
+
+func TestInstanceStatus_ExitClass(t *testing.T) {
+	zero := 0
+	tests := []struct {
+		name string
+		ri   domain.RunningInstance
+		want string
+	}{
+		{
+			name: "operator stop",
+			ri:   domain.RunningInstance{Crashed: true, ExitReason: domain.ExitReasonOperatorStop},
+			want: "stopped",
+		},
+		{
+			name: "clean exit",
+			ri:   domain.RunningInstance{Crashed: true, ExitCode: &zero},
+			want: "exited",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := instanceStatus(tt.ri); got != tt.want {
+				t.Errorf("instanceStatus(%+v) = %q, want %q", tt.ri, got, tt.want)
+			}
+		})
 	}
 }

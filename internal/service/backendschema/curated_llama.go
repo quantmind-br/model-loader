@@ -43,7 +43,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		strFlag("model-url", "mu", nil, nil, "Model download URL.", llamaGroupModelLoad, false),
 		boolFlag("offline", "", nil, false, "Forces offline mode using only local cache, with no network.", llamaGroupModelLoad),
 
-		intFlag("ctx-size", "c", nil, 4096, "Context window size; 0 uses the value loaded from the model.", llamaGroupContext, ptrutil.Ptr(0), nil),
+		intFlag("ctx-size", "c", nil, 0, "Context window size; 0 uses the value loaded from the model.", llamaGroupContext, ptrutil.Ptr(0), nil),
 		intFlag("n-predict", "n", []string{"predict"}, -1, "Number of tokens to generate; -1 = infinite generation.", llamaGroupContext, nil, nil),
 		intFlag("batch-size", "b", nil, 2048, "Maximum logical batch size for prompt processing.", llamaGroupContext, ptrutil.Ptr(1), nil),
 		intFlag("ubatch-size", "ub", nil, 512, "Maximum physical micro-batch size (throughput/memory tuning).", llamaGroupContext, ptrutil.Ptr(1), nil),
@@ -58,9 +58,10 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		strFlag("cpu-strict", "", nil, "0", "Use strict CPU placement.", llamaGroupCPU, false),
 		strFlag("cpu-range", "Cr", nil, nil, "Range of CPUs for affinity (lo-hi). Complements --cpu-mask.", llamaGroupCPU, false),
 
-		boolFlag("mlock", "", nil, false, "Keeps the model in RAM, avoiding swap.", llamaGroupMemory),
-		boolFlag("mmap", "", []string{"no-mmap"}, true, "Model memory mapping; disabling it may reduce pageouts but makes loading slower.", llamaGroupMemory),
-		boolFlag("direct-io", "dio", []string{"no-direct-io"}, false, "Uses Direct I/O when available.", llamaGroupMemory),
+		boolFlag("mlock", "", nil, false, "DEPRECATED in favor of --load-mode: keeps the model in RAM, avoiding swap.", llamaGroupMemory),
+		boolFlag("mmap", "", []string{"no-mmap"}, true, "DEPRECATED in favor of --load-mode: model memory mapping; disabling it may reduce pageouts but makes loading slower.", llamaGroupMemory),
+		boolFlag("direct-io", "dio", []string{"no-direct-io"}, false, "DEPRECATED in favor of --load-mode: uses Direct I/O when available.", llamaGroupMemory),
+		enumFlag("load-mode", "lm", nil, []string{"none", "mmap", "mlock", "mmap+mlock", "dio"}, "mmap", "Model loading mode (replaces --mlock/--mmap/--direct-io).", llamaGroupMemory),
 		boolFlag("repack", "", []string{"no-repack"}, true, "Enables/disables weight repacking.", llamaGroupMemory),
 		boolFlag("op-offload", "", []string{"no-op-offload"}, true, "Offloads tensor operations from host to device.", llamaGroupMemory),
 		boolFlag("no-host", "", nil, false, "Bypasses the host buffer to allow extra buffers.", llamaGroupMemory),
@@ -68,7 +69,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 
 		strFlag("device", "dev", nil, nil, "Selects the devices used for offload.", llamaGroupDevice, false),
 		boolFlag("list-devices", "", nil, false, "Lists available devices and exits.", llamaGroupDevice),
-		intFlag("n-gpu-layers", "ngl", []string{"gpu-layers"}, -1, "Number of model layers moved to VRAM; accepts integer, auto, or all.", llamaGroupDevice, ptrutil.Ptr(-1), ptrutil.Ptr(9999)),
+		withKeywords(intFlag("n-gpu-layers", "ngl", []string{"gpu-layers"}, -1, "Number of model layers moved to VRAM; accepts an exact integer, auto (-1), or all (-2).", llamaGroupDevice, ptrutil.Ptr(-2), ptrutil.Ptr(9999)), "auto", "all"),
 		enumFlag("flash-attn", "fa", nil, []string{"on", "off", "auto"}, "auto", "Flash Attention mode.", llamaGroupDevice),
 		enumFlag("split-mode", "sm", nil, []string{"none", "layer", "row", "tensor"}, "layer", "How to split the model across multiple GPUs.", llamaGroupDevice),
 		strFlag("tensor-split", "ts", nil, nil, "Offload ratio across GPUs (e.g. 3,1).", llamaGroupDevice, false),
@@ -86,7 +87,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		boolFlag("kv-unified", "kvu", []string{"no-kv-unified"}, true, "Use a single unified KV buffer shared across all sequences.", llamaGroupKV),
 		floatFlag("defrag-thold", "dt", nil, nil, "KV cache defragmentation threshold (DEPRECATED).", llamaGroupKV, nil, nil),
 
-		enumFlag("rope-scaling", "", nil, []string{"none", "linear", "yarn"}, "none", "RoPE frequency scaling method.", llamaGroupRope),
+		enumFlag("rope-scaling", "", nil, []string{"none", "linear", "yarn"}, nil, "RoPE frequency scaling method; unset defers to the model (linear otherwise).", llamaGroupRope),
 		floatFlag("rope-scale", "", nil, nil, "Context expansion factor via RoPE.", llamaGroupRope, nil, nil),
 		floatFlag("rope-freq-base", "", nil, nil, "RoPE base frequency (NTK-aware scaling).", llamaGroupRope, nil, nil),
 		floatFlag("rope-freq-scale", "", nil, nil, "Frequency scaling factor; expands context by 1/N.", llamaGroupRope, nil, nil),
@@ -124,7 +125,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		intFlag("dry-allowed-length", "", nil, 2, "Tolerated length before DRY applies.", llamaGroupPenalties, ptrutil.Ptr(0), nil),
 		intFlag("dry-penalty-last-n", "", nil, -1, "DRY window; -1 = full context.", llamaGroupPenalties, nil, nil),
 		strFlag("dry-sequence-breaker", "", nil, "\\n, :, \", *", "Breaks that reset DRY.", llamaGroupPenalties, false),
-		enumFlag("mirostat", "", nil, []string{"0", "1", "2"}, 0, "Mirostat mode; 0 disables it.", llamaGroupPenalties),
+		intFlag("mirostat", "", nil, 0, "Mirostat mode; 0 disables it.", llamaGroupPenalties, ptrutil.Ptr(0), ptrutil.Ptr(2)),
 		floatFlag("mirostat-lr", "", nil, 0.1, "Mirostat learning rate (eta).", llamaGroupPenalties, nil, nil),
 		floatFlag("mirostat-ent", "", nil, 5.0, "Mirostat target entropy (tau).", llamaGroupPenalties, nil, nil),
 		floatFlag("dynatemp-range", "", nil, 0.0, "Dynamic temperature range; 0.0 disables it.", llamaGroupPenalties, ptrutil.Ptr(0.0), nil),
@@ -140,19 +141,24 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		strFlag("chat-template", "", nil, nil, "Defines the chat template (embedded or customized).", llamaGroupChat, false),
 		strFlag("chat-template-file", "", nil, nil, "Reads the chat template from a Jinja file.", llamaGroupChat, false),
 		strFlag("chat-template-kwargs", "", nil, nil, "Extra JSON arguments for the template parser.", llamaGroupChat, false),
-		boolFlag("jinja", "", []string{"no-jinja"}, false, "Toggles the Jinja engine for chat.", llamaGroupChat),
+		boolFlag("jinja", "", []string{"no-jinja"}, true, "Toggles the Jinja engine for chat.", llamaGroupChat),
 		boolFlag("skip-chat-parsing", "", nil, false, "Forces pure content parsing, without structural parsing.", llamaGroupChat),
 		boolFlag("prefill-assistant", "", []string{"no-prefill-assistant"}, true, "Controls response prefill when the last message is already from the assistant.", llamaGroupChat),
 		intFlag("reasoning-budget", "", nil, -1, "Token budget for thinking: -1 = unrestricted, 0 = immediate end, N>0 = budget.", llamaGroupChat, nil, nil),
 		enumFlag("reasoning", "rea", nil, []string{"on", "off", "auto"}, "auto", "Reasoning/thinking mode in chat.", llamaGroupChat),
 		enumFlag("reasoning-format", "", nil, []string{"none", "deepseek", "deepseek-legacy", "auto"}, "auto", "How thought tags are parsed and returned.", llamaGroupChat),
 		strFlag("reasoning-budget-message", "", nil, nil, "Message injected before the end-of-thinking tag when the reasoning budget is exhausted.", llamaGroupChat, false),
+		boolFlag("reasoning-preserve", "", []string{"no-reasoning-preserve"}, false, "Preserve the reasoning trace in the full history, not just the last assistant message (requires a template with 'supports_preserve_reasoning'); unset defers to the template default.", llamaGroupChat),
 
 		strFlag("host", "", nil, "127.0.0.1", "Server listen address.", llamaGroupHTTP, false),
 		portFlag("port", "", 8080, "HTTP server port.", llamaGroupHTTP),
 		boolFlag("reuse-port", "", nil, false, "Allows multiple sockets on the same port.", llamaGroupHTTP),
 		strFlag("api-prefix", "", nil, "", "API route prefix (no trailing slash).", llamaGroupHTTP, false),
 		strFlag("path", "", nil, nil, "Directory of static files to serve.", llamaGroupHTTP, false),
+		strFlag("cors-origins", "", nil, "*", "Comma-separated list of allowed CORS origins; special value 'localhost' reflects the Origin header only when it is localhost.", llamaGroupHTTP, false),
+		strFlag("cors-methods", "", nil, "GET, POST, DELETE, OPTIONS", "Comma-separated list of allowed CORS methods.", llamaGroupHTTP, false),
+		strFlag("cors-headers", "", nil, "*", "Comma-separated list of allowed CORS headers.", llamaGroupHTTP, false),
+		boolFlag("cors-credentials", "", []string{"no-cors-credentials"}, true, "Allow credentials for CORS; if enabled while --cors-origins is '*', the Origin header is echoed back and credentials are always allowed.", llamaGroupHTTP),
 		boolFlag("ui", "", []string{"webui", "no-ui", "no-webui"}, true, "Toggles the web interface.", llamaGroupHTTP),
 		strFlag("webui-config", "", []string{"ui-config"}, nil, "Overrides default UI settings.", llamaGroupHTTP, false),
 		strFlag("webui-config-file", "", []string{"ui-config-file"}, nil, "Loads UI settings from a JSON file.", llamaGroupHTTP, false),
@@ -160,13 +166,15 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		strFlag("api-key-file", "", nil, nil, "Reads authentication keys from a file.", llamaGroupHTTP, false),
 		strFlag("ssl-key-file", "", nil, nil, "SSL private key.", llamaGroupHTTP, false),
 		strFlag("ssl-cert-file", "", nil, nil, "SSL certificate.", llamaGroupHTTP, false),
+		strFlag("mcp-servers-config", "", nil, nil, "Experimental: path to JSON file with MCP server definitions (Cursor-compatible).", llamaGroupHTTP, false),
+		strFlag("mcp-servers-json", "", nil, nil, "Experimental: inline JSON with MCP server definitions (Cursor-compatible).", llamaGroupHTTP, false),
 		intFlag("timeout", "to", nil, 3600, "Read/write timeout (seconds).", llamaGroupHTTP, ptrutil.Ptr(0), nil),
 		intFlag("threads-http", "", nil, -1, "Threads for HTTP requests; -1 = automatic.", llamaGroupHTTP, nil, nil),
 		boolFlag("metrics", "", nil, false, "Prometheus-compatible metrics endpoint.", llamaGroupHTTP),
 		boolFlag("perf", "", []string{"no-perf"}, false, "Whether to enable internal libllama performance timings.", llamaGroupHTTP),
 		boolFlag("slots", "", []string{"no-slots"}, true, "Exposes slot monitoring endpoint.", llamaGroupHTTP),
 		boolFlag("props", "", nil, false, "Allows changing global properties via POST /props.", llamaGroupHTTP),
-		intFlag("parallel", "np", nil, 1, "Parallel server slots; -1 = automatic.", llamaGroupHTTP, nil, nil),
+		intFlag("parallel", "np", nil, -1, "Parallel server slots; -1 = automatic.", llamaGroupHTTP, nil, nil),
 		boolFlag("cont-batching", "cb", []string{"no-cont-batching"}, true, "Enables/disables continuous batching.", llamaGroupHTTP),
 		boolFlag("cache-prompt", "", []string{"no-cache-prompt"}, true, "Enables prompt reuse/cache.", llamaGroupHTTP),
 		intFlag("cache-reuse", "", nil, 0, "Minimum chunk size for attempting reuse via KV shifting.", llamaGroupHTTP, ptrutil.Ptr(0), nil),
@@ -196,7 +204,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		boolFlag("lora-init-without-apply", "", nil, false, "Loads LoRA without applying it.", llamaGroupLora),
 		strFlag("control-vector", "", nil, nil, "Control vector(s).", llamaGroupLora, false),
 		strFlag("control-vector-scaled", "", nil, nil, "Control vector with scale in FILE:SCALE format.", llamaGroupLora, false),
-		strFlag("control-vector-layer-range", "", nil, nil, "Layer range applied to control vectors.", llamaGroupLora, false),
+		withArity(strFlag("control-vector-layer-range", "", nil, nil, "Layer range applied to control vectors; START END.", llamaGroupLora, false), 2),
 
 		listEnumFlag("spec-type", "", nil, []string{"none", "draft-simple", "draft-eagle3", "draft-mtp", "draft-dflash", "ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod", "ngram-cache"}, "none", "Speculative decoding type (comma-separated list, e.g. draft-mtp,ngram-mod).", llamaGroupSpeculative),
 		strFlag("spec-draft-model", "md", []string{"model-draft"}, nil, "Draft model.", llamaGroupSpeculative, false),
@@ -206,7 +214,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		floatFlag("spec-draft-p-split", "", nil, 0.1, "Split probability.", llamaGroupSpeculative, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
 		floatFlag("spec-draft-p-min", "", nil, 0.0, "Minimum probability for the greedy path.", llamaGroupSpeculative, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
 		strFlag("spec-draft-device", "", nil, nil, "Draft devices; follows --device by default.", llamaGroupSpeculative, false),
-		strFlag("spec-draft-ngl", "", nil, 0, "Draft layers in VRAM; accepts integer, auto, or all.", llamaGroupSpeculative, false),
+		withKeywords(intFlag("spec-draft-ngl", "", nil, -1, "Draft layers in VRAM; accepts an exact integer, auto (-1), or all (-2).", llamaGroupSpeculative, ptrutil.Ptr(-2), ptrutil.Ptr(9999)), "auto", "all"),
 		intFlag("spec-draft-threads", "", nil, nil, "Draft CPU threads; follows --threads by default.", llamaGroupSpeculative, ptrutil.Ptr(0), nil),
 		boolFlag("spec-draft-backend-sampling", "", []string{"no-spec-draft-backend-sampling"}, true, "Offload draft sampling to the backend.", llamaGroupSpeculative),
 		intFlag("spec-ngram-mod-n-min", "", nil, 48, "Minimum tokens for ngram-mod speculative decoding.", llamaGroupSpeculative, ptrutil.Ptr(0), nil),
@@ -246,6 +254,12 @@ func boolFlag(long, short string, aliases []string, def bool, help, group string
 	return domain.FlagSpec{Long: long, Short: short, Aliases: aliases, Type: domain.FlagTypeBool, Default: def, HelpText: help, Group: group}
 }
 
+// boolFlagAuto describes a tri-state backend boolean: when unset the backend
+// resolves the value itself, so no concrete default is advertised.
+func boolFlagAuto(long, short string, aliases []string, help, group string) domain.FlagSpec {
+	return domain.FlagSpec{Long: long, Short: short, Aliases: aliases, Type: domain.FlagTypeBool, HelpText: help, Group: group}
+}
+
 func intFlag(long, short string, aliases []string, def any, help, group string, min, max *int) domain.FlagSpec {
 	return domain.FlagSpec{Long: long, Short: short, Aliases: aliases, Type: domain.FlagTypeInt, Default: def, HelpText: help, Group: group, Min: min, Max: max}
 }
@@ -256,6 +270,15 @@ func floatFlag(long, short string, aliases []string, def any, help, group string
 
 func strFlag(long, short string, aliases []string, def any, help, group string, required bool) domain.FlagSpec {
 	return domain.FlagSpec{Long: long, Short: short, Aliases: aliases, Type: domain.FlagTypeString, Default: def, HelpText: help, Group: group, Required: required}
+}
+
+// withArity marks a curated flag whose value occupies n argv tokens, e.g.
+// `--control-vector-layer-range START END`. Arity is per-binary, so it is
+// declared at the call site of the fork that parses the flag that way rather
+// than derived from the flag name (BUGS.md S15).
+func withArity(spec domain.FlagSpec, n int) domain.FlagSpec {
+	spec.Arity = n
+	return spec
 }
 
 func enumFlag(long, short string, aliases []string, values []string, def any, help, group string) domain.FlagSpec {
@@ -276,6 +299,16 @@ func portFlag(long, short string, def int, help, group string) domain.FlagSpec {
 	return domain.FlagSpec{Long: long, Short: short, Type: domain.FlagTypeInt, Default: def, HelpText: help, Group: group, Min: ptrutil.Ptr(1), Max: ptrutil.Ptr(65535), IsPort: true}
 }
 
+// withKeywords marks a numeric flag as also accepting a fixed set of
+// non-numeric literals via FlagSpec.Keywords, so the validator lets those
+// strings through the type and range checks. llama.cpp's two "-ngl" flags
+// parse "auto" as -1 and "all" as -2 but otherwise require an integer
+// (common/arg.cpp), so neither a plain int nor a plain string models them.
+func withKeywords(spec domain.FlagSpec, keywords ...string) domain.FlagSpec {
+	spec.Keywords = keywords
+	return spec
+}
+
 func llamaCacheTypes() []string {
 	return []string{"f32", "f16", "bf16", "q8_0", "q4_0", "q4_1", "iq4_nl", "q5_0", "q5_1"}
 }
@@ -286,7 +319,7 @@ func llamaPresentation() *domain.Presentation {
 		{Name: llamaGroupModelLoad, Flags: []string{"hf-repo", "hf-file", "hf-token", "model-url", "offline", "override-kv"}},
 		{Name: llamaGroupContext, Flags: []string{"ctx-size", "n-predict", "batch-size", "ubatch-size", "keep"}},
 		{Name: llamaGroupCPU, Flags: []string{"threads", "threads-batch", "poll", "prio", "numa", "cpu-mask", "cpu-range", "cpu-strict"}},
-		{Name: llamaGroupMemory, Flags: []string{"mlock", "mmap", "direct-io", "repack", "op-offload", "no-host", "check-tensors"}},
+		{Name: llamaGroupMemory, Flags: []string{"mlock", "mmap", "direct-io", "load-mode", "repack", "op-offload", "no-host", "check-tensors"}},
 		{Name: llamaGroupDevice, Flags: []string{"device", "list-devices", "n-gpu-layers", "flash-attn", "split-mode", "tensor-split", "main-gpu", "fit", "fit-target", "fit-ctx", "cpu-moe", "n-cpu-moe", "override-tensor"}},
 		{Name: llamaGroupKV, Flags: []string{"kv-offload", "cache-type-k", "cache-type-v", "kv-unified", "defrag-thold"}},
 		{Name: llamaGroupRope, Flags: []string{"rope-scaling", "rope-scale", "rope-freq-base", "rope-freq-scale", "yarn-orig-ctx", "yarn-ext-factor", "yarn-attn-factor", "yarn-beta-slow", "yarn-beta-fast"}},
@@ -294,8 +327,8 @@ func llamaPresentation() *domain.Presentation {
 		{Name: llamaGroupSamplers, Flags: []string{"samplers", "sampler-seq", "seed", "temperature", "top-k", "top-p", "min-p", "typical-p", "top-n-sigma", "xtc-probability", "xtc-threshold", "ignore-eos", "backend-sampling", "logit-bias"}},
 		{Name: llamaGroupPenalties, Flags: []string{"repeat-last-n", "repeat-penalty", "presence-penalty", "frequency-penalty", "dry-multiplier", "dry-base", "dry-allowed-length", "dry-penalty-last-n", "dry-sequence-breaker", "mirostat", "mirostat-lr", "mirostat-ent", "dynatemp-range", "dynatemp-exp", "adaptive-target", "adaptive-decay"}},
 		{Name: llamaGroupGrammar, Flags: []string{"grammar", "grammar-file", "json-schema", "json-schema-file"}},
-		{Name: llamaGroupChat, Flags: []string{"chat-template", "chat-template-file", "chat-template-kwargs", "jinja", "skip-chat-parsing", "prefill-assistant", "reasoning", "reasoning-format", "reasoning-budget", "reasoning-budget-message"}},
-		{Name: llamaGroupHTTP, Flags: []string{"host", "port", "reuse-port", "api-prefix", "path", "ui", "webui-config", "webui-config-file", "api-key", "api-key-file", "ssl-key-file", "ssl-cert-file", "timeout", "sse-ping-interval", "threads-http", "metrics", "perf", "slots", "props", "parallel", "cont-batching", "cache-prompt", "cache-reuse", "cache-ram", "cache-idle-slots", "slot-prompt-similarity", "sleep-idle-seconds", "alias", "tags"}},
+		{Name: llamaGroupChat, Flags: []string{"chat-template", "chat-template-file", "chat-template-kwargs", "jinja", "skip-chat-parsing", "prefill-assistant", "reasoning", "reasoning-format", "reasoning-budget", "reasoning-budget-message", "reasoning-preserve"}},
+		{Name: llamaGroupHTTP, Flags: []string{"host", "port", "reuse-port", "api-prefix", "path", "cors-origins", "cors-methods", "cors-headers", "cors-credentials", "ui", "webui-config", "webui-config-file", "api-key", "api-key-file", "ssl-key-file", "ssl-cert-file", "mcp-servers-config", "mcp-servers-json", "timeout", "sse-ping-interval", "threads-http", "metrics", "perf", "slots", "props", "parallel", "cont-batching", "cache-prompt", "cache-reuse", "cache-ram", "cache-idle-slots", "slot-prompt-similarity", "sleep-idle-seconds", "alias", "tags"}},
 		{Name: llamaGroupMultimodal, Flags: []string{"mmproj", "mmproj-url", "mmproj-auto", "mmproj-offload", "image-min-tokens", "image-max-tokens", "mtmd-batch-max-tokens"}},
 		{Name: llamaGroupEmbeddings, Flags: []string{"embeddings", "pooling", "embd-normalize", "reranking"}},
 		{Name: llamaGroupLora, Flags: []string{"lora", "lora-scaled", "lora-init-without-apply", "control-vector", "control-vector-scaled", "control-vector-layer-range"}},

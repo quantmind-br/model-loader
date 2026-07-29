@@ -47,7 +47,7 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 		strFlag("docker-repo", "", nil, nil, "Docker repository used by integrated buun fork flows.", buunGroupModelLoad, false),
 		boolFlag("offline", "", nil, false, "Forces offline mode using only local cache, with no network.", buunGroupModelLoad),
 
-		intFlag("ctx-size", "c", nil, 4096, "Context window size; 0 uses the value loaded from the model.", buunGroupContext, ptrutil.Ptr(0), nil),
+		intFlag("ctx-size", "c", nil, 0, "Context window size; 0 uses the value loaded from the model.", buunGroupContext, ptrutil.Ptr(0), nil),
 		intFlag("n-predict", "n", []string{"predict"}, -1, "Number of tokens to generate; -1 = infinite generation.", buunGroupContext, nil, nil),
 		intFlag("batch-size", "b", nil, 2048, "Maximum logical batch size for prompt processing.", buunGroupContext, ptrutil.Ptr(1), nil),
 		intFlag("ubatch-size", "ub", nil, 512, "Maximum physical micro-batch size (throughput/memory tuning).", buunGroupContext, ptrutil.Ptr(1), nil),
@@ -69,7 +69,7 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 
 		strFlag("device", "dev", nil, nil, "Selects the devices used for offload.", buunGroupDevice, false),
 		boolFlag("list-devices", "", nil, false, "Lists available devices and exits.", buunGroupDevice),
-		strFlag("n-gpu-layers", "ngl", []string{"gpu-layers"}, 0, "Number of model layers moved to VRAM; accepts integer, auto, or all.", buunGroupDevice, false),
+		withKeywords(intFlag("n-gpu-layers", "ngl", []string{"gpu-layers"}, -1, "Number of model layers moved to VRAM; accepts an exact integer, auto (-1), or all (-2).", buunGroupDevice, ptrutil.Ptr(-2), ptrutil.Ptr(9999)), "auto", "all"),
 		enumFlag("split-mode", "sm", nil, []string{"none", "layer", "row", "tensor"}, "layer", "How to split the model across multiple GPUs.", buunGroupDevice),
 		strFlag("tensor-split", "ts", nil, nil, "Offload ratio across GPUs (e.g. 3,1).", buunGroupDevice, false),
 		intFlag("main-gpu", "mg", nil, 0, "Main GPU for the model/intermediate results (depends on split mode).", buunGroupDevice, ptrutil.Ptr(0), nil),
@@ -81,7 +81,7 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 		enumFlag("cache-type-k", "ctk", nil, buunCacheTypes(), "f16", "K cache data type, including buun fork turbo formats.", buunGroupKV),
 		enumFlag("cache-type-v", "ctv", nil, buunCacheTypes(), "f16", "V cache data type, including buun fork turbo formats.", buunGroupKV),
 
-		enumFlag("rope-scaling", "", nil, []string{"none", "linear", "yarn"}, "none", "RoPE frequency scaling method.", buunGroupRope),
+		enumFlag("rope-scaling", "", nil, []string{"none", "linear", "yarn"}, nil, "RoPE frequency scaling method; unset defers to the model (linear otherwise).", buunGroupRope),
 		floatFlag("rope-scale", "", nil, nil, "Context expansion factor via RoPE.", buunGroupRope, nil, nil),
 		floatFlag("rope-freq-base", "", nil, nil, "RoPE base frequency (NTK-aware scaling).", buunGroupRope, nil, nil),
 		floatFlag("rope-freq-scale", "", nil, nil, "Frequency scaling factor; expands context by 1/N.", buunGroupRope, nil, nil),
@@ -120,7 +120,7 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 		intFlag("dry-allowed-length", "", nil, 2, "Tolerated length before DRY applies.", buunGroupPenalties, ptrutil.Ptr(0), nil),
 		intFlag("dry-penalty-last-n", "", nil, -1, "DRY window; -1 = full context.", buunGroupPenalties, nil, nil),
 		strFlag("dry-sequence-breaker", "", nil, "\\n, :, \", *", "Breaks that reset DRY.", buunGroupPenalties, false),
-		enumFlag("mirostat", "", nil, []string{"0", "1", "2"}, 0, "Mirostat mode; 0 disables it.", buunGroupPenalties),
+		intFlag("mirostat", "", nil, 0, "Mirostat mode; 0 disables it.", buunGroupPenalties, ptrutil.Ptr(0), ptrutil.Ptr(2)),
 		floatFlag("mirostat-lr", "", nil, 0.1, "Mirostat learning rate (eta).", buunGroupPenalties, nil, nil),
 		floatFlag("mirostat-ent", "", nil, 5.0, "Mirostat target entropy (tau).", buunGroupPenalties, nil, nil),
 		floatFlag("dynatemp-range", "", nil, 0.0, "Dynamic temperature range; 0.0 disables it.", buunGroupPenalties, ptrutil.Ptr(0.0), nil),
@@ -191,7 +191,7 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 		boolFlag("lora-init-without-apply", "", nil, false, "Loads LoRA without applying it.", buunGroupLora),
 		strFlag("control-vector", "", nil, nil, "Control vector(s).", buunGroupLora, false),
 		strFlag("control-vector-scaled", "", nil, nil, "Control vector with scale in FILE:SCALE format.", buunGroupLora, false),
-		strFlag("control-vector-layer-range", "", nil, nil, "Layer range applied to control vectors.", buunGroupLora, false),
+		withArity(strFlag("control-vector-layer-range", "", nil, nil, "Layer range applied to control vectors; START END.", buunGroupLora, false), 2),
 
 		listEnumFlag("spec-type", "", nil, []string{"none", "draft-simple", "draft-eagle3", "draft-mtp", "ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod", "ngram-cache", "suffix", "copyspec", "recycle", "dflash"}, "none", "Speculative decoding type (comma-separated list, e.g. dflash,ngram-mod).", buunGroupSpeculative),
 		strFlag("spec-draft-model", "md", nil, nil, "Draft model.", buunGroupSpeculative, false),
@@ -201,7 +201,7 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 		floatFlag("spec-draft-p-split", "", nil, 0.1, "Split probability.", buunGroupSpeculative, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
 		floatFlag("spec-draft-p-min", "", nil, 0.75, "Minimum probability for the greedy path.", buunGroupSpeculative, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
 		strFlag("spec-draft-device", "", nil, nil, "Draft devices; follows --device by default.", buunGroupSpeculative, false),
-		strFlag("spec-draft-ngl", "", nil, 0, "Draft layers in VRAM; accepts integer, auto, or all.", buunGroupSpeculative, false),
+		withKeywords(intFlag("spec-draft-ngl", "", nil, -1, "Draft layers in VRAM; accepts an exact integer, auto (-1), or all (-2).", buunGroupSpeculative, ptrutil.Ptr(-2), ptrutil.Ptr(9999)), "auto", "all"),
 		intFlag("spec-draft-threads", "", nil, nil, "Draft CPU threads; follows --threads by default.", buunGroupSpeculative, ptrutil.Ptr(0), nil),
 		boolFlag("spec-draft-backend-sampling", "", []string{"no-spec-draft-backend-sampling"}, false, "Draft sampling in the backend.", buunGroupSpeculative),
 		enumFlag("cache-type-k-draft", "", nil, buunCacheTypes(), "f16", "K cache data type used by the draft model.", buunGroupSpeculative),

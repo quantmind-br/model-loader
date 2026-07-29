@@ -142,12 +142,21 @@ per-token cross-GPU exchange is bandwidth-bound, not P2P-limited. **Draft-split 
 
 ## unsloth
 
-Installed **unsloth 2026.6.7** (+ `unsloth_zoo 2026.6.5`) at `~/.unsloth/studio` (source:
-`~/.unsloth/studio/unsloth_studio/lib/python3.13/site-packages/unsloth-2026.6.7.dist-info/METADATA`).
+Supported policy on this rig is **single-GPU pinning**: set `launch.env` to
+`CUDA_DEVICE_ORDER=PCI_BUS_ID` and `CUDA_VISIBLE_DEVICES=1`. The mask remaps the visible card to
+`cuda:0` inside the worker, so do not add a second device-selection flag. Auth readiness is captured
+from the managed log. If the model overflows one card, choose a smaller quant or move the GGUF to
+llama.cpp for real pooling.
 
-Single-GPU only; pin via `launch.env` (`CUDA_DEVICE_ORDER=PCI_BUS_ID` + `CUDA_VISIBLE_DEVICES=1`).
-Auth token is captured from the log automatically. Overflow → pick a smaller quant or move the
-GGUF to llama.cpp for real pooling.
+Do not enable Unsloth `tensor-parallel` or leave both GPUs visible for a normal profile. The
+supported policy remains single-GPU pinning. If the user explicitly requests **GGUF-only** TP
+research, all conditions are required: both GPUs must be visible, `args["tensor-parallel"] = true`,
+and `extraArgs: ["--tensor-split", "0.5,0.5"]`. The typed flag emits `--split-mode tensor`; the
+startup command/log must prove both `--split-mode tensor` and the final effective
+`--tensor-split 0.5,0.5`. If either is absent, classify TP as not engaged. Then run long/non-English
+and tool-correctness tests. This is an intentional exception subject to the `ExtraArgs` safety rules
+in `unsloth.md`; it does not permit model, port, host, auth/TLS, UI, or other wrapper-owned
+arguments.
 
 ## Pin-per-GPU (two models at once) — the recommended agent default
 

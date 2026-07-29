@@ -92,7 +92,7 @@ Apply the diff to the file(s) for the kind's pattern:
 - **B:** edit `curated_vllm.go` / `curated_sglang.go` directly (the sole flag source).
 - **C:** edit the row slice in `dflashhelp.go` / `unslothhelp.go` / `tabbyhelp.go`, and bump that package's pinned version id (e.g. `embedded-dflash-v3` → `-v4`) plus its tracking comment (commit/version).
 
-Rules: keep all descriptions, labels, group names in **English** (project rule). Do **not** hand-edit a schema JSON's `presentation`/`rules` blocks on disk (web Customize mode owns those; `RefreshSchema` preserves them when `source.editable=true`). Mirror any persisted-profile-structure change into `docs/profile-schema.json`.
+Rules: keep all descriptions, labels, group names in **English** (project rule). Do **not** hand-edit a schema JSON's `presentation`/`rules` blocks on disk — web Customize mode owns those, and a hand edit without `source.customized: true` is discarded by the next regeneration (step 6). Mirror any persisted-profile-structure change into `docs/profile-schema.json`.
 
 ## 5. Reconcile Essentials from the configured schemas
 
@@ -114,7 +114,7 @@ Where Essentials are **persisted in code** depends on the pattern:
 |---|---|---|
 | `llama-server` | `hf-repo, ctx-size, host, port, n-gpu-layers, device, parallel, threads, batch-size, ubatch-size, cache-type-k, cache-type-v, cont-batching, api-key, alias` | `llamaPresentation()` |
 | `beellama-cpp` | `n-gpu-layers, ctx-size, host, port, batch-size, ubatch-size, flash-attn, cache-type-k, cache-type-v, cache-ram, kv-unified, mmproj, jinja, reasoning, spec-type, spec-draft-hf, spec-draft-model, spec-draft-ngl, spec-dflash-cross-ctx, spec-dflash-max-slots` | `BeeLlamaPresentation()` |
-| `buun-llama-cpp` | `hf-repo, hf-token, ctx-size, host, port, n-gpu-layers, device, parallel, threads, batch-size, ubatch-size, cache-type-k, cache-type-v, cache-ram, kv-unified, cont-batching, api-key, alias` | `BuunPresentation()` (no configured schema on disk — Go is the only authority) |
+| `buun-llama-cpp` | `hf-repo, hf-token, ctx-size, host, port, n-gpu-layers, device, parallel, threads, batch-size, ubatch-size, cache-type-k, cache-type-v, cache-ram, kv-unified, cont-batching, api-key, alias` | `BuunPresentation()` |
 | `vllm` | `host, port, api-key, served-model-name, dtype, max-model-len, quantization, tensor-parallel-size, gpu-memory-utilization, kv-cache-dtype, enable-prefix-caching, max-num-batched-tokens, max-num-seqs, enable-chunked-prefill, uvicorn-log-level` | `vllmPresentation()` |
 | `ik-llama-cpp` | `ctx-size, host, port, n-gpu-layers, split-mode, tensor-split, threads, batch-size, ubatch-size, flash-attn, mla-use, cache-type-k, cache-type-v, run-time-repack, override-tensor, n-cpu-moe, smart-expert-reduction, parallel, cont-batching, api-key, alias` | `IkLlamaPresentation()` |
 | `sglang` | `served-model-name, host, port, api-key, context-length, dtype, quantization, kv-cache-dtype, mem-fraction-static, max-running-requests, max-total-tokens, tensor-parallel-size, tp-size, pipeline-parallel-size, data-parallel-size, device, enable-multimodal, chat-template` | `sglangPresentation()` |
@@ -135,7 +135,8 @@ When step 4 **adds** a flag the operator should reach quickly (a headline launch
   - if the build number advanced, also bump the version id (`embedded-v9761` in `llamahelp/embedded.go` and `embedded-v9761-full` in `backendschema/golden_embed.go`) and rename both golden files consistently,
   - re-run `go test ./...` to confirm green.
 - Targeted: `go test ./internal/service/backendschema/... ./internal/service/<kind>help/...` for the kind you touched.
-- Optional live regen of on-disk schemas: `go run ./cmd/regenerate-schemas` re-runs `RefreshSchema` for catalog backends — **but it registers only 6 of 8 generators (no Unsloth, no Tabby)** and skips any schema with `source.editable=true`. Use it as a sanity check for the 6 it covers; for unsloth/tabby, rely on the `*help` package tests instead.
+- Optional live regen of on-disk schemas: `go run ./cmd/regenerate-schemas` re-runs `RefreshSchema` for every catalog backend. `RegisterDefaults` (`backendschema/register.go`) covers all 9 kinds — Unsloth and Tabby included.
+  `RefreshSchema` deletes the schema before generating, so **flag facts are always rebuilt** from the backend: per-flag constraint edits and operator-added flags are replaced. What survives is the operator's `presentation` and `rules`, and only when the file carries `source.customized: true` — the dirty marker set by web Customize mode and `backend schema apply`. Both are reconciled against the regenerated flag set, so a layout or rule naming a flag the backend dropped loses that entry. `source.editable=true` is hardcoded by every generator and means "the web editor may customize this"; it protects nothing. Pristine schemas (no `customized`) are overwritten wholesale, which is how curated Go changes reach disk.
 
 ## 7. Report
 

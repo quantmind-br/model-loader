@@ -193,6 +193,19 @@ func resolveBaseProfile(errw io.Writer, deps profileWriteDeps, isEdit bool, ref,
 			fmt.Fprintf(errw, "read profile input: %v\n", err)
 			return domain.Profile{}, err
 		}
+		// PV4: unmarshalling an object into a non-nil map merges into it, so a
+		// provided "args" could add and overwrite keys but never remove one.
+		// Nil the field first when the input carries the key: a present "args"
+		// object replaces wholesale. Top-level keys absent from the input still
+		// keep their existing values (intentional struct-overlay semantics).
+		var probe map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &probe); err != nil {
+			fmt.Fprintf(errw, "parse profile JSON: %v\n", err)
+			return domain.Profile{}, err
+		}
+		if _, ok := probe["args"]; ok {
+			base.Args = nil
+		}
 		if err := json.Unmarshal(raw, &base); err != nil {
 			fmt.Fprintf(errw, "parse profile JSON: %v\n", err)
 			return domain.Profile{}, err

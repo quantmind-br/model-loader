@@ -64,6 +64,37 @@ func (p BenchmarkPage) viewWizard() string {
 	}
 }
 
+// wizardPairWidths allocates the content width of a two-field wizard row
+// (profile name/model, or mode title/description) across the space left after
+// the selected-row prefix ("  ") and inter-column gap ("  ") are reserved. When
+// both values fit, each keeps its natural rune width; otherwise left starts at
+// leftPercent of the available width and any field needing fewer cells lends its
+// spare to the other, capped at that other field's natural width. Content is
+// truncated only when the combined natural widths cannot fit. totalWidth<=0
+// returns natural widths so unsized pages expose full content.
+func wizardPairWidths(left, right string, totalWidth, leftPercent int) (leftWidth, rightWidth int) {
+	lw := theme.RuneWidth(left)
+	rw := theme.RuneWidth(right)
+	if totalWidth <= 0 {
+		return lw, rw
+	}
+	available := max(2, totalWidth-4)
+	if lw+rw <= available {
+		return lw, rw
+	}
+	leftWidth = max(1, available*leftPercent/100)
+	rightWidth = available - leftWidth
+	switch {
+	case lw < leftWidth:
+		rightWidth = min(rw, rightWidth+(leftWidth-lw))
+		leftWidth = lw
+	case rw < rightWidth:
+		leftWidth = min(lw, leftWidth+(rightWidth-rw))
+		rightWidth = rw
+	}
+	return leftWidth, rightWidth
+}
+
 func (p BenchmarkPage) viewWizardProfile() string {
 	title := theme.Title.Render("Run benchmark — pick a profile") + "  " + theme.Subtitle.Render("(1/3)")
 	filtered := p.filteredProfiles()
@@ -73,18 +104,13 @@ func (p BenchmarkPage) viewWizardProfile() string {
 	}
 	rows := make([]string, 0, len(filtered))
 	for i, prof := range filtered {
-		nameW := 28
-		modelW := 40
-		if p.width > 0 {
-			nameW = min(28, max(12, (p.width-4)*2/5))
-			modelW = min(40, max(12, p.width-4-nameW))
-		}
+		nameW, modelW := wizardPairWidths(prof.Name, prof.Model, p.width, 40)
 		line := fmt.Sprintf("%-*s  %s", nameW, truncate(prof.Name, nameW), truncate(prof.Model, modelW))
 		if i == p.profCursor {
 			if theme.NoColor() {
 				line = "> " + line
 			} else {
-				line = theme.Selected.Render(line)
+				line = theme.Selected.Render("> " + line)
 			}
 		} else {
 			line = "  " + line
@@ -102,10 +128,10 @@ func (p BenchmarkPage) viewWizardMode() string {
 	title := theme.Title.Render("Run benchmark — pick a mode") + "  " + theme.Subtitle.Render("(2/3)")
 	rows := make([]string, 0, len(benchModes)+4)
 	// cursorLine is the physical-line index (within the flattened row list) of
-	// the selected mode's first line. Category headers and 2-line prereq cards
-	// mean row index != physical-line index, so we track it explicitly and hand
-	// it to composeWindowed — otherwise the window can't follow modeCursor and
-	// agentic modes clip below the fold with no marker (UIUX-021).
+	// the selected mode. Category headers mean row index != physical-line
+	// index, so we track it explicitly and hand it to composeWindowed —
+	// otherwise the window can't follow modeCursor and agentic modes clip
+	// below the fold with no marker (UIUX-021).
 	cursorLine, physical := 0, 0
 	var lastCat benchmark.Category
 	for i, m := range benchModes {
@@ -114,27 +140,16 @@ func (p BenchmarkPage) viewWizardMode() string {
 			physical++
 			lastCat = c
 		}
-		// Card: title + description on the first line; prerequisites (if any)
-		// on a second indented line so external dependencies are visible before
-		// committing to a run.
-		desc := modeDescription(m)
-		if p.width > 0 {
-			desc = truncate(modeDescription(m), max(12, p.width-26))
-		}
-		line := fmt.Sprintf("%-22s  %s", m.Title(), desc)
-		if pr := modePrereq(m); pr != "" {
-			prLine := pr
-			if p.width > 0 {
-				prLine = truncate(pr, max(12, p.width-8))
-			}
-			line += "\n    " + theme.Warn.Render("⚠ "+prLine)
-		}
+		// Row: benchmark name plus one short description sentence. Operational
+		// prerequisites stay on the review step so the picker remains scannable.
+		titleW, descW := wizardPairWidths(m.Title(), modeDescription(m), p.width, 40)
+		line := fmt.Sprintf("%-*s  %s", titleW, truncate(m.Title(), titleW), truncate(modeDescription(m), descW))
 		if i == p.modeCursor {
 			cursorLine = physical
 			if theme.NoColor() {
 				line = "> " + strings.ReplaceAll(line, "\n", "\n> ")
 			} else {
-				line = theme.Selected.Render(line)
+				line = theme.Selected.Render("> " + line)
 			}
 		} else {
 			line = "  " + line
@@ -153,18 +168,26 @@ func (p BenchmarkPage) viewWizardReview() string {
 	if p.runner != nil {
 		count = p.runner.CountForMode(mode)
 	}
+	fit := func(prefix, val string) string {
+		if p.width > 0 {
+			val = truncate(val, max(1, p.width-theme.RuneWidth(prefix)))
+		}
+		return prefix + val
+	}
 	lines := []string{
-		fmt.Sprintf("profile:  %s", p.runningName),
-		fmt.Sprintf("mode:     %s (%s)", mode.Title(), modeCategoryLabel(mode)),
+		fit("profile:  ", p.runningName),
+		fit("mode:     ", fmt.Sprintf("%s (%s)", mode.Title(), modeCategoryLabel(mode))),
 	}
 	if count > 0 {
-		lines = append(lines, fmt.Sprintf("items:    %d problems", count))
+		lines = append(lines, fit("items:    ", fmt.Sprintf("%d problems", count)))
 	}
 	if pr := modePrereq(mode); pr != "" {
+		if p.width > 0 {
+			pr = truncate(pr, max(1, p.width-theme.RuneWidth("note:     ")))
+		}
 		lines = append(lines, theme.Warn.Render("note:     "+pr))
 	}
-	lines = append(lines, "", "Description:", "  "+truncate(modeDescription(mode), max(12, p.width-4)),
-		"", theme.Subtitle.Render("[enter] start run   [esc] back to mode"))
+	lines = append(lines, "", "Description:", fit("  ", modeDescription(mode)))
 	return p.clampBody(lipgloss.JoinVertical(lipgloss.Left, title, strings.Join(lines, "\n")))
 }
 
@@ -255,29 +278,29 @@ func (p BenchmarkPage) keyWizardReview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func modeDescription(m benchmark.Mode) string {
 	switch m {
 	case benchmark.ModeJudge:
-		return "SWE-bench Lite; reference-guided LLM judge, median of N samples (needs benchmark.judge config)"
+		return "Rates SWE-bench Lite patch quality with an LLM judge."
 	case benchmark.ModeLongContext:
-		return "needle retrieval in a long prompt — objective diagnostic of KV-cache-quant decay"
+		return "Measures long-context retrieval through needle recall."
 	case benchmark.ModeLlamaBench:
-		return "throughput probe (llama-bench style): TTFT + tokens/s on fixed-size prompts"
+		return "Measures prompt latency and tokens per second."
 	case benchmark.ModeMathBench:
-		return "math reasoning (GSM8K): exact numeric match, accuracy under quantization"
+		return "Measures GSM8K math accuracy by exact numeric answer."
 	case benchmark.ModeCodeGenBench:
-		return "code generation (HumanEval): sandboxed Pass@1; needs python3 on PATH"
+		return "Measures HumanEval code generation with executable tests."
 	case benchmark.ModeInstBench:
-		return "instruction following: structured-format, refusal of disallowed prompts, and answer consistency"
+		return "Measures format following, refusals, and answer consistency."
 	case benchmark.ModeMMLUBench:
-		return "factual knowledge (MMLU): multiple-choice exact-match across STEM/humanities/social/other"
+		return "Measures MMLU factual knowledge with multiple choice."
 	case benchmark.ModeRagasBench:
-		return "RAG quality (synthetic): grader scores faithfulness, answer relevancy, and context precision"
+		return "Measures RAG faithfulness, relevance, and context precision."
 	case benchmark.ModeSummaryBench:
-		return "multi-doc summarization: fact coverage + grader-scored coherence"
+		return "Measures multi-document summary fact coverage and coherence."
 	case benchmark.ModeTerminalBench:
-		return "agentic terminal tasks via the external Terminal-Bench harness; needs the `tb` CLI + Docker (long-running)"
+		return "Measures agentic terminal task completion."
 	case benchmark.ModeSweBenchPro:
-		return "agentic SWE tasks via the external SWE-bench Pro harness; needs a cloned harness + Docker + python (long-running)"
+		return "Measures agentic SWE task patch success."
 	case benchmark.ModeDeepSWE:
-		return "agentic SWE tasks via the external DeepSWE (Pier) harness; needs `pier` CLI + Docker + task corpus (long-running)"
+		return "Measures DeepSWE task completion through Pier."
 	default:
 		return string(m)
 	}

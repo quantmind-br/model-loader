@@ -105,7 +105,7 @@ func resolveInstance(mgr processmgr.Manager, ref string) (domain.RunningInstance
 func instanceStatus(ri domain.RunningInstance) string {
 	switch {
 	case ri.Crashed:
-		return "crashed"
+		return domain.ExitClass(ri)
 	case ri.ExitedAt != nil:
 		return "exited"
 	default:

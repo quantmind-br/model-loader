@@ -80,7 +80,7 @@ func buildMMLUPrompt(p MMLUProblem) string {
 }
 
 // runMMLUBench asks the model one multiple-choice question and scores an
-// objective letter exact-match. Temperature 0 for determinism (no grader).
+// objective letter exact-match. Runs at the profile's launched sampling.
 func (r *Runner) runMMLUBench(ctx context.Context, base, model string, p MMLUProblem) (ProblemResult, ProblemTranscript) {
 	name := "[" + p.Category + "] " + truncateQuestion(p.Question)
 	res := ProblemResult{ProblemID: p.ID, ProblemName: name}
@@ -90,7 +90,6 @@ func (r *Runner) runMMLUBench(ctx context.Context, base, model string, p MMLUPro
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
 		Model:       model,
-		Temperature: 0,
 		MaxTokens:   r.cfg.MaxTokens,
 		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{

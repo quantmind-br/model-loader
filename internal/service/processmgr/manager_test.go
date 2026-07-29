@@ -45,6 +45,35 @@ func newTestManager(t *testing.T) (*fsManager, string) {
 	return mgr, dir
 }
 
+func TestKill_RecordsOperatorStopReason(t *testing.T) {
+	mgr, dir := newTestManager(t)
+	inst, err := mgr.Launch(domain.Profile{
+		ID:    "operator-stop",
+		Model: "/dev/null",
+		Args:  map[string]any{},
+	}, LaunchBackground, "")
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	if err := mgr.Kill(inst.PID); err != nil {
+		t.Fatalf("Kill: %v", err)
+	}
+	history := mgr.History()
+	if len(history) != 1 {
+		t.Fatalf("history = %+v, want one entry", history)
+	}
+	if got := history[0].ExitReason; got != domain.ExitReasonOperatorStop {
+		t.Errorf("history exit reason = %q, want %q", got, domain.ExitReasonOperatorStop)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "instances-history.json"))
+	if err != nil {
+		t.Fatalf("read persisted history: %v", err)
+	}
+	if !strings.Contains(string(data), domain.ExitReasonOperatorStop) {
+		t.Errorf("persisted history missing %q: %s", domain.ExitReasonOperatorStop, data)
+	}
+}
+
 func TestManager_LaunchBackground_WaitsHealthyAndPersists(t *testing.T) {
 	mgr, _ := newTestManager(t)
 	p := domain.Profile{

@@ -299,10 +299,9 @@ func (m ModelPicker) View() string {
 	for i, f := range m.filtered {
 		row := fmt.Sprintf(rowFmt, truncatePath(f.Name, nameW), truncatePath(f.Quant, quantW), truncatePath(f.Params, paramsW), truncatePath(f.Path, pathW))
 		if i == m.cursor {
-			row = theme.Selected.Render(row)
-			if theme.NoColor() {
-				row = "> " + row
-			}
+			row = theme.Selected.Render("> " + row)
+		} else {
+			row = "  " + row
 		}
 		rows = append(rows, row)
 	}

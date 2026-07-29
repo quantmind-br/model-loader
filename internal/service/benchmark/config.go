@@ -13,13 +13,13 @@ type Config struct {
 	// the app logger since the config→Config mapping has no logger of its own.
 	Logger    *slog.Logger
 	MaxTokens int
-	// Limit caps how many items a reducible mode runs (problems for the dataset
-	// modes, presets for llama-bench). <=0 → no cap (full set). A uniform
-	// "reduced run" knob for fast smoke/validation; modes with their own
-	// reducers (terminal-bench --n-tasks, swe-bench-pro instance filter) and the
-	// single-probe longctx ignore it.
+	// Limit caps how many items an in-process reducible mode runs (problems for
+	// the dataset modes, presets for llama-bench). <=0 → no cap (full set). A
+	// uniform "reduced run" knob for fast smoke/validation. The agentic modes do
+	// not read this field — the CLI translates --limit into their own reducers
+	// (terminal-bench/deep-swe --n-tasks, swe-bench-pro sampled instances) before
+	// building Config; the single-probe longctx ignores it.
 	Limit             int
-	Temperature       float64
 	Timeout           time.Duration // per-problem inference timeout
 	LongContextTokens int           // target prompt size for the needle probe (0 → default)
 	SaveTranscripts   bool          // capture raw model/judge I/O for debugging
@@ -71,6 +71,11 @@ type Config struct {
 	TerminalBenchTasks []string
 	// TerminalBenchNTasks caps the number of tasks (tb --n-tasks); 0 → omit.
 	TerminalBenchNTasks int
+	// TerminalBenchSampleSeed seeds the deterministic expansion of --n-tasks into
+	// an explicit --task-id subset sampled from the local dataset cache (paired
+	// with TerminalBenchNTasks). tb has no seed flag, so the subset is resolved
+	// locally; mirrors DeepSWESampleSeed. Only used when the cache exists.
+	TerminalBenchSampleSeed int
 	// TerminalBenchConcurrent is tb --n-concurrent. <=0 → 1 (one trial at a time,
 	// fitting the single-GPU rig: many concurrent trials would hammer one backend).
 	TerminalBenchConcurrent int
@@ -119,6 +124,10 @@ type Config struct {
 	// instance flag, so the gathered patch set is filtered to these). Empty → every
 	// instance present in the patch set.
 	SweBenchProInstances []string
+	// SweBenchProSampleSeed seeds the deterministic sampling of instance_ids from
+	// the raw sample that backs the CLI --limit reducer (which writes the result
+	// into SweBenchProInstances). Mirrors DeepSWESampleSeed.
+	SweBenchProSampleSeed int
 	// SweBenchProPatchPath supplies patches without running an agent: a consolidated
 	// patches JSON (used directly) or a directory of instance_*/*.pred files (run
 	// through gather_patches.py). Takes precedence over SweBenchProAgentCmd: when

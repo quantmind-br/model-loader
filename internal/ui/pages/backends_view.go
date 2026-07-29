@@ -23,6 +23,9 @@ func (p BackendsPage) View() string {
 	if len(p.list.Items()) == 0 {
 		leftContent = components.EmptyState("No backends yet", "Press [n] to add one")
 	}
+	if pl := listPaginationLine(p.list, "backends"); pl != "" {
+		leftContent = lipgloss.JoinVertical(lipgloss.Left, leftContent, pl)
+	}
 	left := lipgloss.NewStyle().Width(listW).Render(leftContent)
 	rightContent := p.detailView(detailW)
 	if p.pendingRefresh {

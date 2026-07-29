@@ -1,11 +1,15 @@
 package httpproxy
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -14,7 +18,7 @@ import (
 // "Authorization: Bearer <authToken>" on every UPSTREAM request — this is
 // outbound auth (proxy → backend, e.g. Unsloth Studio), NOT inbound client
 // auth; the proxy itself remains unauthenticated on the client side.
-func newReverseProxy(port int, authToken string, maxBodyBuffer int64) *httputil.ReverseProxy {
+func newReverseProxy(port int, authToken string, maxBodyBuffer int64, onUnavailable func(error)) *httputil.ReverseProxy {
 	target := &url.URL{
 		Scheme: "http",
 		Host:   fmt.Sprintf("127.0.0.1:%d", port),
@@ -35,7 +39,10 @@ func newReverseProxy(port int, authToken string, maxBodyBuffer int64) *httputil.
 		MaxIdleConns:          32,
 		MaxIdleConnsPerHost:   16,
 	}
-	rp.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
+	rp.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
+		if isBackendUnavailableError(err) && req.Context().Err() == nil && onUnavailable != nil {
+			onUnavailable(err)
+		}
 		writeOpenAIError(w, http.StatusBadGateway, "backend_error", "upstream_unavailable", err.Error())
 	}
 	rp.ModifyResponse = func(resp *http.Response) error {
@@ -80,4 +87,14 @@ func newReverseProxy(port int, authToken string, maxBodyBuffer int64) *httputil.
 		return nil
 	}
 	return rp
+}
+
+func isBackendUnavailableError(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	return errors.Is(err, io.EOF) ||
+		errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.EPIPE)
 }

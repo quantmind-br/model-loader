@@ -1,9 +1,0 @@
-=== go build ./internal/ui/pages/... ===
-(no output)
-
-=== go vet ./internal/ui/pages/... ===
-(no output)
-
-=== go test ./internal/ui/pages/... -count=1 ===
-ok  	github.com/quantmind-br/model-loader/internal/ui/pages	0.558s
-ok  	github.com/quantmind-br/model-loader/internal/ui/pages/profile_editor	0.051s

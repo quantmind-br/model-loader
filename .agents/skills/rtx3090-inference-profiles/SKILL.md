@@ -39,8 +39,9 @@ its "calibration pending" description is the entry hook for full-tuning later.
 | references/dflash.md | lucebox-dflash server: DFlash+DDTree, **PFlash** (10× TTFT), **KVFlash** (flat 256k decode), **Spark** (MoE in <16 GiB) |
 | references/exllama-tabby.md | tabby (EXL2/EXL3, TabbyAPI); cache-mode/bpw/TP by model type |
 | references/sndr.md | **sndr-vllm** (SNDR/Genesis TurboQuant k8v4 + MTP overlay on vLLM); per-commit wheel + `GENESIS_ENFORCE_VERSION_RANGE=1` gotchas; the large-prefill trap |
-| references/dual-gpu.md | any multi-GPU/pinning decision; power/thermal; **P2P status (validated) + engagement/verification**; unsloth |
+| references/dual-gpu.md | any multi-GPU/pinning decision; power/thermal; **P2P status (validated) + engagement/verification** |
 | references/ik-llama.md | **ik-llama-cpp** (ikawrakow fork): MLA · fused-MoE · `-ser` expert reduction · `-rtr` ik-quant repack · RAM prompt cache (`cache-ram`); DeepSeek/GLM MoE GGUF; hand-curated flag subset, no tensor/row split |
+| references/unsloth.md | Unsloth GGUF versus HF/non-GGUF paths; wrapper-specific flags, tools, ExtraArgs, and validation |
 
 Workflows live in `workflows/`; each links back to the shared sections here and to the reference
 files above — it never re-derives knowledge that lives in a reference.
@@ -144,7 +145,7 @@ files above — it never re-derives knowledge that lives in a reference.
 | vllm | **vllm-stable**, **vllm-nightly** (both 0.24.0 @ ee0da84ab; mtp/dflash/eagle3/ngram/suffix spec, fp8 KV verified on the rebuilt nightly, sleep mode); **sndr-vllm** (SNDR/Genesis TurboQuant k8v4 + MTP K=5 overlay; installed venv = dev424, dev714 is the upstream pin — short-prompt only, sndr.md); **vllm-dflash**, **vllm-dspark** (2026-07-09 spec-decode vLLM builds — DFlash / DeepSpec DSpark drafters; speculative.md) | safetensors/AWQ/GPTQ/FP8, repo id or dir | vllm-sglang.md · **sndr.md** |
 | sglang | **sglang-stable** (0.5.9), **sglang-nightly** (0.5.6-dev, +DFLASH), **sglang-dflash** (qwen3_5 DFLASH/NEXTN), **sglang-unlimited** (Unlimited-OCR only) | safetensors | vllm-sglang.md |
 | dflash | **lucebox-dflash** (1b11c50; DFlash+DDTree+PFlash+KVFlash+Spark; Qwen3.5/3.6-27B/Laguna/Gemma4 only) | GGUF positional | dflash.md |
-| unsloth | **unsloth-rtx3090** (unsloth 2026.6.7) | HF repo / GGUF | dual-gpu.md §unsloth |
+| unsloth | registered catalog entry with kind **unsloth** (ID is operator-managed) | HF repo / GGUF | unsloth.md · dual-gpu.md §unsloth |
 | tabby | **tabby** (3cf468c; EXL2 deprecated / EXL3, TabbyAPI; exllamav2 0.3.2, exllamav3 0.0.43) | EXL2/EXL3 model **dir** | exllama-tabby.md |
 
 **Laguna-S-2.1 exception:** route its GGUF to a registered Poolside Laguna fork only after checking
@@ -166,6 +167,11 @@ pin-per-GPU placement → read dual-gpu.md, THEN exactly one backend file.
 tool-calling** profile with an MTP head defaults to **llama.cpp-stable** (the `draft-mtp,ngram-mod`
 chain in `args`); route to **lucebox-dflash** only on an explicit max-tok/s, PFlash, KVFlash, or
 Spark need. beellama-rtx3090 wins when a dedicated DFlash *drafter* GGUF is the point.
+
+Unsloth dispatch: use the operator-managed catalog entry with kind `unsloth`; GGUF follows the
+managed llama-server path, while HF/non-GGUF follows the Unsloth/Transformers worker path. Read
+`references/unsloth.md` before writing the profile; do not transfer llama pass-through or 4-bit
+controls between those paths.
 
 ## Quant choice (coding quality first — full table in research; details per backend file)
 

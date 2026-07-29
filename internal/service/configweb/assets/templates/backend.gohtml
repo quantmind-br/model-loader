@@ -24,7 +24,7 @@
 </header>
 <main class="layout no-sidebar">
   <section class="content">
-    <form id="backend-form" hx-post="/backend/validate" hx-trigger="input changed delay:300ms" hx-target="#issues">
+    <form id="backend-form" novalidate hx-post="/backend/validate" hx-trigger="input delay:300ms" hx-target="#issues">
       <input type="hidden" name="id" value="{{.Draft.ID}}">
       <input type="hidden" name="origId" value="{{.Draft.OrigID}}">
       <input type="hidden" name="isNew" value="{{if .Draft.IsNew}}true{{else}}false{{end}}">

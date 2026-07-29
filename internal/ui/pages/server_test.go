@@ -52,6 +52,7 @@ type fakeProcMgr struct {
 	insts        []domain.RunningInstance
 	history      []domain.ExitedInstance
 	refreshCalls int
+	markedStops  []int
 }
 
 func (f *fakeProcMgr) Kill(pid int) error                      { return nil }
@@ -59,6 +60,7 @@ func (f *fakeProcMgr) List() []domain.RunningInstance          { return f.insts 
 func (f *fakeProcMgr) TailLogs(pid int) (io.ReadCloser, error) { return nil, nil }
 func (f *fakeProcMgr) History() []domain.ExitedInstance        { return f.history }
 func (f *fakeProcMgr) RefreshFromDisk() error                  { f.refreshCalls++; return nil }
+func (f *fakeProcMgr) MarkOperatorStop(pid int)                { f.markedStops = append(f.markedStops, pid) }
 
 type fakeMonMgr struct{}
 
@@ -76,10 +78,14 @@ type fakeProxyForPages struct {
 	loadErr    error
 	unloadErr  error
 	forceStops int
+	stops      int
 }
 
 func (f *fakeProxyForPages) Start(context.Context) error { return nil }
-func (f *fakeProxyForPages) Stop(context.Context) error  { return nil }
+func (f *fakeProxyForPages) Stop(context.Context) error {
+	f.stops++
+	return nil
+}
 func (f *fakeProxyForPages) Status() httpproxy.Status {
 	if len(f.statusSeq) > 0 {
 		st := f.statusSeq[0]
@@ -1167,6 +1173,26 @@ func TestServerPage_CrashedRowShowsMarker(t *testing.T) {
 	}
 }
 
+func TestServerPage_StoppedRowLabel(t *testing.T) {
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{{
+		PID:        777,
+		Port:       8080,
+		ProfileID:  "qwen",
+		LogPath:    "/tmp/x.log",
+		Crashed:    true,
+		ExitReason: domain.ExitReasonOperatorStop,
+	}}}
+	p := NewServerPage(pm, fakeMonMgr{}, nil)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+	profileCell := p.tbl.Rows()[0][3]
+	if !strings.Contains(profileCell, "(stopped)") {
+		t.Errorf("profile cell = %q, want stopped label", profileCell)
+	}
+	if strings.Contains(profileCell, "(crashed)") {
+		t.Errorf("profile cell = %q, must not be labelled crashed", profileCell)
+	}
+}
+
 func TestServerPage_PeriodicRefreshTickEmitsRefreshCmd(t *testing.T) {
 	pm := &fakeProcMgr{}
 	mm := &fakeMonMgr{}
@@ -1232,8 +1258,8 @@ func TestServerPage_RowShowsUptime(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("rows = %d, want 1", len(rows))
 	}
-	if rows[0][3] != "3m12s" {
-		t.Errorf("uptime cell = %q, want %q", rows[0][3], "3m12s")
+	if rows[0][4] != "3m12s" {
+		t.Errorf("uptime cell = %q, want %q", rows[0][4], "3m12s")
 	}
 }
 
@@ -1254,11 +1280,11 @@ func TestServerPage_RowShowsVRAMAndTokens(t *testing.T) {
 
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 	rows := p.tbl.Rows()
-	if rows[0][4] != "1024/24576MB" {
-		t.Errorf("vram cell = %q, want %q", rows[0][4], "1024/24576MB")
+	if rows[0][5] != "1024/24576MB" {
+		t.Errorf("vram cell = %q, want %q", rows[0][5], "1024/24576MB")
 	}
-	if rows[0][5] != "12.3" {
-		t.Errorf("tokens cell = %q, want %q", rows[0][5], "12.3")
+	if rows[0][6] != "12.3" {
+		t.Errorf("tokens cell = %q, want %q", rows[0][6], "12.3")
 	}
 }
 
@@ -1269,8 +1295,8 @@ func TestServerPage_RowFallbackDashesWhenNoState(t *testing.T) {
 	p.SetSize(120, 30)
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 	rows := p.tbl.Rows()
-	if rows[0][3] != "--" || rows[0][4] != "--" || rows[0][5] != "--" {
-		t.Errorf("fallback cells = %q/%q/%q, want all '--'", rows[0][3], rows[0][4], rows[0][5])
+	if rows[0][4] != "--" || rows[0][5] != "--" || rows[0][6] != "--" {
+		t.Errorf("fallback cells = %q/%q/%q, want all '--'", rows[0][4], rows[0][5], rows[0][6])
 	}
 }
 
@@ -1293,11 +1319,11 @@ func TestServerPage_CrashedRowPlainCells(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("rows = %d, want 1", len(rows))
 	}
-	if rows[0][0] != "✗ 13" {
-		t.Errorf("crashed pid cell = %q, want %q (plain, no ANSI)", rows[0][0], "✗ 13")
+	if rows[0][1] != "✗ 13" {
+		t.Errorf("crashed pid cell = %q, want %q (plain, no ANSI)", rows[0][1], "✗ 13")
 	}
-	if !strings.Contains(rows[0][2], "crashed") {
-		t.Errorf("profile cell should mention crashed; got %q", rows[0][2])
+	if !strings.Contains(rows[0][3], "crashed") {
+		t.Errorf("profile cell should mention crashed; got %q", rows[0][3])
 	}
 	// Regression: no cell may contain an ANSI escape (\x1b). Otherwise
 	// bubbles/table.renderRow truncates mid-sequence and corrupts output.
@@ -1371,8 +1397,8 @@ func TestServerPage_HealthyRowUnstyled(t *testing.T) {
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 
 	rows := p.tbl.Rows()
-	if rows[0][0] != "13" {
-		t.Errorf("healthy pid cell should be plain %q; got %q", "13", rows[0][0])
+	if rows[0][1] != "13" {
+		t.Errorf("healthy pid cell should be plain %q; got %q", "13", rows[0][1])
 	}
 }
 
@@ -1404,6 +1430,27 @@ func TestServerPage_EmptyStateHint(t *testing.T) {
 	}
 }
 
+func TestServerPage_EmptyStateKeepsSubViews(t *testing.T) {
+	pm := &fakeProcMgr{
+		insts:   nil,
+		history: []domain.ExitedInstance{{ProfileID: "stopped-profile", PID: 7}},
+	}
+	p := NewServerPage(pm, fakeMonMgr{}, nil)
+	p.SetSize(120, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	out := p.View()
+	for _, want := range []string{"No instances running", "Logs", "Slots", "Metrics", "History"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("empty server view missing %q:\n%s", want, out)
+		}
+	}
+	p.subView = SubViewHistory
+	if out := p.View(); !strings.Contains(out, "stopped-profile") {
+		t.Errorf("history must remain reachable without running instances:\n%s", out)
+	}
+}
+
 func TestServerPage_SubViewTabsHighlightActive(t *testing.T) {
 	pm := &fakeProcMgr{insts: []domain.RunningInstance{{PID: 1, Port: 8080, LogPath: "/tmp/x.log"}}}
 	mm := &chanMonMgr{ch: make(chan monitor.MonitorEvent, 8)}
@@ -1411,21 +1458,47 @@ func TestServerPage_SubViewTabsHighlightActive(t *testing.T) {
 	p.SetSize(120, 30)
 	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
 
-	wantTabs := theme.TabActive.Render("Logs") + theme.Subtitle.Render(" │ ") + theme.TabInactive.Render("Slots") + theme.Subtitle.Render(" │ ") + theme.TabInactive.Render("Metrics") + theme.Subtitle.Render(" │ ") + theme.TabInactive.Render("History")
+	wantTabs := components.ActiveLabel("Logs", true) + theme.Subtitle.Render(" │ ") + components.ActiveLabel("Slots", false) + theme.Subtitle.Render(" │ ") + components.ActiveLabel("Metrics", false) + theme.Subtitle.Render(" │ ") + components.ActiveLabel("History", false)
 	if got := renderSubViewTabs(SubViewLogs); got != wantTabs {
 		t.Errorf("renderSubViewTabs(Logs) shape mismatch; got %q", got)
 	}
 
 	out := p.View()
-	if !strings.Contains(out, theme.TabActive.Render("Logs")) {
+	if !strings.Contains(out, components.ActiveLabel("Logs", true)) {
 		t.Errorf("view missing active Logs tab; got:\n%s", out)
 	}
 
 	// Cycle.
 	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
 	out = p.View()
-	if !strings.Contains(out, theme.TabActive.Render("Slots")) {
+	if !strings.Contains(out, components.ActiveLabel("Slots", true)) {
 		t.Errorf("view missing active Slots tab after [v]; got:\n%s", out)
+	}
+}
+
+func TestServerPage_SubViewTabsHaveColorlessActiveMarker(t *testing.T) {
+	t.Cleanup(theme.RebuildStyles)
+	t.Setenv("NO_COLOR", "1")
+	theme.RebuildStyles()
+
+	out := renderSubViewTabs(SubViewSlots)
+	if !strings.Contains(out, "[Slots]") || strings.Count(out, "[") != 1 {
+		t.Fatalf("Slots is not the sole active marker under NO_COLOR: %q", out)
+	}
+
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{{PID: 1, Port: 8080, LogPath: "/tmp/x.log"}}}
+	mm := &chanMonMgr{ch: make(chan monitor.MonitorEvent, 8)}
+	p := NewServerPage(pm, mm, nil)
+	p.SetSize(120, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+
+	if out := p.View(); !strings.Contains(out, "[Logs]") {
+		t.Fatalf("Logs not bracketed under NO_COLOR:\n%s", out)
+	}
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	pageOut := p.View()
+	if !strings.Contains(pageOut, "[Slots]") || strings.Contains(pageOut, "[Logs]") {
+		t.Fatalf("[v] did not move the NO_COLOR brackets from Logs to Slots:\n%s", pageOut)
 	}
 }
 
@@ -1444,12 +1517,12 @@ func TestServerPage_LogsShowingNofMFooter(t *testing.T) {
 	}
 
 	// More than visible log lines — footer present.
-	st.logs = make([]string, 19)
+	visible := 30 - (tableHeightForRows(30, 1) + 8)
+	st.logs = make([]string, visible+5)
 	for i := range st.logs {
 		st.logs[i] = fmt.Sprintf("line %d", i)
 	}
-	visible := 30 - (serverTableHeight(30) + 8)
-	if !strings.Contains(p.View(), fmt.Sprintf("showing last %d of 19", visible)) {
+	if !strings.Contains(p.View(), fmt.Sprintf("showing last %d of %d", visible, visible+5)) {
 		t.Errorf("overflow log view should show count footer (visible=%d); got:\n%s", visible, p.View())
 	}
 }
@@ -1621,14 +1694,14 @@ func TestServerPage_ApplyInstances_RendersRows(t *testing.T) {
 		t.Fatalf("rows: got %d, want 3", len(rows))
 	}
 	for i, want := range insts {
-		if !strings.Contains(rows[i][0], fmt.Sprintf("%d", want.PID)) {
-			t.Fatalf("row %d pid col %q missing pid %d", i, rows[i][0], want.PID)
+		if !strings.Contains(rows[i][1], fmt.Sprintf("%d", want.PID)) {
+			t.Fatalf("row %d pid col %q missing pid %d", i, rows[i][1], want.PID)
 		}
-		if !strings.Contains(rows[i][1], fmt.Sprintf("%d", want.Port)) {
-			t.Fatalf("row %d port col %q missing port %d", i, rows[i][1], want.Port)
+		if !strings.Contains(rows[i][2], fmt.Sprintf("%d", want.Port)) {
+			t.Fatalf("row %d port col %q missing port %d", i, rows[i][2], want.Port)
 		}
-		if !strings.Contains(rows[i][2], want.ProfileID) {
-			t.Fatalf("row %d profile col %q missing %q", i, rows[i][2], want.ProfileID)
+		if !strings.Contains(rows[i][3], want.ProfileID) {
+			t.Fatalf("row %d profile col %q missing %q", i, rows[i][3], want.ProfileID)
 		}
 	}
 }
@@ -1926,8 +1999,8 @@ func TestServerPage_RowShowsERRWhenSubscriptionFailed(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("rows = %d, want 1", len(rows))
 	}
-	if rows[0][4] != "ERR" || rows[0][5] != "ERR" {
-		t.Errorf("VRAM/Tokens cells = %q/%q, want ERR/ERR", rows[0][4], rows[0][5])
+	if rows[0][5] != "ERR" || rows[0][6] != "ERR" {
+		t.Errorf("VRAM/Tokens cells = %q/%q, want ERR/ERR", rows[0][5], rows[0][6])
 	}
 }
 
@@ -2000,11 +2073,201 @@ func TestServerPage_ResponsiveLayout(t *testing.T) {
 		t.Fatalf("table budget = %d want %d (serverTableHeight)", got, want)
 	}
 	p.SetSize(120, 30)
+	p.SetSize(80, 24)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: []domain.RunningInstance{{PID: 1, Port: 8080}}})
+	if got := p.tbl.Height() + 1; got != 2 {
+		t.Errorf("one-row table height = %d, want 2", got)
+	}
+	insts := make([]domain.RunningInstance, 9)
+	for i := range insts {
+		insts[i] = domain.RunningInstance{PID: i + 1, Port: 8080 + i}
+	}
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: insts})
+	if got, want := p.tbl.Height()+1, serverTableHeight(24); got != want {
+		t.Errorf("nine-row table height = %d, want %d", got, want)
+	}
 	cols := p.tbl.Columns()
-	if len(cols) < 6 {
+	if len(cols) < 7 {
 		t.Fatalf("wide columns missing: %+v", cols)
 	}
-	if cols[2].Width != colProfile || cols[4].Width != colVRAM {
+	if cols[0].Width != markerColumnWidth {
+		t.Errorf("marker column width = %d, want %d", cols[0].Width, markerColumnWidth)
+	}
+	if cols[3].Width != colProfile || cols[5].Width != colVRAM {
 		t.Fatalf("wide columns = %+v (want Profile=%d, VRAM=%d)", cols, colProfile, colVRAM)
+	}
+}
+
+// UIUX-047: the kill confirmation must name the profile and endpoint, not just
+// the pid, and must stay inside the modal frame at narrow widths.
+func TestServerPage_KillConfirmNamesTarget(t *testing.T) {
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{
+		{PID: 4242, Port: 42105, ProfileID: "agents-a1-4b-q8", LogPath: "/tmp/x.log"},
+	}}
+	p := NewServerPage(pm, fakeMonMgr{}, nil)
+	p.SetSize(120, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
+
+	if !p.killConfirm.Active() {
+		t.Fatal("expected kill confirm after K")
+	}
+	content := p.OverlayView().Content
+	for _, want := range []string{"agents-a1-4b-q8", "4242", "42105"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("kill confirm overlay missing %q:\n%s", want, content)
+		}
+	}
+}
+
+func TestServerPage_KillConfirmClipsLongProfileID(t *testing.T) {
+	long := strings.Repeat("q", 60)
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{
+		{PID: 4242, Port: 42105, ProfileID: long, LogPath: "/tmp/x.log"},
+	}}
+	p := NewServerPage(pm, fakeMonMgr{}, nil)
+	p.SetSize(80, 24)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
+
+	content := p.OverlayView().Content
+	if !strings.Contains(content, "…") {
+		t.Errorf("long profile id should be clipped with an ellipsis:\n%s", content)
+	}
+	lines := strings.Split(content, "\n")
+	want := lipgloss.Width(lines[0])
+	for i, line := range lines {
+		if got := lipgloss.Width(line); got != want {
+			t.Fatalf("overlay line %d width = %d, want %d (border broken)", i, got, want)
+		}
+	}
+}
+
+func TestServerPage_XWithLoadedBackendAsksConfirm(t *testing.T) {
+	proxy := &fakeProxyForPages{status: httpproxy.Status{
+		Running: true, LoadedProfileID: "qwen", LoadedPID: 4242, LoadedPort: 42105,
+	}}
+	p := NewServerPage(&fakeProcMgr{}, fakeMonMgr{}, nil).WithProxy(proxy)
+	p.SetSize(120, 30)
+	p, cmd := updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if cmd == nil {
+		t.Fatal("x should emit a proxy stop request")
+	}
+	p, _ = updateAs[*ServerPage](p, cmd())
+	if !p.stopProxyConfirm.Active() {
+		t.Fatal("loaded backend should require stop confirmation")
+	}
+	content := p.OverlayView().Content
+	for _, want := range []string{"qwen", "4242", "42105"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("stop proxy confirmation missing %q:\n%s", want, content)
+		}
+	}
+	if proxy.stops != 0 {
+		t.Fatalf("Stop called %d times before confirmation", proxy.stops)
+	}
+}
+
+func TestServerPage_XWithNoBackendStopsImmediately(t *testing.T) {
+	proxy := &fakeProxyForPages{status: httpproxy.Status{Running: true}}
+	p := NewServerPage(&fakeProcMgr{}, fakeMonMgr{}, nil).WithProxy(proxy)
+	p, cmd := updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if p.stopProxyConfirm.Active() {
+		t.Fatal("proxy without a loaded backend must not open a confirmation")
+	}
+	if cmd == nil {
+		t.Fatal("x should issue an immediate stop command")
+	}
+	msg, ok := cmd().(components.ProxyActionResultMsg)
+	if !ok {
+		t.Fatalf("stop command produced %T, want ProxyActionResultMsg", msg)
+	}
+	if msgAction := fmt.Sprintf("%v", msg); !strings.Contains(msgAction, "stop") {
+		t.Errorf("stop command result = %v, want stop action", msg)
+	}
+	if proxy.stops != 1 {
+		t.Fatalf("Stop called %d times, want 1", proxy.stops)
+	}
+}
+
+func TestServerPage_StopProxyConfirmedStops(t *testing.T) {
+	proxy := &fakeProxyForPages{status: httpproxy.Status{Running: true}}
+	p := NewServerPage(&fakeProcMgr{}, fakeMonMgr{}, nil).WithProxy(proxy)
+	_, cmd := updateAs[*ServerPage](p, serverProxyStopConfirmedMsg{})
+	if cmd == nil {
+		t.Fatal("confirmed proxy stop should return a command")
+	}
+	_ = cmd()
+	if proxy.stops != 1 {
+		t.Fatalf("Stop called %d times, want 1", proxy.stops)
+	}
+}
+
+func TestServerPage_CursorMarkerTracksSelection(t *testing.T) {
+	pm := &fakeProcMgr{insts: []domain.RunningInstance{
+		{PID: 1, Port: 8001}, {PID: 2, Port: 8002}, {PID: 3, Port: 8003},
+	}}
+	p := NewServerPage(pm, fakeMonMgr{}, nil)
+	p.SetSize(120, 30)
+	p, _ = updateAs[*ServerPage](p, monitorInstancesRefreshedMsg{insts: pm.List()})
+	if got := p.tbl.Rows()[0][0]; got != "> " {
+		t.Fatalf("first row marker = %q, want %q", got, "> ")
+	}
+	if got := p.tbl.Rows()[1][0]; got != "  " {
+		t.Fatalf("second row marker = %q, want two spaces", got)
+	}
+	p, _ = updateAs[*ServerPage](p, tea.KeyMsg{Type: tea.KeyDown})
+	if got := p.tbl.Rows()[0][0]; got != "  " {
+		t.Errorf("first row marker after down = %q, want two spaces", got)
+	}
+	if got := p.tbl.Rows()[1][0]; got != "> " {
+		t.Errorf("second row marker after down = %q, want %q", got, "> ")
+	}
+}
+
+func TestServerPage_MarkerColumnKeepsTableWidth(t *testing.T) {
+	p := NewServerPage(&fakeProcMgr{}, fakeMonMgr{}, nil)
+	p.SetSize(80, 24)
+	width := 0
+	for _, col := range p.tbl.Columns() {
+		width += col.Width + tableCellPadding
+	}
+	if width > 80 {
+		t.Errorf("rendered column budget = %d, exceeds terminal width 80", width)
+	}
+}
+
+// TestServerPage_StopProxyConfirmedMarksOperatorStop — UIUX-030(b): confirmed
+// proxy stop records the loaded backend pid as operator-initiated before the
+// supervisor tears the tree down.
+func TestServerPage_StopProxyConfirmedMarksOperatorStop(t *testing.T) {
+	proxy := &fakeProxyForPages{status: httpproxy.Status{Running: true}}
+	pm := &fakeProcMgr{}
+	p := NewServerPage(pm, fakeMonMgr{}, nil).WithProxy(proxy)
+	_, cmd := updateAs[*ServerPage](p, serverProxyStopConfirmedMsg{pid: 4242})
+	if cmd == nil {
+		t.Fatal("confirmed proxy stop should return a command")
+	}
+	if len(pm.markedStops) != 1 || pm.markedStops[0] != 4242 {
+		t.Fatalf("markedStops = %v, want [4242]", pm.markedStops)
+	}
+	_ = cmd()
+	if proxy.stops != 1 {
+		t.Fatalf("Stop called %d times, want 1", proxy.stops)
+	}
+}
+
+// TestServerPage_StopProxyConfirmedZeroPIDSkipsMark — pid 0 (no loaded backend /
+// zero value from older tests) must not call MarkOperatorStop.
+func TestServerPage_StopProxyConfirmedZeroPIDSkipsMark(t *testing.T) {
+	proxy := &fakeProxyForPages{status: httpproxy.Status{Running: true}}
+	pm := &fakeProcMgr{}
+	p := NewServerPage(pm, fakeMonMgr{}, nil).WithProxy(proxy)
+	_, cmd := updateAs[*ServerPage](p, serverProxyStopConfirmedMsg{})
+	if cmd == nil {
+		t.Fatal("confirmed proxy stop should return a command")
+	}
+	if len(pm.markedStops) != 0 {
+		t.Fatalf("markedStops = %v, want empty for pid 0", pm.markedStops)
 	}
 }

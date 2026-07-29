@@ -21,7 +21,7 @@ func TestCrossField_LimitViolation(t *testing.T) {
 		"flash-attn": {Long: "flash-attn", Type: domain.FlagTypeString},
 		"ctx-size":   {Long: "ctx-size", Type: domain.FlagTypeInt},
 	}
-	p := domain.Profile{Args: map[string]any{"flash-attn": "on", "ctx-size": 65536}}
+	p := domain.Profile{Model: existingModel(t), Args: map[string]any{"flash-attn": "on", "ctx-size": 65536}}
 	rep := New(nil).Validate(p, ruleSchema(rule, flags), domain.BackendKindLlamaServer)
 	if len(rep.Warnings) != 1 {
 		t.Fatalf("expected 1 warning, got %+v", rep)
@@ -36,7 +36,7 @@ func TestCrossField_ConditionFalseSkips(t *testing.T) {
 		Severity: "error",
 	}
 	flags := map[string]domain.FlagSpec{"flash-attn": {Long: "flash-attn", Type: domain.FlagTypeString}}
-	p := domain.Profile{Args: map[string]any{"flash-attn": "off"}}
+	p := domain.Profile{Model: existingModel(t), Args: map[string]any{"flash-attn": "off"}}
 	rep := New(nil).Validate(p, ruleSchema(rule, flags), domain.BackendKindLlamaServer)
 	if rep.HasBlockingErrors() {
 		t.Fatalf("rule should not fire when condition false: %+v", rep)
@@ -54,7 +54,7 @@ func TestCrossField_RequireMissing(t *testing.T) {
 		"cache-type-k": {Long: "cache-type-k", Type: domain.FlagTypeString},
 		"flash-attn":   {Long: "flash-attn", Type: domain.FlagTypeString},
 	}
-	p := domain.Profile{Args: map[string]any{"cache-type-k": "q8_0"}} // flash-attn absent
+	p := domain.Profile{Model: existingModel(t), Args: map[string]any{"cache-type-k": "q8_0"}} // flash-attn absent
 	rep := New(nil).Validate(p, ruleSchema(rule, flags), domain.BackendKindLlamaServer)
 	if !rep.HasBlockingErrors() {
 		t.Fatalf("expected error: require flash-attn=on")
@@ -72,7 +72,7 @@ func TestCrossField_LimitWithinBoundPasses(t *testing.T) {
 		"flash-attn": {Long: "flash-attn", Type: domain.FlagTypeString},
 		"ctx-size":   {Long: "ctx-size", Type: domain.FlagTypeInt},
 	}
-	p := domain.Profile{Args: map[string]any{"flash-attn": "on", "ctx-size": 16384}}
+	p := domain.Profile{Model: existingModel(t), Args: map[string]any{"flash-attn": "on", "ctx-size": 16384}}
 	rep := New(nil).Validate(p, ruleSchema(rule, flags), domain.BackendKindLlamaServer)
 	if len(rep.Warnings) != 0 || rep.HasBlockingErrors() {
 		t.Fatalf("compliant value should produce no issues: %+v", rep)
@@ -87,7 +87,7 @@ func TestCrossField_MessageFires(t *testing.T) {
 		Severity: "warning",
 	}
 	flags := map[string]domain.FlagSpec{"flash-attn": {Long: "flash-attn", Type: domain.FlagTypeString}}
-	p := domain.Profile{Args: map[string]any{"flash-attn": "on"}}
+	p := domain.Profile{Model: existingModel(t), Args: map[string]any{"flash-attn": "on"}}
 	rep := New(nil).Validate(p, ruleSchema(rule, flags), domain.BackendKindLlamaServer)
 	if len(rep.Warnings) != 1 || rep.Warnings[0].Message != "heads up" {
 		t.Fatalf("expected one warning 'heads up', got %+v", rep)

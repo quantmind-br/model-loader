@@ -90,13 +90,15 @@ func (s *stubStore) Rename(oldID string, p domain.Profile) error {
 // PIDs and records every call. Backends never actually run; tests configure
 // healthFn to choose whether WaitHealthy returns nil or an error.
 type stubManager struct {
-	mu       sync.Mutex
-	nextPID  int
-	tracked  map[int]domain.RunningInstance
-	launches []domain.Profile
-	kills    []int
-	healthFn func(pid, port int) error
-	killFn   func(pid int) error // optional: when set, Kill records the attempt then returns this error without untracking (mirrors the real manager keeping the entry on a failed kill)
+	mu          sync.Mutex
+	nextPID     int
+	tracked     map[int]domain.RunningInstance
+	launches    []domain.Profile
+	kills       []int
+	events      []string
+	launchPorts []int
+	healthFn    func(pid, port int) error
+	killFn      func(pid int) error // optional: when set, Kill records the attempt then returns this error without untracking (mirrors the real manager keeping the entry on a failed kill)
 
 	swapDelay  time.Duration // optional: delay inside Launch to widen swap race
 	readyToken string        // token WaitReady returns when healthFn passes
@@ -117,7 +119,11 @@ func (m *stubManager) Launch(p domain.Profile, mode processmgr.LaunchMode, attem
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.nextPID++
+	launchNumber := len(m.launches)
 	port, _ := portFromArgs(p.Args)
+	if launchNumber < len(m.launchPorts) {
+		port = m.launchPorts[launchNumber]
+	}
 	inst := domain.RunningInstance{
 		ProfileID: p.ID,
 		// Use the always-live test process PID so the proxy's liveness guard
@@ -132,6 +138,7 @@ func (m *stubManager) Launch(p domain.Profile, mode processmgr.LaunchMode, attem
 	}
 	m.tracked[inst.PID] = inst
 	m.launches = append(m.launches, p)
+	m.events = append(m.events, "launch")
 	return inst, nil
 }
 
@@ -139,6 +146,7 @@ func (m *stubManager) Kill(pid int) error {
 	if m.killFn != nil {
 		m.mu.Lock()
 		m.kills = append(m.kills, pid)
+		m.events = append(m.events, "kill")
 		m.mu.Unlock()
 		return m.killFn(pid)
 	}
@@ -149,6 +157,7 @@ func (m *stubManager) Kill(pid int) error {
 	}
 	delete(m.tracked, pid)
 	m.kills = append(m.kills, pid)
+	m.events = append(m.events, "kill")
 	return nil
 }
 
@@ -189,6 +198,8 @@ func (m *stubManager) History() []domain.ExitedInstance {
 
 func (m *stubManager) RefreshFromDisk() error { return nil }
 
+func (m *stubManager) MarkOperatorStop(int) {}
+
 func (m *stubManager) launchCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -199,6 +210,12 @@ func (m *stubManager) killCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.kills)
+}
+
+func (m *stubManager) eventSequence() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]string(nil), m.events...)
 }
 
 // portFromArgs extracts the "port" value from a profile's Args map.

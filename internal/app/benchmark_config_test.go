@@ -27,6 +27,8 @@ func TestBenchmarkConfig_MapsDeepSWEBlock(t *testing.T) {
 		TimeoutSec: 1500,
 		ExtraArgs:  []string{"--force-build", "--ae", "HTTP_PROXY=x"},
 	}
+	cfg.Benchmark.TerminalBench.SampleSeed = 11
+	cfg.Benchmark.SweBenchPro.SampleSeed = 99
 
 	bc := BenchmarkConfig(cfg)
 
@@ -56,6 +58,12 @@ func TestBenchmarkConfig_MapsDeepSWEBlock(t *testing.T) {
 	}
 	if bc.DeepSWESampleSeed != 42 {
 		t.Errorf("DeepSWESampleSeed = %d, want 42", bc.DeepSWESampleSeed)
+	}
+	if bc.TerminalBenchSampleSeed != 11 {
+		t.Errorf("TerminalBenchSampleSeed = %d, want 11", bc.TerminalBenchSampleSeed)
+	}
+	if bc.SweBenchProSampleSeed != 99 {
+		t.Errorf("SweBenchProSampleSeed = %d, want 99", bc.SweBenchProSampleSeed)
 	}
 	if bc.DeepSWEConcurrent != 3 {
 		t.Errorf("DeepSWEConcurrent = %d, want 3", bc.DeepSWEConcurrent)

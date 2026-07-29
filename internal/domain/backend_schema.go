@@ -16,7 +16,15 @@ type SchemaSource struct {
 	GeneratedFrom string    `json:"generatedFrom,omitempty"`
 	GeneratedAt   time.Time `json:"generatedAt,omitempty"`
 	SourceVersion string    `json:"sourceVersion,omitempty"`
-	Editable      bool      `json:"editable"`
+	// Editable is a capability: every generator marks the schemas it produces
+	// editable, so it carries no information about whether an operator changed
+	// anything.
+	Editable bool `json:"editable"`
+	// Customized is the dirty marker: an operator edited this schema, so a
+	// regeneration must preserve their layout. Only the operator-driven write
+	// paths (configweb Customize handlers, `backend schema apply`) set it;
+	// generators never do.
+	Customized bool `json:"customized,omitempty"`
 }
 
 // BackendValidationSchema is the persisted schema for a backend.

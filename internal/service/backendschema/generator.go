@@ -39,10 +39,10 @@ func resolve(raw string) (string, error) {
 }
 
 // Generate returns the llama-server schema by first trying to parse --help from
-// the resolved binary, falling back to the embedded golden JSON (188 flags), and
+// the resolved binary, falling back to the embedded golden JSON (246 flags), and
 // then overlaying curated metadata (groups, descriptions, aliases). If the
-// existing schema has source.editable=true, generation is skipped to preserve
-// manual edits.
+// existing schema has source.customized=true, generation is skipped so an
+// operator's edits survive incidental re-runs.
 func (g *LlamaServerGenerator) Generate(backend domain.Backend) (domain.BackendValidationSchema, error) {
 	if backend.Kind != domain.BackendKindLlamaServer {
 		return domain.BackendValidationSchema{}, fmt.Errorf("unsupported backend kind: %s", backend.Kind)
@@ -50,15 +50,17 @@ func (g *LlamaServerGenerator) Generate(backend domain.Backend) (domain.BackendV
 
 	ref := schemaStoreRef(backend.SchemaRef)
 	existing, err := g.schemaStore.Load(ref)
-	if err == nil && existing.Source.Editable {
+	if err == nil && existing.Source.Customized {
 		return existing, nil
 	}
 
 	var full domain.BackendValidationSchema
+	parsedLive := false
 	if resolved, err := resolve(backend.Executable); err == nil {
 		parsed, parseErr := parseHelpSchema(backend, resolved)
 		if parseErr == nil {
 			full = parsed
+			parsedLive = true
 		}
 	}
 	if full.Flags == nil {
@@ -74,7 +76,14 @@ func (g *LlamaServerGenerator) Generate(backend domain.Backend) (domain.BackendV
 		full = domain.FlagSchemaToBackend(fs, backend.Kind, backend.ID, src)
 	}
 
-	schema := mergeWithCurated(full, CuratedLlamaSchema())
+	// A live parse is authoritative on flag existence; enrich only. The pinned
+	// golden fallback may trail the curated overlay, so it appends missing flags.
+	var schema domain.BackendValidationSchema
+	if parsedLive {
+		schema = mergeWithCuratedEnrich(full, CuratedLlamaSchema())
+	} else {
+		schema = mergeWithCurated(full, CuratedLlamaSchema())
+	}
 	schema.BackendID = backend.ID
 	if err := g.schemaStore.Save(ref, schema); err != nil {
 		return domain.BackendValidationSchema{}, fmt.Errorf("save schema: %w", err)

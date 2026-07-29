@@ -406,3 +406,199 @@ func TestLaunch_RegistrySaveErrorKillsChild(t *testing.T) {
 		t.Fatalf("tracked has %d entries after rollback; want 0", n)
 	}
 }
+
+// TestLiveness_MarkOperatorStopLabelsAndSkipsRestart — UIUX-030(b): an adopted
+// backend whose death the operator pre-declared via MarkOperatorStop is labelled
+// ExitReasonOperatorStop (ExitClass "stopped") and never restarted, even with
+// RestartPolicyAlways. Without the mark the same death is "crashed" and fires
+// restartFunc (negative control in the same file).
+func TestLiveness_MarkOperatorStopLabelsAndSkipsRestart(t *testing.T) {
+	dir := t.TempDir()
+	fb := fakeBinary(t)
+	var restarts atomic.Int32
+	mgr := New(Config{
+		Resolver:     func(_ domain.Profile) (string, domain.BackendKind, error) { return fb, "", nil },
+		LogDir:       filepath.Join(dir, "logs"),
+		RegistryPath: filepath.Join(dir, "instances.json"),
+		RestartFunc:  func(string) { restarts.Add(1) },
+	})
+	t.Cleanup(func() { _ = mgr.Close() })
+	mgr.livenessStop()
+
+	const pid = 1 << 23
+	mgr.mu.Lock()
+	mgr.tracked[pid] = domain.RunningInstance{
+		PID: pid, ProfileID: "op-stop", StartTicks: 1,
+		RestartPolicy: string(domain.RestartPolicyAlways),
+	}
+	mgr.mu.Unlock()
+	// Intentionally absent from hasReaper: adopted observer death path.
+	mgr.MarkOperatorStop(pid)
+
+	stop := mgr.startLivenessWithProbe(30*time.Millisecond, func(ri domain.RunningInstance) bool {
+		return procutil.SameProcess(ri.PID, ri.StartTicks)
+	})
+	defer stop()
+
+	// Wait until the death is classified.
+	deadline := time.Now().Add(4 * time.Second)
+	var entry domain.RunningInstance
+	var found bool
+	for time.Now().Before(deadline) {
+		for _, ri := range mgr.List() {
+			if ri.PID == pid && ri.Crashed {
+				entry = ri
+				found = true
+				break
+			}
+		}
+		if found {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !found {
+		t.Fatal("liveness never marked the adopted pid Crashed")
+	}
+	if entry.ExitReason != domain.ExitReasonOperatorStop {
+		t.Fatalf("ExitReason = %q, want %q", entry.ExitReason, domain.ExitReasonOperatorStop)
+	}
+	if got := domain.ExitClass(entry); got != "stopped" {
+		t.Fatalf("ExitClass = %q, want stopped", got)
+	}
+	// Give a wrong restart policy time to fire (same window as adopted control).
+	time.Sleep(200 * time.Millisecond)
+	if n := restarts.Load(); n != 0 {
+		t.Fatalf("restartFunc fired %d times after MarkOperatorStop; want 0", n)
+	}
+}
+
+// TestLiveness_AdoptedDeathWithoutMarkStillCrashesAndRestarts is the negative
+// control for UIUX-030(b): without MarkOperatorStop the observer death path
+// still classifies as crashed and applies RestartPolicyAlways.
+func TestLiveness_AdoptedDeathWithoutMarkStillCrashesAndRestarts(t *testing.T) {
+	dir := t.TempDir()
+	fb := fakeBinary(t)
+	var restarts atomic.Int32
+	mgr := New(Config{
+		Resolver:     func(_ domain.Profile) (string, domain.BackendKind, error) { return fb, "", nil },
+		LogDir:       filepath.Join(dir, "logs"),
+		RegistryPath: filepath.Join(dir, "instances.json"),
+		RestartFunc:  func(string) { restarts.Add(1) },
+	})
+	t.Cleanup(func() { _ = mgr.Close() })
+	mgr.livenessStop()
+
+	const pid = 1 << 24
+	mgr.mu.Lock()
+	mgr.tracked[pid] = domain.RunningInstance{
+		PID: pid, ProfileID: "adopted-crash", StartTicks: 1,
+		RestartPolicy: string(domain.RestartPolicyAlways),
+	}
+	mgr.mu.Unlock()
+
+	stop := mgr.startLivenessWithProbe(30*time.Millisecond, func(ri domain.RunningInstance) bool {
+		return procutil.SameProcess(ri.PID, ri.StartTicks)
+	})
+	defer stop()
+
+	deadline := time.Now().Add(4 * time.Second)
+	var entry domain.RunningInstance
+	var found bool
+	for time.Now().Before(deadline) {
+		for _, ri := range mgr.List() {
+			if ri.PID == pid && ri.Crashed {
+				entry = ri
+				found = true
+				break
+			}
+		}
+		if found {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !found {
+		t.Fatal("liveness never marked the adopted pid Crashed")
+	}
+	if got := domain.ExitClass(entry); got != "crashed" {
+		t.Fatalf("ExitClass = %q, want crashed (no MarkOperatorStop)", got)
+	}
+	for time.Now().Before(deadline) {
+		if restarts.Load() >= 1 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if n := restarts.Load(); n < 1 {
+		t.Fatalf("restartFunc fired %d times without MarkOperatorStop; want >= 1", n)
+	}
+}
+
+// TestLiveness_OwnedKillIntentRetainsFlag — liveness must NOT consume
+// killRequested for owned (hasReaper) pids. The reaper's waitEnrichment rewrites
+// ExitReason and maybeScheduleRestart's A4 guard both read that flag; deleting
+// it here would mislabel SIGTERM kills and resurrect RestartPolicyAlways.
+func TestLiveness_OwnedKillIntentRetainsFlag(t *testing.T) {
+	dir := t.TempDir()
+	fb := fakeBinary(t)
+	var restarts atomic.Int32
+	mgr := New(Config{
+		Resolver:     func(_ domain.Profile) (string, domain.BackendKind, error) { return fb, "", nil },
+		LogDir:       filepath.Join(dir, "logs"),
+		RegistryPath: filepath.Join(dir, "instances.json"),
+		RestartFunc:  func(string) { restarts.Add(1) },
+	})
+	t.Cleanup(func() { _ = mgr.Close() })
+	mgr.livenessStop()
+
+	const pid = 1 << 25
+	mgr.mu.Lock()
+	mgr.tracked[pid] = domain.RunningInstance{
+		PID: pid, ProfileID: "owned-kill", StartTicks: 1,
+		RestartPolicy: string(domain.RestartPolicyAlways),
+	}
+	mgr.hasReaper[pid] = struct{}{}
+	mgr.killRequested[pid] = struct{}{}
+	mgr.mu.Unlock()
+
+	stop := mgr.startLivenessWithProbe(30*time.Millisecond, func(ri domain.RunningInstance) bool {
+		return procutil.SameProcess(ri.PID, ri.StartTicks)
+	})
+	defer stop()
+
+	deadline := time.Now().Add(4 * time.Second)
+	var entry domain.RunningInstance
+	var found bool
+	for time.Now().Before(deadline) {
+		for _, ri := range mgr.List() {
+			if ri.PID == pid && ri.Crashed {
+				entry = ri
+				found = true
+				break
+			}
+		}
+		if found {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !found {
+		t.Fatal("liveness never marked the owned pid Crashed")
+	}
+	if entry.ExitReason != domain.ExitReasonOperatorStop {
+		t.Fatalf("ExitReason = %q, want %q (liveness still labels)", entry.ExitReason, domain.ExitReasonOperatorStop)
+	}
+	mgr.mu.Lock()
+	_, still := mgr.killRequested[pid]
+	mgr.mu.Unlock()
+	if !still {
+		t.Fatal("killRequested consumed for owned pid; reaper needs it for A4 + ExitReason rewrite")
+	}
+	// Owned deaths are never put on the adopted restart path; flag retention
+	// is what keeps maybeScheduleRestart (reaper) from resurrecting.
+	time.Sleep(200 * time.Millisecond)
+	if n := restarts.Load(); n != 0 {
+		t.Fatalf("restartFunc fired %d times for owned intentional death; want 0", n)
+	}
+}

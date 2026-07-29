@@ -18,7 +18,7 @@ func TestVLLMGenerator_WrongKind(t *testing.T) {
 	}
 }
 
-func TestVLLMGenerator_SkipsWhenEditable(t *testing.T) {
+func TestVLLMGenerator_SkipsWhenCustomized(t *testing.T) {
 	dir := t.TempDir()
 	store := backendcatalog.NewFSSchemaStore(dir)
 	g := NewVLLMGenerator(store)
@@ -32,14 +32,14 @@ func TestVLLMGenerator_SkipsWhenEditable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first generate: %v", err)
 	}
-	schema.Source.Editable = true
+	schema.Source.Customized = true
 	_ = store.Save("vllm-test.json", schema)
 	schema2, err := g.Generate(backend)
 	if err != nil {
 		t.Fatalf("second generate: %v", err)
 	}
-	if !schema2.Source.Editable {
-		t.Fatal("expected editable schema to be preserved")
+	if !schema2.Source.Customized {
+		t.Fatal("expected customized schema to be preserved")
 	}
 }
 

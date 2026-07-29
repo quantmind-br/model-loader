@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestBodyHeight(t *testing.T) {
@@ -21,7 +22,6 @@ func TestBodyHeight(t *testing.T) {
 		t.Errorf("BodyHeight(1) = %d, want 0", h)
 	}
 }
-
 
 func TestResponsiveSplit(t *testing.T) {
 	tests := []struct {
@@ -60,7 +60,6 @@ func TestResponsiveSplit(t *testing.T) {
 	}
 }
 
-
 func TestClampBodyTruncatesNotWraps(t *testing.T) {
 	long := strings.Repeat("x", 200)
 	in := long + "\nsecond"
@@ -74,5 +73,52 @@ func TestClampBodyTruncatesNotWraps(t *testing.T) {
 	}
 	if !strings.Contains(lines[1], "second") {
 		t.Errorf("line1 = %q, want to contain second (long line must not wrap)", lines[1])
+	}
+}
+
+func TestClampBodyAddsANSISafeEllipsis(t *testing.T) {
+	plain := strings.Split(ClampBody(strings.Repeat("x", 200), 40, 3), "\n")
+	if !strings.HasSuffix(ansi.Strip(plain[0]), "…") || lipgloss.Width(plain[0]) > 40 {
+		t.Fatalf("plain truncation = %q", plain[0])
+	}
+	if got := len(plain); got != 3 {
+		t.Fatalf("plain lines = %d, want 3", got)
+	}
+
+	fitting := strings.Split(ClampBody("short", 40, 3), "\n")
+	if strings.Contains(fitting[0], "…") || len(fitting) != 3 {
+		t.Fatalf("fitting truncation = %q", fitting)
+	}
+
+	styled := strings.Split(ClampBody(Error.Render(strings.Repeat("x", 200)), 40, 3), "\n")
+	if lipgloss.Width(styled[0]) > 40 || !strings.HasSuffix(ansi.Strip(styled[0]), "…") || strings.ContainsRune(ansi.Strip(styled[0]), '\x1b') {
+		t.Fatalf("styled truncation is invalid: %q", styled[0])
+	}
+	if got := len(styled); got != 3 {
+		t.Fatalf("styled lines = %d, want 3", got)
+	}
+
+	// Literal SGR input: profile-independent, so this actually proves the
+	// opening sequence and the trailing reset survive truncation.
+	raw := "\x1b[31m" + strings.Repeat("y", 200) + "\x1b[0m"
+	sgr := strings.Split(ClampBody(raw, 40, 3), "\n")
+	if lipgloss.Width(sgr[0]) > 40 {
+		t.Fatalf("sgr width = %d, want <= 40: %q", lipgloss.Width(sgr[0]), sgr[0])
+	}
+	if !strings.Contains(sgr[0], "\x1b[31m") || !strings.Contains(sgr[0], "\x1b[0m") {
+		t.Fatalf("truncation dropped an SGR sequence: %q", sgr[0])
+	}
+	if stripped := ansi.Strip(sgr[0]); !strings.HasSuffix(stripped, "…") || strings.ContainsRune(stripped, '\x1b') {
+		t.Fatalf("sgr truncation left a sliced escape or lost the tail: %q", sgr[0])
+	}
+
+	// Wide (2-cell) graphemes must not straddle the cut and must not become
+	// U+FFFD. ansi.Truncate uses GraphemeWidth, so no TruncateWc swap is needed.
+	wide := strings.Split(ClampBody(strings.Repeat("宽", 100), 41, 3), "\n")
+	if lipgloss.Width(wide[0]) > 41 {
+		t.Fatalf("wide width = %d, want <= 41: %q", lipgloss.Width(wide[0]), wide[0])
+	}
+	if strings.ContainsRune(wide[0], '\uFFFD') || !strings.HasSuffix(ansi.Strip(wide[0]), "…") {
+		t.Fatalf("wide truncation is invalid: %q", wide[0])
 	}
 }

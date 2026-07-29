@@ -87,6 +87,11 @@ func (m *fsManager) waitEnrichment(cmd *exec.Cmd, pid int, logPath string, attem
 			"pid", pid, "attempt_id", attemptID, "exit_reason", reason)
 		return
 	}
+	// Deliberate termination: Kill set the intent flag under m.mu before
+	// signaling, so a raw "signal:SIGTERM" here would mislabel an operator stop.
+	if _, intentional := m.killRequested[pid]; intentional {
+		reason = domain.ExitReasonOperatorStop
+	}
 	if !cur.Crashed {
 		now := time.Now().UTC()
 		cur.ExitedAt = &now

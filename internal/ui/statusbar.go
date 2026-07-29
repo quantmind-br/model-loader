@@ -11,6 +11,8 @@ import (
 // globalHints is the prefix shown in every status bar line.
 const globalHints = "[1-5] tabs  [tab] next  [q] quit" + components.HelpToken
 
+const captureHints = "[ctrl+c] quit"
+
 // recomputeHints reads page-local hints (when the active page implements
 // HintProvider) and updates the status bar to globalHints + " | " +
 // page hints. Called after every page state change so the status footer
@@ -19,14 +21,15 @@ const globalHints = "[1-5] tabs  [tab] next  [q] quit" + components.HelpToken
 // results) lands in the always-visible status bar instead of being
 // clipped to the in-body flash at narrow geometries.
 func (m *RootModel) recomputeHints() {
+	prefix := globalHints
+	if m.activePageCapturesInput() {
+		prefix = captureHints
+	}
+	m.status.Hints = prefix
 	if h, ok := m.pages[m.active].(HintProvider); ok {
 		if ph := h.Hints(); ph != "" {
-			m.status.Hints = globalHints + " | " + ph
-		} else {
-			m.status.Hints = globalHints
+			m.status.Hints = prefix + " | " + ph
 		}
-	} else {
-		m.status.Hints = globalHints
 	}
 	if sp, ok := m.pages[m.active].(StatusMessageProvider); ok {
 		msg, level := sp.StatusMessage()

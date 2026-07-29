@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 )
 
@@ -50,22 +51,22 @@ func BodyHeight(totalHeight int) int {
 	return totalHeight - TabBarHeight - StatusBarHeight
 }
 
-// ClampBody fits the rendered string into width×height: lines wider than
-// width are hard-truncated at the right edge (soft-wrap inflated the row
-// count and pushed the status bar off-screen at narrow widths), and the
-// block is padded/truncated to exactly height rows so the status bar
-// stays pinned to the bottom.
+// ClampBody fits the rendered string into width×height. Lines wider than width
+// are truncated with an ellipsis through ANSI-safe sequences.
 func ClampBody(s string, width, height int) string {
 	if width <= 0 || height <= 0 {
 		return ""
+	}
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = ansi.Truncate(line, width, "…")
 	}
 	return lipgloss.NewStyle().
 		Height(height).
 		MaxHeight(height).
 		MaxWidth(width).
-		Render(s)
+		Render(strings.Join(lines, "\n"))
 }
-
 
 // ResponsiveSplit returns the layout mode and pane widths for a master-detail
 // page given the available terminal width. Callers should consult mode to decide

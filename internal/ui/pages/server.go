@@ -20,6 +20,9 @@ import (
 type procMgrIface interface {
 	List() []domain.RunningInstance
 	Kill(pid int) error
+	// MarkOperatorStop labels the loaded backend's imminent death as
+	// operator-initiated before the proxy tears it down.
+	MarkOperatorStop(pid int)
 	TailLogs(pid int) (io.ReadCloser, error)
 	History() []domain.ExitedInstance
 	// RefreshFromDisk re-reads instances.json without writing it back —
@@ -68,6 +71,7 @@ type ServerPage struct {
 	// forceKillConfirm arms when an orphan kill is refused because the proxy is
 	// degraded — it offers ForceStop-proxy + kill (audit A13).
 	forceKillConfirm components.Confirm
+	stopProxyConfirm components.Confirm
 
 	historyChart *components.HistoryChart
 	metricsDir   string
@@ -86,6 +90,7 @@ const (
 
 func NewServerPage(pm procMgrIface, mm monitor.Manager, ps profileStoreIface) *ServerPage {
 	cols := []table.Column{
+		{Title: "", Width: markerColumnWidth},
 		{Title: "PID", Width: colPID},
 		{Title: "Port", Width: colPort},
 		{Title: "Profile", Width: colProfile},
@@ -105,20 +110,33 @@ func NewServerPage(pm procMgrIface, mm monitor.Manager, ps profileStoreIface) *S
 		flash:     components.NewFlash("monitor"),
 	}
 }
-
 func (p *ServerPage) SetSize(w, h int) {
 	p.width, p.height = w, h
 	p.tbl.SetWidth(w)
-	p.tbl.SetHeight(serverTableHeight(h))
+	p.applyTableHeight()
 	p.resizeColumns(w)
 }
 
 // serverTableHeight budgets the instance table against the body height:
 // proxy panel (≤3 typical) + status line + sub-tabs + sub-view body share
-// the rest. min 3 rows, capped at the historical 8.
 func serverTableHeight(h int) int { return min(8, max(3, h/3)) }
+
+// tableHeightForRows clamps the ceiling to the rows actually present
+// (header + rowCount) so the sub-view body reclaims unused rows. An empty
+// table keeps the ceiling so the layout cannot collapse.
+func tableHeightForRows(termHeight, rowCount int) int {
+	if rowCount <= 0 {
+		return serverTableHeight(termHeight)
+	}
+	return min(serverTableHeight(termHeight), rowCount+1)
+}
+
+// applyTableHeight re-sizes the instances table for the current row count.
+func (p *ServerPage) applyTableHeight() {
+	p.tbl.SetHeight(tableHeightForRows(p.height, len(p.tbl.Rows())))
+}
 func (p *ServerPage) resizeColumns(w int) {
-	flex := w - 24 - 12
+	flex := w - 24 - 12 - (markerColumnWidth + tableCellPadding)
 	if flex < 0 {
 		flex = 0
 	}
@@ -126,6 +144,7 @@ func (p *ServerPage) resizeColumns(w int) {
 	vramW := min(colVRAM, max(6, flex*30/100))
 	tokW := min(colTokensPerSec, max(6, flex-profileW-vramW))
 	p.tbl.SetColumns([]table.Column{
+		{Title: "", Width: markerColumnWidth},
 		{Title: "PID", Width: colPID},
 		{Title: "Port", Width: colPort},
 		{Title: "Profile", Width: profileW},
@@ -163,6 +182,7 @@ func (p *ServerPage) IsCapturingInput() bool {
 		func() bool { return p.killConfirm.Active() },
 		func() bool { return p.restartConfirm.Active() },
 		func() bool { return p.forceKillConfirm.Active() },
+		func() bool { return p.stopProxyConfirm.Active() },
 		func() bool { return p.historyChart != nil },
 	)
 }
@@ -176,7 +196,9 @@ func (p *ServerPage) View() string {
 		if p.flash.Message() != "" {
 			header = p.flash.View() + "\n" + header
 		}
-		body = header + "\n" + components.EmptyState("No instances running", "Switch to Profiles [1] to start one")
+		body = header + "\n" +
+			components.EmptyState("No instances running", "Switch to Profiles [1] to start one") + "\n" +
+			p.renderStatusLine() + "\n" + p.renderSubViewBody()
 	} else {
 		body = p.renderTable() + "\n" + p.renderStatusLine() + "\n" + p.renderSubViewBody()
 	}
@@ -204,6 +226,10 @@ func (p *ServerPage) OverlayView() Overlay {
 		content := components.Modal("Force-stop proxy", p.forceKillConfirm.View(), p.width, p.height)
 		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
 	}
+	if p.stopProxyConfirm.Active() {
+		content := components.Modal("Stop proxy", p.stopProxyConfirm.View(), p.width, p.height)
+		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
+	}
 	if p.restartConfirm.Active() {
 		content := components.Modal("Restart instance", p.restartConfirm.View(), p.width, p.height)
 		return Overlay{Content: content, Width: p.width, Height: p.height, Active: true}
@@ -222,7 +248,7 @@ func (p *ServerPage) StatusMessage() (string, components.StatusLevel) {
 // Hints implements ui.HintProvider for the Server tab.
 func (p *ServerPage) Hints() string {
 	var hints string
-	if p.killConfirm.Active() || p.restartConfirm.Active() || p.forceKillConfirm.Active() {
+	if p.anyConfirmActive() {
 		hints = components.ConfirmHints
 	} else if p.historyChart != nil {
 		hints = "[1] 1h  [2] 6h  [3] 24h  [4] 7d  [esc] close"

@@ -198,6 +198,9 @@ func (s *Server) postUpstreamChat(ctx context.Context, loaded *loadedBackend, oa
 	}
 	resp, err := s.upstream.Do(req)
 	if err != nil {
+		if ctx.Err() == nil && isBackendUnavailableError(err) {
+			s.markBackendUnavailable(loaded, err)
+		}
 		return nil, &anthropicAPIError{http.StatusBadGateway, "api_error", "upstream: " + err.Error()}
 	}
 	return resp, nil

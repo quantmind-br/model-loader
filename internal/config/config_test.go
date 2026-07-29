@@ -107,3 +107,40 @@ func TestLoad_DefaultLoggingLevelIsInfo(t *testing.T) {
 		t.Errorf("default logging.level = %q, want %q", cfg.Logging.Level, "info")
 	}
 }
+
+// CFG1: the config file and every config-tree default must resolve against the
+// same base. Before the fix DefaultConfigPath honoured $XDG_CONFIG_HOME while
+// the paths.* defaults hardcoded $HOME/.config, so a redirected XDG split the
+// operator's state across two trees with no error.
+func TestConfigTreeDefaultsFollowConfigPathBase(t *testing.T) {
+	xdg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+
+	cfgPath, err := DefaultConfigPath()
+	if err != nil {
+		t.Fatalf("DefaultConfigPath: %v", err)
+	}
+	wantBase := filepath.Join(xdg, "model-loader")
+	if got := filepath.Dir(cfgPath); got != wantBase {
+		t.Fatalf("config dir = %q, want %q", got, wantBase)
+	}
+
+	cfg, err := LoadFrom(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	if got, want := cfg.Paths.ProfilesDir, filepath.Join(wantBase, "profiles"); got != want {
+		t.Errorf("ProfilesDir = %q, want %q", got, want)
+	}
+	if got, want := cfg.Paths.BackendsDir, filepath.Join(wantBase, "backends"); got != want {
+		t.Errorf("BackendsDir = %q, want %q", got, want)
+	}
+	// The state tree is deliberately not XDG-config-scoped.
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home dir")
+	}
+	if got, want := cfg.Paths.StateDir, filepath.Join(home, ".local", "state", "model-loader"); got != want {
+		t.Errorf("StateDir = %q, want %q", got, want)
+	}
+}

@@ -388,7 +388,8 @@ Compound Python commands (`python -m sglang.launch_server`) are supported via
 any agent output. Series: `L` (logs), `B` (TUI), `D` (docs), `T` (tests),
 `S` (schemas), `N` (SNDR), `V` (vLLM venv), `P` (proxy), `BM` (benchmark),
 `DL` (downloads), `DF` (DFlash/DSpark), `UIUX` (TUI+configweb UX),
-`BR` (benchmark reliability), plus `GA`, `PN`, `PV`, `CU`, `AUD-{A,B,C}`
+`BR` (benchmark reliability), `CFG` (config paths), plus `GA`, `PN`, `PV`,
+`CU`, `AUD-{A,B,C}`
 audits. Regression tests cite their BUGS.md id in a comment (sometimes
 documented in dedicated `*_regression_test.go` files like
 `internal/service/benchmark/br_regression_test.go` and
