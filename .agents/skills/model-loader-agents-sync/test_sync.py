@@ -1017,6 +1017,18 @@ sys.exit(2)
         self.assertEqual(sync._zeroclaw_slug("Qwen3.6-27B_AWQ"), "qwen3_6_27b_awq")
         self.assertEqual(sync._zeroclaw_slug("--foo..bar--"), "foo_bar")
 
+    def test_long_alias_is_bounded_and_stable(self):
+        pid = "kat-coder-v2-5-dev-35b-a3b-ud-q5-k-xl-mtp-256k-tensor-split"
+        alias = sync._zeroclaw_alias(pid)
+        self.assertEqual(len(alias), 63)
+        self.assertEqual(alias, sync._zeroclaw_alias(pid))
+        self.assertTrue(alias.startswith("model_loader_kat_coder_v2_5_dev_35b_a3b_ud_q5_k_xl_"))
+        self.assertRegex(alias, r"_[0-9a-f]{8}$")
+
+    def test_short_alias_keeps_legacy_shape(self):
+        self.assertEqual(sync._zeroclaw_alias("Qwen3.6-27B_AWQ"),
+                         "model_loader_qwen3_6_27b_awq")
+
     def test_creates_provider_and_agent_per_profile(self):
         with tempfile.TemporaryDirectory() as td:
             profiles_dir = Path(td, "profiles"); profiles_dir.mkdir()

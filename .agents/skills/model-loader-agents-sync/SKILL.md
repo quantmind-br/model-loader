@@ -128,10 +128,12 @@ it only when changing an adapter.
   user may point unrelated custom models at the same proxy). For recognized
   entries the resolved base URL and `provider ==
   generic-chat-completion-api` are validated as managed fields, not ownership.
-- **ZeroClaw**: the reserved alias prefix `model_loader_`. Providers and
-  agents with that prefix are identified independently; valid pairs are
-  updated. An orphaned prefixed **agent** is deleted via `zeroclaw agents
-  delete` (scrubs references + cascades owned state). An orphaned prefixed
+- **ZeroClaw**: the reserved alias prefix `model_loader_`. Aliases are capped at
+  ZeroClaw's 63-character limit; long profile ids use a deterministic 8-hex
+  SHA-256 suffix. Providers and agents with that prefix are identified
+  independently; valid pairs are updated. An orphaned prefixed **agent** is
+  deleted via `zeroclaw agents delete` (scrubs references + cascades owned
+  state). An orphaned prefixed
   **provider** cannot be dropped — the CLI has no remove-table op — so it is
   *decommissioned*: every adapter-owned leaf (`uri`, `model`, `wire_api`,
   `context_window`, `max_tokens`, `think`) is scrubbed while any `api_key`/

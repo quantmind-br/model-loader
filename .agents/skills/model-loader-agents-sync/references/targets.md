@@ -120,9 +120,10 @@ provider+agent alias is generated **per eligible profile** — there is no
 multi-model catalog inside a provider profile.
 
 Aliases: `model_loader_<slug>`, `<slug>` = profile id lowercased, non-alnum →
-`_`, repeated `_` collapsed, trimmed. A collision between two distinct ids is
-a configuration error (exit 2), never auto-suffixed. Agent alias == provider
-alias.
+`_`, repeated `_` collapsed, trimmed. ZeroClaw limits aliases to 63 characters;
+long aliases keep the longest fitting slug prefix plus `_` and the first 8 hex
+characters of SHA-256(profile id). A collision between two distinct ids is a
+configuration error (exit 2), never auto-suffixed. Agent alias == provider alias.
 
 Provider fields (`build_zeroclaw_provider`, always recalculated, any existing
 `api_key`/extra preserved): `uri` normalized to exactly one `/v1` (never

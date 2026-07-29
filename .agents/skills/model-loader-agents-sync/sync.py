@@ -67,6 +67,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import math
 import os
@@ -123,6 +124,8 @@ DROID_API_KEY_DEFAULT = "model-loader"   # inline non-secret placeholder; proxy 
 DROID_DISPLAY_PREFIX = "Model Loader · "  # exclusive ownership marker on customModels[]
 
 ZEROCLAW_ALIAS_PREFIX = "model_loader_"   # reserved provider+agent alias namespace
+ZEROCLAW_ALIAS_MAX_LEN = 63                # zeroclaw 0.8.3 validation limit
+ZEROCLAW_ALIAS_HASH_LEN = 8
 ZEROCLAW_BIN_DEFAULT = "zeroclaw"
 
 # Context-window arg keys, checked in priority order across backends.
@@ -1495,8 +1498,17 @@ def sync_droid(parts: dict, paths: dict, overrides: dict, args: argparse.Namespa
 
 def _zeroclaw_slug(pid: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "_", pid.lower())
-    s = re.sub(r"_+", "_", s).strip("_")
-    return s
+    return re.sub(r"_+", "_", s).strip("_")
+
+
+def _zeroclaw_alias(pid: str) -> str:
+    slug = _zeroclaw_slug(pid)
+    alias = ZEROCLAW_ALIAS_PREFIX + slug
+    if len(alias) <= ZEROCLAW_ALIAS_MAX_LEN:
+        return alias
+    digest = hashlib.sha256(pid.encode("utf-8")).hexdigest()[:ZEROCLAW_ALIAS_HASH_LEN]
+    slug_len = ZEROCLAW_ALIAS_MAX_LEN - len(ZEROCLAW_ALIAS_PREFIX) - len(digest) - 1
+    return ZEROCLAW_ALIAS_PREFIX + slug[:slug_len].rstrip("_") + "_" + digest
 
 
 def _jp_escape(token: str) -> str:
@@ -1661,7 +1673,7 @@ def sync_zeroclaw(parts: dict, paths: dict, overrides: dict, args: argparse.Name
     alias_by_id: dict[str, str] = {}
     seen: dict[str, str] = {}
     for p in parts["passed"]:
-        alias = ZEROCLAW_ALIAS_PREFIX + _zeroclaw_slug(p.id)
+        alias = _zeroclaw_alias(p.id)
         if alias in seen and seen[alias] != p.id:
             die(f"zeroclaw alias collision: '{p.id}' and '{seen[alias]}' both map to '{alias}'", 2)
         seen[alias] = p.id

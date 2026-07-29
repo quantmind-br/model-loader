@@ -19,11 +19,11 @@
     },
     "model-loader-agents-sync": {
       "canonicalPath": "model-loader-agents-sync",
-      "baseCommit": "4c39c13fdc167476b5e44fe2d3d28513993e50d7",
-      "baseTree": "35816a2740e85ffaa57a7362c980197a80cba11e",
-      "baseTreeHash": "9947b396593caccf13372f25e0cdeb13ad8b07c8ba86af622e078c93aa19fc3b",
-      "dirHash": "970bbc01b1de7fe3bc677f7803872d0c6b955b324f407522e42b4690bc2855a5",
-      "syncedAt": "2026-07-27T19:47:16.958445184Z"
+      "baseCommit": "5b97bc14848ac443dbb44c6a5a32facc74169807",
+      "baseTree": "09695bc7dba473a87fdaa4188f6ce8d69bc31015",
+      "baseTreeHash": "cdd3eeea9e9f184608e2c40c74d8bd89c365b0b84cb84845160c87bb293769b4",
+      "dirHash": "80390f9bed67f02a541b6ac0c7e22ff460cb6484bc1acaad3c26b50045a828a6",
+      "syncedAt": "2026-07-29T14:11:30.586973829Z"
     },
     "model-loader-clean-up": {
       "canonicalPath": "model-loader-clean-up",
