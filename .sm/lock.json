@@ -1,6 +1,14 @@
 {
   "version": 1,
   "skills": {
+    "backend-schema-update": {
+      "canonicalPath": "backend-schema-update",
+      "baseCommit": "cc88fe9731050896025dca6d323fee0944a8b0a9",
+      "baseTree": "a6c8bf2ea289e9f00df0b28081ef98fa304bdd6a",
+      "baseTreeHash": "7de22bec988fe484d70bbc36e7fce556f294cf09c2a983143a1d9b35345291e6",
+      "dirHash": "7de22bec988fe484d70bbc36e7fce556f294cf09c2a983143a1d9b35345291e6",
+      "syncedAt": "2026-07-29T17:28:03.664743251Z"
+    },
     "caveman-compress": {
       "canonicalPath": "caveman-compress",
       "baseCommit": "bf848e22cef3eb5206f97fa54c6dd039e32eef9b",
