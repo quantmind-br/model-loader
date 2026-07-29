@@ -180,7 +180,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		intFlag("cache-reuse", "", nil, 0, "Minimum chunk size for attempting reuse via KV shifting.", llamaGroupHTTP, ptrutil.Ptr(0), nil),
 		intFlag("cache-ram", "cram", nil, 8192, "Maximum prompt-cache size in MiB; -1 = no limit, 0 = disable.", llamaGroupHTTP, nil, nil),
 		boolFlag("cache-idle-slots", "", []string{"no-cache-idle-slots"}, true, "Save idle slots to the prompt cache (requires cache-ram).", llamaGroupHTTP),
-		intFlag("sleep-idle-seconds", "", nil, -1, "Seconds of idleness before the server sleeps; -1 disables.", llamaGroupHTTP, nil, nil),
+		withAllowedInts(intFlag("sleep-idle-seconds", "", nil, -1, "Seconds of idleness before the server sleeps; -1 disables.", llamaGroupHTTP, ptrutil.Ptr(1), nil), -1),
 		floatFlag("slot-prompt-similarity", "sps", nil, 0.1, "Required prompt similarity to reuse a slot; 0.0 disables.", llamaGroupHTTP, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
 		intFlag("sse-ping-interval", "", nil, 30, "SSE ping interval in seconds; -1 disables.", llamaGroupHTTP, nil, nil),
 		strFlag("tags", "", nil, nil, "Model tags, comma-separated (informational, not used for routing).", llamaGroupHTTP, false),

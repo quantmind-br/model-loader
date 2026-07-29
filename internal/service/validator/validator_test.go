@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -66,6 +67,45 @@ func TestValidator_TypeRule(t *testing.T) {
 			}
 			if tc.wantErrs > 0 && rep.Errors[0].Field != tc.wantField {
 				t.Errorf("Errors[0].Field=%q, want %q", rep.Errors[0].Field, tc.wantField)
+			}
+		})
+	}
+}
+
+func TestValidator_IntAllowedValueBeforeMin(t *testing.T) {
+	min := 1
+	sch := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"sleep-idle-seconds": {
+			Long:        "sleep-idle-seconds",
+			Type:        domain.FlagTypeInt,
+			Min:         &min,
+			AllowedInts: []int{-1},
+		},
+	}}
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(`{"sleep-idle-seconds":-1}`), &decoded); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name string
+		args map[string]any
+		want int
+	}{
+		{name: "native allowed integer", args: map[string]any{"sleep-idle-seconds": -1}, want: 0},
+		{name: "json decoded allowed integer", args: decoded, want: 0},
+		{name: "positive integer", args: map[string]any{"sleep-idle-seconds": 1}, want: 0},
+		{name: "zero below minimum", args: map[string]any{"sleep-idle-seconds": 0}, want: 1},
+		{name: "other negative below minimum", args: map[string]any{"sleep-idle-seconds": -2}, want: 1},
+		{name: "fractional value", args: map[string]any{"sleep-idle-seconds": -1.5}, want: 1},
+	}
+	v := New(log.Nop())
+	model := existingModel(t)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rep := v.Validate(domain.Profile{ID: "x", Model: model, Args: tc.args}, sch, domain.BackendKindLlamaServer)
+			if got := len(rep.Errors); got != tc.want {
+				t.Fatalf("Errors=%d (%v), want %d", got, rep.Errors, tc.want)
 			}
 		})
 	}

@@ -206,7 +206,7 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		strFlag("slot-save-path", "", nil, nil, "Directory to save slot KV cache.", beeGroupHTTP, false),
 		floatFlag("slot-prompt-similarity", "sps", nil, 0.10, "How closely a request prompt must match a slot's prompt to reuse it; 0 disables it.", beeGroupHTTP, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
 		strFlag("media-path", "", nil, nil, "Directory for loading local media files via file:// URLs.", beeGroupHTTP, false),
-		intFlag("sleep-idle-seconds", "", nil, -1, "Seconds of idleness after which the server sleeps; -1 disables it.", beeGroupHTTP, nil, nil),
+		withAllowedInts(intFlag("sleep-idle-seconds", "", nil, -1, "Seconds of idleness after which the server sleeps; -1 disables it.", beeGroupHTTP, ptrutil.Ptr(1), nil), -1),
 		boolFlag("embedding", "", []string{"embeddings"}, false, "Restrict the server to the embedding use case (dedicated embedding models only).", beeGroupHTTP),
 		boolFlag("rerank", "", []string{"reranking"}, false, "Enable the reranking endpoint on the server.", beeGroupHTTP),
 		strFlag("ui-config", "", []string{"webui-config"}, nil, "JSON providing default web UI settings (overrides UI defaults).", beeGroupHTTP, false),

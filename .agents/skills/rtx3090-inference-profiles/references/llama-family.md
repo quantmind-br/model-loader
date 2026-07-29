@@ -8,11 +8,11 @@ nightly adds correct separate-HF-draft-repo sidecar resolution plus DFlash/EAGLE
 tag — v0.4.0 swapped the fork DFlash for upstream `draft-dflash` and added KVarN KV compression +
 the KV precision tail; v0.4.1 is KVarN/HIP/Vulkan + compact-SWA-tail work with **no flag-surface
 change** vs b10829); **`buun-rtx3090`** (buun fork,
-b9792 `87c351d28`, superseded — recommend beellama unless the user insists). All take local GGUF
+b10696 `0eb1e82b6`, superseded — recommend beellama unless the user insists). All take local GGUF
 paths (`--model` emitted from the profile `model` field; HF repo ids REJECTED by the validator
 for these kinds) and share canonical flag mapping (`ngl` → `n-gpu-layers`). On-disk schemas are
-curated and `source.editable` (249 flags llama.cpp-stable/nightly, 265 beellama, 251 buun) — a
-flag the binary supports but the schema lacks goes verbatim in `extraArgs`, a **raw passthrough**
+curated and `source.editable` — a flag the binary supports but the schema lacks goes verbatim in
+`extraArgs`, a **raw passthrough**
 whose values are never enum/type-checked (`internal/service/validator/rules.go`
 `applyExtraArgsRules`); it is for schema-absent flags only, NOT a workaround for "enum-blocked"
 values — nothing valid is enum-blocked. The validator also resolves flag aliases (`Lookup` in
@@ -113,11 +113,9 @@ setup: **references/model-research.md** (mandatory research pass).
 - **Draft/spec flag surface:** `--draft`/`--draft-n`/`--draft-max` (→ `draft.n_max`) and
   `--draft-min`/`--draft-n-min` remain live aliases on b9934/b10083; the canonical names are
   `--spec-draft-n-max` / `--spec-draft-n-min`, prefer those. Dialects DO differ by backend
-  (`common/speculative.cpp` type maps): `mtp` and `dflash` are the **buun-only** fork `spec-type`
-  spellings — upstream and BeeLlama v0.4.0 use `draft-mtp` and `draft-dflash`. **BeeLlama v0.4.0
-  switched to the upstream `draft-dflash` spelling** (its old fork `dflash` is gone); only **buun**
-  (b9792, not upgraded) still uses the fork `dflash`/`mtp` dialect and has NO `draft-dflash`. Never
-  mix spellings across the three backends; trust each backend's schema.
+  (`common/speculative.cpp` type maps): upstream and BeeLlama v0.4.0 use `draft-mtp` and
+  `draft-dflash`; Buun b10696 accepts both those upstream spellings and the fork `mtp`/`dflash`
+  dialect. Use the spelling shown by the target backend's live schema.
 - `--defrag-thold` deprecated/no-op. `--no-host`: AMX-specific, skip on this rig.
 - mmap default ON is what makes proxy hot-swaps fast (page cache). The library's anchors use
   `--no-mmap --mlock --no-host` (avoids page-cache eviction stalls mid-session; mlock may log a
@@ -371,12 +369,13 @@ llama-server backends. Do not pick prisma-ml for DSpark (unusable via server, ab
 
 Registered as **`buun-rtx3090`** in the catalog (predecessor fork, superseded by beellama for
 every use case — recommend beellama and record that in the description if the user insists on
-buun). Buun (b9792) keeps buun-era DFlash/draft names — `--spec-dflash-default`,
+Buun). Buun (b10696) retains its buun-era DFlash/draft flags — `--spec-dflash-default`,
 `--dflash-max-slots`, `--draft-max`, `--draft-model`, `--draft-topk`, `--tree-budget`
-(`backends/buun-llama-cpp/common/arg.cpp`). BeeLlama v0.3.x renamed these to `--spec-*`, and
-**v0.4.0 then removed the whole `--spec-dflash-*` family entirely** (adopting upstream flat
+(`backends/buun-llama-cpp/common/arg.cpp`); its live `spec-type` accepts both fork `mtp`/`dflash`
+and upstream `draft-mtp`/`draft-dflash` spellings. BeeLlama v0.3.x renamed these to `--spec-*`,
+and **v0.4.0 then removed the whole `--spec-dflash-*` family entirely** (adopting upstream flat
 `draft-dflash`; upstream keeps `--draft-max` as a live alias but has none of the DFlash-slot
-controls). Never mix spellings across the three backends; trust each one's own schema.
+controls). Use each target backend's own schema for the remaining flag surface.
 
 ## Gotchas
 

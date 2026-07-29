@@ -64,8 +64,9 @@ Run top to bottom. Steps 1–8 are pre-launch; 9–12 are the measured loop.
    `args`: the step-2 sampling + anti-loop flags (llama-family: `repeat-penalty 1.05`,
    `repeat-last-n 256`; **DRY banned**), the template flag if drifted, the speculative `spec-type`
    (list-valued enum — the `draft-mtp,ngram-mod` chain and `draft-dflash` validate directly in
-   `args`; beellama v0.4.0 uses upstream `draft-dflash`/`draft-mtp`, only buun spells it
-   `dflash`/`mtp`), and the backend's **agent-serving** flags
+   `args`; upstream llama.cpp and BeeLlama use `draft-dflash`/`draft-mtp`, while Buun b10696
+   accepts both those upstream spellings and its fork spellings `dflash`/`mtp` — target the live
+   schema), and the backend's **agent-serving** flags
    (llama.cpp: `cache-reuse 256`, `ubatch 2048` — `references/llama-family.md` §Tuning by model
    type; vLLM: `performance-mode interactivity`, `served-model-name` = profile id —
    `references/vllm-sglang.md` §Both backends: profile musts).

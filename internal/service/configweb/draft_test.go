@@ -150,6 +150,71 @@ func TestDraft_ApplyTo_ClearsSurfacedFlag(t *testing.T) {
 	}
 }
 
+func TestDraft_ApplyTo_CanonicalizesAliasBackedSurfacedFlag(t *testing.T) {
+	existing := domain.Profile{
+		ID: "p",
+		Args: map[string]any{
+			"spec-draft-model": "/models/legacy.gguf",
+		},
+		Launch: domain.LaunchConfig{BackendID: "llama"},
+	}
+	schema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"draft-model": {
+			Long:    "draft-model",
+			Aliases: []string{"spec-draft-model"},
+			Type:    domain.FlagTypeString,
+		},
+	}}
+	d := Draft{
+		ID:        "p",
+		BackendID: "llama",
+		Args:      map[string]string{"draft-model": "/models/current.gguf"},
+	}
+
+	p := d.ApplyTo(existing, schema, surfacedFlags(domain.BackendValidationSchema{
+		Flags:        schema.Flags,
+		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{{Flags: []string{"draft-model"}}}},
+	}))
+
+	if got := p.Args["draft-model"]; got != "/models/current.gguf" {
+		t.Fatalf("canonical value = %#v, want %q", got, "/models/current.gguf")
+	}
+	if _, ok := p.Args["spec-draft-model"]; ok {
+		t.Fatalf("legacy alias survived canonical save: %#v", p.Args)
+	}
+}
+
+func TestDraft_ApplyTo_ClearsAliasBackedFlagAndPreservesUnsurfacedArg(t *testing.T) {
+	existing := domain.Profile{
+		ID: "p",
+		Args: map[string]any{
+			"spec-draft-model": "/models/legacy.gguf",
+			"tool-call-parser": "gemma4",
+		},
+		Launch: domain.LaunchConfig{BackendID: "llama"},
+	}
+	schema := domain.FlagSchema{Flags: map[string]domain.FlagSpec{
+		"draft-model": {
+			Long:    "draft-model",
+			Aliases: []string{"spec-draft-model"},
+			Type:    domain.FlagTypeString,
+		},
+	}}
+	d := Draft{ID: "p", BackendID: "llama", Args: map[string]string{}}
+
+	p := d.ApplyTo(existing, schema, surfacedFlags(domain.BackendValidationSchema{
+		Flags:        schema.Flags,
+		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{{Flags: []string{"draft-model"}}}},
+	}))
+
+	if _, ok := p.Args["spec-draft-model"]; ok {
+		t.Fatalf("cleared alias-backed flag survived: %#v", p.Args)
+	}
+	if got := p.Args["tool-call-parser"]; got != "gemma4" {
+		t.Fatalf("unsurfaced argument = %#v, want %q", got, "gemma4")
+	}
+}
+
 // S15: Args emits one argv token per key, so a flag whose value spans two
 // tokens must leave Args and land in ExtraArgs pre-split, where processmgr
 // passes it through verbatim.

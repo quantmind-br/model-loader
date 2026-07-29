@@ -194,7 +194,6 @@ func checkType(spec domain.FlagSpec, val any) string {
 	}
 	return ""
 }
-
 func toInt64(val any) (int64, bool) {
 	switch v := val.(type) {
 	case int:
@@ -237,6 +236,11 @@ func checkIntRange(spec domain.FlagSpec, val any) string {
 			return fmt.Sprintf("expected valid port (1-65535), got %d", n)
 		}
 		return ""
+	}
+	for _, allowed := range spec.AllowedInts {
+		if n == int64(allowed) {
+			return ""
+		}
 	}
 	if spec.Min != nil && n < int64(*spec.Min) {
 		return fmt.Sprintf("expected >= %d, got %d", *spec.Min, n)
@@ -420,4 +424,3 @@ func extraArgsContain(extra []string, spec domain.FlagSpec) bool {
 	}
 	return false
 }
-

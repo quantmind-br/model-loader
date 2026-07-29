@@ -32,17 +32,18 @@ type FlagSpec struct {
 	// emitted as a single token, so a flag with Arity > 1 is rejected there and
 	// must go through Profile.ExtraArgs, which is passed through verbatim
 	// (BUGS.md S15).
-	Arity int `json:"arity,omitempty"`
-	Default    any
-	HelpText   string
-	Group      string // "common" | "sampling" | "example-specific" | "embedded"
+	Arity    int `json:"arity,omitempty"`
+	Default  any
+	HelpText string
+	Group    string // "common" | "sampling" | "example-specific" | "embedded"
 
-	Min      *int     `json:"min,omitempty"`
-	Max      *int     `json:"max,omitempty"`
-	FloatMin *float64 `json:"floatMin,omitempty"`
-	FloatMax *float64 `json:"floatMax,omitempty"`
-	IsPort   bool     `json:"isPort,omitempty"`
-	Required bool     `json:"required,omitempty"`
+	Min         *int     `json:"min,omitempty"`
+	Max         *int     `json:"max,omitempty"`
+	AllowedInts []int    `json:"allowedInts,omitempty"`
+	FloatMin    *float64 `json:"floatMin,omitempty"`
+	FloatMax    *float64 `json:"floatMax,omitempty"`
+	IsPort      bool     `json:"isPort,omitempty"`
+	Required    bool     `json:"required,omitempty"`
 }
 
 // FlagSchema is the parsed --help output keyed by long name.

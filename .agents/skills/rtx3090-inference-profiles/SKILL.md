@@ -108,9 +108,9 @@ files above — it never re-derives knowledge that lives in a reference.
 - **Prefer speculative decoding whenever assets exist** (speculative.md): MTP on MoE/finetunes,
   DFlash on dense (beellama v0.4.0 `draft-dflash` — **renamed from the old fork `dflash`**), plain
   `draft-mtp` on llama.cpp. **The `draft-mtp,ngram-mod` chain is ideal for agents and validates
-  directly in `args`** — llama.cpp `spec-type` is a **list-valued enum** (comma-chained values and
-  `draft-dflash` both pass the validator; beellama v0.4.0 now also spells DFlash `draft-dflash`,
-  only buun still uses fork `dflash`/`mtp`; all list-valued). Draft assets are
+  directly in `args`** — llama-family `spec-type` is list-valued; upstream and BeeLlama use
+  `draft-mtp`/`draft-dflash`, while Buun b10696 accepts both those upstream spellings and the
+  fork `mtp`/`dflash` dialect. Draft assets are
   build-sensitive: nightly b10083 resolves a separate `spec-draft-hf` repo to its requested
   `mtp-*`/`dflash-*`/`eagle3-*` sidecar; stable b9934 predates that fix, so use a local
   `spec-draft-model` for a separate sidecar repo. The profile's main `model` remains a local GGUF.
@@ -140,7 +140,7 @@ files above — it never re-derives knowledge that lives in a reference.
 |---|---|---|---|
 | llama-server | **llama.cpp-stable** (b9934), **llama.cpp-nightly** (b10083; adds correct separate-HF-draft-repo sidecar resolution for MTP/DFlash/EAGLE-3, plus DFlash/EAGLE-3 sidecar discovery; +4 CORS flags), **llama.cpp-prisma-ml** (PrismML fork b9597, base b9594; **Q2_0 2-bit ternary weights** for Bonsai models + `Q1_0`, `--kv-mean-center` Q4_0 K-cache mean-centering; `draft-dspark` is present but **NOT usable via the server path** — fails at the first draft round, see llama-family.md; schema is enrich-only so it never inherits upstream-only flags) | GGUF path | llama-family.md |
 | beellama-cpp | **beellama-rtx3090** (v0.4.1, b10856; upstream `draft-dflash` + adaptive `profit` controller, KVarN KV compression + KV precision tail, reasoning-loop-guard; list-valued spec. v0.4.1 = no flag change vs b10829) | GGUF (+**upstream-format** DFlash drafter) | llama-family.md |
-| buun-llama-cpp | **buun-rtx3090** (b9792; superseded — recommend beellama; list-valued spec) | GGUF | llama-family.md |
+| buun-llama-cpp | **buun-rtx3090** (b10696; superseded — recommend beellama; list-valued spec) | GGUF | llama-family.md |
 | ik-llama-cpp | **ik-llama-cpp** (ikawrakow fork `t0002-889-g3bb0e9f0`; MLA, fused-MoE/up-gate, `-ser` expert reduction, `-rtr` repack, RAM prompt cache; split none/graph/layer only — no tensor/row; hand-curated flag subset) | GGUF path | ik-llama.md |
 | vllm | **vllm-stable**, **vllm-nightly** (both 0.24.0 @ ee0da84ab; mtp/dflash/eagle3/ngram/suffix spec, fp8 KV verified on the rebuilt nightly, sleep mode); **sndr-vllm** (SNDR/Genesis TurboQuant k8v4 + MTP K=5 overlay; installed venv = dev424, dev714 is the upstream pin — short-prompt only, sndr.md); **vllm-dflash**, **vllm-dspark** (2026-07-09 spec-decode vLLM builds — DFlash / DeepSpec DSpark drafters; speculative.md) | safetensors/AWQ/GPTQ/FP8, repo id or dir | vllm-sglang.md · **sndr.md** |
 | sglang | **sglang-stable** (0.5.9), **sglang-nightly** (0.5.6-dev, +DFLASH), **sglang-dflash** (qwen3_5 DFLASH/NEXTN), **sglang-unlimited** (Unlimited-OCR only) | safetensors | vllm-sglang.md |
@@ -207,7 +207,7 @@ ctx-label check (label = binary-k floored from `ctx-size`/`max-model-len`).
 | Routing chained spec / sglang parsers through extraArgs "because the enum blocks them" | STALE (BUGS.md S1/S2 fixed): `spec-type` is list-valued (`draft-mtp,ngram-mod`, `draft-dflash` validate in `args`); sglang `reasoning-parser`/`tool-call-parser` enums widened to the installed 0.5.9 detector maps (`qwen3_coder`/`glm47`/`qwen3-thinking` validate in `args`) | put them in `args`; extraArgs is only for genuinely schema-absent flags |
 | vLLM `--reasoning-parser qwen3` | measured silently dropping 1224/1692 tokens | no parser until the token-accounting test passes; tags stay in `content` |
 | vLLM ngram spec with default lookup-min | corrupts ~50% of Qwen tool calls (#40875) | `prompt_lookup_min: 8` on tool-calling profiles |
-| `spec-type: dflash`/`mtp` on beellama v0.4.0 or llama.cpp | dialects differ: upstream + beellama v0.4.0 = `draft-mtp`/`draft-dflash`; only buun still = `mtp`/`dflash` (+ extra DFlash-slot flags) | trust each backend's own schema; never mix |
+| `spec-type` dialect mismatch | upstream and BeeLlama use `draft-mtp`/`draft-dflash`; Buun b10696 accepts both those upstream spellings and fork `mtp`/`dflash` | use the spelling accepted by the target backend's live schema |
 | "tensor-split makes everything faster" | dense short-ctx only (+22...39%); 35B-A3B MoE is per-model (measured 2026-07-12: all three embedded-MTP profiles promoted, +11.31...12.17% equal-weight geomean across 5/25/50/90% fill; per-band ranges sometimes overlap); reverses >=512k; prefill regresses; external drafts crash, embedded MTP/nextn per-model; a successful load proves compatibility, not speed; keeping an external draft beats tensor (79>48 tok/s) | layer default for unmeasured models; tensor after aggregate A/B >=5% plus TTFT/VRAM/draft/correctness guardrails; measure per ctx |
 | Single-GPU profile silently layer-splits | llama.cpp auto-splits with both cards visible | pin: `CUDA_DEVICE_ORDER=PCI_BUS_ID` + `CUDA_VISIBLE_DEVICES=1` |
 | Mask + device flag together | `CUDA_VISIBLE_DEVICES` remaps the card to `cuda:0` in-process | mask via env; leave `-mg`/`--device`/`--base-gpu-id` at default |

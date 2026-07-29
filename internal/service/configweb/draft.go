@@ -71,7 +71,9 @@ func (d Draft) ApplyTo(existing domain.Profile, schema domain.FlagSchema, surfac
 // Flags the editor surfaced as form fields are form-driven (the submission is
 // authoritative: present = set, absent = the user cleared it). Configured args
 // the editor never surfaced are preserved verbatim with their original type, so
-// a save can never silently drop a flag the schema's presentation omits.
+// a save can never silently drop a flag the schema's presentation omits. All
+// accepted names for a surfaced flag are removed before the displayed map key
+// is copied from the form.
 // Reserved (manager-owned) flags are always excluded.
 func mergeArgs(existing map[string]any, form map[string]string, schema domain.FlagSchema, surfaced map[string]bool) (map[string]any, map[string][]string) {
 	out := map[string]any{}
@@ -81,7 +83,7 @@ func mergeArgs(existing map[string]any, form map[string]string, schema domain.Fl
 		}
 		// Surfaced flags come from the form below (so an unticked/cleared one is
 		// correctly removed); keys the form never rendered are preserved as-is.
-		if surfaced[domain.CanonicalFlag(k)] {
+		if surfaced[k] || surfaced[domain.CanonicalFlag(k)] {
 			continue
 		}
 		out[k] = v

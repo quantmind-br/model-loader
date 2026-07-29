@@ -115,9 +115,10 @@ func allFlagEdits(schema domain.BackendValidationSchema) []FlagEditVM {
 	return out
 }
 
-// surfacedFlags returns the set of long-form flags the editor renders as
-// editable form fields for schema, mirroring BuildViewModel's group-render loop
-// (presentation-group flags that exist in schema.Flags, minus reserved flags).
+// surfacedFlags returns the set of accepted names for flags the editor renders
+// as editable form fields for schema, mirroring BuildViewModel's group-render
+// loop (presentation-group flags that exist in schema.Flags, minus reserved
+// flags).
 // The save path uses it to know which flags the submitted form is authoritative
 // for; everything else is a configured arg the editor never showed and must
 // preserve rather than drop.
@@ -136,7 +137,10 @@ func surfacedFlags(schema domain.BackendValidationSchema) map[string]bool {
 			if _, ok := schema.Flags[long]; !ok {
 				continue
 			}
-			out[long] = true
+			spec := schema.Flags[long]
+			for _, name := range equivalentFlagNames(long, spec) {
+				out[name] = true
+			}
 		}
 	}
 	return out
@@ -166,11 +170,14 @@ func fieldVM(long string, spec domain.FlagSpec, d Draft) FieldVM {
 	// Only a value the user explicitly set fills the field. An untouched flag
 	// stays empty (= not configured) so it never leaks into the saved profile;
 	// the schema default is surfaced only as a placeholder hint.
-	if v, ok := d.Args[long]; ok {
-		if f.Widget == "toggle" {
-			v = normalizeToggle(v)
+	for _, name := range equivalentFlagNames(long, spec) {
+		if v, ok := d.Args[name]; ok {
+			if f.Widget == "toggle" {
+				v = normalizeToggle(v)
+			}
+			f.Value = v
+			break
 		}
-		f.Value = v
 	}
 	if f.Widget == "toggle" {
 		// The default is interpolated into the widget's Alpine expression;
@@ -179,6 +186,28 @@ func fieldVM(long string, spec domain.FlagSpec, d Draft) FieldVM {
 		f.Default = normalizeToggle(f.Default)
 	}
 	return f
+}
+
+// equivalentFlagNames returns the accepted names for a presented schema key
+// in lookup order. The schema map key is first so a value already stored under
+// the current key wins over an equivalent legacy name.
+func equivalentFlagNames(key string, spec domain.FlagSpec) []string {
+	names := make([]string, 0, 3+len(spec.Aliases))
+	seen := map[string]bool{}
+	add := func(name string) {
+		if name == "" || seen[name] {
+			return
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	add(key)
+	add(spec.Long)
+	add(spec.Short)
+	for _, alias := range spec.Aliases {
+		add(alias)
+	}
+	return names
 }
 
 // normalizeToggle maps persisted bool spellings onto the toggle widget's

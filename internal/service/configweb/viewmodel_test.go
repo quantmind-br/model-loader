@@ -117,11 +117,11 @@ func TestBuildViewModel_OrdersGroupsAndWidgets(t *testing.T) {
 
 func TestNormalizeToggle(t *testing.T) {
 	cases := map[string]string{
-		"true":    "on",
-		"false":   "off",
-		"on":      "on",
-		"off":     "off",
-		"":        "",
+		"true":  "on",
+		"false": "off",
+		"on":    "on",
+		"off":   "off",
+		"":      "",
 		// Whitelist: unexpected stored values are treated as unset so they
 		// can never reach the widget's Alpine expression verbatim.
 		"garbage": "",
@@ -153,5 +153,32 @@ func TestBuildViewModel_UntouchedFlagStaysUnconfigured(t *testing.T) {
 	}
 	if f.Default != "8192" {
 		t.Fatalf("default hint should be 8192, got %q", f.Default)
+	}
+}
+
+func TestBuildViewModel_AliasValueRendersInParsedKeyField(t *testing.T) {
+	schema := domain.BackendValidationSchema{
+		BackendKind: domain.BackendKindLlamaServer,
+		Flags: map[string]domain.FlagSpec{
+			"draft-model": {
+				Long:    "draft-model",
+				Aliases: []string{"spec-draft-model"},
+				Type:    domain.FlagTypeString,
+			},
+		},
+		Presentation: &domain.Presentation{Groups: []domain.PresentationGroup{
+			{Name: "Speculative", Flags: []string{"draft-model"}},
+		}},
+	}
+
+	vm := BuildViewModel(Draft{Args: map[string]string{
+		"spec-draft-model": "/models/draft.gguf",
+	}}, schema, nil)
+	field := vm.Groups[0].Fields[0]
+	if field.Flag != "draft-model" {
+		t.Fatalf("field key = %q, want parsed key draft-model", field.Flag)
+	}
+	if field.Value != "/models/draft.gguf" {
+		t.Fatalf("alias-backed value = %q, want %q", field.Value, "/models/draft.gguf")
 	}
 }

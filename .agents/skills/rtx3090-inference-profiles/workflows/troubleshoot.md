@@ -125,8 +125,10 @@ load is a **real load failure**, never a validator block. Do not "work around" i
   inventory. Only absent drafting across those observable surfaces proves the spec is not engaged.
 - **Fixes (one per iteration):**
   1. **Dialect mismatch** — the spelling must match the backend: **upstream llama.cpp + beellama
-     v0.4.0 = `draft-mtp`/`draft-dflash`**, **only buun = `mtp`/`dflash`** (full matrix →
-     references/speculative.md §Per-engine support). A valid-but-wrong-dialect value loads nothing.
+     v0.4.0 = `draft-mtp`/`draft-dflash`**, while **Buun b10696 accepts both those upstream
+     spellings and its fork spellings `mtp`/`dflash`** (full matrix →
+     references/speculative.md §Per-engine support). Target the live schema; a valid-but-wrong-dialect
+     value loads nothing.
   2. **Missing/wrong asset resolution** — the GGUF/quant must ship the MTP/nextn tensors, or the
      external drafter must resolve to the matching sidecar. On nightly b10083, `spec-draft-hf`
      requires the corresponding `spec-type` (`draft-mtp`→`mtp-*`, `draft-dflash`→`dflash-*`,
