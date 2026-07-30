@@ -104,22 +104,32 @@ func mergeCurated(full domain.BackendValidationSchema, curated domain.BackendVal
 			if curatedSpec.Short != "" {
 				fullSpec.Short = curatedSpec.Short
 			}
-			if curatedSpec.Default != nil {
+			// On the enrich path (appendMissing=false), the parsed binary is
+			// authoritative on defaults and constraints. Only fill in gaps
+			// where the parser left a nil value. On the golden/fallback path
+			// (appendMissing=true), curated values always override.
+			if curatedSpec.Default != nil && (appendMissing || fullSpec.Default == nil) {
 				fullSpec.Default = curatedSpec.Default
 			}
-			if curatedSpec.Min != nil {
+			if curatedSpec.Min != nil && (appendMissing || fullSpec.Min == nil) {
 				fullSpec.Min = curatedSpec.Min
 			}
-			if curatedSpec.Max != nil {
+			if curatedSpec.Max != nil && (appendMissing || fullSpec.Max == nil) {
 				fullSpec.Max = curatedSpec.Max
 			}
-			if curatedSpec.FloatMin != nil {
+			if curatedSpec.FloatMin != nil && (appendMissing || fullSpec.FloatMin == nil) {
 				fullSpec.FloatMin = curatedSpec.FloatMin
 			}
-			if curatedSpec.FloatMax != nil {
+			if curatedSpec.FloatMax != nil && (appendMissing || fullSpec.FloatMax == nil) {
 				fullSpec.FloatMax = curatedSpec.FloatMax
 			}
-			if len(curatedSpec.EnumValues) > 0 {
+			// Enum values from the live binary are authoritative on the enrich
+			// path (appendMissing=false) only when the parser actually extracted
+			// them (e.g. --spec-type none,draft-simple,...). When the parser
+			// couldn't extract enum values (e.g. --prio N), the curated values
+			// fill in the metadata gap. The golden fallback path
+			// (appendMissing=true) always uses curated values.
+			if len(curatedSpec.EnumValues) > 0 && (appendMissing || len(fullSpec.EnumValues) == 0) {
 				fullSpec.EnumValues = append([]string(nil), curatedSpec.EnumValues...)
 			}
 			// The help parser cannot distinguish a numeric flag whose description

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
+	"github.com/quantmind-br/model-loader/internal/service/internal/ptrutil"
 )
 
 // cacheTypeEnum lists the KV-cache quant types accepted by --cache-type-{k,v}.
@@ -59,6 +60,14 @@ func ParseHelp(data []byte) (domain.FlagSchema, error) {
 			}
 			if rawDefault != nil {
 				spec.Default = coerceDefault(spec.Type, rawDefault)
+				// Mirror parseFlagLine's numeric cleanup: if coercion
+				// produced a non-numeric default for a numeric type
+				// (e.g. "read from model"), drop it.
+				if (spec.Type == domain.FlagTypeInt || spec.Type == domain.FlagTypeFloat) && spec.Default != nil {
+					if _, ok := spec.Default.(string); ok {
+						spec.Default = nil
+					}
+				}
 			}
 			spec = hardcodedFlagOverrides(spec)
 		}
@@ -115,8 +124,9 @@ func isFlagDefLine(line string) bool {
 var sectionHeaderRe = regexp.MustCompile(`^-{5}\s+(.+?)\s+params\s+-{5}$`)
 
 var (
-	bracketEnumRe = regexp.MustCompile(`^\[([^\]]+)\]$`)
-	braceEnumRe   = regexp.MustCompile(`^\{([^}]+)\}$`)
+	bracketEnumRe     = regexp.MustCompile(`^\[([^\]]+)\]$`)
+	braceEnumRe       = regexp.MustCompile(`^\{([^}]+)\}$`)
+	angleBracketIntRe = regexp.MustCompile(`^<(\d+)(?:\|(\d+)|\.{2,3}(\d+))>$`)
 )
 
 // parseSectionHeader returns the section name (e.g., "common") for a header
@@ -205,6 +215,37 @@ func parseFlagLine(line string) (domain.FlagSpec, bool) {
 	if spec.Type == domain.FlagTypeEnum {
 		spec.EnumValues = parseEnumPlaceholder(placeholder)
 	}
+	// Inline comma-separated enum lists (e.g. --spec-type none,draft-simple,...)
+	// appear as a bare comma-separated token without brackets. The placeholder
+	// IS the list; parse it as an enum so the live-parse path can preserve
+	// per-backend allowed values (prisma dspark vs upstream dflash).
+	// Only match when every element looks like a kebab-case identifier
+	// (lowercase alphanumeric with hyphens/underscores); exclude patterns
+	// like FNAME:SCALE,... or <dev1,dev2,..> that also contain commas.
+	if len(spec.EnumValues) == 0 && placeholder != "" && !strings.Contains(placeholder, " ") && strings.Contains(placeholder, ",") && !strings.ContainsAny(placeholder, "<>:") {
+		values := splitAndTrim(placeholder, ",")
+		if len(values) > 1 && isInlineEnumValues(values) {
+			spec.Type = domain.FlagTypeEnum
+			spec.EnumValues = values
+		}
+	}
+	// Numeric angle-bracket placeholders like <0|1> or <0...100> carry
+	// implicit range constraints. Extract min/max so the validator can
+	// enforce them even without curated metadata.
+	if spec.Type == domain.FlagTypeInt && angleBracketIntRe.MatchString(placeholder) {
+		if m := angleBracketIntRe.FindStringSubmatch(placeholder); m != nil {
+			lo, _ := strconv.Atoi(m[1])
+			spec.Min = ptrutil.Ptr(lo)
+			hiStr := m[2]
+			if hiStr == "" {
+				hiStr = m[3]
+			}
+			if hiStr != "" {
+				hi, _ := strconv.Atoi(hiStr)
+				spec.Max = ptrutil.Ptr(hi)
+			}
+		}
+	}
 	rawDefault := extractDefault(descChunk)
 	// llama-server overloads the "N" placeholder for both ints and floats
 	// (e.g. --top-k N is int, --top-p N is float). When the inferred type is int
@@ -215,6 +256,14 @@ func parseFlagLine(line string) (domain.FlagSpec, bool) {
 	}
 	if rawDefault != nil {
 		spec.Default = coerceDefault(spec.Type, rawDefault)
+		// If coercion failed for a numeric type (result is still string),
+		// drop the default so the validator doesn't choke on a non-numeric
+		// literal like "read from model".
+		if (spec.Type == domain.FlagTypeInt || spec.Type == domain.FlagTypeFloat) && spec.Default != nil {
+			if _, ok := spec.Default.(string); ok {
+				spec.Default = nil
+			}
+		}
 	}
 	spec = hardcodedFlagOverrides(spec)
 	return spec, true
@@ -290,6 +339,24 @@ func splitAndTrim(s, sep string) []string {
 	return out
 }
 
+// isInlineEnumValues reports whether every string in values looks like an enum
+// identifier: lowercase alphanumeric with hyphens and underscores only.
+// This guards against false positives for comma-separated placeholders like
+// "FNAME:SCALE,..." or "<dev1,dev2,..>".
+func isInlineEnumValues(values []string) bool {
+	for _, v := range values {
+		if v == "" {
+			return false
+		}
+		for _, r := range v {
+			if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func allowedValuesFromContinuations(lines []string, start int) []string {
 	var chunks []string
 	for j := start; j < len(lines); j++ {
@@ -329,7 +396,6 @@ func parseAllowedValues(raw string) []string {
 	}
 	return out
 }
-
 // inferType maps the placeholder token to a FlagType.
 func inferType(placeholder string) domain.FlagType {
 	switch {
@@ -337,6 +403,8 @@ func inferType(placeholder string) domain.FlagType {
 		return domain.FlagTypeBool
 	case parseEnumPlaceholder(placeholder) != nil:
 		return domain.FlagTypeEnum
+	case angleBracketIntRe.MatchString(placeholder):
+		return domain.FlagTypeInt
 	}
 	// Fallback: scalar. Distinguishing int vs float vs string is best-effort
 	// using common llama-server placeholders.
@@ -350,13 +418,20 @@ func inferType(placeholder string) domain.FlagType {
 }
 
 // extractDefault pulls the first "(default: X)" payload from the description.
-// Returns nil if absent.
+// Returns nil if absent or if the value is an inherited-description reference
+// (e.g. "same as --cpu-strict", "same as --threads-draft").
 func extractDefault(desc string) any {
 	m := defaultRe.FindStringSubmatch(desc)
 	if m == nil {
 		return nil
 	}
-	return strings.TrimSpace(m[1])
+	raw := strings.TrimSpace(m[1])
+	// Inherited defaults like "same as --cpu-strict" reference another flag
+	// and are not literal values.
+	if strings.Contains(raw, "--") {
+		return nil
+	}
+	return raw
 }
 
 // looksFloat reports whether the raw default value is a decimal number (i.e.
