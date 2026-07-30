@@ -43,11 +43,11 @@
     },
     "rtx3090-inference-profiles": {
       "canonicalPath": "rtx3090-inference-profiles",
-      "baseCommit": "210936e748ac6da6aef278bec0f7333414aa3bcd",
-      "baseTree": "8fc40e542b9e6137511b3b309223dd76076d6702",
-      "baseTreeHash": "91cacfff6c1a5aeca0685282d59adbace99f0bfa2e02a0b99293164348d31a9a",
-      "dirHash": "ecffd5230ab165a1c18683f1237aecdb9accce2b289c70742e7f358fd2799ad5",
-      "syncedAt": "2026-07-29T18:42:18.598845357Z"
+      "baseCommit": "523416f18937d9e5eb7de83bfcbacd81e0246fd9",
+      "baseTree": "14a754417bcadd91276bbccd7978dc2df6d00b2f",
+      "baseTreeHash": "29629e3c2b2c03560f2d232a265a254536cf443d50410e9d83da658587a11e47",
+      "dirHash": "2fbf1cdf4da9f539db1a4b8ceaa5dda9ad3bdd15f89954cb1d681471baf7b824",
+      "syncedAt": "2026-07-30T00:15:41.321967897Z"
     },
     "tui-design": {
       "canonicalPath": "tui-design",

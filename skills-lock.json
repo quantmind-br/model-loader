@@ -42,7 +42,7 @@
       "sourceType": "local"
     },
     "rtx3090-inference-profiles": {
-      "computedHash": "620e4d690d66f19bcf9b2284e2ffc49c2783ce869cbcdfc5d4c4cbca262b90b4",
+      "computedHash": "85b7687660ec72ac4a9599dfcd114cfd97990feed05f81013c2edd1aa7d7bbd5",
       "skillPath": "rtx3090-inference-profiles/SKILL.md",
       "source": "/home/diogo/dev/skills",
       "sourceType": "local"
