@@ -33,7 +33,7 @@ func TestCuratedLlama_ValidatesMTPProfile(t *testing.T) {
 			"cache-type-k":     "q4_0",
 			"cache-type-v":     "q4_0",
 			"cpu-mask":         "0x00000003",
-			"cpu-strict":       "1",
+			"cpu-strict":       float64(1),
 			"ctx-size":         float64(200000),
 			"flash-attn":       "on",
 			"host":             "127.0.0.1",
@@ -448,5 +448,118 @@ func TestMergeWithCurated_PreservesParsedArity(t *testing.T) {
 	}
 	if spec.Arity != 2 {
 		t.Fatalf("Arity = %d, want 2 (curated 0 must not erase the parsed count)", spec.Arity)
+	}
+}
+
+// S17: mergeWithCuratedEnrich must preserve parsed EnumValues when the live
+// binary declares different allowed values than the curated overlay. A prisma-ml
+// fork with --spec-type=draft-dspark must not have its enum overwritten by the
+// curated draft-dflash.
+func TestMergeWithCuratedEnrich_PreservesParsedEnumValues(t *testing.T) {
+	full := domain.BackendValidationSchema{
+		Flags: map[string]domain.FlagSpec{
+			"spec-type": {
+				Long:       "spec-type",
+				Type:       domain.FlagTypeString,
+				EnumValues: []string{"none", "draft-simple", "draft-dspark"},
+				Default:    "none",
+			},
+		},
+	}
+	curated := domain.BackendValidationSchema{
+		Flags: map[string]domain.FlagSpec{
+			"spec-type": {
+				Long:       "spec-type",
+				Type:       domain.FlagTypeEnum,
+				List:       true,
+				EnumValues: []string{"none", "draft-simple", "draft-dflash"},
+				Default:    "none",
+			},
+		},
+	}
+	merged := mergeWithCuratedEnrich(full, curated)
+	spec, ok := merged.Flags["spec-type"]
+	if !ok {
+		t.Fatal("spec-type missing after enrich merge")
+	}
+	// Enrich must preserve parsed enum values (prisma fork has dspark, not dflash).
+	if len(spec.EnumValues) != 3 || spec.EnumValues[2] != "draft-dspark" {
+		t.Fatalf("EnumValues = %v, want [none draft-simple draft-dspark] (parsed values must survive enrich)", spec.EnumValues)
+	}
+	// But Type and List from curated must still apply.
+	if spec.Type != domain.FlagTypeEnum {
+		t.Fatalf("Type = %d, want enum (4)", spec.Type)
+	}
+	if !spec.List {
+		t.Fatal("List = false, want true (curated List must apply)")
+	}
+}
+
+// S17b: mergeWithCurated (appendMissing=true, used by golden fallback) must
+// still override parsed EnumValues since the golden may trail the curated schema.
+func TestMergeWithCurated_OverridesParsedEnumValues(t *testing.T) {
+	full := domain.BackendValidationSchema{
+		Flags: map[string]domain.FlagSpec{
+			"spec-type": {
+				Long:       "spec-type",
+				Type:       domain.FlagTypeString,
+				EnumValues: []string{"none", "draft-simple"},
+				Default:    "none",
+			},
+		},
+	}
+	curated := domain.BackendValidationSchema{
+		Flags: map[string]domain.FlagSpec{
+			"spec-type": {
+				Long:       "spec-type",
+				Type:       domain.FlagTypeEnum,
+				List:       true,
+				EnumValues: []string{"none", "draft-simple", "draft-dflash"},
+				Default:    "none",
+			},
+		},
+	}
+	merged := mergeWithCurated(full, curated)
+	spec, ok := merged.Flags["spec-type"]
+	if !ok {
+		t.Fatal("spec-type missing after append-missing merge")
+	}
+	// Append-missing (golden fallback) must override with curated values.
+	if len(spec.EnumValues) != 3 || spec.EnumValues[2] != "draft-dflash" {
+		t.Fatalf("EnumValues = %v, want [none draft-simple draft-dflash] (curated must override in golden path)", spec.EnumValues)
+	}
+}
+
+// S17c: mergeWithCuratedEnrich must fill in curated EnumValues when the parser
+// couldn't extract them (e.g. --prio N where the help text just says "N").
+// These are curated metadata the parser structurally can't recover.
+func TestMergeWithCuratedEnrich_FillsInMissingParsedEnumValues(t *testing.T) {
+	full := domain.BackendValidationSchema{
+		Flags: map[string]domain.FlagSpec{
+			"prio": {
+				Long:    "prio",
+				Type:    domain.FlagTypeInt,
+				Default: 0,
+				// Parser couldn't extract enum values from "N" placeholder.
+			},
+		},
+	}
+	curated := domain.BackendValidationSchema{
+		Flags: map[string]domain.FlagSpec{
+			"prio": {
+				Long:       "prio",
+				Type:       domain.FlagTypeEnum,
+				EnumValues: []string{"-1", "0", "1", "2", "3"},
+				Default:    0,
+			},
+		},
+	}
+	merged := mergeWithCuratedEnrich(full, curated)
+	spec, ok := merged.Flags["prio"]
+	if !ok {
+		t.Fatal("prio missing after enrich merge")
+	}
+	if len(spec.EnumValues) != 5 || spec.EnumValues[2] != "1" {
+		t.Fatalf("EnumValues = %v, want [-1 0 1 2 3] (curated must fill in when parser didn't extract)", spec.EnumValues)
 	}
 }

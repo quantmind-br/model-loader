@@ -615,3 +615,59 @@ func TestParseHelp_Golden(t *testing.T) {
 		t.Fatalf("golden mismatch.\nDiff: run `go test ./internal/service/llamahelp -update` and inspect the diff with `git diff`.")
 	}
 }
+
+// S16: inline comma-separated enum lists (e.g. --spec-type none,draft-simple,...)
+// must be parsed as Type=enum with the comma-separated values extracted, so the
+// live-parse path can preserve per-backend allowed values (prisma dspark vs
+// upstream dflash). Patterns like FNAME:SCALE,... or <dev1,dev2,..> must not
+// trigger the detection.
+func TestParseHelp_ParsesInlineCommaListEnum(t *testing.T) {
+	tests := []struct {
+		line        string
+		wantEnum    bool
+		wantValues  []string
+	}{
+		{
+			line:       "--spec-type none,draft-simple,draft-dspark,ngram-simple  comma-separated list (default: none)",
+			wantEnum:   true,
+			wantValues: []string{"none", "draft-simple", "draft-dspark", "ngram-simple"},
+		},
+		{
+			line:       "--lora-scaled FNAME:SCALE,...  path with scaling (default: none)",
+			wantEnum:   false,
+		},
+		{
+			line:       "--device \u003cdev1,dev2,..\u003e  comma-separated device list",
+			wantEnum:   false,
+		},
+		{
+			line:       "--fit-target MiB0,MiB1,...  target margin per device (default: 1024)",
+			wantEnum:   false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.line[:30], func(t *testing.T) {
+			spec, ok := parseFlagLine(tc.line)
+			if !ok {
+				t.Fatal("parseFlagLine returned false")
+			}
+			if tc.wantEnum {
+				if spec.Type != domain.FlagTypeEnum {
+					t.Fatalf("Type = %d, want enum (4)", spec.Type)
+				}
+				if len(spec.EnumValues) != len(tc.wantValues) {
+					t.Fatalf("EnumValues = %v, want %v", spec.EnumValues, tc.wantValues)
+				}
+				for i, v := range tc.wantValues {
+					if i >= len(spec.EnumValues) || spec.EnumValues[i] != v {
+						t.Fatalf("EnumValues[%d] = %q, want %q", i, spec.EnumValues[i], v)
+					}
+				}
+			} else {
+				if spec.Type == domain.FlagTypeEnum {
+					t.Fatalf("Type = enum, want non-enum for line: %s", tc.line)
+				}
+			}
+		})
+	}
+}

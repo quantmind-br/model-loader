@@ -405,7 +405,7 @@
       "Aliases": null,
       "Type": 3,
       "EnumValues": null,
-      "Default": "same as --cpu-mask",
+      "Default": null,
       "HelpText": "CPU affinity mask: arbitrarily long hex. Complements cpu-range-batch (default: same as --cpu-mask)",
       "Group": "common"
     },
@@ -417,7 +417,7 @@
       ],
       "Type": 3,
       "EnumValues": null,
-      "Default": "same as --cpu-mask",
+      "Default": null,
       "HelpText": "Draft model CPU affinity mask. Complements cpu-range-draft (default: same as --cpu-mask)",
       "Group": "speculative"
     },
@@ -429,7 +429,7 @@
       ],
       "Type": 3,
       "EnumValues": null,
-      "Default": "same as --cpu-mask",
+      "Default": null,
       "HelpText": "Draft model CPU affinity mask. Complements cpu-range-draft (default: same as --cpu-mask)",
       "Group": "speculative"
     },
@@ -491,21 +491,25 @@
       "Long": "cpu-strict",
       "Short": "",
       "Aliases": null,
-      "Type": 3,
+      "Type": 1,
       "EnumValues": null,
-      "Default": "0",
+      "Default": 0,
       "HelpText": "use strict CPU placement (default: 0)",
-      "Group": "common"
+      "Group": "common",
+      "min": 0,
+      "max": 1
     },
     "cpu-strict-batch": {
       "Long": "cpu-strict-batch",
       "Short": "",
       "Aliases": null,
-      "Type": 3,
+      "Type": 1,
       "EnumValues": null,
-      "Default": "same as --cpu-strict",
+      "Default": null,
       "HelpText": "use strict CPU placement (default: same as --cpu-strict)",
-      "Group": "common"
+      "Group": "common",
+      "min": 0,
+      "max": 1
     },
     "cpu-strict-batch-draft": {
       "Long": "cpu-strict-batch-draft",
@@ -513,11 +517,13 @@
       "Aliases": [
         "spec-draft-cpu-strict-batch"
       ],
-      "Type": 3,
+      "Type": 1,
       "EnumValues": null,
-      "Default": "--cpu-strict-draft",
+      "Default": null,
       "HelpText": "Use strict CPU placement for draft model (default: --cpu-strict-draft)",
-      "Group": "speculative"
+      "Group": "speculative",
+      "min": 0,
+      "max": 1
     },
     "cpu-strict-draft": {
       "Long": "cpu-strict-draft",
@@ -525,11 +531,13 @@
       "Aliases": [
         "spec-draft-cpu-strict"
       ],
-      "Type": 3,
+      "Type": 1,
       "EnumValues": null,
-      "Default": "same as --cpu-strict",
+      "Default": null,
       "HelpText": "Use strict CPU placement for draft model (default: same as --cpu-strict)",
-      "Group": "speculative"
+      "Group": "speculative",
+      "min": 0,
+      "max": 1
     },
     "ctx-size": {
       "Long": "ctx-size",
@@ -1003,7 +1011,7 @@
       "Aliases": null,
       "Type": 1,
       "EnumValues": null,
-      "Default": "read from model",
+      "Default": null,
       "HelpText": "maximum number of tokens each image can take, only used by vision models with dynamic resolution (default: read from model)",
       "Group": "example-specific"
     },
@@ -1013,7 +1021,7 @@
       "Aliases": null,
       "Type": 1,
       "EnumValues": null,
-      "Default": "read from model",
+      "Default": null,
       "HelpText": "minimum number of tokens each image can take, only used by vision models with dynamic resolution (default: read from model)",
       "Group": "example-specific"
     },
@@ -1537,7 +1545,7 @@
       ],
       "Type": 1,
       "EnumValues": null,
-      "Default": "auto",
+      "Default": null,
       "HelpText": "max. number of layers to store in VRAM, either an exact number, 'auto', or 'all' (default: auto)",
       "Group": "common"
     },
@@ -1550,7 +1558,7 @@
       ],
       "Type": 1,
       "EnumValues": null,
-      "Default": "auto",
+      "Default": null,
       "HelpText": "max. number of draft model layers to store in VRAM, either an exact number, 'auto', or 'all' (default: auto)",
       "Group": "speculative"
     },
@@ -1676,21 +1684,25 @@
       "Long": "poll",
       "Short": "",
       "Aliases": null,
-      "Type": 3,
+      "Type": 1,
       "EnumValues": null,
-      "Default": "50",
+      "Default": 50,
       "HelpText": "use polling level to wait for work (0 - no polling, default: 50)",
-      "Group": "common"
+      "Group": "common",
+      "min": 0,
+      "max": 100
     },
     "poll-batch": {
       "Long": "poll-batch",
       "Short": "",
       "Aliases": null,
-      "Type": 3,
+      "Type": 1,
       "EnumValues": null,
-      "Default": "same as --poll",
+      "Default": null,
       "HelpText": "use polling to wait for work (default: same as --poll)",
-      "Group": "common"
+      "Group": "common",
+      "min": 0,
+      "max": 1
     },
     "poll-batch-draft": {
       "Long": "poll-batch-draft",
@@ -1698,11 +1710,13 @@
       "Aliases": [
         "spec-draft-poll-batch"
       ],
-      "Type": 3,
+      "Type": 1,
       "EnumValues": null,
-      "Default": "--poll-draft",
+      "Default": null,
       "HelpText": "Use polling to wait for draft model work (default: --poll-draft)",
-      "Group": "speculative"
+      "Group": "speculative",
+      "min": 0,
+      "max": 1
     },
     "poll-draft": {
       "Long": "poll-draft",
@@ -1710,11 +1724,13 @@
       "Aliases": [
         "spec-draft-poll"
       ],
-      "Type": 3,
+      "Type": 1,
       "EnumValues": null,
-      "Default": "same as --poll",
+      "Default": null,
       "HelpText": "Use polling to wait for draft model work (default: same as --poll)",
-      "Group": "speculative"
+      "Group": "speculative",
+      "min": 0,
+      "max": 1
     },
     "pooling": {
       "Long": "pooling",
@@ -1944,7 +1960,7 @@
       "Aliases": null,
       "Type": 1,
       "EnumValues": null,
-      "Default": "loaded from model",
+      "Default": null,
       "HelpText": "RoPE base frequency, used by NTK-aware scaling (default: loaded from model)",
       "Group": "common"
     },
@@ -2264,8 +2280,19 @@
       "Long": "spec-type",
       "Short": "",
       "Aliases": null,
-      "Type": 3,
-      "EnumValues": null,
+      "Type": 4,
+      "EnumValues": [
+        "none",
+        "draft-simple",
+        "draft-eagle3",
+        "draft-mtp",
+        "draft-dflash",
+        "ngram-simple",
+        "ngram-map-k",
+        "ngram-map-k4v",
+        "ngram-mod",
+        "ngram-cache"
+      ],
       "Default": "none",
       "HelpText": "comma-separated list of types of speculative decoding to use (default: none)",
       "Group": "speculative"
@@ -2405,7 +2432,7 @@
       "Aliases": null,
       "Type": 1,
       "EnumValues": null,
-      "Default": "same as --threads",
+      "Default": null,
       "HelpText": "number of threads to use during batch and prompt processing (default: same as --threads)",
       "Group": "common"
     },
@@ -2417,7 +2444,7 @@
       ],
       "Type": 1,
       "EnumValues": null,
-      "Default": "same as --threads-draft",
+      "Default": null,
       "HelpText": "number of threads to use during batch and prompt processing (default: same as --threads-draft)",
       "Group": "speculative"
     },
@@ -2429,7 +2456,7 @@
       ],
       "Type": 1,
       "EnumValues": null,
-      "Default": "same as --threads",
+      "Default": null,
       "HelpText": "number of threads to use during generation (default: same as --threads)",
       "Group": "speculative"
     },
