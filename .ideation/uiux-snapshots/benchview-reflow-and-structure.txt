@@ -1,0 +1,53 @@
+Structure + reflow measurements — configweb benchmark viewer (read-only)
+Source: http://127.0.0.1:40795/ (TUI Benchmark tab -> [W]), Chrome
+Captured: 2026-07-30
+
+--------------------------------------------------------------------
+/  (Runs list)
+--------------------------------------------------------------------
+tbody tr count ............................ 193
+form controls (input/select/button) ....... 0
+links ..................................... 3 nav (Runs / Compare / Live)
+                                            + 193 "detail →" row links
+table header cells ........................ when | profile | mode | metric | tok/s | (detail)
+                                            all static, none sortable
+pagination / filter / search / mode picker  none present
+
+--------------------------------------------------------------------
+REFLOW — document.documentElement.scrollWidth vs viewport width
+(measured in a same-origin iframe whose width was stepped down)
+--------------------------------------------------------------------
+  720 px viewport -> doc  705 px -> overflow  -15 px   OK
+  545 px viewport -> doc  545 px -> overflow    0 px   OK (floor)
+  500 px viewport -> doc  545 px -> overflow   45 px   HORIZONTAL SCROLL
+  390 px viewport -> doc  545 px -> overflow  155 px   HORIZONTAL SCROLL
+  320 px viewport -> doc  545 px -> overflow  225 px   HORIZONTAL SCROLL
+
+WCAG 2.2 SC 1.4.10 (Reflow) requires no two-dimensional scrolling down to
+320 CSS px. The viewer bottoms out at 545 px.
+
+Container check:
+  getComputedStyle(table.parentElement).overflowX ....... "visible"
+  .bench-table                                          width:100%
+  .bench-table th                                       white-space:nowrap
+  app.css @media (max-width:720px) block ................ contains rules for
+     .topbar / .sidebar / .top-fields / .fields-grid / .flag-fields-grid
+     — no rules for .bench-table or .bench-nav
+
+--------------------------------------------------------------------
+/live  (empty state)
+--------------------------------------------------------------------
+Body copy: "no run in progress"
+No next-step guidance, no statement that the page auto-refreshes when a run
+starts. Compare with the TUI, which uses components.EmptyState with an action
+line ("Press [b] to run your first benchmark").
+
+--------------------------------------------------------------------
+/compare
+--------------------------------------------------------------------
+Throughput (llama-bench) section header row: profile | tok/s | tok/s | TTFT | …
+The primary-metric column and the dedicated tok/s column render the same value
+(427.1 twice) for throughput-mode runs.
+Source: configweb/benchview_viewmodel.go:276-283 appends a "tok/s" card
+unconditionally after the primary card, which is already "tok/s" for
+ModeLlamaBench (primaryMetricOf, line 168).

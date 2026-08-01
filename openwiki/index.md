@@ -1,0 +1,16 @@
+---
+okf_version: "0.1"
+---
+
+# Files
+
+- [Architecture overview](architecture.md) - Top-level layout of model-loader — the single-binary entrypoints, the dependency-injection container, the three bootstrap modes (owner vs observer), on-disk state, and the end-to-end proxy request flow that hot-swaps the active backend.
+- [Backend schema generation and validation](backend-schema.md) - How per-backend validation schemas are produced from --help output, embedded golden fallbacks, and hand-curated overlays, then merged so live-parsed facts stay authoritative while curated metadata fills semantic gaps. Covers the manager, generators, merge core, the spec-type enum system, and the presentation layer.
+- [Benchmark engine](benchmark.md) - The 12-mode evaluation engine spanning five categories (Quality, Speed, Robustness, Knowledge, Agentic). Covers the single canonical mode list, the run pipeline, the LLM-judge and self-consistency scoring, objective modes, and the three agentic modes that shell out to external harnesses plus Docker with stall-watchdog hang detection.
+- [Domain data model](data-model.md) - The zero-dependency domain types that flow across model-loader — Profile launch configs, Backend catalog entries, RunningInstance/ExitedInstance process records, and the FlagSchema/BackendValidationSchema that drive validation and the web editor.
+- [HTTP proxy and model hot-swap](http-proxy.md) - The multi-API reverse proxy that fronts a single loaded backend. Speaks four client APIs — OpenAI native, Anthropic Messages, OpenAI Responses, and Gemini — all translated to the backend's chat completions, with implicit per-request model swap via the serialized ensureLoaded path and admin endpoints for explicit control.
+- [Operations and configuration](operations.md) - Operator runbook for model-loader — runtime and binary requirements, the TOML configuration surface, where state lives on disk, and the troubleshooting guidance for common failures (missing binaries, schema generation, port conflicts, instance recovery).
+- [Process manager and lifecycle](process-manager.md) - The process lifecycle engine in internal/service/processmgr. Launches backend processes, tracks them by PID plus /proc start-ticks to defend against PID recycling, writes flock-guarded delta updates to instances.json, supervises health, and runs a restart engine for adopted crashes.
+- [model-loader quickstart](quickstart.md) - Entry point for the model-loader code wiki. A Go terminal UI and headless CLI that manages local LLM inference servers across nine backends, fronted by a single multi-API HTTP proxy that hot-swaps the active model on demand.
+- [Surfaces — TUI, web editor, and CLI](surfaces.md) - The three operator surfaces of model-loader. The 5-tab Bubble Tea TUI is the default; a schema-driven configweb editor (also reused as a read-only benchmark viewer) handles profile and backend editing in the browser; and a full Cobra CLI mirrors every TUI action without importing the UI package.
+- [Testing and QA](testing.md) - Test conventions for model-loader — stdlib testing only with hand-rolled doubles, white-box by default, the single golden fixture pair for llama-server --help, regression-test bundles linked to BUGS.md ids, and the two-command quality gate.

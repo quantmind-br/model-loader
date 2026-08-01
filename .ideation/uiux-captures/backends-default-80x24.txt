@@ -1,0 +1,24 @@
+ 1 Profiles  │  2 Server  │  3 Models  │  4 Backends  │  5 Benchmark
+   Backends
+
+│ llama.cpp stable
+  llama.cpp nightly
+  llama.cpp prisma-ml
+  BeeLlama RTX3090
+  Lucebox DFlash
+  Unsloth RTX3090
+  sglang-unlimited
+page 1/3 · 20 backends
+──────────────────────────────────────────────────────────────────────────────
+llama.cpp stable default
+llama-server
+
+ID:          llama.cpp-stable
+Kind:        llama-server
+Executable:  /home/diogo/dev/model-loader/backends/llama.cpp-stable/build/bin…
+SchemaRef:   schemas/llama.cpp-stable.json
+Description: (none)
+Tags:        (none)
+
+
+[1-5] tabs  [tab] next  [q] quit  [?] help | [e] edit  [n] new  [X] del  [D]…

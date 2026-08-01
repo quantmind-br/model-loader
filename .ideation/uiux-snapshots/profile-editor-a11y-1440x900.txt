@@ -1,0 +1,103 @@
+Accessibility snapshot — configweb profile editor (Configure tab)
+Source: Chrome accessibility tree, http://127.0.0.1:36411/, viewport 1266x1191
+Profile: agents-a1-4b-q8-ngram-layer-256k (llama.cpp-stable)
+Captured: 2026-07-30
+
+tab "Configure" [ref_1] type="button"
+tab "Customize" [ref_2] type="button"
+button "Cancel" [ref_3]
+button "Save" [ref_4] type="button"
+tab "Essentials" [ref_5] type="button"
+tab "1. Model Loading" [ref_6] type="button"
+tab "2. Context and Generation" [ref_7] type="button"
+tab "3. Threads and CPU" [ref_8] type="button"
+tab "4. Memory and I/O" [ref_9] type="button"
+tab "5. Devices and GPU" [ref_10] type="button"
+tab "6. KV Cache" [ref_11] type="button"
+tab "7. RoPE and YaRN" [ref_12] type="button"
+tab "8. Context Shift and SWA" [ref_13] type="button"
+tab "9. Samplers and Sampling" [ref_14] type="button"
+tab "10. Penalties and Advanced Sampling Techniques" [ref_15] type="button"
+tab "11. Grammar and Schema" [ref_16] type="button"
+tab "12. Chat Template and Jinja" [ref_17] type="button"
+tab "13. HTTP Server" [ref_18] type="button"
+tab "14. Multimodal (Vision)" [ref_19] type="button"
+tab "15. Embeddings and Reranking" [ref_20] type="button"
+tab "16. LoRA and Control Vectors" [ref_21] type="button"
+tab "17. Speculative Decoding" [ref_22] type="button"
+textbox "profile identifier (slug)" [ref_23] placeholder="profile identifier (slug)"
+textbox "profile name" [ref_24] placeholder="profile name"
+textbox "model path or repo" [ref_25] placeholder="model path or repo"
+textbox "comma-separated tags" [ref_26] placeholder="comma-separated tags"
+textbox "optional notes about this profile" [ref_27] placeholder="optional notes about this profile"
+textbox "KEY" [ref_28] placeholder="KEY"
+textbox "VALUE" [ref_29] placeholder="VALUE"
+button "Remove environment variable 1" [ref_30] type="button"
+button "+ Add env var" [ref_31] type="button"
+textbox "Search parameters" [ref_32] type="text" placeholder="Search parameter…  ( / )"
+tabpanel [ref_33]
+ textbox "unused (default)" [ref_34] placeholder="unused (default)"
+ textbox "0 (default)" [ref_35] type="number" placeholder="0 (default)"
+ textbox "127.0.0.1 (default)" [ref_36] placeholder="127.0.0.1 (default)"
+ textbox "-1 (default)" [ref_37] type="number" placeholder="-1 (default)"
+
+--------------------------------------------------------------------
+DOM INTEGRITY MEASUREMENTS (JS, same page/session)
+--------------------------------------------------------------------
+document.querySelectorAll('[id]') duplicates .............. 28 ids appear twice
+  arg-hf-repo(2), arg-hf-repo-help(2), arg-ctx-size(2), arg-ctx-size-help(2),
+  arg-host(2), arg-host-help(2), arg-n-gpu-layers(2), arg-n-gpu-layers-help(2),
+  arg-device(2), arg-device-help(2), arg-parallel(2), arg-parallel-help(2), …
+
+form[0] duplicate field names ............................. 22
+  arg.hf-repo(2) arg.ctx-size(2) arg.host(2) arg.n-gpu-layers(2) arg.device(2)
+  arg.parallel(2) arg.threads(2) arg.batch-size(2) arg.ubatch-size(2)
+  arg.cache-type-k(2) arg.cache-type-v(2) …
+
+document.getElementById('arg-ctx-size').labels.length ..... 2   (ambiguous label)
+
+Duplicate-submission probe (no save performed):
+  nodes = form[0].querySelectorAll('[name="arg.ctx-size"]')
+  before -> [{group:'group-panel-essentials', val:'262144'},
+             {group:'group-panel-2--context-and-generation', val:'262144'}]
+  edit second copy to 131072 ->
+  after  -> [{group:'group-panel-essentials', val:'262144'},
+             {group:'group-panel-2--context-and-generation', val:'131072'}]
+  new FormData(form[0]).getAll('arg.ctx-size') -> ["262144", "131072"]
+  Server side: handlers.go:41-42 keeps vs[0] -> "262144"  (the edit is discarded)
+
+--------------------------------------------------------------------
+FOCUS + TARGET SIZE
+--------------------------------------------------------------------
+:focus-visible rules present .............................. 2  (global ring + search-input)
+:focus rules present ...................................... 6  (box-shadow rings on fields)
+Interactive elements under 24x24 CSS px ................... input.toggle-check 20x20
+  enclosing label.toggle-hit measures 82.4 x 44  -> WCAG 2.5.8 satisfied via enclosing target
+
+--------------------------------------------------------------------
+CONTRAST (computed foreground vs resolved background, dark theme)
+--------------------------------------------------------------------
+field help text  (#arg-ctx-size-help) ..... 6.99:1  @12px/400   PASS (>=4.5:1)
+sidebar group tab (inactive) .............. 6.47:1  @14px/500   PASS
+section muted text (.muted) ............... 6.47:1  @16px/400   PASS
+field label ............................... 16.27:1 @14px/600   PASS
+
+--------------------------------------------------------------------
+ERROR STATE
+--------------------------------------------------------------------
+live region: <div id="issues" role="status" aria-live="polite">
+  text with model cleared + ctx-size=-5:
+    "ctx-size: expected >= 0, got -5" / "model: required"
+form hx-trigger .......................... "input delay:300ms"
+input aria-invalid ....................... null (never set)
+input aria-describedby ................... "arg-ctx-size-help" (help only, not the error)
+Error in a NON-active group (arg-threads-batch = -9, Essentials active):
+  offending field offsetParent ........... null  (not rendered)
+  sidebar group "3. Threads and CPU" ..... no error badge (shows option count "13")
+  #issues links/buttons .................. 0  (no way to jump to the field)
+
+--------------------------------------------------------------------
+REFLOW
+--------------------------------------------------------------------
+Profile editor at 386px viewport: single column, sidebar becomes a horizontal
+chip strip, Save/Cancel stay in view. No horizontal body overflow observed.

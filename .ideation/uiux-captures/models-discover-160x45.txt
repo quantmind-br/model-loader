@@ -1,0 +1,45 @@
+ 1 Profiles  │  2 Server  │  3 Models  │  4 Backends  │  5 Benchmark
+Models
+ Library  Downloads  Discover
+Discover GGUF models on the Hugging Face Hub.
+
+Press [enter] or [s] to search. Selected files download into your first
+configured models path and show up in the Downloads section.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1-5] tabs  [tab] next  [q] quit  [?] help | [←/→] section  [enter] search HF  [esc] back to library
