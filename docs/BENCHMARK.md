@@ -244,7 +244,7 @@ Example custom profile:
 
 ## References
 
-- [Profile Configurations](./profiles-README.md)
+- [Profile data model](../openwiki/data-model.md)
 - [Speculative Decoding Theory](https://arxiv.org/abs/2211.17192)
 - [DFlash Implementation](https://github.com/mit-han-lab/llm-awq)
 - [MTP (Multi-Token Prediction)](https://arxiv.org/abs/2404.19737)

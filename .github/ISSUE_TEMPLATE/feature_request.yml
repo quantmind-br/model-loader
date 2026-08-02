@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose a focused improvement
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Which user workflow is difficult or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe the observable behavior you want, not only an implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds or related tools have you tried?
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Primary surface
+      options:
+        - TUI
+        - CLI
+        - HTTP proxy
+        - Backend integration
+        - Benchmarking
+        - Documentation
+        - Other
+    validations:
+      required: true

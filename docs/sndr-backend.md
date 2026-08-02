@@ -134,7 +134,7 @@ symlinked under the `models.search_paths` root.
 (VRAM / MM-budget); the three 27B keep vision so their A/B against the stock vision
 profiles is apples-to-apples.
 
-## ⚠ Large-prefill trap (measured 2026-07-03 — [BUGS.md N3](BUGS.md))
+## ⚠ Large-prefill trap (measured 2026-07-03 — [BUGS.md N3](../BUGS.md))
 
 The `turboquant_k8v4` **continuation-prefill** path (patch `P38`,
 `turboquant_attn.py::_prefill_attention` → `p38_tq_continuation_memory.py`) dequantizes

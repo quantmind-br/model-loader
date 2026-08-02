@@ -57,22 +57,32 @@ Instance ports are ephemeral and internal: the process manager assigns each back
 |-----|---------|-------------|
 | `host` | `127.0.0.1` | Bind host for the proxy. Overridable with `serve --host` |
 | `port` | `4321` | Bind port for the proxy. Overridable with `serve --port` |
+| `health_check_timeout_sec` | `0` | Backend health-wait override in seconds. `0` selects the caller default; headless `serve` uses 360 seconds for large model loads |
 
 #### Endpoints
 
-The proxy exposes the OpenAI-compatible inference surface, the Anthropic Messages API (translated to the backend's chat completions), and dedicated admin endpoints. All return JSON; failures use the OpenAI `{"error":{...}}` envelope, except the two Anthropic routes, whose failures use the Anthropic `{"type":"error","error":{...}}` envelope.
+The proxy exposes OpenAI-compatible inference, Anthropic Messages, OpenAI
+Responses, Gemini translation, and dedicated admin endpoints. All return JSON;
+failures use the OpenAI `{"error":{...}}` envelope, except the two Anthropic
+routes, whose failures use the Anthropic
+`{"type":"error","error":{...}}` envelope.
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | `POST` | `/v1/chat/completions`, `/v1/completions`, … | Proxied to the loaded backend. The `"model"` field (or `?model=` query param) triggers an implicit swap when needed |
 | `POST` | `/v1/messages` | Anthropic Messages API translated to the backend's `/v1/chat/completions` (streaming, tools, images, system; `reasoning_content` → `thinking` blocks). `"model"` must be a profile id (strict 404 otherwise) and triggers the same implicit swap |
 | `POST` | `/v1/messages/count_tokens` | Deterministic local token estimate; never contacts or loads a backend. Validates that `"model"` is an existing profile |
+| `POST` | `/v1/responses` | OpenAI Responses API translated to the backend's chat-completions endpoint |
+| `POST` | `/v1beta/models/{model}:{generateContent\|streamGenerateContent\|countTokens}` | Gemini API translated to chat completions; `GET /v1beta/models` lists profiles |
 | `GET`  | `/v1/models` | OpenRouter-shaped model list — each profile mirrors an OpenRouter `/api/v1/models` object (non-applicable fields empty) plus OpenAI's `object:"model"` and `owned_by` (serving backend id) and Anthropic's `type:"model"`/`display_name`/`created_at`; envelope keeps `{"object":"list"}` and adds `has_more`/`first_id`/`last_id` |
 | `GET`  | `/_status` | Current state: `running`, `loaded_profile_id`, `loaded_pid`, `loaded_port`, `inflight_requests`, `last_swap_at`, `last_swap_dur`, `last_error` |
 | `POST` | `/_admin/load` | Explicitly load a profile. Body: `{"profile_id":"<id>"}` (alias: `{"model":"<id>"}`). Returns the same `Status` shape as `/_status` |
 | `POST` | `/_admin/unload` | Kill the loaded backend, freeing its VRAM. Query params: `?force=true` (skip drain), `?drain_timeout=10s` (cap on in-flight drain wait, defaults to the shutdown grace period). Idempotent: 200 when nothing is loaded |
 
-When a request targets a profile that is not loaded yet, the proxy launches the backend and waits for it to become healthy before forwarding (up to 180 seconds by default, to accommodate slow model loads).
+When a request targets a profile that is not loaded yet, the proxy launches the
+backend and waits for it to become healthy before forwarding. The headless
+`serve` command allows 360 seconds by default to accommodate slow model loads;
+`health_check_timeout_sec` overrides that duration.
 
 The proxy binds to loopback by default and has no built-in authentication; do not expose it directly to a public interface.
 
@@ -83,9 +93,11 @@ Profile evaluation engine settings (Benchmark tab and `model-loader benchmark`).
 | Key | Default | Description |
 |-----|---------|-------------|
 | `max_tokens` | `32768` | Generation cap per problem |
+| `limit` | `0` | Uniform item cap for reducible modes; `0` runs the full set |
 | `timeout_sec` | `120` | Per-problem inference timeout, in seconds |
 | `long_context_tokens` | `0` | Target prompt size for the long-context needle probe (`0` → 8000) |
 | `save_transcripts` | `true` | Capture raw model/judge I/O per run for debugging |
+| `unload_after_run` | `false` | Unload the model through the proxy after a run; `false` keeps it warm |
 
 #### `[benchmark.judge]`
 
@@ -104,8 +116,15 @@ Throughput-mode (`llama-bench`) settings.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `presets` | `["512/128", "4096/256"]` | `pp/tg` token pairs (prompt / generation) to measure |
+| `presets` | `["5%/256", "25%/256", "50%/256", "90%/128"]` | Effective-context fill percentage and generation-token pairs |
 | `repetitions` | `3` | Measurements per preset (`0` → 3) |
+| `warmup` | `1` | Warmup repetitions discarded before measurement; `0` disables warmup |
+
+#### `[benchmark.embeddings]`
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `base_url` | `""` | Optional embeddings endpoint; empty reuses the model-under-test server |
 
 #### `[benchmark.terminalbench]`
 
@@ -122,6 +141,7 @@ Agentic [Terminal-Bench](https://github.com/laude-institute/terminal-bench) mode
 | `sample_seed` | `0` | Seeds the deterministic `--n-tasks`→`--task-id` expansion (with `n_tasks` / `--limit`) |
 | `concurrent` | `1` | `--n-concurrent` (keep at 1 on a single-GPU rig) |
 | `timeout_sec` | `0` | Whole-run cap; `0` → none (NOT the per-request `timeout`) |
+| `stall_timeout_sec` | `0` | No-progress watchdog override; `0` uses the built-in default |
 | `extra_args` | `[]` | Passed verbatim (e.g. `["--no-rebuild"]`) |
 
 #### `[benchmark.swebenchpro]`
@@ -163,6 +183,7 @@ the full guide (chat-completions routing and container→host networking matter)
 | `sample_seed` | `0` | `--sample-seed` for a deterministic subset (with `n_tasks`) |
 | `concurrent` | `1` | `--n-concurrent` (keep at 1 on a single-GPU rig) |
 | `timeout_sec` | `0` | Whole-run cap; `0` → none |
+| `stall_timeout_sec` | `0` | No-progress watchdog override; `0` uses the built-in default |
 | `extra_args` | `[]` | Passed verbatim after the built flags |
 
 ## Example
@@ -191,12 +212,15 @@ level = "info"
 [serve]
 host = "127.0.0.1"
 port = 4321
+health_check_timeout_sec = 0
 
 [benchmark]
 max_tokens = 32768
 timeout_sec = 120
 long_context_tokens = 0
 save_transcripts = true
+limit = 0
+unload_after_run = false
 
 [benchmark.judge]
 base_url = ""
@@ -205,8 +229,9 @@ model = ""
 samples = 3
 
 [benchmark.llamabench]
-presets = ["512/128", "4096/256"]
+presets = ["5%/256", "25%/256", "50%/256", "90%/128"]
 repetitions = 3
+warmup = 1
 
 # [benchmark.deepswe]
 # tasks_dir = "~/dev/deep-swe/tasks"   # required for --mode deep-swe; see docs/deep-swe.md

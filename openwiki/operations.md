@@ -42,7 +42,7 @@ state_dir = "~/.local/state/model-loader"
 search_paths = ["~/.lmstudio/models", "~/models"]
 
 [ui]
-default_tab = "profiles"
+default_tab = "launcher"
 
 [serve]
 host = "127.0.0.1"
