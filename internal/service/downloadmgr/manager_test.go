@@ -122,7 +122,6 @@ func TestManager_CancelQueuedRecord(t *testing.T) {
 		<-release
 		_, _ = w.Write([]byte("ok"))
 	}))
-	defer srv.Close()
 
 	var wg sync.WaitGroup
 	dir := t.TempDir()
@@ -130,10 +129,12 @@ func TestManager_CancelQueuedRecord(t *testing.T) {
 		WithSpawner(inProcessSpawner(t, srv.Client(), &wg)).
 		WithPollInterval(20 * time.Millisecond)
 	mgr.StartPolling()
-	defer mgr.Close()
-	// Declared last so it runs FIRST (LIFO): unblock any in-flight handler before
-	// srv.Close()/mgr.Close() wait on connections, avoiding a teardown deadlock.
-	defer close(release)
+	t.Cleanup(func() {
+		close(release)
+		wg.Wait()
+		mgr.Close()
+		srv.Close()
+	})
 
 	first, _ := mgr.Start(Spec{URL: srv.URL, DestFile: filepath.Join(dir, "first")})
 	queued, _ := mgr.Start(Spec{URL: srv.URL, DestFile: filepath.Join(dir, "queued")})
@@ -671,4 +672,3 @@ func waitForStatus(t *testing.T, mgr *Manager, id ID, want Status) State {
 	t.Fatalf("record %s never appeared in snapshot", id)
 	return State{}
 }
-
