@@ -47,9 +47,14 @@ thoughts/
 # Agent / IDE scratch dirs
 .claw/
 .pi/
+/.claude/
+/.commandcode/
+/.ideation/
+/.agents/
 
 # Agent instruction files
 AGENTS.md
+CLAUDE.md
 prompt-*.md
 
 # Design artifact files
@@ -67,6 +72,13 @@ TUI_AUDIT.md
 
 # Agent skills (managed by tools, not project code)
 .claude/skills
+/skills-lock.json
+
+# Local design history and tool configuration
+/docs/superpowers/
+/.cbmignore
+/.ignore
+/.shotgunignore
 
 # Temp / logs
 tmp/

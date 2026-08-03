@@ -5,7 +5,7 @@ fresh checkout to a reviewable change.
 
 ## Before you start
 
-- Search existing issues and [`BUGS.md`](BUGS.md) before opening a duplicate.
+- Search existing GitHub Issues before opening a duplicate.
 - Open an issue before a broad architectural change or new benchmark mode.
 - Keep pull requests focused on one coherent outcome.
 - Never include model weights, local configuration, credentials, logs, backend
@@ -59,8 +59,8 @@ invariants used by maintainers and coding tools.
    behavior changes.
 5. If `internal/domain/profile.go` changes, update
    `docs/profile-schema.json` in the same pull request.
-6. If you find a new defect, add it to `BUGS.md`; regression tests should cite
-   its identifier in a nearby comment.
+6. Link bug fixes to their GitHub Issue when one exists and keep regression
+   tests focused on the behavior that failed.
 
 The project uses standard-library `testing` assertions and hand-written test
 doubles. Do not introduce a mocking or assertion framework for a local change.
@@ -72,6 +72,7 @@ The required quality gate is:
 ```bash
 go build ./...
 go test ./...
+go vet ./...
 ```
 
 For a narrow edit, run the affected package first, then run the full gate. If
@@ -79,15 +80,15 @@ you change a user-facing surface, exercise that surface manually as well: run
 the CLI command, use the TUI flow, or send a request to the local HTTP service.
 
 Backend-help changes may require schema regeneration. Follow
-`.claude/commands/backend-schema-update.md` and include the regenerated schema
-artifacts in the same pull request.
+[`docs/backend-schema-update.md`](docs/backend-schema-update.md) and include the
+regenerated schema artifacts in the same pull request.
 
 ## Pull requests
 
 A reviewable pull request:
 
 - explains the user-visible problem and the chosen solution;
-- links its issue or `BUGS.md` entry when one exists;
+- links its GitHub Issue when one exists;
 - lists the commands and manual scenarios used for verification;
 - calls out compatibility, migration, and operational impact;
 - contains no unrelated formatting or cleanup; and

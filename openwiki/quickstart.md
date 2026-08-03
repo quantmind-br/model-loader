@@ -73,14 +73,15 @@ make install     # GOBIN=~/.local/bin go install ./cmd/model-loader
 make tests       # go test ./...
 ```
 
-No `gofmt`/`go vet`/lint/CI targets exist. The quality gate is `go build ./... && go test ./...` with 0 exit codes — see [Testing & QA](testing.md).
+No formatter or linter Make targets exist. GitHub Actions and the local quality
+gate run `go build ./...`, `go test ./...`, and `go vet ./...` — see
+[Testing & QA](testing.md).
 
 ## Defect tracking
 
-`BUGS.md` is the single source of truth for defects (do not embed a copy elsewhere). Series prefixes: `L`, `B`, `D`, `T`, `S`, `N`, `V`, `P`, `BM`, `DL`, `DF`, `UIUX`, `BR`, `CFG`, plus audit series `AUD-{A,B,C}` and `GA`/`PN`/`PV`/`CU`. Regression tests cite their `BUGS.md` id in a comment.
+New defects are tracked in GitHub Issues. `BUGS.md` explains the legacy IDs
+retained by regression-test comments.
 
-## Backlog
-
-- **`docs/superpowers/` PRDs and plans** — design history (specs + dated implementation plans), not runtime behavior. Anchor: `docs/superpowers/specs/`, `docs/superpowers/plans/`. Deferred: design history does not belong in the runtime code wiki.
-- **`.ideation/` UIUX captures** — UI design scratch (screenshots, snapshots). Anchor: `.ideation/uiux-screenshots/`. Deferred: design exploration, not code.
-- **`scripts/` and `tools/*-curate/`** — operator scripts and the eight Python dataset curaters that write committed datasets under `internal/service/benchmark/data/`. Anchor: `scripts/`, `tools/`. Deferred: operator tooling; revisit when documenting benchmark dataset curation.
+Operator scripts and dataset-curation tools live under `scripts/` and `tools/`;
+they write the committed benchmark datasets under
+`internal/service/benchmark/data/`.

@@ -12,5 +12,3 @@ The maintained architecture documentation is organized by topic in OpenWiki:
 - [Testing and QA](openwiki/testing.md)
 
 Start with the [OpenWiki quickstart](openwiki/quickstart.md) for a guided map.
-Historical specifications and implementation plans under `docs/superpowers/`
-are design records, not the source of truth for current behavior.

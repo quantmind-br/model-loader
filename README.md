@@ -6,6 +6,8 @@
 
 Run and benchmark local LLM inference servers from one terminal application.
 
+![model-loader Profiles screen](docs/assets/model-loader-tui.png)
+
 `model-loader` is a Go TUI and headless CLI that manages launch profiles,
 supervises inference processes, and exposes a single OpenAI-compatible endpoint.
 When a request names another profile, the proxy can stop the current backend,
@@ -58,6 +60,12 @@ you want to run and associate it with one of these kinds.
 No CGO is required.
 
 ## Install from source
+
+Prebuilt Linux amd64 archives and checksums are available from
+[GitHub Releases](https://github.com/quantmind-br/model-loader/releases).
+Backend executables and model weights are intentionally not bundled.
+
+To build the latest source instead:
 
 ```bash
 git clone https://github.com/quantmind-br/model-loader.git
@@ -180,10 +188,6 @@ rules, and [troubleshooting](docs/troubleshooting.md) for common failures.
 - [Testing and QA](openwiki/testing.md): test structure and project quality gate
 - [Profile JSON Schema](docs/profile-schema.json): canonical machine-readable profile contract
 
-Historical specifications and implementation plans live under
-[`docs/superpowers/`](docs/superpowers/). They explain design decisions but are
-not the source of truth for current runtime behavior.
-
 ## Contributing
 
 Contributions are welcome: bug fixes, backend integrations, documentation,
@@ -204,7 +208,9 @@ public issue.
 
 The project is under active development and currently optimized for a single
 trusted operator on Linux. Interfaces and persisted schemas may evolve before
-a stable `v1.0.0` release. Known defects are tracked in [`BUGS.md`](BUGS.md).
+a stable `v1.0.0` release. Known defects are tracked in
+[GitHub Issues](https://github.com/quantmind-br/model-loader/issues); historical
+regression identifiers are explained in [`BUGS.md`](BUGS.md).
 
 ## License
 

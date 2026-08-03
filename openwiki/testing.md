@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: Testing and QA
-description: Test conventions for model-loader — stdlib testing only with hand-rolled doubles, white-box by default, the single golden fixture pair for llama-server --help, regression-test bundles linked to BUGS.md ids, and the two-command quality gate.
+description: Test conventions for model-loader — stdlib testing only with hand-rolled doubles, white-box by default, the single golden fixture pair for llama-server --help, legacy regression identifiers, and the quality gate.
 tags: [testing, qa, golden, regression, bugs]
 ---
 
@@ -60,9 +60,10 @@ A duplicate `//go:embed` copy at `internal/service/backendschema/testdata/help-v
 - **CLI-level integration:** ~27 files in `internal/cli/*`. Uses `bytes.Buffer` as `io.Writer`; calls leaf command funcs directly; never `exec.Command` of the binary itself.
 - **TUI integration:** `internal/ui/root_test.go` + `profiles_test.go` use `teatest.NewTestModel` at 120×30. The rest of `internal/ui/pages/*_test.go` is pure-function style: construct page struct, invoke `Update`, call `drainCmd(cmd)`, assert on `[]tea.Msg`.
 
-## Regression tests and BUGS linkage
+## Regression tests and historical identifiers
 
-Regression tests cite their `BUGS.md` id in a comment and are **not** named `Test*Regression*` — they describe the scenario and keep the audit id in a comment.
+Some regression tests retain a historical defect ID in a comment and are **not**
+named `Test*Regression*`; new defects are tracked in GitHub Issues.
 
 Two dedicated regression bundles:
 - `internal/service/benchmark/br_regression_test.go` — **BR1–BR8** (benchmark reliability).
@@ -79,6 +80,8 @@ Other themed regressions:
 ```bash
 go build ./...     # compile
 go test ./...      # full suite
+go vet ./...       # static checks
 ```
 
-That is the entire gate. No linter, no formatter target, no CI. Before yielding, run both and confirm 0 exit codes. There is no coverage tooling in the repo (`.gitignore` excludes `coverage.out`/`coverage.html`).
+GitHub Actions runs the same three commands. There is no coverage service;
+`.gitignore` excludes ad-hoc `coverage.out`/`coverage.html` files.

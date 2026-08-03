@@ -1,8 +1,7 @@
 # Repository Guidelines
 
-> `CLAUDE.md` is a symlink to this file; **edit `AGENTS.md` in place.** The
-> symlink target follows automatically. Defect tracker: `BUGS.md` (single
-> source of truth — do not embed a copy here).
+> Local agent runtimes may symlink `CLAUDE.md` to this file; **edit
+> `AGENTS.md` in place.** Public defects are tracked in GitHub Issues.
 
 ---
 
@@ -25,8 +24,8 @@ demand.
   A read-only benchmark viewer (`benchmark web` / TUI `W`) reuses `configweb`.
   Backends are intentionally **orphaned** on TUI exit so inference survives.
 - **Module:** `github.com/quantmind-br/model-loader`
-- **Repo state:** bug tracker in `BUGS.md`; PRDs/plans under `docs/superpowers/`;
-  curated reference in `openwiki/`; AGENTS.md (this file) is the operator KB.
+- **Repo state:** public defects in GitHub Issues; curated reference in
+  `openwiki/`; AGENTS.md (this file) is the operator KB.
 
 ---
 
@@ -125,13 +124,12 @@ reasoning/thinking mapping survives.
 | `internal/ui/{theme,components,pages}/` | Theme + reusable widgets (tab_bar, statusbar, modal, overlay, flash, sparkline, proxy_panel, etc.) + per-tab page sets. |
 | `docs/profile-schema.json` | Canonical JSON Schema for `domain.Profile` (v3). |
 | `docs/{config,troubleshooting,sndr-backend,swe-bench-pro,deep-swe,BENCHMARK}.md` | Operator-facing runbooks. |
-| `docs/superpowers/{specs,plans}/` | PRDs + dated implementation plans. |
 | `openwiki/` | Curated topic-organized reference (hand-maintained via an `update` AI command). `quickstart.md` is the entry; `architecture.md`, `tui.md`, `cli.md`, `proxy.md`, `backends.md`, `profiles.md`, `benchmark.md`, `operations.md`. |
 | `scripts/` | Operator scripts (SNDR setup, Qwen benchmarks, live monitor). |
 | `tools/<task>-curate/` | Python dataset curaters (8 dirs). Writes committed `.json` files under `internal/service/benchmark/data/`. |
 | `backends/<id>/` | **Gitignored** vendored backend source trees. No git submodules; manage each as its own checkout. |
 | `testdata/` | Golden fixtures (`help-v9761.{txt,golden.json}`) + fake binaries (`fake-llama-server.sh`, `fake-llama-help.sh`). |
-| `BUGS.md` | Single source of truth for defects. See §7. |
+| `BUGS.md` | Historical regression-ID explanation and known-issue pointer. |
 
 ---
 
@@ -167,8 +165,8 @@ go run ./cmd/scripts/print_args.go <profile-id>   # specific profile
 ./bin/model-loader serve     # headless proxy daemon (no flock)
 ```
 
-**No** `gofmt`/`go vet`/`golangci-lint`/`staticcheck` targets. No CI workflows.
-No Dockerfile / goreleaser / brew formula. Distribution = `make install`.
+**No** `gofmt`/`go vet`/`golangci-lint`/`staticcheck` Make targets. GitHub
+Actions runs build, tests, and vet. No Dockerfile / goreleaser / brew formula.
 
 ---
 
@@ -320,7 +318,7 @@ No Dockerfile / goreleaser / brew formula. Distribution = `make install`.
 | Canonical profile JSON Schema | `docs/profile-schema.json` |
 | Operator runbooks | `docs/{config,troubleshooting,sndr-backend,swe-bench-pro,deep-swe,BENCHMARK}.md` |
 | Curated reference | `openwiki/{quickstart,architecture,tui,cli,proxy,backends,profiles,benchmark,operations}.md` |
-| Defect tracker | `BUGS.md` |
+| Defect tracker | GitHub Issues; legacy ID notes in `BUGS.md` |
 
 The 5-tab TUI root lives at `internal/ui/root.go`:
 `TabProfiles=0`, `TabServer=1`, `TabModels=2`, `TabBackends=3`, `TabBenchmark=4`.
@@ -372,7 +370,7 @@ Compound Python commands (`python -m sglang.launch_server`) are supported via
   `PRD_*.md`, `TUI_AUDIT.md`. **Note:** `AGENTS.md` *is* checked in despite
   this pattern — it's the canonical KB.
 
-### Tooling state directories at repo root (not project code)
+### Local tooling state directories (ignored; not project code)
 
 | Dir | Tool |
 |---|---|
@@ -384,19 +382,8 @@ Compound Python commands (`python -m sglang.launch_server`) are supported via
 
 ### Defect tracking
 
-**`BUGS.md` is the single source of truth** — do not embed a copy here or in
-any agent output. Series: `L` (logs), `B` (TUI), `D` (docs), `T` (tests),
-`S` (schemas), `N` (SNDR), `V` (vLLM venv), `P` (proxy), `BM` (benchmark),
-`DL` (downloads), `DF` (DFlash/DSpark), `UIUX` (TUI+configweb UX),
-`BR` (benchmark reliability), `CFG` (config paths), plus `GA`, `PN`, `PV`,
-`CU`, `AUD-{A,B,C}`
-audits. Regression tests cite their BUGS.md id in a comment (sometimes
-documented in dedicated `*_regression_test.go` files like
-`internal/service/benchmark/br_regression_test.go` and
-`reliability_regression_test.go`).
-
-When you find a defect, add it to `BUGS.md` and ask the user whether they want
-it fixed in the same session.
+Track new defects in GitHub Issues. Existing regression comments retain legacy
+IDs such as `BR1` and `AUD-A1`; `BUGS.md` explains that historical convention.
 
 ## OpenWiki
 
@@ -411,11 +398,9 @@ When working in this repository, read the OpenWiki quickstart first, then follow
 
 ### Project slash commands / skills
 
-- `.claude/commands/backend-schema-update.md` — the 3-pattern (`A` live-help +
-  overlay / `B` curated Go / `C` embedded rows) schema-update workflow used
-  by every `*help` package.
-- `.claude/skills/` subdirectories: `model-loader-agents-sync`,
-  `caveman-compress`, `tui-{design,refactor,validator}`, `grill-me`, `llamacpp`.
+- `docs/backend-schema-update.md` — the public 3-pattern (`A` live-help +
+  overlay / `B` curated Go / `C` embedded rows) schema-update workflow.
+- Local `.agents/` and `.claude/` skills are ignored and are not project code.
 
 ---
 
@@ -531,27 +516,25 @@ keep the audit id in a comment.
 
 ### Coverage tooling
 
-**None in repo.** No codecov config, no `.cover`, no `-cover`/`-coverprofile` in
-the Makefile, no GitHub Actions, no CI workflows. `.gitignore` excludes
-`coverage.out` / `coverage.html` so ad-hoc runs aren't committed. Coverage is
-measured per-session (e.g. `.omo/evidence/*.md`). Thin / low-density packages
+No codecov config and no `.cover` or `-coverprofile` Make target. GitHub Actions
+runs build, tests, and vet. `.gitignore` excludes `coverage.out` /
+`coverage.html` so ad-hoc runs aren't committed. Thin / low-density packages
 worth knowing: `internal/app/{bootstrap,lock}` (single happy-path tests),
 `configweb/embed_test.go`, `benchmark/runner_{inst,mmlu}bench_test.go`.
 
-### Quality gate (the entire gate)
+### Quality gate
 
 ```bash
 go build ./...     # compile
 go test ./...      # full suite
+go vet ./...       # static checks
 ```
 
-That's it. No linter, no formatter target, no CI. Before yielding, run both
-and confirm 0 exit codes.
+Before yielding, run all three and confirm 0 exit codes.
 
 ---
 
-*Edit `AGENTS.md` in place. The symlink at `CLAUDE.md` follows it. Defect
-history lives in `BUGS.md`.*
+*Edit `AGENTS.md` in place. Track public defects in GitHub Issues.*
 
 <!-- OPENWIKI:START -->
 

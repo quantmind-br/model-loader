@@ -11,8 +11,7 @@ import (
 // essentialSeed lists, per backend kind, the flag long-names that should land
 // in the highlighted "Essentials" group when synthesizing a default
 // Presentation. Copied from the retired profile_editor essentials registry.
-// "port" is intentionally absent: the process manager owns port allocation
-// (see docs/superpowers/specs/2026-06-10-auto-port-proxy-only-design.md).
+// "port" is intentionally absent because the process manager owns allocation.
 var essentialSeed = map[domain.BackendKind][]string{
 	domain.BackendKindLlamaServer:  {"n-gpu-layers", "ctx-size", "batch-size", "ubatch-size", "flash-attn", "cache-type-k", "cache-type-v"},
 	domain.BackendKindBuunLlamaCpp: {"n-gpu-layers", "ctx-size", "cache-type-k", "cache-type-v", "spec-type", "spec-draft-model", "spec-dflash-default", "dflash-max-slots"},

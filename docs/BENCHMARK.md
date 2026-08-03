@@ -155,8 +155,8 @@ MTP+DFlash (Speed):
 - Check that previous profile shut down properly
 - Verify model files exist:
   ```bash
-  ls -lh /home/diogo/models/huggingface/bytkim/Qwen3.6-27B-MTP-pi-tune-GGUF/
-  ls -lh /home/diogo/models/huggingface/Anbeeld/Qwen3.6-27B-DFlash-GGUF/
+  ls -lh "$HOME/models/huggingface/bytkim/Qwen3.6-27B-MTP-pi-tune-GGUF/"
+  ls -lh "$HOME/models/huggingface/Anbeeld/Qwen3.6-27B-DFlash-GGUF/"
   ```
 - Verify API endpoint is accessible:
   ```bash

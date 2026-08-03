@@ -117,4 +117,4 @@ All JSON persistence uses atomic writes from `internal/service/internal/fsx` (`W
 | Atomic JSON + flock + proc utilities | `internal/service/internal/{fsx,procutil,shellsplit}/` |
 | Canonical profile JSON Schema | `docs/profile-schema.json` |
 | Operator runbooks | `docs/{config,troubleshooting,sndr-backend,swe-bench-pro,deep-swe,BENCHMARK}.md` |
-| Defect tracker | `BUGS.md` |
+| Defect tracker | GitHub Issues; legacy identifier notes in `BUGS.md` |
