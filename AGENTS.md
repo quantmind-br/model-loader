@@ -2,6 +2,8 @@
 
 > Local agent runtimes may symlink `CLAUDE.md` to this file; **edit
 > `AGENTS.md` in place.** Public defects are tracked in GitHub Issues.
+> Tracked in git despite the `.gitignore` "Agent instruction files" pattern
+> (verified `git ls-files`); do not untrack it.
 
 ---
 
@@ -25,7 +27,10 @@ demand.
   Backends are intentionally **orphaned** on TUI exit so inference survives.
 - **Module:** `github.com/quantmind-br/model-loader`
 - **Repo state:** public defects in GitHub Issues; curated reference in
-  `openwiki/`; AGENTS.md (this file) is the operator KB.
+  `openwiki/`; AGENTS.md (this file) is the operator KB. `README.md` is the
+  public overview (9-kind backend table, CLI tree, config/state paths);
+  `CONTRIBUTING.md` defines the quality gate; `CHANGELOG.md` is SemVer
+  (0.1.0 released 2026-08-02); `ARCHITECTURE.md` is a stub pointing at OpenWiki.
 
 ---
 
@@ -33,18 +38,18 @@ demand.
 
 ### Top-level layout
 
-| Path | Role |
+|Path|Role|
 |---|---|
-| `cmd/model-loader/` | Single-binary entry. `main()` wires `cli.TUIRunner = runTUI`, then `os.Exit(cli.Execute())`. `runTUI` takes the single-instance flock, calls `app.Bootstrap(…, app.AsStateOwner())`, builds 5 pages + supervisor + download manager + monitor, runs `tea.NewProgram(root, tea.WithAltScreen())`. On exit logs (does **not** kill) orphaned live instances. |
-| `cmd/regenerate-schemas/` | Dev helper (`go run`). Calls `backendschema.Manager.RefreshSchema` for every catalog entry. |
-| `cmd/scripts/print_args.go` | Dev helper. Loads a profile, runs `BuildArgsForBackend`, prints exe+args. |
-| `internal/app/` | Single DI container `Services` (`bootstrap.go`), `AcquireSingleInstanceLock` (`lock.go`), `BenchmarkConfig` (`benchmark_config.go`, single literal — "never reintroduce a second copy"). |
-| `internal/config/` | Viper TOML loader (`config.go`); per-user `~/.config/model-loader/config.toml`. |
-| `internal/domain/` | Zero external deps. Types: `Profile` (schemaVersion=3), `RunningInstance`, `ExitedInstance`, `Backend`, `FlagSchema`, `BackendValidationSchema`, `BackendKind`. |
-| `internal/log/` | File-only `slog` (`log.go`); rotation gated by state-owner flag. |
-| `internal/cli/` | Cobra tree. **MUST NOT import `internal/ui`** — uses `TUIRunner` callback to break the cycle. `ExitError{Code}` for non-1 exits. |
-| `internal/ui/` | Bubble Tea `RootModel` (`root.go`), 5 tabs. Subdirs: `theme/`, `components/`, `pages/`, `internal/filter/`. |
-| `internal/service/` | **25 packages**: `processmgr`, `httpproxy`, `proxysupervisor`, `backendcatalog`, `backendschema`, `llamahelp`, `buunhelp`, `dflashhelp`, `sglanghelp`, `vllmhelp`, `unslothhelp`, `tabbyhelp`, `llamabin`, `profilestore`, `downloadmgr`, `hfhub`, `modelscanner`, `monitor`, `metricsstore`, `benchmark`, `benchmarkstore`, `validator`, `migration`, `sizing`, `configweb`. Plus `internal/{fsx,procutil,shellsplit}`. Each owns one concern, exports its own interface, takes `Config` + functional options, falls back to `log.Nop()`. |
+|`cmd/model-loader/`|Single-binary entry. `main()` wires `cli.TUIRunner = runTUI`, then `os.Exit(cli.Execute())`. `runTUI` takes the single-instance flock, calls `app.Bootstrap(…, app.AsStateOwner())`, builds 5 pages + supervisor + download manager + monitor, runs `tea.NewProgram(root, tea.WithAltScreen())`. On exit logs (does **not** kill) orphaned live instances.|
+|`cmd/regenerate-schemas/`|Dev helper (`go run`). Calls `backendschema.Manager.RefreshSchema` for every catalog entry.|
+|`cmd/scripts/print_args.go`|Dev helper. Loads a profile, runs `BuildArgsForBackend`, prints exe+args.|
+|`internal/app/`|Single DI container `Services` (`bootstrap.go`), `AcquireSingleInstanceLock` (`lock.go`), `BenchmarkConfig` (`benchmark_config.go`, single literal — "never reintroduce a second copy").|
+|`internal/config/`|Viper TOML loader (`config.go`); per-user `~/.config/model-loader/config.toml`. `AppConfig` sub-structs: `paths` (ProfilesDir/LogDir/StateDir/BackendsDir/LlamaServerBinaryPath), `models.search_paths`, `ui` (DefaultTab/Keybindings), `logging.level`, `serve` (Host `127.0.0.1`, Port `4321`, HealthCheckTimeoutSec), `benchmark` (MaxTokens `32768`, TimeoutSec `120`, LongContextTokens, LlamaBench presets `["5%/256","25%/256","50%/256","90%/128"]` reps `3` warmup `1`, Judge with `$ENV_VAR` secret expansion, TerminalBench/SweBenchPro/DeepSWE). Missing file auto-created on first run; `ui.default_tab` migration `profiles → launcher`.|
+|`internal/domain/`|Zero external deps. Types: `Profile` (schemaVersion=3), `RunningInstance`, `ExitedInstance`, `Backend`, `FlagSchema`, `BackendValidationSchema`, `BackendKind`, `Model`/`ModelPath`.|
+|`internal/log/`|File-only `slog` (`log.go`); rotation gated by state-owner flag.|
+|`internal/cli/`|Cobra tree. **MUST NOT import `internal/ui`** — uses `TUIRunner` callback (`root.go`) to break the cycle. `ExitError{Code}` for non-1 exits. `Version`/`BuildDate` ldflags-injected.|
+|`internal/ui/`|Bubble Tea `RootModel` (`root.go`), 5 tabs. Subdirs: `theme/`, `components/`, `pages/`, `internal/filter/`.|
+|`internal/service/`|**25 packages**: `processmgr`, `httpproxy`, `proxysupervisor`, `backendcatalog`, `backendschema`, `llamahelp`, `buunhelp`, `dflashhelp`, `sglanghelp`, `vllmhelp`, `unslothhelp`, `tabbyhelp`, `llamabin`, `profilestore`, `downloadmgr`, `hfhub`, `modelscanner`, `monitor`, `metricsstore`, `benchmark`, `benchmarkstore`, `validator`, `migration`, `sizing`, `configweb`. Plus `internal/{fsx,procutil,shellsplit}`. Each owns one concern, exports its own interface, takes `Config` + functional options, falls back to `log.Nop()`. Several ship a package-local `AGENTS.md` (profilestore, processmgr, backendcatalog, hfhub, modelscanner, monitor, sizing, migration, proxysupervisor, benchmarkstore, metricsstore, internal) — read those for package-specific contracts.|
 
 ### DI entry points
 
@@ -60,7 +65,7 @@ demand.
 ```
 
 - **TUI** (`cmd/model-loader/main.go`): `app.Bootstrap(cliLevel, app.AsStateOwner())`. Holds flock. Reconciles `instances.json` at boot.
-- **`serve`** (`internal/cli/serve.go`): `app.Bootstrap(…, app.AsStateOwner())`. Holds **no flock** — coexists with TUI because registry writes are flock-guarded deltas.
+- **`serve`** (`internal/cli/serve.go`): `app.Bootstrap(…, app.AsStateOwner())`. Holds **no flock** — coexists with TUI because registry writes are flock-guarded deltas. Health-check timeout 360s.
 - **`benchmark`** + **`instance start/stop/restart`** (`internal/cli/bootstrap_lock.go`): `bootstrapWithLock` acquires flock + `app.Bootstrap` **without** `AsStateOwner` (owning TUI/serve already gates registry writes).
 - **Read-only CLI** (`profile list`, `model list`, …): plain `app.Bootstrap`. Observer only.
 
@@ -90,7 +95,7 @@ reasoning/thinking mapping survives.
 
 ```
 ~/.config/model-loader/
-  config.toml                       # Viper-loaded
+  config.toml                       # Viper-loaded (auto-created on first run)
   profiles/<id>.json                # id == basename, schemaVersion 3
   backends/catalog.json
   backends/schemas/<id>.json
@@ -98,7 +103,7 @@ reasoning/thinking mapping survives.
   model-loader.lock                 # single-instance flock
   instances.json                    # running; flock-guarded deltas
   instances-history.json
-  proxy-state.json                  # proxysupervisor state
+  proxy-state.json                  # proxysupervisor state (snake_case wire contract)
   logs/<profile-id>-<port>.log      # merged stdout+stderr
   metrics/<profileID>/*.jsonl
   benchmark/runs/*.json (+ transcripts)
@@ -109,27 +114,27 @@ reasoning/thinking mapping survives.
 
 ## 3. Key Directories
 
-| Path | Purpose |
+|Path|Purpose|
 |---|---|
-| `cmd/model-loader/main.go` | TUI + `serve` entry (one binary). |
-| `internal/app/bootstrap.go` | DI container `Services`. Use `AsStateOwner()` for any code path that owns the registry. |
-| `internal/cli/{serve,benchmark,root,bootstrap_lock}.go` | Headless entry points. `bootstrap_lock.go` is the shared flock-acquisition helper. |
-| `internal/domain/` | Zero-deps types. **Edit `profile.go` ⟹ also edit `docs/profile-schema.json`** in the same commit. |
-| `internal/service/processmgr/` | Largest service. Launch / Kill / Reconcile / WaitHealthy / restart engine. Files: `launch.go`, `manager.go`, `enrichment.go`, `recover.go`, `liveness.go`, `restart.go`, `registry.go`, `prune.go`. |
-| `internal/service/httpproxy/` | OpenAI/Anthropic/Responses/Gemini translation + admin endpoints. Files split by surface area (`server.go`, `proxy.go`, `handler.go`, `extract.go`, `*_handlers.go`, `*_translate.go`, `*_stream.go`). |
-| `internal/service/proxysupervisor/` | Detached proxy supervisor. Owns `proxy-state.json`. |
-| `internal/service/backendschema/` | `--help`-parse orchestrator + curated overlay. Per-kind embedded schemas in `llamahelp`, `vllmhelp`, `sglanghelp`, `dflashhelp`, `buunhelp`, `unslothhelp`, `tabbyhelp`. |
-| `internal/service/{profilestore,backendcatalog,monitor,metricsstore,downloadmgr,hfhub,modelscanner,benchmark,benchmarkstore,validator,migration,sizing,configweb,llamabin}/` | One concern each. |
-| `internal/service/internal/{fsx,procutil,shellsplit}/` | Leaf utilities. **Never reimplement `WriteJSONAtomic`/`StartTicks`/`quote-aware split` outside these packages.** |
-| `internal/ui/{theme,components,pages}/` | Theme + reusable widgets (tab_bar, statusbar, modal, overlay, flash, sparkline, proxy_panel, etc.) + per-tab page sets. |
-| `docs/profile-schema.json` | Canonical JSON Schema for `domain.Profile` (v3). |
-| `docs/{config,troubleshooting,sndr-backend,swe-bench-pro,deep-swe,BENCHMARK}.md` | Operator-facing runbooks. |
-| `openwiki/` | Curated topic-organized reference (hand-maintained via an `update` AI command). `quickstart.md` is the entry; `architecture.md`, `tui.md`, `cli.md`, `proxy.md`, `backends.md`, `profiles.md`, `benchmark.md`, `operations.md`. |
-| `scripts/` | Operator scripts (SNDR setup, Qwen benchmarks, live monitor). |
-| `tools/<task>-curate/` | Python dataset curaters (8 dirs). Writes committed `.json` files under `internal/service/benchmark/data/`. |
-| `backends/<id>/` | **Gitignored** vendored backend source trees. No git submodules; manage each as its own checkout. |
-| `testdata/` | Golden fixtures (`help-v9761.{txt,golden.json}`) + fake binaries (`fake-llama-server.sh`, `fake-llama-help.sh`). |
-| `BUGS.md` | Historical regression-ID explanation and known-issue pointer. |
+|`cmd/model-loader/main.go`|TUI + `serve` entry (one binary).|
+|`internal/app/bootstrap.go`|DI container `Services`. Use `AsStateOwner()` for any code path that owns the registry.|
+|`internal/cli/{serve,benchmark,root,bootstrap_lock}.go`|Headless entry points. `bootstrap_lock.go` is the shared flock-acquisition helper.|
+|`internal/domain/`|Zero-deps types. **Edit `profile.go` ⟹ also edit `docs/profile-schema.json`** in the same commit.|
+|`internal/service/processmgr/`|Largest service. Launch / Kill / Reconcile / WaitHealthy / restart engine. Files: `launch.go`, `manager.go`, `enrichment.go`, `recover.go`, `liveness.go`, `restart.go`, `registry.go`, `prune.go`.|
+|`internal/service/httpproxy/`|OpenAI/Anthropic/Responses/Gemini translation + admin endpoints. Files split by surface area (`server.go`, `proxy.go`, `handler.go`, `extract.go`, `*_handlers.go`, `*_translate.go`, `*_stream.go`).|
+|`internal/service/proxysupervisor/`|Detached proxy supervisor. Owns `proxy-state.json`.|
+|`internal/service/backendschema/`|`--help`-parse orchestrator + curated overlay (`cli-flags.v1` envelope with editable/customized markers; `golden_embed.go` embeds the fallback golden schema). Per-kind embedded schemas in `llamahelp`, `vllmhelp`, `sglanghelp`, `dflashhelp`, `buunhelp`, `unslothhelp`, `tabbyhelp`.|
+|`internal/service/{profilestore,backendcatalog,monitor,metricsstore,downloadmgr,hfhub,modelscanner,benchmark,benchmarkstore,validator,migration,sizing,configweb,llamabin}/`|One concern each.|
+|`internal/service/internal/{fsx,procutil,shellsplit}/`|Leaf utilities. **Never reimplement `WriteJSONAtomic`/`StartTicks`/`quote-aware split` outside these packages.**|
+|`internal/ui/{theme,components,pages}/`|Theme + reusable widgets (tab_bar, statusbar, modal, overlay, flash, sparkline, proxy_panel, etc.) + per-tab page sets.|
+|`docs/profile-schema.json`|Canonical JSON Schema for `domain.Profile` (v3, `additionalProperties:false`).|
+|`docs/{config,troubleshooting,sndr-backend,swe-bench-pro,deep-swe,BENCHMARK}.md`|Operator-facing runbooks. `docs/backend-schema-update.md` = the public schema-update workflow.|
+|`openwiki/`|Curated topic-organized reference (hand-maintained via an `update` AI command; last regenerated 2026-07-31 per `openwiki/.last-update.json`). `quickstart.md` is the entry; `architecture.md`, `tui.md`, `cli.md`, `proxy.md`, `backends.md`, `profiles.md`, `benchmark.md`, `operations.md`. Do not hand-edit generated pages.|
+|`scripts/`|Operator scripts (SNDR setup, Qwen benchmarks, live monitor, p2p-matrix harness) — ad-hoc tooling, not part of the binary.|
+|`tools/<task>-curate/`|Python dataset curaters (8 dirs). Writes committed `.json` files under `internal/service/benchmark/data/`.|
+|`backends/<id>/`|**Gitignored** vendored backend source trees (~20 checkouts; no git submodules; each manages its own `backend-build.sh`).|
+|`testdata/`|Golden fixtures (`help-v10152.{txt,golden.json}`) + fake binaries (`fake-llama-server.sh`, `fake-llama-help.sh`).|
+|`BUGS.md`|Historical regression-ID explanation and known-issue pointer (one open investigation: managed backend exits before health).|
 
 ---
 
@@ -165,8 +170,11 @@ go run ./cmd/scripts/print_args.go <profile-id>   # specific profile
 ./bin/model-loader serve     # headless proxy daemon (no flock)
 ```
 
-**No** `gofmt`/`go vet`/`golangci-lint`/`staticcheck` Make targets. GitHub
-Actions runs build, tests, and vet. No Dockerfile / goreleaser / brew formula.
+**No** `gofmt`/`go vet`/`golangci-lint`/`staticcheck` Make targets. CI
+(`.github/workflows/ci.yml`) runs build, tests, and vet on push/PR to `main`
+(go-version-file from go.mod). `release.yml` builds a `v*` tag release
+(`CGO_ENABLED=0`, tar + sha256sum, `gh release create`). No Dockerfile /
+goreleaser / brew formula.
 
 ---
 
@@ -186,10 +194,11 @@ Actions runs build, tests, and vet. No Dockerfile / goreleaser / brew formula.
   `WriteJSONExclusive` (race-free Create via hard-link).
 - **Registry writes are flock-guarded deltas** (`fsx.WithFileLock` + load +
   keyed mutate + atomic save). Abort on load error; never wipe on parse fail.
-- **6 documented `mutateRegistry` callsites (all OUT of `m.mu`)** —
-  `processmgr/launch.go::Launch`, `launchForeground`, `Kill` (×2 internal),
-  `liveness.go`, `waitEnrichment`, `Reconcile`. Adding a 7th requires updating
-  this contract + the audit docs.
+- **6 documented `mutateRegistry` entry points (7 raw call sites, all OUT of
+  `m.mu`)** — `launch.go::Launch`, `launch.go::launchForeground`,
+  `manager.go::Kill` (×2 internal), `liveness.go`, `enrichment.go::waitEnrichment`,
+  `recover.go::Reconcile`. Definition lives at `registry.go:53`. Adding a 7th
+  named entry requires updating this contract + the audit docs.
 
 ### Process management invariants
 
@@ -247,8 +256,8 @@ Actions runs build, tests, and vet. No Dockerfile / goreleaser / brew formula.
   `Overlayer`, `StatusMessageProvider`, `Cleaner`.
 - Layout: `MinTermWidth` × `MinTermHeight` (terminal-too-small guard);
   stacked layout below 100 cols; truncate-at-edge otherwise.
-- Theme = GitHub-Primer adaptive palette; `NO_COLOR` is stripped in `theme.init()`
-  (the repo's only `init()`); helpers `BodyHeight`, `ClampBody`.
+- Theme = GitHub-Primer adaptive palette; `NO_COLOR` is stripped in `theme.init()`.
+  Helpers `BodyHeight`, `ClampBody`.
 - `RootModel` exposes `With*Page`/`WithProcessManager` fluent setters.
 - Help overlay (`?`/`esc`): glamour-wrapped viewport; `g/home`→GotoTop,
   `G/end`→GotoBottom are bound explicitly.
@@ -293,32 +302,7 @@ Actions runs build, tests, and vet. No Dockerfile / goreleaser / brew formula.
 
 ## 6. Important Files
 
-| Concern | File |
-|---|---|
-| TUI entry | `cmd/model-loader/main.go` |
-| Headless proxy | `internal/cli/serve.go` |
-| One-shot CLI bootstrap | `internal/cli/bootstrap_lock.go`, `internal/app/bootstrap.go` |
-| DI container | `internal/app/bootstrap.go` |
-| Single-instance lock | `internal/app/lock.go` |
-| Domain types | `internal/domain/{profile,instance,backend,backend_schema,flag_schema}.go` |
-| Config loader | `internal/config/config.go` |
-| Profile JSON persistence | `internal/service/profilestore/` |
-| Process lifecycle | `internal/service/processmgr/{launch,manager,enrichment,recover,liveness,restart,registry,prune}.go` |
-| HTTP proxy | `internal/service/httpproxy/server.go`, `handler.go`, `proxy.go`, `extract.go`, `*_handlers.go` |
-| Proxy supervisor | `internal/service/proxysupervisor/supervisor.go`, `state.go` |
-| Backend catalog + schema | `internal/service/backendcatalog/`, `internal/service/backendschema/` |
-| Embedded `--help` schemas | `internal/service/{llama,vllm,sglang,dflash,buun,unsloth,tabby}help/` |
-| Monitor (logs/slots/GPU/metrics) | `internal/service/monitor/` |
-| Benchmark engine | `internal/service/benchmark/` (single mode list at `handler.go::ModesInOrder`; live-run feed `tracker.go`, export `export.go`, data-relative ceilings `metrics_scale.go`) |
-| Web editor + benchmark viewer | `internal/service/configweb/` (profile/backend editor + read-only benchmark viewer & htmx live monitor in `benchview_*.go`) |
-| TUI root + pages | `internal/ui/root.go`, `internal/ui/pages/{profiles,server,models,backends,benchmark}*.go` |
-| Reusable widgets | `internal/ui/components/` |
-| Theme | `internal/ui/theme/` |
-| Atomic JSON + flock + proc utilities | `internal/service/internal/{fsx,procutil,shellsplit}/` |
-| Canonical profile JSON Schema | `docs/profile-schema.json` |
-| Operator runbooks | `docs/{config,troubleshooting,sndr-backend,swe-bench-pro,deep-swe,BENCHMARK}.md` |
-| Curated reference | `openwiki/{quickstart,architecture,tui,cli,proxy,backends,profiles,benchmark,operations}.md` |
-| Defect tracker | GitHub Issues; legacy ID notes in `BUGS.md` |
+See §2 for layout. Key additions: domain schema `docs/profile-schema.json`, process lifecycle `processmgr/{launch,manager,enrichment,recover,liveness,restart,registry,prune}.go`, proxy `httpproxy/*_handlers.go`, supervisor `proxysupervisor/`, `backendcatalog`+`backendschema`, monitor/metrics/benchmark, `configweb/benchview_*.go`, `internal/ui/pages/*.go`, `internal/service/internal/{fsx,procutil,shellsplit}/`.
 
 The 5-tab TUI root lives at `internal/ui/root.go`:
 `TabProfiles=0`, `TabServer=1`, `TabModels=2`, `TabBackends=3`, `TabBenchmark=4`.
@@ -331,76 +315,39 @@ The 5-tab TUI root lives at `internal/ui/root.go`:
 
 - **Go** ≥ 1.26.2 (toolchain pinned in `go.mod`).
 - **No CGO**. No git submodules. `backends/*` is vendored source under
-  `.gitignore` (manage each as its own upstream checkout).
+  `.gitignore` (manage each as its own checkout; each tree has its own
+  `backend-build.sh`).
 
 ### Binary dependencies (expected on PATH or registered in catalog)
 
-| Binary | Where it's referenced |
+|Binary|Where it's referenced|
 |---|---|
-| `llama-server` | `llamabin.DefaultName` (`internal/service/llamabin/resolver.go`); `--help`/`--version` probe in `internal/service/llamahelp/exec_parser.go`. Default backend; PATH lookup falls back if no `default_backend_id` in config. |
-| `python3` | `llamabin.ResolveCommandWithPythonFallback`; backend builders via `processmgr/launch.go::makeCommand`. |
-| `nvidia-smi` | `internal/service/monitor/gpu.go` (GPU monitoring, optional). |
-| `bwrap` | `internal/service/benchmark/codegenbench.go` (sandbox; falls back to bare python). |
-| `docker` | `terminalbench.go`, `deepswe.go`, `swebenchpro.go` (required by agentic modes). |
-| `tb` (Terminal-Bench CLI) | `tbDefaultCmd` in `internal/service/benchmark/terminalbench.go`. |
-| `pier` (datacurve-ai/pier) | `deepDefaultCmd` in `internal/service/benchmark/deepswe.go`. |
-| `vllm`, `sglang`, `dflash_server`, `unsloth`, `beellama`, `buun`, `tabbyapi` | User-registered via `model-loader backend add --executable <path> --kind <kind>`. Not hard-coded. |
+|`llama-server`|`llamabin.DefaultName` (`internal/service/llamabin/resolver.go`); `--help`/`--version` probe in `internal/service/llamahelp/exec_parser.go`. Default backend; PATH lookup falls back if no `default_backend_id` in config.|
+|`python3`|`llamabin.ResolveCommandWithPythonFallback`; backend builders via `processmgr/launch.go::makeCommand`.|
+|`nvidia-smi`|`internal/service/monitor/gpu.go` (GPU monitoring, optional).|
+|`bwrap`|`internal/service/benchmark/codegenbench.go` (sandbox; falls back to bare python).|
+|`docker`|`terminalbench.go`, `deepswe.go`, `swebenchpro.go` (required by agentic modes).|
+|`tb` (Terminal-Bench CLI)|`tbDefaultCmd` in `internal/service/benchmark/terminalbench.go`.|
+|`pier` (datacurve-ai/pier)|`deepDefaultCmd` in `internal/service/benchmark/deepswe.go`.|
+|`vllm`, `sglang`, `dflash_server`, `unsloth`, `beellama`, `buun`, `tabbyapi`|User-registered via `model-loader backend add --executable <path> --kind <kind>`. Not hard-coded.|
 
 Compound Python commands (`python -m sglang.launch_server`) are supported via
 `makeCommand` + `llamabin.ResolveCommandWithPythonFallback`.
 
 ### Direct dependencies (`go.mod`)
+CLI `spf13/cobra`+`viper`, TUI `charmbracelet/*` (bubbletea/bubbles/lipgloss/huh/glamour), other `fsnotify/clipboard/runewidth/tiktoken/term`.
 
-- CLI: `spf13/cobra v1.10.2`, `spf13/viper v1.20.0-alpha-6`.
-- TUI: `charmbracelet/{bubbletea v1.3.10, bubbles v1.0.0, lipgloss, huh v1.0.0,
-  glamour v1.0.0, x/ansi, x/exp/teatest}`.
-- Other: `fsnotify/fsnotify v1.7.0`, `atotto/clipboard v0.1.4`,
-  `mattn/go-runewidth v0.0.19`, `tiktoken-go/tokenizer v0.7.0`.
-
-### Gitignored trees (from `.gitignore`)
-
-- Build: `bin/`, `dist/`, `coverage.out`, `coverage.html`, `__debug_bin*`.
-- Backend source: `backends/` (no submodules).
-- Go workspace: `vendor/`, `go.work`, `go.work.sum`.
-- Agent/tooling scratch (none of these are project code): `.agents/`,
-  `.claude/skills/gitnexus`, `.pi/`, `.superpowers/`, `.sisyphus/`,
-  `.gitnexus/`, `.worktrees/`, `.omo/`, `.hermes/`, `.understand-anything/`,
-  `.claw/`.
-- Auto-generated agent artifacts: `AGENTS.md`, `prompt-*.md`, `IDEATION_*.md`,
-  `PRD_*.md`, `TUI_AUDIT.md`. **Note:** `AGENTS.md` *is* checked in despite
-  this pattern — it's the canonical KB.
-
-### Local tooling state directories (ignored; not project code)
-
-| Dir | Tool |
-|---|---|
-| `.claude/` | Claude Code (settings, skills, commands incl. `backend-schema-update.md`) |
-| `.agents/` | Custom skills (`tui-validator`, `tui-design`, `tui-refactor`, `rtx3090-inference-profiles`, `model-loader-clean-up`, `caveman-compress`, `huggingface-download`, `grill-me`, `llamacpp`, …) |
-| `.superpowers/`, `.omo/`, `.sisyphus/`, `.pi/`, `.hermes/` | Other AI-agent runtimes |
-| `.understand-anything/` | Codebase knowledge-graph cache |
-| `.worktrees/`, `.gitnexus/` | Worktrees + GitNexus cache |
+### Gitignored trees
+`bin/`/`dist/`/`coverage.*`, `backends/` (vendored, no submodules), `vendor/`/`go.work*`, tooling scratch `.agents/`/`.claude/`/`.pi/`/`.superpowers/`/`.worktrees/`/`.gitnexus/` etc. `AGENTS.md` stays tracked despite ignore pattern (verified `git ls-files`).
 
 ### Defect tracking
 
 Track new defects in GitHub Issues. Existing regression comments retain legacy
-IDs such as `BR1` and `AUD-A1`; `BUGS.md` explains that historical convention.
+IDs such as `BR1` and `AUD-A1`; `BUGS.md` explains that historical convention
+and tracks one open investigation (managed backend exits before health check).
 
 ## OpenWiki
-
-This repository has documentation located in the /openwiki directory.
-
-Start here:
-- [OpenWiki quickstart](openwiki/quickstart.md)
-
-OpenWiki includes repository overview, architecture notes, workflows, domain concepts, operations, integrations, testing guidance, and source maps.
-
-When working in this repository, read the OpenWiki quickstart first, then follow its links to the relevant architecture, workflow, domain, operation, and testing notes.
-
-### Project slash commands / skills
-
-- `docs/backend-schema-update.md` — the public 3-pattern (`A` live-help +
-  overlay / `B` curated Go / `C` embedded rows) schema-update workflow.
-- Local `.agents/` and `.claude/` skills are ignored and are not project code.
+See `openwiki/quickstart.md` then architecture/workflows/domain/ops/testing notes. Workflow `docs/backend-schema-update.md` (3-pattern A/B/C). Local `.agents/`/`.claude/` skills are ignored.
 
 ---
 
@@ -413,9 +360,10 @@ When working in this repository, read the OpenWiki quickstart first, then follow
 - **Only test-only 3rd-party import:** `github.com/charmbracelet/x/exp/teatest`
   in 2 files (`internal/ui/root_test.go`, `internal/ui/pages/profiles_test.go`).
 - **Hand-rolled doubles** (`stub*`, `fake*`) — never a mock framework.
-- ~205 `_test.go` files: 0 in `cmd/`, ~127 in `internal/service/**`, 27 in
-  `internal/cli/`, ~36 in `internal/ui/**`, 3 in `internal/app/`, 7 in
-  `internal/domain/`.
+- **218 `_test.go` files** (verified 2026-08-02): 0 in `cmd/`, 140 in
+  `internal/service/**` (incl. 3 in `internal/service/internal/`), 25 in
+  `internal/cli/`, 39 in `internal/ui/**`, 3 in `internal/app/`, 8 in
+  `internal/domain/`, 2 in `internal/config/`, 1 in `internal/log/`.
 
 ### Conventions
 
@@ -432,23 +380,7 @@ When working in this repository, read the OpenWiki quickstart first, then follow
 
 ### Canonical helpers
 
-| Helper | Where |
-|---|---|
-| `freePort(t)` | `internal/service/processmgr/manager_test.go:17` (duplicated as `freePortSup` in `proxysupervisor/supervisor_test.go`). |
-| `fakeBinary(t)` | `manager_test.go:27` — abs path to `testdata/fake-llama-server.sh`. |
-| `newTestManager(t)` | `manager_test.go:36`. |
-| `spawnGroupLeader(t)` | `processmgr/lifecycle_audit_test.go:36` — Setsid leader + child PID. |
-| `newTestServer(t, store, mgr)` | `httpproxy/swap_test.go:12`. |
-| `newAnthropicMux(t, store, mgr)` | `httpproxy/anthropic_handlers_test.go:16`. |
-| `startBackend(t, respond)` | `httpproxy/anthropic_handlers_test.go:144` — fake upstream + `upstreamCapture` channel. |
-| `runStream(t, script)` | `httpproxy/anthropic_stream_test.go:54` — drives `runAnthropicStream` and parses SSE. |
-| `mustTranslate{Anthropic,Gemini,Responses}(t, raw)` | `httpproxy/{anthropic_translate,gemini,responses}_test.go`. |
-| `drainCmd(cmd)` | `internal/ui/pages/server_test.go:26` — flattens `BatchMsg` and returns leaves. |
-| `stubStore` / `stubManager` | `httpproxy/mocks_test.go` — most-reused doubles; full in-memory `profilestore.Store` + `processmgr.Manager`. |
-| `fakeProxy` | `cli/instance_lifecycle_test.go`. |
-| `fakeManager` | `cli/instance_test.go`. |
-| `fakeBStore`, `fakeStore`, `fakeProber`, `fakeSnapshotter`, `fakeHub`, `fakeDLManager`, `fakeScanner` | per-package, near consumers. |
-| `shrinkWatchdogTiming(t, …)` | `benchmark/terminalbench_watchdog_test.go:19` — swap + restore package vars via `t.Cleanup`; shared with `agentic_watchdog_test.go`. |
+Doubles: `stubStore`/`stubManager` (`httpproxy/mocks_test.go`), `fakeBinary`/`newTestManager`/`freePort` (`processmgr/manager_test.go`), `newTestServer`/`startBackend`/`runStream`/`mustTranslate*` (`httpproxy/*_test.go`), `drainCmd` (`ui/pages/server_test.go`), `fakeProxy`/`fakeManager` (`cli/*`), `shrinkWatchdogTiming` (`benchmark/*watchdog_test.go`).
 
 Status-sequencing pattern: doubles like `fakeProxy` carry a `statusSeq
 []httpproxy.Status` field; `Status()` pops from head and falls back to a
@@ -456,38 +388,18 @@ default once empty.
 
 ### Golden files
 
-Exactly one canonical pair at `testdata/`:
-
-```
-testdata/help-v9761.txt         # input fixture (real --help capture)
-testdata/help-v9761.golden.json # expected parsed JSON
-```
-
-Generator: `internal/service/llamahelp/parser_test.go::TestParseHelp_Golden`:
-```go
-var updateGolden = flag.Bool("update", false, "regenerate golden files")
-…
-if *updateGolden { os.WriteFile(goldenPath, got, 0o644); … }
-// else: bytes.Equal + fail with hint: go test -update
-```
-
-A duplicate `//go:embed` copy at
-`internal/service/backendschema/testdata/help-v9761.golden.json` **must be
-kept byte-identical by hand** when the root golden is regenerated.
-
-`//go:embed` is used heavily in production code (curated schemas, benchmark
-datasets, configweb assets) but **in zero** `_test.go` files.
+One pair at `testdata/help-v10152.{txt,golden.json}` (b10152). Generator `llamahelp/parser_test.go::TestParseHelp_Golden` (`-update` flag). Duplicate `backendschema/testdata/help-v10152.golden.json` must stay byte-identical (loaded by `golden_embed.go:loadGoldenSchema`, stamp `embedded-v10152-full`). `//go:embed` only in prod code, never `_test.go`.
 
 ### Test categories
 
 - **Pure unit (no I/O):** `internal/domain/*`, `internal/log/*`,
-  `internal/service/internal/{fsx,shellsplit,…}`.
+  `internal/config/*`, `internal/service/internal/{fsx,shellsplit,…}`.
 - **httptest-based (no real processes):** `httpproxy/*`, `configweb/*`,
   `hfhub/*`, `backendcatalog/*`, `downloadmgr/*`.
 - **Real processes + port allocation:** `processmgr/*`, `proxysupervisor/*`,
   `internal/service/internal/procutil/*`, `benchmark/*_watchdog_test.go`,
   `benchmark/{llamabench,longcontext}_probe_test.go`.
-- **CLI-level integration:** 27 files in `internal/cli/*`. Uses `bytes.Buffer`
+- **CLI-level integration:** 25 files in `internal/cli/*`. Uses `bytes.Buffer`
   as `io.Writer`; calls leaf command funcs directly; never `exec.Command` of
   the binary itself.
 - **TUI integration:** `internal/ui/root_test.go` +
@@ -508,6 +420,7 @@ Other themed regressions:
 - `processmgr/lifecycle_audit_test.go` — **AUD-A1/A3/A4/A5/A7/A10/A11/A12**.
 - `profilestore/fs_store_test.go` — **PV1**.
 - `validator/validator_test.go` — **S1**.
+- `config/searchpaths_test.go` — **B9** (rewrite preserves unrelated values).
 
 Per-test comments (e.g. `// UIUX-011`, `// BR1`, `// AUD-A1`) appear inline in
 tests that don't get a dedicated regression file. **Naming**: regression
@@ -530,7 +443,8 @@ go test ./...      # full suite
 go vet ./...       # static checks
 ```
 
-Before yielding, run all three and confirm 0 exit codes.
+Before yielding, run all three and confirm 0 exit codes. The gate is defined
+in `CONTRIBUTING.md` and enforced by `.github/workflows/ci.yml`.
 
 ---
 
