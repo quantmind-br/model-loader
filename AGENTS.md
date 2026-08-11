@@ -1,36 +1,44 @@
 # Repository Guidelines
 
-> Local agent runtimes may symlink `CLAUDE.md` to this file; **edit
-> `AGENTS.md` in place.** Public defects are tracked in GitHub Issues.
-> Tracked in git despite the `.gitignore` "Agent instruction files" pattern
-> (verified `git ls-files`); do not untrack it.
+This file is the operational knowledge base for `model-loader`. It is generated
+from a parallel scan of the repository across four areas — **core source**,
+**tests**, **configs/build**, and **scripts/docs** — and is the single source
+of truth for how the code is organized, how to build/test it, and the
+conventions any change must respect.
+
+**Work with the grain of the repo.** When a section below says "invariant",
+"contract", or "must", treat it as a hard rule: there are tests and audit
+bundles that enforce these properties (see §9). When in doubt, follow the
+existing pattern in the nearest sibling file.
 
 ---
 
 ## 1. Project Overview
 
-**model-loader** is a Go 1.26.2 terminal UI **and** headless CLI for running
-local LLM inference servers on a single workstation (reference rig: 2× RTX
-3090). It manages *launch profiles*, supervises backend *processes*, and fronts
-them with one OpenAI-shaped HTTP proxy that hot-swaps the active model on
-demand.
+`model-loader` is a **Go TUI and headless CLI** for running and benchmarking
+local LLM inference servers from one terminal application. It manages launch
+profiles, supervises inference processes, and exposes a single
+OpenAI-compatible HTTP endpoint. When a request names another profile, the
+proxy stops the current backend, starts the requested one, waits for it to
+become healthy, and forwards the request.
 
-- **For:** a single operator curating tuned launch configs for one GPU.
-  Loopback-only proxy, no auth, single-instance lock.
-- **Backends (9 `BackendKind`s):** `llama-server`, `vllm`, `sglang`, `dflash`,
-  `buun-llama-cpp`, `beellama-cpp`, `ik-llama-cpp`, `unsloth`, `tabby`. Operators register
-  each backend (binary + kind) via `model-loader backend add`.
-- **Surfaces:** 5-tab Bubble Tea TUI (default), headless `serve` proxy daemon,
-  full Cobra CLI mirroring every TUI action (`benchmark` is a subcommand tree:
-  `run`/`list`/`compare`/`history`/`show`/`transcript`/`export`/`delete`/`web`).
-  A read-only benchmark viewer (`benchmark web` / TUI `W`) reuses `configweb`.
-  Backends are intentionally **orphaned** on TUI exit so inference survives.
-- **Module:** `github.com/quantmind-br/model-loader`
-- **Repo state:** public defects in GitHub Issues; curated reference in
-  `openwiki/`; AGENTS.md (this file) is the operator KB. `README.md` is the
-  public overview (9-kind backend table, CLI tree, config/state paths);
-  `CONTRIBUTING.md` defines the quality gate; `CHANGELOG.md` is SemVer
-  (0.1.0 released 2026-08-02); `ARCHITECTURE.md` is a stub pointing at OpenWiki.
+- Designed for a **single operator on a local GPU workstation** (reference
+  system: two RTX 3090s). The process manager and profile model are not tied to
+  that hardware.
+- **Two execution modes**, sharing one bootstrap:
+  - **TUI** — interactive 5-tab Bubble Tea app (Profiles, Server, Models,
+    Backends, Benchmark). Default when run with no subcommand.
+  - **Headless CLI** — a complete Cobra command tree (`serve`, `profile`,
+    `instance`, `backend`, `model`, `benchmark`, …) with JSON output.
+- Backends are registered as **executables + kinds** (`llama-server`, `vllm`,
+  `sglang`, `dflash`, `beellama-cpp`, `buun-llama-cpp`, `ik-llama-cpp`,
+  `tabby`, `unsloth`). Profiles are validated, portable JSON that resolve to a
+  concrete backend binary and argument list at launch time.
+- The proxy binds to **loopback by default and has no authentication** — do not
+  expose it to an untrusted network without an authenticated reverse proxy.
+
+Module path: `github.com/quantmind-br/model-loader`, Go **1.26.2**, license
+0BSD. Maintained architecture docs live in `openwiki/` (see §8).
 
 ---
 
@@ -38,103 +46,173 @@ demand.
 
 ### Top-level layout
 
-|Path|Role|
-|---|---|
-|`cmd/model-loader/`|Single-binary entry. `main()` wires `cli.TUIRunner = runTUI`, then `os.Exit(cli.Execute())`. `runTUI` takes the single-instance flock, calls `app.Bootstrap(…, app.AsStateOwner())`, builds 5 pages + supervisor + download manager + monitor, runs `tea.NewProgram(root, tea.WithAltScreen())`. On exit logs (does **not** kill) orphaned live instances.|
-|`cmd/regenerate-schemas/`|Dev helper (`go run`). Calls `backendschema.Manager.RefreshSchema` for every catalog entry.|
-|`cmd/scripts/print_args.go`|Dev helper. Loads a profile, runs `BuildArgsForBackend`, prints exe+args.|
-|`internal/app/`|Single DI container `Services` (`bootstrap.go`), `AcquireSingleInstanceLock` (`lock.go`), `BenchmarkConfig` (`benchmark_config.go`, single literal — "never reintroduce a second copy").|
-|`internal/config/`|Viper TOML loader (`config.go`); per-user `~/.config/model-loader/config.toml`. `AppConfig` sub-structs: `paths` (ProfilesDir/LogDir/StateDir/BackendsDir/LlamaServerBinaryPath), `models.search_paths`, `ui` (DefaultTab/Keybindings), `logging.level`, `serve` (Host `127.0.0.1`, Port `4321`, HealthCheckTimeoutSec), `benchmark` (MaxTokens `32768`, TimeoutSec `120`, LongContextTokens, LlamaBench presets `["5%/256","25%/256","50%/256","90%/128"]` reps `3` warmup `1`, Judge with `$ENV_VAR` secret expansion, TerminalBench/SweBenchPro/DeepSWE). Missing file auto-created on first run; `ui.default_tab` migration `profiles → launcher`.|
-|`internal/domain/`|Zero external deps. Types: `Profile` (schemaVersion=3), `RunningInstance`, `ExitedInstance`, `Backend`, `FlagSchema`, `BackendValidationSchema`, `BackendKind`, `Model`/`ModelPath`.|
-|`internal/log/`|File-only `slog` (`log.go`); rotation gated by state-owner flag.|
-|`internal/cli/`|Cobra tree. **MUST NOT import `internal/ui`** — uses `TUIRunner` callback (`root.go`) to break the cycle. `ExitError{Code}` for non-1 exits. `Version`/`BuildDate` ldflags-injected.|
-|`internal/ui/`|Bubble Tea `RootModel` (`root.go`), 5 tabs. Subdirs: `theme/`, `components/`, `pages/`, `internal/filter/`.|
-|`internal/service/`|**25 packages**: `processmgr`, `httpproxy`, `proxysupervisor`, `backendcatalog`, `backendschema`, `llamahelp`, `buunhelp`, `dflashhelp`, `sglanghelp`, `vllmhelp`, `unslothhelp`, `tabbyhelp`, `llamabin`, `profilestore`, `downloadmgr`, `hfhub`, `modelscanner`, `monitor`, `metricsstore`, `benchmark`, `benchmarkstore`, `validator`, `migration`, `sizing`, `configweb`. Plus `internal/{fsx,procutil,shellsplit}`. Each owns one concern, exports its own interface, takes `Config` + functional options, falls back to `log.Nop()`. Several ship a package-local `AGENTS.md` (profilestore, processmgr, backendcatalog, hfhub, modelscanner, monitor, sizing, migration, proxysupervisor, benchmarkstore, metricsstore, internal) — read those for package-specific contracts.|
+```
+cmd/
+  model-loader/          # main: registers cli.TUIRunner = runTUI, then cli.Execute()
+  regenerate-schemas/    # re-parse every backend --help and refresh catalog schemas
+  scripts/               # small dev helpers (e.g. print_args.go — inspect resolved exe+args)
+internal/
+  app/                   # Bootstrap(): the single DI wiring point for TUI, CLI, serve, benchmark
+  cli/                   # Cobra command tree (must NOT import internal/ui)
+  config/                # config.toml load/save (paths, models.search_paths, ui, logging, serve)
+  domain/                # shared types, zero external deps (Profile, Instance, Backend, flags, schemas)
+  log/                   # slog wrapper; file-only logging, log.Nop()
+  ui/                    # Bubble Tea root + 5 tab pages, components, theme, contracts
+  service/               # every domain service (see §3)
+backends/                # vendored backend checkouts/venvs (gitignored, each with backend-build.sh)
+docs/  openwiki/  testdata/
+```
+
+501 Go files in the project proper (498 under `internal/`, 3 under `cmd/`), 219 `*_test.go` files. The gitignored `backends/` trees are vendored checkouts with their own sources and are not counted.
 
 ### DI entry points
 
-```
-                            runTUI ──────────────── acquires flock + app.Bootstrap(AsStateOwner)
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-       5 TUI pages     supervisor      downloadmgr/monitor
-              │
-              ▼
-       RootModel[5]tea.Model
-```
-
-- **TUI** (`cmd/model-loader/main.go`): `app.Bootstrap(cliLevel, app.AsStateOwner())`. Holds flock. Reconciles `instances.json` at boot.
-- **`serve`** (`internal/cli/serve.go`): `app.Bootstrap(…, app.AsStateOwner())`. Holds **no flock** — coexists with TUI because registry writes are flock-guarded deltas. Health-check timeout 360s.
-- **`benchmark`** + **`instance start/stop/restart`** (`internal/cli/bootstrap_lock.go`): `bootstrapWithLock` acquires flock + `app.Bootstrap` **without** `AsStateOwner` (owning TUI/serve already gates registry writes).
-- **Read-only CLI** (`profile list`, `model list`, …): plain `app.Bootstrap`. Observer only.
+- **`internal/app.Bootstrap(logLevel, opts…)`** is the *single* wiring point.
+  Every leaf CLI command, the TUI, `serve`, and `benchmark` call it and get a
+  fully assembled `*app.Services` (config, stores, process manager, monitor,
+  proxy supervisor, backend catalog, …). `app.AsStateOwner()` is the opt-in
+  for state-owning processes (see §5 process invariants).
+- **`cli.TUIRunner`** is a package-level callback set by `main` to `runTUI`.
+  This is what keeps `internal/cli` from importing `internal/ui` (avoids a
+  cycle). **Do not break this.**
+- **Version/build info** is injected via ldflags:
+  `-X github.com/quantmind-br/model-loader/internal/cli.Version=…` and
+  `.BuildDate=…` (see Makefile). Defaults to `dev`.
 
 ### Request flow (proxy)
 
 ```
-client ──► httpproxy ──► ensureLoaded (swapMu)
-                          │
-                          ├─ same target + SameProcess → no-op
-                          ├─ different target        → kill old + launch new + WaitReady
-                          └─ crash detected           → relaunch (proxy recovers, no 502)
-
-loaded backend ←─ reverse proxy ←─ catch-all /
-                                    /v1/messages        (Anthropic → OpenAI chat)
-                                    /v1/responses       (OpenAI Responses → chat)
-                                    /v1beta/models…     (Gemini → chat)
-                                    /v1/models          (OpenRouter-shaped list)
-                                    /_admin/load, /_admin/unload
-                                    /_status
+client → httpproxy.Server (OpenAI-shaped /v1/*, /v1/messages, /responses, /v1beta/*)
+       → resolve requested model id → processmgr (ensure backend up /
+         hot-swap profile) → forward request to backend process
 ```
 
-Anthropic/Responses paths **never** route through `loaded.proxy.ModifyResponse`
-— they `postUpstreamChat` directly to `127.0.0.1:<port>/v1/chat/completions` so
-reasoning/thinking mapping survives.
+Public endpoints (`model-loader serve`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/chat/completions` | OpenAI-compatible chat inference |
+| `POST` | `/v1/messages` | Anthropic Messages translation |
+| `POST` | `/v1/responses` | OpenAI Responses translation |
+| `POST` | `/v1beta/models/{model}:generateContent` | Gemini translation |
+| `GET` | `/v1/models` | List profiles as models |
+| `GET` | `/_status` | Proxy and loaded-backend status |
+| `POST` | `/_admin/load` | Explicitly load a profile |
+| `POST` | `/_admin/unload` | Drain and unload the active backend |
 
 ### State on disk
 
-```
-~/.config/model-loader/
-  config.toml                       # Viper-loaded (auto-created on first run)
-  profiles/<id>.json                # id == basename, schemaVersion 3
-  backends/catalog.json
-  backends/schemas/<id>.json
-~/.local/state/model-loader/
-  model-loader.lock                 # single-instance flock
-  instances.json                    # running; flock-guarded deltas
-  instances-history.json
-  proxy-state.json                  # proxysupervisor state (snake_case wire contract)
-  logs/<profile-id>-<port>.log      # merged stdout+stderr
-  metrics/<profileID>/*.jsonl
-  benchmark/runs/*.json (+ transcripts)
-  downloads/dl-<id>.json
-```
+| Location | Contents |
+|---|---|
+| `~/.config/model-loader/config.toml` | Application configuration |
+| `~/.config/model-loader/profiles/` | Versioned profile JSON files |
+| `~/.config/model-loader/backends/` | Backend catalog and validation schemas |
+| `~/.local/state/model-loader/` | `instances.json`, proxy state, metric store, benchmark runs |
+
+The TUI intentionally leaves live inference processes running when it exits.
+Use the Server tab or `model-loader instance stop` to stop one.
 
 ---
 
 ## 3. Key Directories
 
-|Path|Purpose|
+### Core source — `internal/`
+
+- **`internal/domain`** — pure types with zero external dependencies:
+  `Profile`, `Instance`, `Backend`, `BackendKind`, `FlagSchema`, flag/arg
+  helpers, schema builder, model path/HF-repo detection. JSON round-trip
+  caveat: ints come back as float64; `validator.checkType` handles it.
+- **`internal/config`** — TOML config load/save; `search_paths` model
+  discovery; serve defaults; UI keybindings; logging level.
+- **`internal/app`** — `Bootstrap()` DI graph + single-instance lock
+  (`AcquireSingleInstanceLock`, `bootstrapWithLock`).
+- **`internal/cli`** — Cobra tree (see §5 CLI conventions). Commands:
+  `serve`, `profile {list,show,add,delete,set-default,export,import,validate,
+  duplicate,rename,pin,unpin}`, `instance {list,show,history,start,stop,
+  restart,logs,metrics}`, `backend {list,probe,show,schema,refresh,apply,
+  add,delete,set-default}`, `model {list,search,info,download,downloads,cancel,
+  resume}`, `benchmark {run,list,compare,history,show,transcript,export,delete,
+  web}`, plus hidden `download <state-path>` and `_exittest` workers.
+- **`internal/ui`** — Bubble Tea root + `pages/` (profiles, server, models,
+  backends, benchmark) + `components/` (pickers, modals, charts, statusbar,
+  tab bar) + `theme/` + `contracts.go` (page optional interfaces) +
+  `internal/filter`.
+- **`internal/service`** — one package per service (see below).
+
+### Service layer — `internal/service/`
+
+| Package | Responsibility |
 |---|---|
-|`cmd/model-loader/main.go`|TUI + `serve` entry (one binary).|
-|`internal/app/bootstrap.go`|DI container `Services`. Use `AsStateOwner()` for any code path that owns the registry.|
-|`internal/cli/{serve,benchmark,root,bootstrap_lock}.go`|Headless entry points. `bootstrap_lock.go` is the shared flock-acquisition helper.|
-|`internal/domain/`|Zero-deps types. **Edit `profile.go` ⟹ also edit `docs/profile-schema.json`** in the same commit.|
-|`internal/service/processmgr/`|Largest service. Launch / Kill / Reconcile / WaitHealthy / restart engine. Files: `launch.go`, `manager.go`, `enrichment.go`, `recover.go`, `liveness.go`, `restart.go`, `registry.go`, `prune.go`.|
-|`internal/service/httpproxy/`|OpenAI/Anthropic/Responses/Gemini translation + admin endpoints. Files split by surface area (`server.go`, `proxy.go`, `handler.go`, `extract.go`, `*_handlers.go`, `*_translate.go`, `*_stream.go`).|
-|`internal/service/proxysupervisor/`|Detached proxy supervisor. Owns `proxy-state.json`.|
-|`internal/service/backendschema/`|`--help`-parse orchestrator + curated overlay (`cli-flags.v1` envelope with editable/customized markers; `golden_embed.go` embeds the fallback golden schema). Per-kind embedded schemas in `llamahelp`, `vllmhelp`, `sglanghelp`, `dflashhelp`, `buunhelp`, `unslothhelp`, `tabbyhelp`.|
-|`internal/service/{profilestore,backendcatalog,monitor,metricsstore,downloadmgr,hfhub,modelscanner,benchmark,benchmarkstore,validator,migration,sizing,configweb,llamabin}/`|One concern each.|
-|`internal/service/internal/{fsx,procutil,shellsplit}/`|Leaf utilities. **Never reimplement `WriteJSONAtomic`/`StartTicks`/`quote-aware split` outside these packages.**|
-|`internal/ui/{theme,components,pages}/`|Theme + reusable widgets (tab_bar, statusbar, modal, overlay, flash, sparkline, proxy_panel, etc.) + per-tab page sets.|
-|`docs/profile-schema.json`|Canonical JSON Schema for `domain.Profile` (v3, `additionalProperties:false`).|
-|`docs/{config,troubleshooting,sndr-backend,swe-bench-pro,deep-swe,BENCHMARK}.md`|Operator-facing runbooks. `docs/backend-schema-update.md` = the public schema-update workflow.|
-|`openwiki/`|Curated topic-organized reference (hand-maintained via an `update` AI command; last regenerated 2026-07-31 per `openwiki/.last-update.json`). `quickstart.md` is the entry; `architecture.md`, `tui.md`, `cli.md`, `proxy.md`, `backends.md`, `profiles.md`, `benchmark.md`, `operations.md`. Do not hand-edit generated pages.|
-|`scripts/`|Operator scripts (SNDR setup, Qwen benchmarks, live monitor, p2p-matrix harness) — ad-hoc tooling, not part of the binary.|
-|`tools/<task>-curate/`|Python dataset curaters (8 dirs). Writes committed `.json` files under `internal/service/benchmark/data/`.|
-|`backends/<id>/`|**Gitignored** vendored backend source trees (~20 checkouts; no git submodules; each manages its own `backend-build.sh`).|
-|`testdata/`|Golden fixtures (`help-v10152.{txt,golden.json}`) + fake binaries (`fake-llama-server.sh`, `fake-llama-help.sh`).|
-|`BUGS.md`|Historical regression-ID explanation and known-issue pointer (one open investigation: managed backend exits before health).|
+| `profilestore` | Persist/import/export/migrate Profile JSON on disk |
+| `validator` | Validate profiles against FlagSchema + fixed rules (`rules.go`, `crossfield.go`) |
+| `modelscanner` | Walk search paths, emit `ScanEvent` for GGUF files (quant + param count) |
+| `processmgr` | Launch/track/kill/recover/prune/restart LLM server processes; `instances.json` registry; 35 files, largest service |
+| `monitor` | Stream logs, slot snapshots, GPU stats, aggregated metrics |
+| `httpproxy` | OpenAI-shaped reverse proxy with on-demand backend swap |
+| `proxysupervisor` | Run the HTTP proxy as a detached OS process with persistent state |
+| `backendcatalog` | Persist backend catalog + validation schemas |
+| `backendschema` | Schema manager; `RegisterDefaults` + `RefreshSchema` (used by `regenerate-schemas`); Presentation building/reconciliation |
+| `benchmark` | SWE-bench-Lite evaluation, quality/speed/robustness/knowledge/agentic modes |
+| `benchmarkstore` | Persist benchmark runs as one JSON file per run |
+| `downloadmgr` | HuggingFace downloads via detached worker subprocesses (`model-loader download <state-path>`) |
+| `hfhub` | HuggingFace Hub API client (search/info) |
+| `configweb` | On-demand web GUI the TUI uses to edit profiles |
+| `llamabin` | Resolve/validate `llama-server` binary path (+ python fallback) |
+| `llamahelp` | Parse `llama-server --help` into FlagSchema; embedded fallback |
+| `vllmhelp`, `sglanghelp`, `tabbyhelp`, `unslothhelp`, `buunhelp`, `dflashhelp` | Embedded curated schemas for Python/other backends |
+| `sizing`, `metricsstore`, `migration` | Context-window sizing, metric persistence, legacy migrations |
+| `internal/{fsx,procutil,shellsplit,ptrutil}` | Internal helpers (atomic JSON, process utils, shell splitting) |
+
+**Backend schema presentation.** `backendschema` synthesizes the flag groups
+shown in the Backends tab. `essentialSeed` (per-kind flag long-names, e.g.
+`n-gpu-layers`, `ctx-size`, `flash-attn`) seeds the highlighted "Essentials"
+group; `port` is intentionally absent because the process manager owns
+allocation. `BuildPresentation` builds the default presentation from the
+schema, and `ReconcilePresentation(prev, next)` carries an operator-curated
+layout across a regeneration (keeps group order, drops flags the regenerated
+schema no longer has, appends new flags to the group that names them).
+Curated literal presentations live in `curated_llama.go`, `curated_beellama.go`,
+`curated_buun.go`, `curated_ik.go`, `curated_sglang.go`, `curated_vllm.go`
+(`Curated*Schema()` returning a `BackendValidationSchema` with `Presentation`
+set). **Curated/seed flags must reference only flags the schema actually
+defines** — `presentation_coverage_test.go` and the `curated_*_test.go` files
+enforce this, because a dangling entry renders as an empty row instead of
+failing loudly.
+
+### Backends — `backends/`
+
+One directory per backend variant (e.g. `llama.cpp-stable`,
+`llama.cpp-nightly`, `vllm-stable`, `vllm-nightly`, `sglang-*`, `dflash`,
+`tabby`, `unsloth`, `buun-llama-cpp`, `beellama.cpp`, `sndr-vllm`, …). These
+are **vendored checkouts/venvs, gitignored, no submodules** — each tree has
+its own `backend-build.sh` and is managed as its own checkout. Never rely on
+them being present in a fresh clone.
+
+### Tests — `testdata/` + `*_test.go`
+
+- `testdata/fake-llama-server.sh` — fake llama-server for processmgr tests
+  (serves `/health`, echoes argv to stderr, SIGTERM-clean; Linux-only, needs
+  `python3` or `nc`). `fake-llama-help.sh`, `help-v10152.txt`,
+  `help-v10152.golden.json` support llamahelp golden tests.
+- 219 `_test.go` files: 0 in `cmd/`, 141 in `internal/service/**` (incl. 3 in
+  `internal/service/internal/`), 25 in `internal/cli/`, 39 in `internal/ui/**`,
+  3 in `internal/app/`, 8 in `internal/domain/`, 2 in `internal/config/`,
+  1 in `internal/log/`.
+
+### Scripts — `cmd/`
+
+- `cmd/regenerate-schemas` — re-parses every backend `--help` and refreshes
+  catalog schemas; run after touching a `*help` package.
+- `cmd/scripts/print_args.go` — prints the resolved executable + args for a
+  profile (default or `<profile-id>`); useful for debugging launch resolution.
+
+### Docs — `docs/` + root
+
+`README.md` (user guide), `ARCHITECTURE.md` (pointer into openwiki),
+`CHANGELOG.md`, `BUGS.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
+`LICENSE`, `docs/{BENCHMARK.md, config.md, backend-schema-update.md,
+sndr-backend.md, deep-swe.md, profile-schema.json}` and historical
+`docs/superpowers/plans/`. The maintained topic docs are in `openwiki/` (§8).
 
 ---
 
@@ -151,7 +229,7 @@ make tests       # go test ./...
 Other frequent `go` invocations:
 
 ```bash
-# Regenerate llama-server --help golden:
+# Regenerate llama-server --help golden (commits parsed schema):
 go test ./internal/service/llamahelp -update
 
 # Run a single package / test:
@@ -163,16 +241,16 @@ go run ./cmd/regenerate-schemas
 
 # Inspect a profile's resolved exe + args:
 go run ./cmd/scripts/print_args.go               # default profile
-go run ./cmd/scripts/print_args.go <profile-id>   # specific profile
+go run ./cmd/scripts/print_args.go <profile-id>  # specific profile
 
-# Run the TUI:
-./bin/model-loader           # or `make build && ./bin/model-loader`
-./bin/model-loader serve     # headless proxy daemon (no flock)
+# Run the TUI / headless proxy:
+./bin/model-loader          # or make build && ./bin/model-loader
+./bin/model-loader serve    # headless proxy daemon (no single-instance flock)
 ```
 
 **No** `gofmt`/`go vet`/`golangci-lint`/`staticcheck` Make targets. CI
-(`.github/workflows/ci.yml`) runs build, tests, and vet on push/PR to `main`
-(go-version-file from go.mod). `release.yml` builds a `v*` tag release
+(`.github/workflows/ci.yml`) runs build, tests, and `go vet` on push/PR to
+`main` (Go version from `go.mod`). `release.yml` builds a `v*` tag release
 (`CGO_ENABLED=0`, tar + sha256sum, `gh release create`). No Dockerfile /
 goreleaser / brew formula.
 
@@ -185,127 +263,130 @@ goreleaser / brew formula.
 - `*Manager` / `*Store` naming.
 - Each package exports its own interface; consumers import the interface.
 - `type Config struct{…}` + functional options (`WithLogger`, `WithWaitFunc`).
-- `log.Nop()` fallback; never `nil` logger.
+- `log.Nop()` fallback; never a `nil` logger.
 - **Error sentinels** as package-level `var Err… = errors.New(…)`. Never use
   `fmt.Errorf` for sentinels. Examples: `ErrModelNotFound`,
   `ErrForegroundBusy`, `ErrHealthCheckTimeout`, `ErrProxyDegraded`.
 - **Atomic JSON** via `internal/service/internal/fsx`:
   `WriteJSONAtomic` (MkdirAll + unique CreateTemp + Rename, chmod 0644) and
-  `WriteJSONExclusive` (race-free Create via hard-link).
-- **Registry writes are flock-guarded deltas** (`fsx.WithFileLock` + load +
-  keyed mutate + atomic save). Abort on load error; never wipe on parse fail.
-- **6 documented `mutateRegistry` entry points (7 raw call sites, all OUT of
-  `m.mu`)** — `launch.go::Launch`, `launch.go::launchForeground`,
-  `manager.go::Kill` (×2 internal), `liveness.go`, `enrichment.go::waitEnrichment`,
-  `recover.go::Reconcile`. Definition lives at `registry.go:53`. Adding a 7th
-  named entry requires updating this contract + the audit docs.
+  `WriteJSONExclusive` (race-free creation). Never write directly to critical
+  JSON paths.
 
-### Process management invariants
+### Process management invariants (processmgr)
 
-1. **`AsStateOwner()`** gates `log.New(... Rotate: true)` and `mgr.Reconcile()`.
-   Only TUI + `serve` pass it. One-shot CLI commands are observers and **must
-   not** pass it (audit A2/C6).
-2. **Single-instance flock** is `LOCK_EX|LOCK_NB` on `<stateDir>/model-loader.lock`.
-   TUI + `bootstrapWithLock` acquire; `serve` does not (registry writes are
-   flock-guarded so TUI and `serve` coexist).
+1. **`AsStateOwner()`** gates `log.New(... Rotate: true)` and
+   `mgr.Reconcile()`. Only the TUI and `serve` pass it. One-shot CLI commands
+   are observers and **must not** pass it.
+2. **Single-instance flock** is `LOCK_EX|LOCK_NB` on
+   `<stateDir>/model-loader.lock`. TUI + `bootstrapWithLock` acquire; `serve`
+   does not (registry writes are flock-guarded so TUI and `serve` coexist).
 3. **`hasReaper[pid]`** marks PIDs with live `cmd.Wait` reapers; liveness
-   applies restart policy only to adopted (reaper-less) deaths.
-4. **Reaper starts AFTER registry upsert** commits (P-C4): a fast-crash
-   `Crashed` delta can never be clobbered by a launch's running-state delta.
-5. **Kill-intent guard**: `killRequested[pid]` is set under `m.mu` **before**
-   signaling. Restart path no-ops on `killRequested` (intentional kills never
-   resurrect the backend).
-6. **Identity-aware everywhere**: `procutil.SameProcess(pid, StartTicks)` from
-   `/proc/<pid>/stat` field 22. Recycled PIDs are never signaled and never
-   surfaced as live. `StartTicks=0` falls back to legacy `/proc/<pid>/comm` +
-   cmdline heuristics.
-7. **Group kill**: spawn with `SysProcAttr.Setsid: true`; `procutil.TerminateTree`
-   sweeps the group (vLLM EngineCore/Worker_TP + SGLang trees die with leader).
-8. **`PYTHONUNBUFFERED=1`** is injected at spawn for vLLM/SGLang/Unsloth
-   (Python backends). Without it their logs block-buffer and the Server-tab tail
-   lands in bursts.
-9. **`healthCheckTimeout`** default is **180s** in the proxy; bumped to
-   **360s** in `serve` for large MoE loads. Always check `ProcessExited`
-   after `WaitHealthy`.
+   applies the restart policy only to adopted (reaper-less) deaths.
+4. **Reaper starts AFTER registry upsert commits**: a fast-crash `Crashed`
+   delta can never be clobbered by a launch's running-state delta.
+5. **Kill-intent guard**: `killRequested[pid]` is set under `m.mu` before
+   signaling; the restart path no-ops when a kill is already requested.
+6. Ports are **assigned automatically** by the process manager; a `port`
+   argument in a profile is ignored and stripped. Instance logging is
+   file-only, never stdout.
+7. Health checks use a configurable timeout (default 360s) so slow-booting
+   models aren't killed mid-init.
 
-### Proxy invariants
+### Proxy invariants (httpproxy)
 
-- `swapMu` serializes swaps. `inflight atomic.Int64` is a gauge.
+- `swapMu` serializes swaps; `inflight atomic.Int64` is a gauge;
   `serving atomic.Int64` covers only the backend-use phase (catch-all proxy +
-  anthropic/responses/gemini upstream). Requests parked at `swapMu` do **not**
+  anthropic/responses/gemini upstream). Requests parked at `swapMu` do not
   stall `/_admin/unload`.
 - `/_admin/unload`, `/_admin/load`, `/v1/messages/count_tokens` participate in
-  neither gauge — comment in `anthropic_handlers.go` explains.
+  neither gauge (comment in `anthropic_handlers.go`).
 - Status JSON is **snake_case**; `Status.UnmarshalJSON` falls back to
   PascalCase for old proxy binaries.
 - Errors are OpenAI-enveloped, except two Anthropic routes that use
   `{"type":"error","error":{…}}`.
 
-### TUI conventions
+### TUI conventions (internal/ui)
 
 - Global rune shortcuts are gated by `activePageCapturesInput()`. Only
   `ctrl+c` is unconditional. A capturing page implements
   `InputCapture.IsCapturingInput()`.
-- Pages hosting `*huh.Form` **must** forward non-`KeyMsg` messages so focus and
-  validation complete.
-- `lowercase = navigation` (`k`/`j`/`g`/`G` reserved for lists);
-  `UPPERCASE = destructive, always confirm` (`X` delete, `K` kill/unload,
-  `R` refresh, `I` import, `E` export, `D` default, `P` probe, `C` clear).
-- Pages implement optional interfaces in `internal/ui/contracts.go`:
-  `InputCapture`, `Reloader`, `HintProvider`, `HelpContextProvider`,
-  `Overlayer`, `StatusMessageProvider`, `Cleaner`.
-- Layout: `MinTermWidth` × `MinTermHeight` (terminal-too-small guard);
-  stacked layout below 100 cols; truncate-at-edge otherwise.
-- Theme = GitHub-Primer adaptive palette; `NO_COLOR` is stripped in `theme.init()`.
-  Helpers `BodyHeight`, `ClampBody`.
-- `RootModel` exposes `With*Page`/`WithProcessManager` fluent setters.
-- Help overlay (`?`/`esc`): glamour-wrapped viewport; `g/home`→GotoTop,
-  `G/end`→GotoBottom are bound explicitly.
+- Pages hosting `*huh.Form` forms defer to the form's key handling.
+- Page updates return `(tea.Model, tea.Cmd)`; fire-and-forget messages are
+  sent through a `drainCmd`-style helper in tests.
+- The TUI and its pages are covered via `teatest.NewTestModel` (120×30
+  terminal) and pure-function page tests (see §9).
 
-### CLI conventions
+### CLI conventions (internal/cli)
 
 - `cli.TUIRunner = runTUI` callback keeps `internal/cli` from importing
-  `internal/ui`. **Do not** break this.
+  `internal/ui`. **Do not break this.**
 - `&ExitError{Code: N}` for non-1 exits; unwrapped by `Execute()`.
-- Every leaf command calls `app.Bootstrap` and `defer svc.Close()`.
-- Output via `cmd.OutOrStdout()` / `ErrOrStderr()` — never `fmt.Print`.
-- `--json` honored by every table command.
+- Every leaf command calls `app.Bootstrap` and gets services from it; no
+  ad-hoc construction.
+- JSON output via `internal/cli/output.go`; `bytes.Buffer` in tests (never
+  exec the binary itself).
+
+### Profile naming convention (curation discipline — not code-enforced)
+
+Profile IDs are lowercase, slash-safe kebab slugs, and the profile filename
+basename must equal `id`.
+
+Canonical pattern:
+
+```text
+<model-family-and-version>-<size>[-<variant>][-<quant>][-<capability/backend/mode>...]-<ctx>
+```
+
+Required minimum:
+
+- The **initial segment names the model**: start with the real base model/family
+  and version when available (`qwen3.6-27b...`, `gemma-4-e4b...`,
+  `agents-a1-35b-a3b...`). Do not start with the backend, task, quant, or a
+  local nickname unless that is the model family itself.
+- The **final segment is the context window**: `-<ctx>` must be the last segment,
+  sourced from the backend's active context argument (`args.ctx-size` for
+  llama.cpp, normally `args.max-model-len` for vLLM/SGLang, or
+  `args.context-length` where the backend schema uses that spelling). Use the
+  binary-k value floored from the configured token count: `262144` → `256k`,
+  `253952` → `248k`, `200000` → `195k`, and `1048576` → `1m`. No suffix may
+  appear after the context label.
+- **Capability segments mirror configuration, not intent:** include `vision`
+  only while `args.mmproj` or a vision-native backend configuration is active;
+  include `mtp`/`dflash` only while the corresponding speculative configuration
+  is active. Backend and placement qualifiers such as `vllm`, `sglang`, `tp2`,
+  `beellama`, `textonly`, `tensor`, and `layer` appear before the final context
+  segment.
+- Name the **real base model**, not merely the publisher's repackaging label.
 
 ### Naming and sync rules
 
-- **Profile IDs** are lowercase kebab/slug-shaped
-  (`^[a-z0-9]+([._-][a-z0-9]+)*$`); filename basename **equals** `id`.
-- `domain.Profile` and `docs/profile-schema.json` **must stay in sync**. Schema
-  version 3, `additionalProperties:false`.
-- Backend IDs: kebab/catalog id like `llama.cpp-stable`, `sglang-dflash`,
-  `sndr-vllm`. `backend_id` ≠ `kind` — one `kind` may have multiple
-  `backend_id`s.
-- **Single mode list**: `benchmark.ModesInOrder()` is canonical. `cli` mode
-  list derives from it. Do not introduce a second literal.
-- **Single benchmark config**: `app.BenchmarkConfig(cfg)` — duplicating the
-  literal once cost DeepSWE its CLI wiring. Wire it via the accessor.
-- `port` is reserved in `Profile.Args`; the process manager allocates an
-  ephemeral loopback port and injects it under the `port` key on Launch.
-- English-only: all UI text, schema metadata, flag/field/JSON/TOML keys,
-  group labels, descriptions. **No localization.**
-
-### Pre-allocated work / committed resources
-
-- **Do not** start, pre-plan, or pre-allocate todos for cleanup before the
-  request demonstrably works.
-- **Do not** add comments that aren't strictly functionality. Docstrings and
-  Godoc comments are fine; changelogs and "what I just did" notes are noise.
-- **Do not** extend `essentialSeed` in `backendschema/presentation.go`
-  without explicit request.
+- New backend help/schema facts go into the matching `*help` package and are
+  regenerated with `go run ./cmd/regenerate-schemas`; golden files update with
+  `go test ./internal/service/llamahelp -update`.
+- Schema/presentation changes that affect the Backends tab must keep curated
+  presentations and `essentialSeed` in sync with the schema (enforced by
+  `presentation_coverage_test.go`).
+- Docs that describe behavior should be updated in `openwiki/`, not by
+  hand-editing generated pages (see §8).
 
 ---
 
 ## 6. Important Files
 
-See §2 for layout. Key additions: domain schema `docs/profile-schema.json`, process lifecycle `processmgr/{launch,manager,enrichment,recover,liveness,restart,registry,prune}.go`, proxy `httpproxy/*_handlers.go`, supervisor `proxysupervisor/`, `backendcatalog`+`backendschema`, monitor/metrics/benchmark, `configweb/benchview_*.go`, `internal/ui/pages/*.go`, `internal/service/internal/{fsx,procutil,shellsplit}/`.
-
-The 5-tab TUI root lives at `internal/ui/root.go`:
-`TabProfiles=0`, `TabServer=1`, `TabModels=2`, `TabBackends=3`, `TabBenchmark=4`.
+| File | Purpose |
+|---|---|
+| `cmd/model-loader/main.go` | Entry point; sets `cli.TUIRunner`, dispatches modes |
+| `internal/app/bootstrap.go` | `Bootstrap()` / `bootServices` DI container |
+| `internal/app/benchmark_config.go` | `BenchmarkConfig` mapping for the 12 benchmark modes |
+| `internal/cli/root.go` | Cobra root, `Version`/`BuildDate`, `TUIRunner`, `ExitError` |
+| `internal/cli/output.go` | JSON output helpers |
+| `internal/service/processmgr/` | Process lifecycle + instance registry (largest service) |
+| `internal/service/httpproxy/` | OpenAI-shaped reverse proxy + API translations |
+| `internal/service/backendschema/presentation.go` | `essentialSeed`, `BuildPresentation`, `ReconcilePresentation` |
+| `internal/service/backendschema/curated_*.go` | Curated Backends-tab presentations per kind |
+| `internal/service/llamahelp/` | `--help` parser + embedded v9761 schema + golden files |
+| `internal/service/backendcatalog/` | `catalog.json` + sentinel `ErrNotFound` |
+| `internal/service/benchmark/` | `Runner` — 12 modes + regression bundles |
 
 ---
 
@@ -313,45 +394,56 @@ The 5-tab TUI root lives at `internal/ui/root.go`:
 
 ### Required runtime
 
-- **Go** ≥ 1.26.2 (toolchain pinned in `go.mod`).
-- **No CGO**. No git submodules. `backends/*` is vendored source under
-  `.gitignore` (manage each as its own checkout; each tree has its own
-  `backend-build.sh`).
+- Go **1.26.2** (declared in `go.mod`); CI reads the version from `go.mod`.
 
-### Binary dependencies (expected on PATH or registered in catalog)
+### Binary dependencies (on PATH or registered in catalog)
 
-|Binary|Where it's referenced|
-|---|---|
-|`llama-server`|`llamabin.DefaultName` (`internal/service/llamabin/resolver.go`); `--help`/`--version` probe in `internal/service/llamahelp/exec_parser.go`. Default backend; PATH lookup falls back if no `default_backend_id` in config.|
-|`python3`|`llamabin.ResolveCommandWithPythonFallback`; backend builders via `processmgr/launch.go::makeCommand`.|
-|`nvidia-smi`|`internal/service/monitor/gpu.go` (GPU monitoring, optional).|
-|`bwrap`|`internal/service/benchmark/codegenbench.go` (sandbox; falls back to bare python).|
-|`docker`|`terminalbench.go`, `deepswe.go`, `swebenchpro.go` (required by agentic modes).|
-|`tb` (Terminal-Bench CLI)|`tbDefaultCmd` in `internal/service/benchmark/terminalbench.go`.|
-|`pier` (datacurve-ai/pier)|`deepDefaultCmd` in `internal/service/benchmark/deepswe.go`.|
-|`vllm`, `sglang`, `dflash_server`, `unsloth`, `beellama`, `buun`, `tabbyapi`|User-registered via `model-loader backend add --executable <path> --kind <kind>`. Not hard-coded.|
+`llama-server` (llama.cpp), `vllm`, `sglang`, `dflash_server`, `unsloth`,
+`beellama`, `buun`, `tabbyapi`. User-registered via
+`model-loader backend add --executable <path> --kind <kind>`. Not hard-coded.
 
-Compound Python commands (`python -m sglang.launch_server`) are supported via
+Compound Python commands (`python -m sglang.launch_server`, …) are built in
 `makeCommand` + `llamabin.ResolveCommandWithPythonFallback`.
 
 ### Direct dependencies (`go.mod`)
-CLI `spf13/cobra`+`viper`, TUI `charmbracelet/*` (bubbletea/bubbles/lipgloss/huh/glamour), other `fsnotify/clipboard/runewidth/tiktoken/term`.
+
+CLI `spf13/cobra` + `viper`; TUI `charmbracelet/*` (bubbletea, bubbles,
+lipgloss, huh, glamour, x/ansi); other: `fsnotify`, `atotto/clipboard`,
+`mattn/go-runewidth`, `tiktoken-go/tokenizer`, `golang.org/x/term`.
+Test-only third-party: `charmbracelet/x/exp/teatest` (2 files).
 
 ### Gitignored trees
-`bin/`/`dist/`/`coverage.*`, `backends/` (vendored, no submodules), `vendor/`/`go.work*`, tooling scratch `.agents/`/`.claude/`/`.pi/`/`.superpowers/`/`.worktrees/`/`.gitnexus/` etc. `AGENTS.md` stays tracked despite ignore pattern (verified `git ls-files`).
+
+`bin/`/`dist/`/`coverage.*`, `backends/` (vendored, no submodules),
+`vendor/`/`go.work*`, tooling scratch (`.agents/`, `.claude/`, `.pi/`,
+`.superpowers/`, `.worktrees/`, `.gitnexus/`, `.commandcode/`, `.ideation/`,
+`.sm/`, `.slim/`). `AGENTS.md` stays tracked despite the ignore pattern
+(verified via `git ls-files`). `docs/superpowers/` and `TUI_AUDIT.md` are
+ignored design/audit artifacts.
 
 ### Defect tracking
 
-Track new defects in GitHub Issues. Existing regression comments retain legacy
-IDs such as `BR1` and `AUD-A1`; `BUGS.md` explains that historical convention
-and tracks one open investigation (managed backend exits before health check).
-
-## OpenWiki
-See `openwiki/quickstart.md` then architecture/workflows/domain/ops/testing notes. Workflow `docs/backend-schema-update.md` (3-pattern A/B/C). Local `.agents/`/`.claude/` skills are ignored.
+Track new defects in GitHub Issues (bug-report template). Existing regression
+comments retain legacy IDs such as `BR1` and `AUD-A1`; `BUGS.md` explains that
+historical convention and tracks one open investigation (managed backend exits
+before health check).
 
 ---
 
-## 8. Testing & QA
+## 8. OpenWiki
+
+This repository uses OpenWiki for recurring code documentation. Start with
+`openwiki/quickstart.md`, then follow its links to architecture, data model,
+HTTP proxy, process manager, backend schemas, surfaces, operations, testing,
+and benchmark topics.
+
+Do not hand-edit generated OpenWiki pages unless explicitly asked; prefer
+updating source code/docs and letting OpenWiki regenerate. Local
+`.agents/`/`.claude/` skills are ignored.
+
+---
+
+## 9. Testing & QA
 
 ### Frameworks
 
@@ -360,10 +452,6 @@ See `openwiki/quickstart.md` then architecture/workflows/domain/ops/testing note
 - **Only test-only 3rd-party import:** `github.com/charmbracelet/x/exp/teatest`
   in 2 files (`internal/ui/root_test.go`, `internal/ui/pages/profiles_test.go`).
 - **Hand-rolled doubles** (`stub*`, `fake*`) — never a mock framework.
-- **218 `_test.go` files** (verified 2026-08-02): 0 in `cmd/`, 140 in
-  `internal/service/**` (incl. 3 in `internal/service/internal/`), 25 in
-  `internal/cli/`, 39 in `internal/ui/**`, 3 in `internal/app/`, 8 in
-  `internal/domain/`, 2 in `internal/config/`, 1 in `internal/log/`.
 
 ### Conventions
 
@@ -372,23 +460,19 @@ See `openwiki/quickstart.md` then architecture/workflows/domain/ops/testing note
   `internal/app/{bootstrap,lock}_test.go` (`package app_test`).
 - File naming: `*_test.go` next to source. No `tests/` subdir.
 - Function naming: `TestFoo` for standard cases; `TestFoo_bar_baz` for
-  scenario descriptions. Sub-tests via `t.Run` are always inside table-driven
-  loops over a `tests := []struct{…}{…}` literal at the top of the function.
-- Hermeticity: `t.Setenv("NO_COLOR", "")`, `HOME`, `XDG_CONFIG_HOME`,
-  `QUANTMIND_API_KEY` etc.
-- `t.TempDir()` everywhere; no `ioutil.TempDir`.
-
-### Canonical helpers
-
-Doubles: `stubStore`/`stubManager` (`httpproxy/mocks_test.go`), `fakeBinary`/`newTestManager`/`freePort` (`processmgr/manager_test.go`), `newTestServer`/`startBackend`/`runStream`/`mustTranslate*` (`httpproxy/*_test.go`), `drainCmd` (`ui/pages/server_test.go`), `fakeProxy`/`fakeManager` (`cli/*`), `shrinkWatchdogTiming` (`benchmark/*watchdog_test.go`).
-
-Status-sequencing pattern: doubles like `fakeProxy` carry a `statusSeq
-[]httpproxy.Status` field; `Status()` pops from head and falls back to a
-default once empty.
+  scenario-style cases.
+- Table-driven tests with `{name, … want}` structs and `t.Run(tt.name, …)`.
+- `t.Helper()` on shared helpers (`freePort`, `fakeBinary`, `newTestManager`,
+  `drainCmd`).
+- Real processes use `t.TempDir()` + `testdata/fake-llama-server.sh`; ports via
+  `freePort` (listen on `127.0.0.1:0`, close, reuse).
+- `-update` flag pattern for golden regeneration (`llamahelp/parser_test.go`).
 
 ### Golden files
 
-One pair at `testdata/help-v10152.{txt,golden.json}` (b10152). Generator `llamahelp/parser_test.go::TestParseHelp_Golden` (`-update` flag). Duplicate `backendschema/testdata/help-v10152.golden.json` must stay byte-identical (loaded by `golden_embed.go:loadGoldenSchema`, stamp `embedded-v10152-full`). `//go:embed` only in prod code, never `_test.go`.
+`llamahelp/parser_test.go::TestGenerateGolden` runs only with `-update`; it
+commits the parsed schema so the golden test can diff without a live
+`llama-server` binary (`help-v10152.golden.json` + `fake-llama-help.sh`).
 
 ### Test categories
 
@@ -407,6 +491,9 @@ One pair at `testdata/help-v10152.{txt,golden.json}` (b10152). Generator `llamah
   initial term size. The rest of `internal/ui/pages/*_test.go` is
   pure-function style: construct page struct, invoke `Update`, call
   `drainCmd(cmd)`, assert on `[]tea.Msg`.
+- **Schema/presentation integrity:** `backendschema/presentation_coverage_test.go`
+  + `curated_*_test.go` assert curated presentations and `essentialSeed`
+  reference only flags the schema defines.
 
 ### Regression tests and BUGS linkage
 
@@ -423,39 +510,12 @@ Other themed regressions:
 - `config/searchpaths_test.go` — **B9** (rewrite preserves unrelated values).
 
 Per-test comments (e.g. `// UIUX-011`, `// BR1`, `// AUD-A1`) appear inline in
-tests that don't get a dedicated regression file. **Naming**: regression
-tests are **not** called `Test*Regression*`; they describe the scenario and
-keep the audit id in a comment.
+tests without a dedicated regression file. **Naming**: regression tests are
+**not** called `Test*Regression*`; they describe the scenario and keep the
+audit id in a comment.
 
-### Coverage tooling
+### Coverage tooling & quality gate
 
-No codecov config and no `.cover` or `-coverprofile` Make target. GitHub Actions
-runs build, tests, and vet. `.gitignore` excludes `coverage.out` /
-`coverage.html` so ad-hoc runs aren't committed. Thin / low-density packages
-worth knowing: `internal/app/{bootstrap,lock}` (single happy-path tests),
-`configweb/embed_test.go`, `benchmark/runner_{inst,mmlu}bench_test.go`.
-
-### Quality gate
-
-```bash
-go build ./...     # compile
-go test ./...      # full suite
-go vet ./...       # static checks
-```
-
-Before yielding, run all three and confirm 0 exit codes. The gate is defined
-in `CONTRIBUTING.md` and enforced by `.github/workflows/ci.yml`.
-
----
-
-*Edit `AGENTS.md` in place. Track public defects in GitHub Issues.*
-
-<!-- OPENWIKI:START -->
-
-## OpenWiki
-
-This repository uses OpenWiki for recurring code documentation. Start with `openwiki/quickstart.md`, then follow its links to architecture, workflows, domain concepts, operations, integrations, testing guidance, and source maps.
-
-The scheduled OpenWiki GitHub Actions workflow refreshes the repository wiki. Do not hand-edit generated OpenWiki pages unless explicitly asked; prefer updating source code/docs and letting OpenWiki regenerate.
-
-<!-- OPENWIKI:END -->
+No codecov config and no `-coverprofile` Make target. `.gitignore` excludes
+`coverage.out` / `coverage.html`. The CI quality gate is build + test + `go vet`
+on `main` push/PR.

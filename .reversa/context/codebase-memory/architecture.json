@@ -1,0 +1,764 @@
+{
+  "project": "home-diogo-dev-model-loader",
+  "total_nodes": 5731,
+  "total_edges": 29784,
+  "node_labels": [
+    {
+      "label": "Function",
+      "count": 2686
+    },
+    {
+      "label": "Method",
+      "count": 825
+    },
+    {
+      "label": "Variable",
+      "count": 745
+    },
+    {
+      "label": "File",
+      "count": 538
+    },
+    {
+      "label": "Struct",
+      "count": 531
+    },
+    {
+      "label": "Section",
+      "count": 117
+    },
+    {
+      "label": "Route",
+      "count": 64
+    },
+    {
+      "label": "Package",
+      "count": 59
+    },
+    {
+      "label": "Folder",
+      "count": 51
+    },
+    {
+      "label": "Interface",
+      "count": 42
+    },
+    {
+      "label": "Module",
+      "count": 40
+    },
+    {
+      "label": "Class",
+      "count": 29
+    },
+    {
+      "label": "Type",
+      "count": 2
+    },
+    {
+      "label": "Branch",
+      "count": 1
+    },
+    {
+      "label": "Project",
+      "count": 1
+    }
+  ],
+  "edge_types": [
+    {
+      "type": "CALLS",
+      "count": 8392
+    },
+    {
+      "type": "USAGE",
+      "count": 7001
+    },
+    {
+      "type": "DEFINES",
+      "count": 5894
+    },
+    {
+      "type": "TESTS",
+      "count": 3617
+    },
+    {
+      "type": "DEFINES_METHOD",
+      "count": 1183
+    },
+    {
+      "type": "IMPORTS",
+      "count": 705
+    },
+    {
+      "type": "SEMANTICALLY_RELATED",
+      "count": 578
+    },
+    {
+      "type": "CONTAINS_FILE",
+      "count": 533
+    },
+    {
+      "type": "WRITES",
+      "count": 518
+    },
+    {
+      "type": "OVERRIDE",
+      "count": 338
+    },
+    {
+      "type": "SIMILAR_TO",
+      "count": 241
+    },
+    {
+      "type": "IMPLEMENTS",
+      "count": 210
+    },
+    {
+      "type": "TESTS_FILE",
+      "count": 179
+    },
+    {
+      "type": "FILE_CHANGES_WITH",
+      "count": 135
+    },
+    {
+      "type": "HTTP_CALLS",
+      "count": 102
+    },
+    {
+      "type": "DEPENDS_ON",
+      "count": 59
+    },
+    {
+      "type": "CONTAINS_FOLDER",
+      "count": 46
+    },
+    {
+      "type": "HANDLES",
+      "count": 34
+    },
+    {
+      "type": "DATA_FLOWS",
+      "count": 18
+    },
+    {
+      "type": "HAS_BRANCH",
+      "count": 1
+    }
+  ],
+  "languages": [
+    {
+      "language": "Go",
+      "file_count": 498
+    },
+    {
+      "language": "YAML",
+      "file_count": 5
+    }
+  ],
+  "packages": [
+    {
+      "name": "github.com/alecthomas/chroma/v2",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    {
+      "name": "github.com/atotto/clipboard",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    {
+      "name": "github.com/aymanbagabas/go-osc52/v2",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    {
+      "name": "github.com/aymanbagabas/go-udiff",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    {
+      "name": "github.com/aymerick/douceur",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    {
+      "name": "github.com/catppuccin/go",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    {
+      "name": "github.com/charmbracelet/bubbles",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    {
+      "name": "github.com/charmbracelet/bubbletea",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    {
+      "name": "github.com/charmbracelet/colorprofile",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    {
+      "name": "github.com/charmbracelet/glamour",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    {
+      "name": "github.com/charmbracelet/huh",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    {
+      "name": "github.com/charmbracelet/lipgloss",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    {
+      "name": "github.com/charmbracelet/x/ansi",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    {
+      "name": "github.com/charmbracelet/x/cellbuf",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    {
+      "name": "github.com/charmbracelet/x/exp/golden",
+      "node_count": 1,
+      "fan_in": 0,
+      "fan_out": 0
+    }
+  ],
+  "entry_points": [
+    {
+      "name": "main",
+      "qualified_name": "home-diogo-dev-model-loader.cmd.model-loader.main",
+      "file": "cmd/model-loader/main.go"
+    },
+    {
+      "name": "main",
+      "qualified_name": "home-diogo-dev-model-loader.cmd.regenerate-schemas.main",
+      "file": "cmd/regenerate-schemas/main.go"
+    }
+  ],
+  "routes": [
+    {
+      "method": "",
+      "path": "/tmp/out",
+      "handler": ""
+    },
+    {
+      "method": "",
+      "path": "http://127.0.0.1:4321",
+      "handler": ""
+    },
+    {
+      "method": "ANY",
+      "path": "/v1/models",
+      "handler": ""
+    },
+    {
+      "method": "",
+      "path": "/v1/messages",
+      "handler": ""
+    },
+    {
+      "method": "",
+      "path": "/v1/messages/count_tokens",
+      "handler": ""
+    },
+    {
+      "method": "",
+      "path": "/v1/responses",
+      "handler": ""
+    },
+    {
+      "method": "ANY",
+      "path": "/v1beta/models",
+      "handler": ""
+    },
+    {
+      "method": "ANY",
+      "path": "/v1beta/models/",
+      "handler": ""
+    },
+    {
+      "method": "ANY",
+      "path": "/_status",
+      "handler": ""
+    },
+    {
+      "method": "ANY",
+      "path": "/_admin/load",
+      "handler": ""
+    },
+    {
+      "method": "ANY",
+      "path": "/_admin/unload",
+      "handler": ""
+    },
+    {
+      "method": "ANY",
+      "path": "/",
+      "handler": ""
+    },
+    {
+      "method": "ANY",
+      "path": "/run/{id}",
+      "handler": ""
+    },
+    {
+      "method": "ANY",
+      "path": "/compare",
+      "handler": ""
+    },
+    {
+      "method": "ANY",
+      "path": "/live",
+      "handler": ""
+    },
+    {
+      "method": "",
+      "path": "/live/fragment",
+      "handler": ""
+    },
+    {
+      "method": "ANY",
+      "path": "/static/",
+      "handler": ""
+    },
+    {
+      "method": "ANY",
+      "path": "/healthz",
+      "handler": ""
+    },
+    {
+      "method": "ANY",
+      "path": "/closed",
+      "handler": ""
+    },
+    {
+      "method": "",
+      "path": "/usr/bin/python",
+      "handler": ""
+    }
+  ],
+  "hotspots": [
+    {
+      "name": "Set",
+      "qualified_name": "home-diogo-dev-model-loader.internal.ui.components.Set",
+      "fan_in": 159
+    },
+    {
+      "name": "String",
+      "qualified_name": "home-diogo-dev-model-loader.internal.service.downloadmgr.String",
+      "fan_in": 137
+    },
+    {
+      "name": "Update",
+      "qualified_name": "home-diogo-dev-model-loader.internal.ui.pages.Update",
+      "fan_in": 106
+    },
+    {
+      "name": "Error",
+      "qualified_name": "home-diogo-dev-model-loader.internal.service.hfhub.Error",
+      "fan_in": 83
+    },
+    {
+      "name": "NewServerPage",
+      "qualified_name": "home-diogo-dev-model-loader.internal.ui.pages.NewServerPage",
+      "fan_in": 79
+    },
+    {
+      "name": "Close",
+      "qualified_name": "home-diogo-dev-model-loader.internal.service.benchmark.Close",
+      "fan_in": 68
+    },
+    {
+      "name": "NewModelsPage",
+      "qualified_name": "home-diogo-dev-model-loader.internal.ui.pages.NewModelsPage",
+      "fan_in": 68
+    },
+    {
+      "name": "Update",
+      "qualified_name": "home-diogo-dev-model-loader.internal.ui.components.Update",
+      "fan_in": 68
+    },
+    {
+      "name": "NewFSStore",
+      "qualified_name": "home-diogo-dev-model-loader.internal.service.profilestore.NewFSStore",
+      "fan_in": 60
+    },
+    {
+      "name": "Message",
+      "qualified_name": "home-diogo-dev-model-loader.internal.ui.components.Message",
+      "fan_in": 59
+    }
+  ],
+  "boundaries": [
+    {
+      "from": "ui",
+      "to": "service",
+      "call_count": 202
+    },
+    {
+      "from": "service",
+      "to": "ui",
+      "call_count": 170
+    },
+    {
+      "from": "service",
+      "to": "domain",
+      "call_count": 100
+    },
+    {
+      "from": "ui",
+      "to": "cli",
+      "call_count": 91
+    },
+    {
+      "from": "cli",
+      "to": "service",
+      "call_count": 84
+    },
+    {
+      "from": "service",
+      "to": "cli",
+      "call_count": 69
+    },
+    {
+      "from": "service",
+      "to": "log",
+      "call_count": 43
+    },
+    {
+      "from": "model-loader",
+      "to": "ui",
+      "call_count": 27
+    },
+    {
+      "from": "app",
+      "to": "service",
+      "call_count": 27
+    },
+    {
+      "from": "cli",
+      "to": "ui",
+      "call_count": 20
+    }
+  ],
+  "layers": [
+    {
+      "name": "",
+      "layer": "api",
+      "reason": "has HTTP route definitions"
+    },
+    {
+      "name": "0",
+      "layer": "api",
+      "reason": "has HTTP route definitions"
+    },
+    {
+      "name": "app",
+      "layer": "entry",
+      "reason": "only outbound calls"
+    },
+    {
+      "name": "cli",
+      "layer": "core",
+      "reason": "high fan-in (160 in, 104 out)"
+    },
+    {
+      "name": "domain",
+      "layer": "core",
+      "reason": "high fan-in (100 in, 0 out)"
+    },
+    {
+      "name": "gguf",
+      "layer": "api",
+      "reason": "has HTTP route definitions"
+    },
+    {
+      "name": "json",
+      "layer": "api",
+      "reason": "has HTTP route definitions"
+    },
+    {
+      "name": "log",
+      "layer": "api",
+      "reason": "has HTTP route definitions"
+    },
+    {
+      "name": "model-loader",
+      "layer": "entry",
+      "reason": "has entry points, only outbound calls"
+    },
+    {
+      "name": "regenerate-schemas",
+      "layer": "internal",
+      "reason": "fan-in=0, fan-out=0"
+    },
+    {
+      "name": "service",
+      "layer": "internal",
+      "reason": "fan-in=313, fan-out=382"
+    },
+    {
+      "name": "ui",
+      "layer": "internal",
+      "reason": "fan-in=217, fan-out=293"
+    }
+  ],
+  "clusters": [
+    {
+      "id": 7,
+      "label": "internal",
+      "members": 485,
+      "cohesion": 0.7311886586695747,
+      "top_nodes": [
+        "Update",
+        "Error",
+        "NewServerPage",
+        "View",
+        "NewModelsPage"
+      ],
+      "packages": [
+        "internal"
+      ],
+      "edge_types": [
+        "CALLS"
+      ]
+    },
+    {
+      "id": 33,
+      "label": "internal",
+      "members": 315,
+      "cohesion": 0.751060820367751,
+      "top_nodes": [
+        "Error",
+        "Execute",
+        "Close",
+        "Write",
+        "Complete"
+      ],
+      "packages": [
+        "internal"
+      ],
+      "edge_types": [
+        "CALLS"
+      ]
+    },
+    {
+      "id": 5,
+      "label": "internal",
+      "members": 284,
+      "cohesion": 0.8045454545454546,
+      "top_nodes": [
+        "init",
+        "emitJSON",
+        "Bootstrap",
+        "newTempStore",
+        "seed"
+      ],
+      "packages": [
+        "internal"
+      ],
+      "edge_types": [
+        "CALLS"
+      ]
+    },
+    {
+      "id": 29,
+      "label": "internal",
+      "members": 251,
+      "cohesion": 0.7300177619893428,
+      "top_nodes": [
+        "Set",
+        "String",
+        "newStubStore",
+        "newStubManager",
+        "Error"
+      ],
+      "packages": [
+        "internal"
+      ],
+      "edge_types": [
+        "CALLS"
+      ]
+    },
+    {
+      "id": 6,
+      "label": "internal",
+      "members": 232,
+      "cohesion": 0.674074074074074,
+      "top_nodes": [
+        "Render",
+        "RebuildStyles",
+        "viewRunning",
+        "NoColor",
+        "Render"
+      ],
+      "packages": [
+        "internal"
+      ],
+      "edge_types": [
+        "CALLS"
+      ]
+    },
+    {
+      "id": 34,
+      "label": "internal",
+      "members": 197,
+      "cohesion": 0.7258382642998028,
+      "top_nodes": [
+        "Update",
+        "View",
+        "NewProfilePicker",
+        "NewProxyPanel",
+        "Init"
+      ],
+      "packages": [
+        "internal"
+      ],
+      "edge_types": [
+        "CALLS"
+      ]
+    },
+    {
+      "id": 26,
+      "label": "internal",
+      "members": 191,
+      "cohesion": 0.8505747126436781,
+      "top_nodes": [
+        "Cleanup",
+        "New",
+        "Launch",
+        "Kill",
+        "Close"
+      ],
+      "packages": [
+        "internal",
+        "cmd"
+      ],
+      "edge_types": [
+        "CALLS"
+      ]
+    },
+    {
+      "id": 19,
+      "label": "internal",
+      "members": 173,
+      "cohesion": 0.763302752293578,
+      "top_nodes": [
+        "NewFSSchemaStore",
+        "Generate",
+        "NewFSStore",
+        "Save",
+        "Load"
+      ],
+      "packages": [
+        "internal",
+        "cmd"
+      ],
+      "edge_types": [
+        "CALLS"
+      ]
+    },
+    {
+      "id": 28,
+      "label": "internal",
+      "members": 152,
+      "cohesion": 0.7648456057007126,
+      "top_nodes": [
+        "Nop",
+        "New",
+        "Validate",
+        "finish",
+        "sseScript"
+      ],
+      "packages": [
+        "internal"
+      ],
+      "edge_types": [
+        "CALLS"
+      ]
+    },
+    {
+      "id": 3,
+      "label": "internal",
+      "members": 141,
+      "cohesion": 0.7054945054945055,
+      "top_nodes": [
+        "Update",
+        "runTUI",
+        "NewRoot",
+        "handleKey",
+        "WithProfilesPage"
+      ],
+      "packages": [
+        "internal",
+        "cmd"
+      ],
+      "edge_types": [
+        "CALLS"
+      ]
+    },
+    {
+      "id": 20,
+      "label": "internal",
+      "members": 128,
+      "cohesion": 0.6273972602739726,
+      "top_nodes": [
+        "Done",
+        "handleSave",
+        "Get",
+        "NewBenchViewer",
+        "newStubBenchStore"
+      ],
+      "packages": [
+        "internal"
+      ],
+      "edge_types": [
+        "CALLS"
+      ]
+    },
+    {
+      "id": 31,
+      "label": "internal",
+      "members": 125,
+      "cohesion": 0.825,
+      "top_nodes": [
+        "Lookup",
+        "ToFlagSchema",
+        "CuratedLlamaSchema",
+        "CuratedBeeLlamaSchema",
+        "CuratedBuunSchema"
+      ],
+      "packages": [
+        "internal"
+      ],
+      "edge_types": [
+        "CALLS"
+      ]
+    }
+  ]
+}

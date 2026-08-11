@@ -13,8 +13,10 @@ func TestCuratedBuun_RuntimeFacts(t *testing.T) {
 	if !ok {
 		t.Fatal("spec-type missing from curated schema")
 	}
-	if !containsStr(specType.EnumValues, "draft-dflash") || !containsStr(specType.EnumValues, "dflash") {
-		t.Fatalf("spec-type enum = %v, want both draft-dflash and dflash", specType.EnumValues)
+	for _, want := range []string{"draft-dflash", "dflash", "draft-dspark"} {
+		if !containsStr(specType.EnumValues, want) {
+			t.Fatalf("spec-type enum = %v, want %q", specType.EnumValues, want)
+		}
 	}
 
 	tests := []struct {
@@ -34,6 +36,24 @@ func TestCuratedBuun_RuntimeFacts(t *testing.T) {
 		{name: "spec-draft-p-split", def: 0.1, aliases: []string{"draft-p-split"}, wantType: domain.FlagTypeFloat},
 		{name: "spec-draft-p-min", def: 0.0, aliases: []string{"draft-p-min"}, wantType: domain.FlagTypeFloat},
 		{name: "dflash-max-slots", def: 1, wantType: domain.FlagTypeInt},
+		// b9637-1518-gba09e2a80: --mlock/--mmap/--direct-io are deprecated in
+		// favor of the -lm/--load-mode selector.
+		{name: "load-mode", def: "mmap", wantType: domain.FlagTypeEnum},
+		{name: "ctx-size-draft", def: 0, wantType: domain.FlagTypeInt, wantMin: ptrutilInt(0)},
+		{name: "timeout", def: 3600, wantType: domain.FlagTypeInt},
+		{name: "models-max", def: 4, wantType: domain.FlagTypeInt, wantMin: ptrutilInt(0)},
+		{name: "reasoning-budget", def: -1, wantType: domain.FlagTypeInt, wantMin: ptrutilInt(-1)},
+		{name: "dry-penalty-last-n", def: 64, wantType: domain.FlagTypeInt, wantMin: ptrutilInt(0)},
+		{name: "top-p", def: 0.95, wantType: domain.FlagTypeFloat},
+		{name: "min-p", def: 0.05, wantType: domain.FlagTypeFloat},
+		{name: "adaptive-target", def: -1.0, wantType: domain.FlagTypeFloat},
+		{name: "adaptive-decay", def: 0.9, wantType: domain.FlagTypeFloat},
+		{name: "yarn-attn-factor", def: -1.0, wantType: domain.FlagTypeFloat},
+		{name: "yarn-beta-fast", def: -1.0, wantType: domain.FlagTypeFloat},
+		{name: "jinja", def: true, aliases: []string{"no-jinja"}, wantType: domain.FlagTypeBool},
+		{name: "models-autoload", def: true, aliases: []string{"no-models-autoload"}, wantType: domain.FlagTypeBool},
+		{name: "spec-draft-backend-sampling", def: true, aliases: []string{"no-spec-draft-backend-sampling"}, wantType: domain.FlagTypeBool},
+		{name: "logits-all", def: true, aliases: []string{"no-logits-all"}, wantType: domain.FlagTypeBool},
 	}
 
 	for _, tc := range tests {
@@ -167,7 +187,7 @@ func TestCuratedBuun_VBRControls(t *testing.T) {
 		kind    domain.FlagType
 	}{
 		{name: "vbr-budget", def: "dynamic", aliases: []string{"vbr-bits"}, kind: domain.FlagTypeString},
-		{name: "vbr-min-bits", def: "t1", aliases: []string{"vbr-floor"}, kind: domain.FlagTypeString},
+		{name: "vbr-min-bits", def: nil, aliases: []string{"vbr-floor"}, kind: domain.FlagTypeString},
 		{name: "vbr-vram-budget", def: "auto", aliases: []string{"vbr-vram"}, kind: domain.FlagTypeString},
 		{name: "vbr-reclaim-floor", def: 8.125, kind: domain.FlagTypeFloat},
 		{name: "vbr-reset-keep-frac", def: 0.25, kind: domain.FlagTypeFloat},
@@ -202,11 +222,22 @@ func TestCuratedBuun_EssentialsAndSource(t *testing.T) {
 	if schema.Source.GeneratedFrom != "buun-llama-cpp/common/arg.cpp" {
 		t.Errorf("GeneratedFrom = %q", schema.Source.GeneratedFrom)
 	}
-	if schema.Source.SourceVersion != "10696 (0eb1e82b6)" {
+	// The fork's build number and its git describe are different numbering
+	// schemes, so both are tracked.
+	if schema.Source.SourceVersion != "11155 (ba09e2a80) / b9637-1518-gba09e2a80" {
 		t.Errorf("SourceVersion = %q", schema.Source.SourceVersion)
 	}
 
-	wantEssentials := []string{"hf-repo", "hf-token", "ctx-size", "host", "port", "n-gpu-layers", "device", "parallel", "threads", "batch-size", "ubatch-size", "cache-type-k", "cache-type-v", "cache-ram", "kv-unified", "cont-batching", "api-key", "alias"}
+	// Dropped by the fork: the TTS vocoder flags and the --no-backend-sampling
+	// negation (-bs/--backend-sampling is positive-only).
+	fs := schema.ToFlagSchema()
+	for _, gone := range []string{"model-vocoder", "tts-use-guide-tokens", "no-tts-use-guide-tokens", "no-backend-sampling"} {
+		if _, ok := fs.Lookup(gone); ok {
+			t.Errorf("%s still present; the backend no longer declares it", gone)
+		}
+	}
+
+	wantEssentials := []string{"hf-repo", "hf-token", "ctx-size", "host", "port", "n-gpu-layers", "device", "flash-attn", "load-mode", "parallel", "threads", "batch-size", "ubatch-size", "cache-type", "cache-type-k", "cache-type-v", "cache-ram", "kv-unified", "cont-batching", "api-key", "alias"}
 	for _, group := range schema.Presentation.Groups {
 		if group.Name == buunGroupEssentials {
 			if !group.Highlighted {

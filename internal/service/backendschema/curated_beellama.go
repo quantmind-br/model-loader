@@ -38,10 +38,22 @@ const (
 // the KV-cache precision tail (KVCPT) controls, upstream draft-dflash speculative
 // decoding, the profit-based adaptive draft-max controller, and a reasoning loop
 // guard with its tuning surface. Flag metadata below was synchronized against the
-// BeeLlama source tree at git v0.4.1-1-g94605e9fe (commit 94605e9fe, build 10856),
-// reading common/arg.cpp directly as the source of truth. TurboQuant/TCQ cache
+// BeeLlama source tree at git v0.4.2-4-g5a357925e (commit 5a357925e, build 11001),
+// reading common/arg.cpp directly as the source of truth. v0.4.2 merged upstream
+// through 6ba5ef247, replacing --mlock/--mmap/--direct-io with the unified
+// --load-mode selector (the deprecated flags remain functional) and adding
+// --fit/--fit-target/--fit-ctx, --repack, --op-offload, --docker-repo,
+// --hf-repo-v/--hf-file-v, --backend-sampling, --cache-idle-slots,
+// --mcp-servers-config/--mcp-servers-json, --tags, --pooling, and
+// --embd-normalize. TurboQuant/TCQ cache
 // types, DDTree tree verification, CopySpec, the fringe controller, and the fork
 // DFlash ring were removed in v0.4.0.
+//
+// Draft and auxiliary contexts stay on the standard cache types: common/arg.cpp
+// builds the --spec-draft-type-k/-v value list with
+// get_all_kv_cache_types(include_kvarn_pseudo_types = false), so a kvarnN value
+// on a draft cache raises "Unsupported cache type" at launch
+// (docs/beellama-args.md, "KV cache precision tail").
 //
 // Flags that common/arg.cpp restricts via set_examples to non-server examples
 // are intentionally excluded: llama-server does not register them and rejects
@@ -56,10 +68,13 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 
 	for _, spec := range []domain.FlagSpec{
 		// 1. Model loading
-		strFlag("hf-repo", "hf", nil, nil, "Download/load a model directly from Hugging Face; quant is optional.", beeGroupModelLoad, false),
+		strFlag("hf-repo", "hf", []string{"hfr"}, nil, "Download/load a model directly from Hugging Face; quant is optional.", beeGroupModelLoad, false),
 		strFlag("hf-file", "hff", nil, nil, "Specific file inside the HF repository, overriding automatic quant selection.", beeGroupModelLoad, false),
-		strFlag("hf-token", "", nil, nil, "Hugging Face authentication token for private repositories.", beeGroupModelLoad, false),
+		strFlag("hf-token", "hft", nil, nil, "Hugging Face access token (overrides the HF_TOKEN environment variable).", beeGroupModelLoad, false),
 		strFlag("model-url", "mu", nil, nil, "Model download URL.", beeGroupModelLoad, false),
+		strFlag("docker-repo", "dr", nil, nil, "Docker Hub model repository in [repo/]model[:quant] format.", beeGroupModelLoad, false),
+		strFlag("hf-repo-v", "hfv", []string{"hfrv"}, nil, "Hugging Face model repository for the vocoder model; quant is optional.", beeGroupModelLoad, false),
+		strFlag("hf-file-v", "hffv", nil, nil, "Specific vocoder file inside the HF repository.", beeGroupModelLoad, false),
 		boolFlag("offline", "", nil, false, "Force offline mode using only the local cache, with no network.", beeGroupModelLoad),
 		strFlag("override-kv", "", nil, nil, "Override model metadata by key, KEY=TYPE:VALUE (comma-separated).", beeGroupModelLoad, false),
 
@@ -77,10 +92,22 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		intFlag("poll", "", nil, 50, "Polling level while waiting for work; 0 disables it.", beeGroupCPU, ptrutil.Ptr(0), ptrutil.Ptr(100)),
 		enumFlag("prio", "", nil, []string{"-1", "0", "1", "2", "3"}, 0, "Process/thread priority: low, normal, medium, high, realtime.", beeGroupCPU),
 		enumFlag("numa", "", nil, []string{"distribute", "isolate", "numactl"}, nil, "Optimizations for NUMA machines.", beeGroupCPU),
+		strFlag("cpu-mask", "C", nil, nil, "CPU affinity mask as an arbitrarily long hex value; complements --cpu-range.", beeGroupCPU, false),
+		strFlag("cpu-range", "Cr", nil, nil, "Range of CPUs for affinity (lo-hi); complements --cpu-mask.", beeGroupCPU, false),
+		intFlag("cpu-strict", "", nil, 0, "Use strict CPU placement (0|1).", beeGroupCPU, ptrutil.Ptr(0), ptrutil.Ptr(1)),
+		strFlag("cpu-mask-batch", "Cb", nil, nil, "Batch CPU affinity mask; inherits --cpu-mask by default.", beeGroupCPU, false),
+		strFlag("cpu-range-batch", "Crb", nil, nil, "Batch CPU range for affinity (lo-hi); inherits --cpu-range by default.", beeGroupCPU, false),
+		intFlag("cpu-strict-batch", "", nil, nil, "Use strict batch CPU placement (0|1); inherits --cpu-strict by default.", beeGroupCPU, ptrutil.Ptr(0), ptrutil.Ptr(1)),
+		enumFlag("prio-batch", "", nil, []string{"0", "1", "2", "3"}, 0, "Batch process/thread priority: normal, medium, high, realtime.", beeGroupCPU),
+		intFlag("poll-batch", "", nil, nil, "Use polling (0|1) while waiting for batch work; inherits --poll by default.", beeGroupCPU, ptrutil.Ptr(0), ptrutil.Ptr(1)),
 
 		// 4. Memory and I/O
-		boolFlag("mlock", "", nil, false, "Keep the model in RAM, avoiding swap.", beeGroupMemory),
-		boolFlag("mmap", "", []string{"no-mmap"}, true, "Memory-map the model; disabling it gives slower load but may reduce pageouts.", beeGroupMemory),
+		boolFlag("mlock", "", nil, false, "DEPRECATED in favor of --load-mode: keeps the model in RAM, avoiding swap.", beeGroupMemory),
+		boolFlag("mmap", "", []string{"no-mmap"}, true, "DEPRECATED in favor of --load-mode: model memory mapping; disabling it may reduce pageouts but makes loading slower.", beeGroupMemory),
+		boolFlag("direct-io", "dio", []string{"no-direct-io"}, false, "DEPRECATED in favor of --load-mode: uses Direct I/O when available.", beeGroupMemory),
+		enumFlag("load-mode", "lm", nil, []string{"none", "mmap", "mlock", "mmap+mlock", "dio"}, "mmap", "Model loading mode (replaces --mlock/--mmap/--direct-io).", beeGroupMemory),
+		boolFlag("repack", "", []string{"no-repack"}, true, "Enables/disables weight repacking.", beeGroupMemory),
+		boolFlag("op-offload", "", []string{"no-op-offload"}, true, "Offloads tensor operations from host to device.", beeGroupMemory),
 		boolFlag("no-host", "", nil, false, "Bypass the host buffer, allowing extra buffers to be used.", beeGroupMemory),
 		boolFlag("check-tensors", "", nil, false, "Check model tensors for invalid values.", beeGroupMemory),
 
@@ -90,6 +117,9 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		enumFlag("split-mode", "sm", nil, []string{"none", "layer", "row", "tensor"}, "layer", "How to split the model across multiple GPUs.", beeGroupDevice),
 		strFlag("tensor-split", "ts", nil, nil, "Offload ratio across GPUs (e.g. 3,1).", beeGroupDevice, false),
 		intFlag("main-gpu", "mg", nil, 0, "Main GPU for the model/intermediate results (depends on split mode).", beeGroupDevice, ptrutil.Ptr(0), nil),
+		enumFlag("fit", "fit", nil, []string{"on", "off"}, "on", "Adjusts unset parameters to fit device memory.", beeGroupDevice),
+		strFlag("fit-target", "fitt", nil, nil, "Target memory margin per device used by --fit, in MiB (comma-separated; a single value is broadcast to every device, default 1024).", beeGroupDevice, false),
+		intFlag("fit-ctx", "fitc", nil, 4096, "Minimum context that --fit may configure.", beeGroupDevice, ptrutil.Ptr(0), nil),
 		strFlag("override-tensor", "ot", nil, nil, "Override tensor buffer type, <pattern>=<buffer type> (comma-separated).", beeGroupDevice, false),
 		boolFlag("cpu-moe", "cmoe", nil, false, "Keep all Mixture-of-Experts weights on the CPU.", beeGroupDevice),
 		intFlag("n-cpu-moe", "ncmoe", nil, nil, "Keep the first N Mixture-of-Experts layers on the CPU.", beeGroupDevice, ptrutil.Ptr(0), nil),
@@ -99,6 +129,7 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		enumFlag("cache-type-k", "ctk", nil, beellamaCacheTypes(), "f16", "K cache data type, including BeeLlama KVarN compression formats.", beeGroupKV),
 		enumFlag("cache-type-v", "ctv", nil, beellamaCacheTypes(), "f16", "V cache data type, including BeeLlama KVarN compression formats.", beeGroupKV),
 		enumFlag("flash-attn", "fa", nil, []string{"on", "off", "auto"}, "auto", "Flash Attention use: on, off, or auto.", beeGroupKV),
+		floatFlag("defrag-thold", "dt", nil, nil, "KV cache defragmentation threshold (DEPRECATED).", beeGroupKV, nil, nil),
 		// KVarN SWA-layer overrides and the KV-cache precision tail (KVCPT), BeeLlama v0.4.0.
 		enumFlag("cache-type-k-swa", "", nil, []string{"kvarn2", "kvarn3", "kvarn4", "kvarn5", "kvarn6", "kvarn8"}, nil, "KVarN SWA-layer K cache override; requires a KVarN target cache and must be paired with --cache-type-v-swa.", beeGroupKV),
 		enumFlag("cache-type-v-swa", "", nil, []string{"kvarn2", "kvarn3", "kvarn4", "kvarn5", "kvarn6", "kvarn8"}, nil, "KVarN SWA-layer V cache override; requires a KVarN target cache and must be paired with --cache-type-k-swa.", beeGroupKV),
@@ -119,7 +150,7 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		// 8. Context shift and checkpoints
 		boolFlag("swa-full", "", nil, false, "Use a full-size SWA cache.", beeGroupShift),
 		boolFlag("context-shift", "", []string{"no-context-shift"}, false, "Control context shift during infinite generation.", beeGroupShift),
-		intFlag("ctx-checkpoints", "ctxcp", []string{"swa-checkpoints"}, nil, "Max KV-state checkpoints kept per slot for fast prefix reuse.", beeGroupShift, ptrutil.Ptr(0), nil),
+		intFlag("ctx-checkpoints", "ctxcp", []string{"swa-checkpoints"}, 32, "Max KV-state checkpoints kept per slot for fast prefix reuse.", beeGroupShift, ptrutil.Ptr(0), nil),
 		intFlag("checkpoint-min-step", "cms", nil, 8192, "Minimum spacing between context checkpoints in tokens; 0 = no minimum.", beeGroupShift, ptrutil.Ptr(0), nil),
 
 		// 9. RAM cache, slots, unified KV
@@ -133,9 +164,14 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		floatFlag("top-p", "", nil, 0.95, "Nucleus sampling; 1.0 disables it.", beeGroupSamplers, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
 		floatFlag("min-p", "", nil, 0.05, "Keep tokens above a relative minimum probability; 0 disables it.", beeGroupSamplers, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
 		floatFlag("typical-p", "", []string{"typical"}, 1.0, "Locally typical sampling; 1.0 disables it.", beeGroupSamplers, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
-		floatFlag("top-n-sigma", "", nil, -1.0, "Top-n-sigma sampling; -1.0 disables it.", beeGroupSamplers, nil, nil),
+		floatFlag("top-n-sigma", "", []string{"top-nsigma"}, -1.0, "Top-n-sigma sampling; -1.0 disables it.", beeGroupSamplers, nil, nil),
+		floatFlag("xtc-probability", "", nil, 0.0, "XTC sampling probability; 0.0 disables it.", beeGroupSamplers, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
+		floatFlag("xtc-threshold", "", nil, 0.1, "XTC sampling threshold; above 0.5 disables it.", beeGroupSamplers, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
 		boolFlag("ignore-eos", "", nil, false, "Ignore the EOS token and continue generating.", beeGroupSamplers),
-		strFlag("samplers", "", nil, nil, "Order of samplers applied during generation.", beeGroupSamplers, false),
+		strFlag("samplers", "", nil, "penalties;dry;top_n_sigma;top_k;typ_p;top_p;min_p;xtc;temperature", "Order of samplers applied during generation, separated by ';'.", beeGroupSamplers, false),
+		strFlag("sampler-seq", "", []string{"sampling-seq"}, "edskypmxt", "Simplified one-letter sampler order sequence.", beeGroupSamplers, false),
+		strFlag("logit-bias", "l", nil, nil, "Increases/decreases the chance of specific tokens, in TOKEN_ID(+/-)BIAS format.", beeGroupSamplers, false),
+		boolFlag("backend-sampling", "bs", nil, false, "Enables backend sampling (experimental).", beeGroupSamplers),
 
 		// 11. Penalties and advanced sampling
 		intFlag("repeat-last-n", "", nil, 64, "Recent tokens considered for repetition penalty; -1 = ctx-size.", beeGroupPenalties, nil, nil),
@@ -145,11 +181,15 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		floatFlag("dry-multiplier", "", nil, 0.0, "DRY intensity; 0.0 disables it.", beeGroupPenalties, ptrutil.Ptr(0.0), nil),
 		floatFlag("dry-base", "", nil, 1.75, "DRY base for penalizing repetitive sequences.", beeGroupPenalties, nil, nil),
 		intFlag("dry-allowed-length", "", nil, 2, "Tolerated length before DRY applies.", beeGroupPenalties, ptrutil.Ptr(0), nil),
+		intFlag("dry-penalty-last-n", "", nil, -1, "DRY window in tokens; 0 disables it, -1 = context size.", beeGroupPenalties, nil, nil),
+		strFlag("dry-sequence-breaker", "", nil, "\\n, :, \", *", "Sequence breaker that resets DRY; the first use clears the default breakers.", beeGroupPenalties, false),
+		floatFlag("dynatemp-range", "", nil, 0.0, "Dynamic temperature range; 0.0 disables it.", beeGroupPenalties, ptrutil.Ptr(0.0), nil),
+		floatFlag("dynatemp-exp", "", nil, 1.0, "Dynamic temperature exponent.", beeGroupPenalties, nil, nil),
 		intFlag("mirostat", "", nil, 0, "Mirostat mode; 0 disables it.", beeGroupPenalties, ptrutil.Ptr(0), ptrutil.Ptr(2)),
 		floatFlag("mirostat-lr", "", nil, 0.1, "Mirostat learning rate (eta).", beeGroupPenalties, nil, nil),
 		floatFlag("mirostat-ent", "", nil, 5.0, "Mirostat target entropy (tau).", beeGroupPenalties, nil, nil),
-		floatFlag("adaptive-target", "", nil, nil, "Adaptive-p: select tokens near this probability (0.0-1.0); negative disables.", beeGroupPenalties, nil, ptrutil.Ptr(1.0)),
-		floatFlag("adaptive-decay", "", nil, nil, "Adaptive-p: decay rate for target adaptation over time.", beeGroupPenalties, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
+		floatFlag("adaptive-target", "", nil, -1.0, "Adaptive-p: select tokens near this probability (0.0-1.0); negative disables.", beeGroupPenalties, nil, ptrutil.Ptr(1.0)),
+		floatFlag("adaptive-decay", "", nil, 0.9, "Adaptive-p: decay rate for target adaptation over time; lower is more reactive, higher more stable.", beeGroupPenalties, ptrutil.Ptr(0.0), ptrutil.Ptr(0.99)),
 
 		// 12. Grammar and schema
 		strFlag("grammar", "", nil, nil, "Constrain output with a GBNF grammar.", beeGroupGrammar, false),
@@ -164,7 +204,7 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		boolFlag("jinja", "", []string{"no-jinja"}, true, "Use the Jinja template engine for chat.", beeGroupChat),
 		enumFlag("reasoning-format", "", nil, []string{"none", "deepseek", "deepseek-legacy", "auto"}, "auto", "Format used to extract reasoning blocks.", beeGroupChat),
 		enumFlag("reasoning", "rea", nil, []string{"on", "off", "auto"}, "auto", "Use reasoning/thinking in the chat: on, off, or auto.", beeGroupChat),
-		intFlag("reasoning-budget", "", nil, nil, "Token budget for thinking; -1 unrestricted, 0 immediate end.", beeGroupChat, nil, nil),
+		intFlag("reasoning-budget", "", nil, -1, "Token budget for thinking: -1 = unrestricted, 0 = immediate end, N>0 = budget.", beeGroupChat, nil, nil),
 		enumFlag("reasoning-loop-guard", "", nil, []string{"off", "force-close", "stop"}, "force-close", "Reasoning loop guard mode (BeeLlama): off, force-close, or stop.", beeGroupChat),
 		intFlag("reasoning-loop-min-tokens", "", nil, 512, "Reasoning loop guard: minimum hidden reasoning tokens before loop checks begin.", beeGroupChat, ptrutil.Ptr(0), nil),
 		intFlag("reasoning-loop-window", "", nil, 1024, "Reasoning loop guard: token tail window inspected for loop detection.", beeGroupChat, ptrutil.Ptr(1), nil),
@@ -183,7 +223,7 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		strFlag("api-key", "", nil, nil, "Set API authentication key(s).", beeGroupHTTP, false),
 		strFlag("api-key-file", "", nil, nil, "Read authentication keys from a file.", beeGroupHTTP, false),
 		strFlag("path", "", nil, nil, "Directory of static files to serve.", beeGroupHTTP, false),
-		boolFlag("ui", "", []string{"no-ui"}, true, "Toggle the built-in web interface.", beeGroupHTTP),
+		boolFlag("ui", "", []string{"webui", "no-ui", "no-webui"}, true, "Toggle the built-in web interface.", beeGroupHTTP),
 		intFlag("timeout", "to", nil, 3600, "Read/write timeout in seconds.", beeGroupHTTP, ptrutil.Ptr(0), nil),
 		intFlag("threads-http", "", nil, -1, "Threads for HTTP requests; -1 = automatic.", beeGroupHTTP, nil, nil),
 		boolFlag("metrics", "", nil, false, "Expose a Prometheus-compatible metrics endpoint.", beeGroupHTTP),
@@ -192,16 +232,20 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		boolFlag("cont-batching", "cb", []string{"no-cont-batching"}, true, "Toggle continuous batching.", beeGroupHTTP),
 		boolFlag("cache-prompt", "", []string{"no-cache-prompt"}, true, "Enable prompt reuse/cache.", beeGroupHTTP),
 		strFlag("alias", "a", nil, nil, "Model name alias exposed by the API.", beeGroupHTTP, false),
+		strFlag("tags", "", nil, nil, "Model tags, comma-separated (informational, not used for routing).", beeGroupHTTP, false),
 		boolFlag("reuse-port", "", nil, false, "Allow multiple sockets to bind to the same port.", beeGroupHTTP),
 		strFlag("api-prefix", "", nil, nil, "Path prefix the server serves from, without the trailing slash.", beeGroupHTTP, false),
 		strFlag("ssl-key-file", "", nil, nil, "Path to a PEM-encoded SSL private key.", beeGroupHTTP, false),
 		strFlag("ssl-cert-file", "", nil, nil, "Path to a PEM-encoded SSL certificate.", beeGroupHTTP, false),
+		strFlag("mcp-servers-config", "", nil, nil, "Experimental: path to JSON file with MCP server definitions (Cursor-compatible).", beeGroupHTTP, false),
+		strFlag("mcp-servers-json", "", nil, nil, "Experimental: inline JSON with MCP server definitions (Cursor-compatible).", beeGroupHTTP, false),
 		strFlag("cors-origins", "", nil, nil, "Comma-separated list of allowed CORS origins; 'localhost' reflects only localhost origins.", beeGroupHTTP, false),
 		strFlag("cors-methods", "", nil, nil, "Comma-separated list of allowed CORS methods.", beeGroupHTTP, false),
 		strFlag("cors-headers", "", nil, nil, "Comma-separated list of allowed CORS headers.", beeGroupHTTP, false),
 		boolFlag("cors-credentials", "", []string{"no-cors-credentials"}, true, "Allow credentials for CORS requests.", beeGroupHTTP),
 		intFlag("sse-ping-interval", "", nil, 30, "Server SSE ping interval in seconds; -1 disables it.", beeGroupHTTP, nil, nil),
 		intFlag("cache-reuse", "", nil, 0, "Minimum chunk size to reuse from the cache via KV shifting; requires prompt caching.", beeGroupHTTP, ptrutil.Ptr(0), nil),
+		boolFlag("cache-idle-slots", "", []string{"no-cache-idle-slots"}, true, "Save idle slots to the prompt cache (requires cache-ram).", beeGroupHTTP),
 		boolFlag("props", "", nil, false, "Allow changing global properties via POST /props.", beeGroupHTTP),
 		strFlag("slot-save-path", "", nil, nil, "Directory to save slot KV cache.", beeGroupHTTP, false),
 		floatFlag("slot-prompt-similarity", "sps", nil, 0.10, "How closely a request prompt must match a slot's prompt to reuse it; 0 disables it.", beeGroupHTTP, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
@@ -209,6 +253,8 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		withAllowedInts(intFlag("sleep-idle-seconds", "", nil, -1, "Seconds of idleness after which the server sleeps; -1 disables it.", beeGroupHTTP, ptrutil.Ptr(1), nil), -1),
 		boolFlag("embedding", "", []string{"embeddings"}, false, "Restrict the server to the embedding use case (dedicated embedding models only).", beeGroupHTTP),
 		boolFlag("rerank", "", []string{"reranking"}, false, "Enable the reranking endpoint on the server.", beeGroupHTTP),
+		enumFlag("pooling", "", nil, []string{"none", "mean", "cls", "last", "rank"}, nil, "Embedding pooling.", beeGroupHTTP),
+		intFlag("embd-normalize", "", nil, 2, "Normalization; 2 = Euclidean.", beeGroupHTTP, nil, nil),
 		strFlag("ui-config", "", []string{"webui-config"}, nil, "JSON providing default web UI settings (overrides UI defaults).", beeGroupHTTP, false),
 		strFlag("ui-config-file", "", []string{"webui-config-file"}, nil, "JSON file providing default web UI settings.", beeGroupHTTP, false),
 		boolFlag("ui-mcp-proxy", "", []string{"webui-mcp-proxy", "no-ui-mcp-proxy", "no-webui-mcp-proxy"}, false, "Enable the experimental MCP CORS proxy; do not enable in untrusted environments.", beeGroupHTTP),
@@ -220,6 +266,9 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		strFlag("mmproj-url", "mmu", nil, nil, "URL to a multimodal projector file.", beeGroupMultimodal, false),
 		boolFlag("mmproj-auto", "", []string{"no-mmproj-auto", "no-mmproj"}, true, "Automatically download/use the model's multimodal projector.", beeGroupMultimodal),
 		boolFlag("mmproj-offload", "", []string{"no-mmproj-offload"}, true, "Offload the multimodal projector to the GPU; disable to run it on CPU (0 VRAM).", beeGroupMultimodal),
+		intFlag("image-min-tokens", "", nil, nil, "Minimum tokens per image; only used by vision models with dynamic resolution (default read from the model).", beeGroupMultimodal, ptrutil.Ptr(0), nil),
+		intFlag("image-max-tokens", "", nil, nil, "Maximum tokens per image; only used by vision models with dynamic resolution (default read from the model).", beeGroupMultimodal, ptrutil.Ptr(0), nil),
+		intFlag("mtmd-batch-max-tokens", "", nil, 1024, "Maximum image tokens per batch when encoding images.", beeGroupMultimodal, ptrutil.Ptr(0), nil),
 
 		// 16. LoRA and control vectors
 		strFlag("lora", "", nil, nil, "LoRA adapter(s).", beeGroupLora, false),
@@ -241,13 +290,13 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		strFlag("spec-draft-model", "md", []string{"model-draft", "spec-draft-model"}, nil, "Draft model for speculative decoding (DFlash drafter GGUF).", beeGroupSpeculative, false),
 		strFlag("spec-draft-hf", "hfd", []string{"hf-repo-draft", "spec-draft-hf", "hfrd"}, nil, "HF repo for the draft model, <user>/<model>[:quant]; downloads on first run.", beeGroupSpeculative, false),
 		withKeywords(intFlag("spec-draft-ngl", "ngld", []string{"n-gpu-layers-draft", "gpu-layers-draft", "spec-draft-ngl"}, -1, "Draft model layers offloaded to VRAM; accepts an exact integer, auto (-1), or all (-2).", beeGroupSpeculative, ptrutil.Ptr(-2), ptrutil.Ptr(9999)), "auto", "all"),
-		intFlag("spec-draft-n-max", "", nil, 3, "Max tokens to draft per step; DFlash raises the effective omitted value to 16 by itself.", beeGroupSpeculative, ptrutil.Ptr(0), nil),
+		intFlag("spec-draft-n-max", "", nil, 3, "Max tokens to draft per step; when omitted a DFlash drafter resolves it to its own block size minus one instead of 3.", beeGroupSpeculative, ptrutil.Ptr(0), nil),
 		intFlag("spec-draft-n-min", "", nil, 0, "Min draft tokens for speculative decoding.", beeGroupSpeculative, ptrutil.Ptr(0), nil),
 		floatFlag("spec-draft-p-split", "", []string{"draft-p-split"}, 0.10, "Speculative decoding split probability.", beeGroupSpeculative, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
 		floatFlag("spec-draft-p-min", "", []string{"draft-p-min"}, 0.0, "Minimum speculative decoding probability.", beeGroupSpeculative, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
 		strFlag("spec-draft-device", "devd", []string{"device-draft", "spec-draft-device"}, nil, "Devices for offloading the draft model; follows --device by default.", beeGroupSpeculative, false),
-		enumFlag("spec-draft-type-k", "ctkd", []string{"cache-type-k-draft", "spec-draft-type-k"}, beellamaCacheTypes(), nil, "K cache data type for the draft model.", beeGroupSpeculative),
-		enumFlag("spec-draft-type-v", "ctvd", []string{"cache-type-v-draft", "spec-draft-type-v"}, beellamaCacheTypes(), nil, "V cache data type for the draft model.", beeGroupSpeculative),
+		enumFlag("spec-draft-type-k", "ctkd", []string{"cache-type-k-draft", "spec-draft-type-k"}, beellamaDraftCacheTypes(), "f16", "K cache data type for the draft model; draft contexts do not accept the KVarN types.", beeGroupSpeculative),
+		enumFlag("spec-draft-type-v", "ctvd", []string{"cache-type-v-draft", "spec-draft-type-v"}, beellamaDraftCacheTypes(), "f16", "V cache data type for the draft model; draft contexts do not accept the KVarN types.", beeGroupSpeculative),
 		// Draft-model CPU/thread placement (mirror the main-model CPU flags for the drafter).
 		intFlag("spec-draft-threads", "td", []string{"threads-draft"}, nil, "CPU threads for draft generation; defaults to --threads.", beeGroupSpeculative, ptrutil.Ptr(0), nil),
 		intFlag("spec-draft-threads-batch", "tbd", []string{"threads-batch-draft"}, nil, "CPU threads for draft batch/prefill; defaults to --spec-draft-threads.", beeGroupSpeculative, ptrutil.Ptr(0), nil),
@@ -301,8 +350,8 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		BackendKind:   domain.BackendKindBeeLlamaCpp,
 		BackendID:     "beellama-cpp-default",
 		Source: domain.SchemaSource{
-			GeneratedFrom: "beellama.cpp curated reference",
-			SourceVersion: "curated-beellama-cpp",
+			GeneratedFrom: "beellama.cpp curated reference (common/arg.cpp @ 5a357925e)",
+			SourceVersion: "curated-beellama-cpp-v0.4.2-4-g5a357925e-b11001",
 			Editable:      true,
 		},
 		Flags:        flags,
@@ -313,9 +362,18 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 
 // beellamaCacheTypes lists the standard llama KV cache types plus the BeeLlama
 // fork's KVarN target-context compression types, in the order reported by the
-// binary's --help (the kv_cache_types vector in common/arg.cpp).
+// binary's --help (the kv_cache_types vector in common/arg.cpp plus the KVarN
+// pseudo-types appended by get_all_kv_cache_types(include_kvarn_pseudo_types)).
 func beellamaCacheTypes() []string {
-	return []string{"f32", "f16", "bf16", "q8_0", "q4_0", "q4_1", "iq4_nl", "q5_0", "q5_1", "q6_0", "q6_1", "q3_0", "q3_1", "q2_0", "q2_1", "kvarn2", "kvarn3", "kvarn4", "kvarn5", "kvarn6", "kvarn8"}
+	return append(beellamaDraftCacheTypes(), "kvarn2", "kvarn3", "kvarn4", "kvarn5", "kvarn6", "kvarn8")
+}
+
+// beellamaDraftCacheTypes lists the KV cache types a draft or auxiliary context
+// accepts: the real ggml types only. common/arg.cpp advertises the draft cache
+// flags with get_all_kv_cache_types() (KVarN pseudo-types excluded) and
+// kv_cache_type_from_str rejects a kvarnN value with "Unsupported cache type".
+func beellamaDraftCacheTypes() []string {
+	return []string{"f32", "f16", "bf16", "q8_0", "q4_0", "q4_1", "iq4_nl", "q5_0", "q5_1", "q6_0", "q6_1", "q3_0", "q3_1", "q2_0", "q2_1"}
 }
 
 // beeLlamaRules are DFlash-aware cross-field validation rules. They are chosen
@@ -331,22 +389,22 @@ func beeLlamaRules() []domain.CrossFieldRule {
 // highlighted Essentials group leads with the DFlash workflow.
 func BeeLlamaPresentation() *domain.Presentation {
 	return &domain.Presentation{Groups: []domain.PresentationGroup{
-		{Name: beeGroupEssentials, Highlighted: true, Flags: []string{"n-gpu-layers", "ctx-size", "host", "port", "batch-size", "ubatch-size", "flash-attn", "cache-type-k", "cache-type-v", "cache-type-k-swa", "cache-type-v-swa", "kv-tail-tokens", "kv-tail-type", "cache-ram", "kv-unified", "mmproj", "jinja", "reasoning", "spec-type", "spec-draft-hf", "spec-draft-model", "spec-draft-ngl"}},
-		{Name: beeGroupModelLoad, Flags: []string{"hf-repo", "hf-file", "hf-token", "model-url", "offline", "override-kv"}},
+		{Name: beeGroupEssentials, Highlighted: true, Flags: []string{"n-gpu-layers", "ctx-size", "host", "port", "batch-size", "ubatch-size", "flash-attn", "split-mode", "tensor-split", "parallel", "cache-type-k", "cache-type-v", "cache-type-k-swa", "cache-type-v-swa", "kv-tail-tokens", "kv-tail-type", "cache-ram", "kv-unified", "mmproj", "jinja", "reasoning", "spec-type", "spec-dm-controller", "spec-draft-hf", "spec-draft-model", "spec-draft-ngl", "load-mode"}},
+		{Name: beeGroupModelLoad, Flags: []string{"hf-repo", "hf-file", "hf-token", "model-url", "docker-repo", "hf-repo-v", "hf-file-v", "offline", "override-kv"}},
 		{Name: beeGroupContext, Flags: []string{"ctx-size", "n-predict", "batch-size", "ubatch-size", "keep"}},
-		{Name: beeGroupCPU, Flags: []string{"threads", "threads-batch", "poll", "prio", "numa"}},
-		{Name: beeGroupMemory, Flags: []string{"mlock", "mmap", "no-host", "check-tensors"}},
-		{Name: beeGroupDevice, Flags: []string{"n-gpu-layers", "device", "list-devices", "split-mode", "tensor-split", "main-gpu", "override-tensor", "cpu-moe", "n-cpu-moe"}},
-		{Name: beeGroupKV, Flags: []string{"kv-offload", "cache-type-k", "cache-type-v", "cache-type-k-swa", "cache-type-v-swa", "kv-tail-tokens", "kv-tail-type", "flash-attn"}},
+		{Name: beeGroupCPU, Flags: []string{"threads", "threads-batch", "poll", "prio", "numa", "cpu-mask", "cpu-range", "cpu-strict", "cpu-mask-batch", "cpu-range-batch", "cpu-strict-batch", "prio-batch", "poll-batch"}},
+		{Name: beeGroupMemory, Flags: []string{"mlock", "mmap", "direct-io", "load-mode", "repack", "op-offload", "no-host", "check-tensors"}},
+		{Name: beeGroupDevice, Flags: []string{"n-gpu-layers", "device", "list-devices", "split-mode", "tensor-split", "main-gpu", "fit", "fit-target", "fit-ctx", "override-tensor", "cpu-moe", "n-cpu-moe"}},
+		{Name: beeGroupKV, Flags: []string{"kv-offload", "cache-type-k", "cache-type-v", "cache-type-k-swa", "cache-type-v-swa", "kv-tail-tokens", "kv-tail-type", "flash-attn", "defrag-thold"}},
 		{Name: beeGroupRope, Flags: []string{"rope-scaling", "rope-scale", "rope-freq-base", "rope-freq-scale", "yarn-orig-ctx", "yarn-ext-factor", "yarn-attn-factor", "yarn-beta-slow", "yarn-beta-fast"}},
 		{Name: beeGroupShift, Flags: []string{"swa-full", "context-shift", "ctx-checkpoints", "checkpoint-min-step"}},
 		{Name: beeGroupCacheRAM, Flags: []string{"cache-ram", "kv-unified"}},
-		{Name: beeGroupSamplers, Flags: []string{"seed", "temperature", "top-k", "top-p", "min-p", "typical-p", "top-n-sigma", "ignore-eos", "samplers"}},
-		{Name: beeGroupPenalties, Flags: []string{"repeat-last-n", "repeat-penalty", "presence-penalty", "frequency-penalty", "dry-multiplier", "dry-base", "dry-allowed-length", "mirostat", "mirostat-lr", "mirostat-ent", "adaptive-target", "adaptive-decay"}},
+		{Name: beeGroupSamplers, Flags: []string{"seed", "temperature", "top-k", "top-p", "min-p", "typical-p", "top-n-sigma", "xtc-probability", "xtc-threshold", "ignore-eos", "samplers", "sampler-seq", "logit-bias", "backend-sampling"}},
+		{Name: beeGroupPenalties, Flags: []string{"repeat-last-n", "repeat-penalty", "presence-penalty", "frequency-penalty", "dry-multiplier", "dry-base", "dry-allowed-length", "dry-penalty-last-n", "dry-sequence-breaker", "dynatemp-range", "dynatemp-exp", "mirostat", "mirostat-lr", "mirostat-ent", "adaptive-target", "adaptive-decay"}},
 		{Name: beeGroupGrammar, Flags: []string{"grammar", "grammar-file", "json-schema", "json-schema-file"}},
 		{Name: beeGroupChat, Flags: []string{"chat-template", "chat-template-file", "chat-template-kwargs", "jinja", "reasoning-format", "reasoning", "reasoning-budget", "reasoning-budget-message", "reasoning-preserve", "skip-chat-parsing", "prefill-assistant", "reasoning-loop-guard", "reasoning-loop-min-tokens", "reasoning-loop-window", "reasoning-loop-max-period", "reasoning-loop-min-coverage", "reasoning-loop-check-interval", "reasoning-loop-interventions"}},
-		{Name: beeGroupHTTP, Flags: []string{"host", "port", "api-key", "api-key-file", "path", "ui", "timeout", "threads-http", "metrics", "slots", "parallel", "cont-batching", "cache-prompt", "alias", "reuse-port", "api-prefix", "ssl-key-file", "ssl-cert-file", "cors-origins", "cors-methods", "cors-headers", "cors-credentials", "sse-ping-interval", "cache-reuse", "props", "slot-save-path", "slot-prompt-similarity", "media-path", "sleep-idle-seconds", "embedding", "rerank", "ui-config", "ui-config-file", "ui-mcp-proxy", "tools", "agent"}},
-		{Name: beeGroupMultimodal, Flags: []string{"mmproj", "mmproj-url", "mmproj-auto", "mmproj-offload"}},
+		{Name: beeGroupHTTP, Flags: []string{"host", "port", "api-key", "api-key-file", "path", "ui", "timeout", "threads-http", "metrics", "slots", "parallel", "cont-batching", "cache-prompt", "alias", "tags", "reuse-port", "api-prefix", "ssl-key-file", "ssl-cert-file", "mcp-servers-config", "mcp-servers-json", "cors-origins", "cors-methods", "cors-headers", "cors-credentials", "sse-ping-interval", "cache-reuse", "cache-idle-slots", "props", "slot-save-path", "slot-prompt-similarity", "media-path", "sleep-idle-seconds", "embedding", "rerank", "pooling", "embd-normalize", "ui-config", "ui-config-file", "ui-mcp-proxy", "tools", "agent"}},
+		{Name: beeGroupMultimodal, Flags: []string{"mmproj", "mmproj-url", "mmproj-auto", "mmproj-offload", "image-min-tokens", "image-max-tokens", "mtmd-batch-max-tokens"}},
 		{Name: beeGroupLora, Flags: []string{"lora", "lora-scaled", "control-vector", "control-vector-scaled", "lora-init-without-apply"}},
 		{Name: beeGroupSpeculative, Flags: []string{"spec-type", "spec-draft-model", "spec-draft-hf", "spec-draft-ngl", "spec-draft-n-max", "spec-draft-n-min", "spec-draft-p-split", "spec-draft-p-min", "spec-draft-device", "spec-draft-type-k", "spec-draft-type-v", "spec-draft-threads", "spec-draft-threads-batch", "spec-draft-cpu-mask", "spec-draft-cpu-range", "spec-draft-cpu-strict", "spec-draft-prio", "spec-draft-poll", "spec-draft-cpu-mask-batch", "spec-draft-cpu-strict-batch", "spec-draft-prio-batch", "spec-draft-poll-batch", "spec-draft-cpu-moe", "spec-draft-n-cpu-moe", "spec-draft-override-tensor", "spec-draft-backend-sampling", "spec-default", "spec-dm-controller", "spec-dm-profit-min", "spec-dm-profit-raise-margin", "spec-dm-profit-lower-margin", "spec-dm-profit-ewma-alpha", "spec-dm-profit-min-samples", "spec-dm-profit-warmup", "spec-dm-profit-baseline-interval", "spec-ngram-mod-n-min", "spec-ngram-mod-n-max", "spec-ngram-mod-n-match", "spec-ngram-simple-size-n", "spec-ngram-simple-size-m", "spec-ngram-simple-min-hits", "spec-ngram-map-k-size-n", "spec-ngram-map-k-size-m", "spec-ngram-map-k-min-hits", "spec-ngram-map-k4v-size-n", "spec-ngram-map-k4v-size-m", "spec-ngram-map-k4v-min-hits"}},
 		{Name: beeGroupRouter, Flags: []string{"models-dir", "models-preset", "models-max", "models-autoload"}},

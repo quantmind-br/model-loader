@@ -62,10 +62,11 @@ Embedded fallbacks: `llamahelp/embedded.go::EmbeddedSchema()` returns 13 essenti
 
 | Backend | `spec-type` EnumValues |
 |---------|------------------------|
-| llama-server / BeeLlama | `none, draft-simple, draft-eagle3, draft-mtp, draft-dflash, ngram-simple, ngram-map-k, ngram-map-k4v, ngram-mod, ngram-cache` |
-| Buun | upstream set **plus** `suffix, copyspec, recycle, dflash` (buun shorthand) |
+| llama-server | `none, draft-simple, draft-eagle3, draft-mtp, draft-dflash, draft-dspark, ngram-simple, ngram-map-k, ngram-map-k4v, ngram-mod, ngram-cache` |
+| BeeLlama | `none, draft-simple, draft-eagle3, draft-mtp, draft-dflash, ngram-simple, ngram-map-k, ngram-map-k4v, ngram-mod, ngram-cache` |
+| Buun | the BeeLlama set **plus** `suffix, copyspec, recycle, dflash` (buun shorthand) |
 
-Pre-2cef620, buun's curated list lacked `draft-dflash`, so the upstream spelling was rejected and valid configs got routed through `extraArgs` (the passthrough that bypasses validation). `applyExtraArgsRules` deliberately does **not** type/enum-check known flags in extra args — only emits a non-blocking warning for unrecognized flags (BUGS.md S1: curated schemas can lag the binary).
+Note llama-server and BeeLlama no longer share an identical enum: llama-server added `draft-dspark` while BeeLlama's fork tree has not. Pre-2cef620, buun's curated list lacked `draft-dflash`, so the upstream spelling was rejected and valid configs got routed through `extraArgs` (the passthrough that bypasses validation). `applyExtraArgsRules` deliberately does **not** type/enum-check known flags in extra args — only emits a non-blocking warning for unrecognized flags (BUGS.md S1: curated schemas can lag the binary).
 
 ## Presentation layer
 

@@ -27,7 +27,7 @@ const (
 )
 
 // CuratedIkLlamaSchema returns the hand-curated ik-llama-cpp schema, synced
-// against ik_llama.cpp t0002-938-gb054a8b9 (backends/ik_llama.cpp). Flag facts
+// against ik_llama.cpp t0002-1002-g5763a901 (backends/ik_llama.cpp). Flag facts
 // come from gpt_params_find_arg and gpt_params_print_usage in common/common.cpp:
 // its --help uses the pre-arg.cpp format that llamahelp cannot parse, so this
 // curated catalog is the only flag source. find_arg is shared by every example,
@@ -97,7 +97,7 @@ func CuratedIkLlamaSchema() domain.BackendValidationSchema {
 		boolFlag("no-offload-only-active-experts", "no-ooae", nil, false, "Offload every expert instead of only the active ones.", ikGroupDevice),
 		strFlag("offload-policy", "op", nil, nil, "Per-layer offload policy as layer_id,0|1 pairs, comma-separated.", ikGroupDevice, false),
 		boolFlag("fit", "", nil, false, "Auto-tune unset parameters to fit device memory.", ikGroupDevice),
-		intFlag("fit-margin", "", nil, nil, "Memory margin (MiB) reserved by --fit.", ikGroupDevice, ptrutil.Ptr(0), nil),
+		intFlag("fit-margin", "", nil, 0, "Memory margin (MiB) reserved by --fit.", ikGroupDevice, ptrutil.Ptr(0), nil),
 		strFlag("gpu-fit-margin", "gfm", nil, nil, "Per-layer GPU fit margin as layer_id,margin pairs, comma-separated.", ikGroupDevice, false),
 		intFlag("max-extra-alloc", "mea", nil, nil, "Maximum extra VRAM allocation per GPU in MiB.", ikGroupDevice, ptrutil.Ptr(0), nil),
 		intFlag("worst-graph-tokens", "wgt", nil, nil, "Token budget for worst-case graph sizing.", ikGroupDevice, nil, nil),
@@ -140,6 +140,7 @@ func CuratedIkLlamaSchema() domain.BackendValidationSchema {
 		boolFlag("v-cache-hadamard", "vhad", nil, false, "Apply a Hadamard transform to the V cache.", ikGroupKV),
 		boolFlag("no-kv-offload", "nkvo", nil, false, "Keep the KV cache on host memory.", ikGroupKV),
 		floatFlag("defrag-thold", "dt", nil, -1.0, "KV cache defrag threshold; -1 disables defrag.", ikGroupKV, nil, nil),
+		boolFlag("swa-compress", "", nil, false, "Allocate sliding-window attention layers at window size instead of full context size (opt-in compacted SWA KV cache).", ikGroupKV),
 
 		// 8. RoPE and YaRN
 		enumFlag("rope-scaling", "", nil, []string{"none", "linear", "yarn"}, nil, "RoPE frequency scaling method; unset defers to the model (linear otherwise).", ikGroupRope),
@@ -154,10 +155,10 @@ func CuratedIkLlamaSchema() domain.BackendValidationSchema {
 
 		// 9. Context Shift, Checkpoints, and RAM Cache
 		enumFlag("context-shift", "", nil, []string{"auto", "on", "off", "1", "0"}, "on", "Context-shift mode for infinite generation; 1/0 are accepted as on/off.", ikGroupShift),
-		intFlag("ctx-checkpoints", "", nil, 32, "Number of context checkpoints to keep per slot.", ikGroupShift, nil, nil),
-		intFlag("ctx-checkpoints-interval", "", nil, 512, "Minimum token interval between context checkpoints.", ikGroupShift, nil, nil),
-		intFlag("ctx-checkpoints-tolerance", "", nil, 5, "Tokens before the full prompt at which a checkpoint is created.", ikGroupShift, nil, nil),
-		strFlag("ctx-checkpoints-eviction", "", nil, nil, "Context-checkpoint eviction policy.", ikGroupShift, false),
+		intFlag("ctx-checkpoints", "ctx-ckpt", nil, 32, "Number of context checkpoints to keep per slot.", ikGroupShift, nil, nil),
+		intFlag("ctx-checkpoints-interval", "ctx-ckpt-i", nil, 512, "Minimum token interval between context checkpoints; <= 0 disables.", ikGroupShift, nil, nil),
+		intFlag("ctx-checkpoints-tolerance", "ctx-ckpt-t", nil, 5, "Tokens before the full prompt at which a checkpoint is created; <= 0 disables.", ikGroupShift, nil, nil),
+		enumFlag("ctx-checkpoints-eviction", "ctx-ckpt-e", nil, []string{"auto", "fifo", "variance"}, "variance", "Context-checkpoint eviction policy; auto resolves to variance.", ikGroupShift),
 		intFlag("cache-ram", "cram", nil, 8192, "RAM cache size in MiB; -1 = unlimited, 0 = disable.", ikGroupShift, nil, nil),
 		intFlag("cache-ram-n-min", "cram-n-min", nil, 0, "Minimum number of cached tokens that triggers the prompt cache.", ikGroupShift, ptrutil.Ptr(0), nil),
 		floatFlag("cache-ram-similarity", "crs", nil, 0.5, "Similarity threshold for RAM-cache prompt reuse.", ikGroupShift, nil, nil),
@@ -225,7 +226,7 @@ func CuratedIkLlamaSchema() domain.BackendValidationSchema {
 		boolFlag("skip-chat-parsing", "", nil, false, "Force a pure content parser even when a Jinja template is set.", ikGroupChat),
 
 		// 14. Speculative Decoding
-		strFlag("spec-type", "", nil, nil, "Speculative decoding type payload TYPE:k=v,... (none, draft, dflash, mtp, ngram-cache, ngram-simple, ngram-map-k, ngram-map-k4v, ngram-mod, suffix).", ikGroupSpeculative, false),
+		strFlag("spec-type", "", nil, nil, "Speculative decoding type payload TYPE:k=v,... (none, draft, dflash, dspark, mtp, ngram-cache, ngram-simple, ngram-map-k, ngram-map-k4v, ngram-mod, suffix). dspark is a DFlash-family draft type: it needs a draft model and cross_ctx >= 1, and it is excluded from --spec-autotune.", ikGroupSpeculative, false),
 		withArity(strFlag("spec-replace", "", nil, nil, "Draft/target token replacement, as two values: TARGET DRAFT.", ikGroupSpeculative, false), 2),
 		boolFlag("spec-autotune", "", nil, false, "Autotune speculative decoding parameters.", ikGroupSpeculative),
 		strFlag("model-draft", "md", nil, nil, "Draft model path for speculative decoding.", ikGroupSpeculative, false),
@@ -233,7 +234,7 @@ func CuratedIkLlamaSchema() domain.BackendValidationSchema {
 		strFlag("device-draft", "devd", nil, nil, "Devices used to offload the draft model.", ikGroupSpeculative, false),
 		strFlag("draft-params", "draft", nil, nil, "Comma-separated list of draft model parameters.", ikGroupSpeculative, false),
 		floatFlag("p-split", "ps", nil, 0.1, "Speculative decoding split probability.", ikGroupSpeculative, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
-		enumFlag("recurrent-ckpt-mode", "", nil, []string{"auto", "per-step", "gpu-fallback", "cpu"}, "auto", "Checkpoint strategy for recurrent/hybrid speculative decoding.", ikGroupSpeculative),
+		enumFlag("spec-ckpt-mode", "", []string{"recurrent-ckpt-mode"}, []string{"auto", "per-step", "gpu-fallback", "cpu"}, "auto", "Checkpoint strategy for speculative decoding (recurrent/hybrid models); --recurrent-ckpt-mode is a deprecated alias.", ikGroupSpeculative),
 		strFlag("mtp-requantize-output-tensor", "mtprot", nil, nil, "Requantize the output tensor to this type for MTP.", ikGroupSpeculative, false),
 
 		// 15. Multimodal
@@ -289,7 +290,7 @@ func CuratedIkLlamaSchema() domain.BackendValidationSchema {
 		BackendID:     "ik-llama-cpp-default",
 		Source: domain.SchemaSource{
 			GeneratedFrom: "ik_llama.cpp curated reference",
-			SourceVersion: "curated-ik-llama-cpp-t0002-938-gb054a8b9",
+			SourceVersion: "curated-ik-llama-cpp-t0002-1002-g5763a901",
 			Editable:      true,
 		},
 		Flags:        flags,
@@ -308,9 +309,9 @@ func IkLlamaPresentation() *domain.Presentation {
 		{Name: ikGroupEssentials, Highlighted: true, Flags: []string{
 			"ctx-size", "host", "port", "n-gpu-layers", "split-mode", "tensor-split",
 			"threads", "batch-size", "ubatch-size", "flash-attn", "mla-use",
-			"cache-type-k", "cache-type-v", "run-time-repack", "override-tensor",
+			"cache-type-k", "cache-type-v", "cache-ram", "run-time-repack", "override-tensor",
 			"n-cpu-moe", "smart-expert-reduction", "parallel", "cont-batching",
-			"api-key", "alias",
+			"jinja", "spec-type", "api-key", "alias",
 		}},
 		{Name: ikGroupModelLoad, Flags: []string{"hf-repo", "hf-file", "hf-token", "model-url", "override-kv", "control-vector", "control-vector-scaled", "control-vector-layer-range", "validate-quants", "no-warmup"}},
 		{Name: ikGroupContext, Flags: []string{"ctx-size", "n-predict", "batch-size", "ubatch-size", "keep", "sequences"}},
@@ -318,14 +319,14 @@ func IkLlamaPresentation() *domain.Presentation {
 		{Name: ikGroupMemory, Flags: []string{"mlock", "no-mmap", "run-time-repack", "check-tensors", "transparent-huge-pages", "prefetch-experts", "prefetch-experts-threads"}},
 		{Name: ikGroupDevice, Flags: []string{"n-gpu-layers", "gpu-layers-draft", "split-mode", "tensor-split", "main-gpu", "max-gpu", "device", "override-tensor", "cpu-moe", "n-cpu-moe", "defer-experts", "no-offload-only-active-experts", "offload-policy", "fit", "fit-margin", "gpu-fit-margin", "max-extra-alloc", "worst-graph-tokens", "rpc", "cuda-params", "graph-reduce-type", "graph-attn-precision", "split-mode-graph-scheduling", "scheduler-async"}},
 		{Name: ikGroupAttention, Flags: []string{"flash-attn", "mla-use", "attention-max-batch", "no-fused-moe", "grouped-expert-routing", "no-fused-up-gate", "no-fused-mul-multiadd", "merge-qkv", "merge-up-gate-experts", "smart-expert-reduction", "graph-reuse", "grp-attn-n", "grp-attn-w", "dsa", "fused-indexer-topk", "dsa-top-k"}},
-		{Name: ikGroupKV, Flags: []string{"cache-type-k", "cache-type-v", "cache-type-k-draft", "cache-type-v-draft", "cache-type-k-first", "cache-type-k-last", "cache-type-v-first", "cache-type-v-last", "indexer-cache-type-k", "k-cache-hadamard", "v-cache-hadamard", "no-kv-offload", "defrag-thold"}},
+		{Name: ikGroupKV, Flags: []string{"cache-type-k", "cache-type-v", "cache-type-k-draft", "cache-type-v-draft", "cache-type-k-first", "cache-type-k-last", "cache-type-v-first", "cache-type-v-last", "indexer-cache-type-k", "k-cache-hadamard", "v-cache-hadamard", "no-kv-offload", "defrag-thold", "swa-compress"}},
 		{Name: ikGroupRope, Flags: []string{"rope-scaling", "rope-scale", "rope-freq-base", "rope-freq-scale", "yarn-orig-ctx", "yarn-ext-factor", "yarn-attn-factor", "yarn-beta-slow", "yarn-beta-fast"}},
 		{Name: ikGroupShift, Flags: []string{"context-shift", "ctx-checkpoints", "ctx-checkpoints-interval", "ctx-checkpoints-tolerance", "ctx-checkpoints-eviction", "cache-ram", "cache-ram-n-min", "cache-ram-similarity"}},
 		{Name: ikGroupSamplers, Flags: []string{"samplers", "sampling-seq", "seed", "temp", "top-k", "top-p", "min-p", "typical", "tfs", "top-n-sigma", "xtc-probability", "xtc-threshold", "dry-multiplier", "dry-base", "dry-allowed-length", "dry-penalty-last-n", "dry-sequence-breaker", "adaptive-target", "adaptive-decay", "adaptive-updt-w-cur", "allowlist-pieces", "allowlist-unicode-rule", "allowlist-keyword", "allowlist-keyword-delay", "banned-n", "banned-string-file", "expiring-logit-bias-file", "ignore-eos", "logit-bias"}},
 		{Name: ikGroupPenalties, Flags: []string{"repeat-last-n", "repeat-penalty", "presence-penalty", "frequency-penalty", "penalize-nl", "dynatemp-range", "dynatemp-exp", "mirostat", "mirostat-lr", "mirostat-ent"}},
 		{Name: ikGroupGrammar, Flags: []string{"grammar", "grammar-file", "json-schema"}},
 		{Name: ikGroupChat, Flags: []string{"jinja", "chat-template", "chat-template-file", "chat-template-kwargs", "reasoning-format", "reasoning", "reasoning-budget", "reasoning-budget-message", "reasoning-tokens", "parallel-tool-calls", "no-prefill-assistant", "skip-chat-parsing"}},
-		{Name: ikGroupSpeculative, Flags: []string{"spec-type", "spec-replace", "spec-autotune", "model-draft", "ctx-size-draft", "device-draft", "draft-params", "p-split", "recurrent-ckpt-mode", "mtp-requantize-output-tensor"}},
+		{Name: ikGroupSpeculative, Flags: []string{"spec-type", "spec-replace", "spec-autotune", "model-draft", "ctx-size-draft", "device-draft", "draft-params", "p-split", "spec-ckpt-mode", "mtp-requantize-output-tensor"}},
 		{Name: ikGroupMultimodal, Flags: []string{"mmproj", "mmproj-url", "no-mmproj-offload", "mtmd-kq-type", "image", "image-min-tokens", "image-max-tokens"}},
 		{Name: ikGroupHTTP, Flags: []string{"host", "port", "path", "api-key", "api-key-file", "ssl-key-file", "ssl-cert-file", "timeout", "threads-http", "system-prompt-file", "log-format", "metrics", "no-slots", "slot-prompt-similarity", "slot-save-path", "send-done", "sql-save-file", "sqlite-zstd-ext-file", "spm-infill", "alias", "webui", "webui-mcp-proxy", "embeddings", "parallel", "cont-batching"}},
 		{Name: ikGroupLora, Flags: []string{"lora", "lora-scaled", "lora-init-without-apply"}},

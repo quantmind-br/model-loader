@@ -15,16 +15,16 @@ import (
 // the profile's Model field by processmgr.buildDFlashArgs); the draft model
 // is the --draft flag below.
 //
-// Schema tracks lucebox-hub commit 1b11c50 (2026-06-29).
+// Schema tracks lucebox-hub commit b8c3a0d (2026-08-09).
 func EmbeddedSchema() domain.FlagSchema {
-	return domain.BuildFlagSchema("embedded-dflash-v3", dflashRows)
+	return domain.BuildFlagSchema("embedded-dflash-v5", dflashRows)
 }
 
 var kvTypes = []string{"f16", "bf16", "q4_0", "q4_1", "q5_0", "q5_1", "q8_0", "tq3_0"}
 
 var dflashRows = []domain.FlagSpecRow{
 	// Core
-	{Long: "draft", Type: domain.FlagTypeString, Default: "", HelpText: "Path to the DFlash draft GGUF, required for speculative decode (qwen35/qwen36 targets)", Group: "common"},
+	{Long: "draft", Type: domain.FlagTypeString, Default: "", HelpText: "Path to the DFlash draft GGUF, required for speculative decode; support varies by target architecture", Group: "common"},
 	{Long: "host", Type: domain.FlagTypeString, Default: "0.0.0.0", HelpText: "Server bind address", Group: "common"},
 	{Long: "port", Type: domain.FlagTypeInt, Default: float64(8080), IsPort: true, HelpText: "HTTP listen port", Group: "common"},
 	{Long: "max-ctx", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(1024 * 1024), HelpText: "Max context length / KV cache size; 0 = backend default. Oversizing slows prefill (FA stride over unused KV)", Group: "common"},
@@ -36,12 +36,14 @@ var dflashRows = []domain.FlagSpecRow{
 	{Long: "prefill-cache-slots", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), HelpText: "Full prompt/prefill cache slot count (0 disables); distinct from --prefix-cache-slots", Group: "common"},
 	{Long: "chunk", Type: domain.FlagTypeInt, Default: float64(512), Min: ptrutil.Ptr(1), HelpText: "Chunked-prefill chunk (ubatch) size", Group: "common"},
 	{Long: "fa-window", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(1024 * 1024), HelpText: "Flash-attention sliding window; 0 = full attention (qwen3.6 full-attn layers need the whole context for tool calls)", Group: "common"},
+	{Long: "paged-attention", Type: domain.FlagTypeBool, Default: false, HelpText: "Experimental: 16-token paged KV blocks for autoregressive decode on a monolithic Qwen3.5/Qwen3.6 dense target (arch qwen35). Requires one local target device, a positive --max-ctx and --fa-window 0; rejected together with --draft, --ddtree or PFlash compression, and it turns off the prefix/prefill snapshot caches and the disk KV cache", Group: "common"},
 	{Long: "no-cors", Type: domain.FlagTypeBool, Default: false, HelpText: "Disable CORS headers", Group: "common"},
 
 	// Speculative decode (DFlash + DDTree)
 	{Long: "ddtree", Type: domain.FlagTypeBool, Default: false, HelpText: "Enable DDTree tree-verify speculative decode (default: chain verify)", Group: "speculative-decode"},
 	{Long: "ddtree-budget", Type: domain.FlagTypeInt, Default: float64(22), Min: ptrutil.Ptr(1), Max: ptrutil.Ptr(512), HelpText: "DDTree token budget per step (22 on RTX 3090, 40 on RTX 5090; re-sweep per card)", Group: "speculative-decode"},
-	{Long: "verify-width", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), HelpText: "Laguna chain speculative-verify width (0 = auto)", Group: "speculative-decode"},
+	{Long: "verify-width", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), HelpText: "Laguna chain speculative-verify width; 0 = adaptive (per-step width trimmed by drafter confidence off a base of 8)", Group: "speculative-decode"},
+	{Long: "adaptive-experts", Type: domain.FlagTypeFloat, FloatMin: ptrutil.Ptr(0.01), FloatMax: ptrutil.Ptr(1.0), HelpText: "MoE expert-count gating on verify batches (near-lossless); tau in (0,1], 0.80 when passed bare on the real CLI", Group: "speculative-decode"},
 	{Long: "fast-rollback", Type: domain.FlagTypeBool, Default: true, HelpText: "Speculative fast rollback (on by default; --ddtree also enables it). Set --no-fast-rollback to disable", Group: "speculative-decode"},
 	{Long: "no-fast-rollback", Type: domain.FlagTypeBool, Default: false, HelpText: "Disable speculative fast rollback, even with --ddtree (overrides the on-by-default --fast-rollback)", Group: "speculative-decode"},
 	{Long: "draft-swa", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), HelpText: "Draft sliding-window attention size (0 = off; e.g. 2048 for unsloth Qwen3.6 targets)", Group: "speculative-decode"},
@@ -49,8 +51,8 @@ var dflashRows = []domain.FlagSpecRow{
 	{Long: "lazy-draft", Type: domain.FlagTypeBool, Default: false, HelpText: "Legacy alias for --draft-residency=request-scoped", Group: "speculative-decode"},
 
 	// KV cache
-	{Long: "cache-type-k", Short: "ctk", Type: domain.FlagTypeEnum, EnumValues: kvTypes, HelpText: "KV cache type for keys; unset = tq3_0 when max-ctx > 6144 else q4_0 (HIP builds: q4_0)", Group: "kv-cache"},
-	{Long: "cache-type-v", Short: "ctv", Type: domain.FlagTypeEnum, EnumValues: kvTypes, HelpText: "KV cache type for values; unset = tq3_0 when max-ctx > 6144 else q4_0 (HIP builds: q4_0)", Group: "kv-cache"},
+	{Long: "cache-type-k", Short: "ctk", Type: domain.FlagTypeEnum, EnumValues: kvTypes, HelpText: "KV cache type for keys; unset = per model family default (laguna: q8_0, else q4_0; HIP builds: always q4_0)", Group: "kv-cache"},
+	{Long: "cache-type-v", Short: "ctv", Type: domain.FlagTypeEnum, EnumValues: kvTypes, HelpText: "KV cache type for values; unset = per model family default (laguna: q8_0, else q4_0; HIP builds: always q4_0)", Group: "kv-cache"},
 	{Long: "kv-cache-dir", Type: domain.FlagTypeString, Default: "", HelpText: "Directory for the on-disk KV prefix cache (enables the feature)", Group: "kv-cache"},
 	{Long: "kv-cache-budget", Type: domain.FlagTypeInt, Default: float64(4096), Min: ptrutil.Ptr(0), HelpText: "Max on-disk KV cache size in MB", Group: "kv-cache"},
 	{Long: "kv-cache-min-tokens", Type: domain.FlagTypeInt, Default: float64(512), Min: ptrutil.Ptr(0), HelpText: "Min tokens before a prefix is persisted to disk", Group: "kv-cache"},
@@ -87,8 +89,10 @@ var dflashRows = []domain.FlagSpecRow{
 	// Multi-GPU / placement / IPC
 	{Long: "target-device", Type: domain.FlagTypeString, Default: "auto:0", HelpText: "Target device as backend:gpu (e.g. cuda:0, hip:0); conflicts with --target-devices", Group: "multi-gpu"},
 	{Long: "draft-device", Type: domain.FlagTypeString, Default: "auto:0", HelpText: "Draft device as backend:gpu; mixed target/draft backends require --draft-ipc-bin", Group: "multi-gpu"},
-	{Long: "target-devices", Type: domain.FlagTypeString, Default: "", HelpText: "Comma-separated layer-split devices, e.g. cuda:0,cuda:1; conflicts with --target-device", Group: "multi-gpu"},
+	{Long: "target-devices", Type: domain.FlagTypeString, Default: "", HelpText: "Comma-separated target devices, e.g. cuda:0,cuda:1; used for layer-split (default) or tensor-parallel via --target-split-mode; conflicts with --target-device", Group: "multi-gpu"},
+	{Long: "target-split-mode", Type: domain.FlagTypeEnum, EnumValues: []string{"layer", "tensor"}, Default: "layer", HelpText: "Multi-GPU split mode for --target-devices: layer-split or tensor-parallel", Group: "multi-gpu"},
 	{Long: "target-layer-split", Type: domain.FlagTypeString, Default: "", HelpText: "Comma-separated layer-split weights (requires --target-devices)", Group: "multi-gpu"},
+	{Long: "target-split-fast-rollback", Type: domain.FlagTypeBool, Default: false, HelpText: "Opt in to exact F32 rollback checkpoints for local same-backend qwen35 target layer splits (extra VRAM; env DFLASH_SPLIT_FAST_ROLLBACK=1); requires --target-devices with 2+ local devices", Group: "multi-gpu"},
 	{Long: "peer-access", Type: domain.FlagTypeBool, Default: false, HelpText: "Enable P2P peer access between target GPUs", Group: "multi-gpu"},
 	{Long: "draft-ipc-bin", Type: domain.FlagTypeString, Default: "", HelpText: "Out-of-process draft backend IPC daemon (mixed CUDA/HIP placement)", Group: "multi-gpu"},
 	{Long: "draft-ipc-work-dir", Type: domain.FlagTypeString, Default: "", HelpText: "Remote draft IPC scratch directory (requires --draft-ipc-bin)", Group: "multi-gpu"},
@@ -104,4 +108,9 @@ var dflashRows = []domain.FlagSpecRow{
 	// Expert routing analysis (MoE backends only)
 	{Long: "freq", Type: domain.FlagTypeBool, Default: false, HelpText: "Track MoE expert frequency and print routing analysis at shutdown", Group: "moe-offload"},
 	{Long: "collect-routing", Type: domain.FlagTypeString, Default: "", HelpText: "Log binary routing data (hidden states + expert IDs) to this path for MLP expert-predictor training (scripts/train_predictor.py)", Group: "moe-offload"},
+
+	// DeepSeek4 (single-device only)
+	{Long: "ds4-fused-decode", Type: domain.FlagTypeBool, Default: false, HelpText: "Enable DeepSeek4 single-graph GPU decode", Group: "ds4"},
+	{Long: "ds4-expert-top-k", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), HelpText: "Keep and renormalize the top-N routed experts (0 = model default; single-device DeepSeek4 only)", Group: "ds4"},
+	{Long: "ds4-prefill", Type: domain.FlagTypeEnum, EnumValues: []string{"exact", "dense", "sparse"}, Default: "exact", HelpText: "DeepSeek4 prefill attention mode; dense/sparse are experimental and may change generated tokens", Group: "ds4"},
 }

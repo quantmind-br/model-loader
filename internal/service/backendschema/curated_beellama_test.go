@@ -2,6 +2,7 @@ package backendschema
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/quantmind-br/model-loader/internal/domain"
@@ -44,6 +45,50 @@ func TestCuratedBeeLlama_CacheTypesIncludeQ60(t *testing.T) {
 	}
 }
 
+// TestCuratedBeeLlama_DraftCacheTypesExcludeKVarN pins the asymmetry between the
+// target and draft cache-type enums. common/arg.cpp advertises the draft flags
+// with get_all_kv_cache_types() (no KVarN pseudo-types) and
+// kv_cache_type_from_str rejects a kvarnN value on a draft context with
+// "Unsupported cache type", so offering one in the editor produces a profile
+// that dies at launch.
+func TestCuratedBeeLlama_DraftCacheTypesExcludeKVarN(t *testing.T) {
+	schema := CuratedBeeLlamaSchema().ToFlagSchema()
+	for _, flag := range []string{"spec-draft-type-k", "spec-draft-type-v"} {
+		spec, ok := schema.Lookup(flag)
+		if !ok {
+			t.Fatalf("%s missing from curated schema", flag)
+		}
+		for _, v := range spec.EnumValues {
+			if strings.HasPrefix(v, "kvarn") {
+				t.Errorf("%s enum offers target-only cache type %q", flag, v)
+			}
+		}
+		if spec.Default != "f16" {
+			t.Errorf("%s default = %v, want f16", flag, spec.Default)
+		}
+	}
+	for _, flag := range []string{"cache-type-k", "cache-type-v"} {
+		spec, _ := schema.Lookup(flag)
+		if !containsStr(spec.EnumValues, "kvarn4") {
+			t.Errorf("%s enum lost the KVarN target types: %v", flag, spec.EnumValues)
+		}
+	}
+}
+
+// TestCuratedBeeLlama_SourceVersionIsRevisionQualified guards that the curated
+// provenance names the BeeLlama revision it was synchronized against. A bare
+// "curated-beellama-cpp" makes every fallback schema on disk look identical
+// across fork releases, hiding schema drift from the operator.
+func TestCuratedBeeLlama_SourceVersionIsRevisionQualified(t *testing.T) {
+	src := CuratedBeeLlamaSchema().Source
+	if !strings.HasPrefix(src.SourceVersion, "curated-beellama-cpp-") {
+		t.Fatalf("sourceVersion = %q, want a curated-beellama-cpp-<revision> value", src.SourceVersion)
+	}
+	if src.SourceVersion == "curated-beellama-cpp-" {
+		t.Fatal("sourceVersion carries no revision")
+	}
+}
+
 // TestCuratedBeeLlama_RemovedV030SurfaceAbsent guards that flags and aliases
 // removed by BeeLlama v0.3.0 no longer appear anywhere in the curated schema.
 // Curated-only flags are re-injected and curated aliases override parsed ones
@@ -55,6 +100,12 @@ func TestCuratedBeeLlama_RemovedV030SurfaceAbsent(t *testing.T) {
 	removedFlags := map[string]bool{
 		"spec-dflash-default":       true,
 		"checkpoint-every-n-tokens": true,
+		// v0.4.0 split the single ngram size/hit knobs per strategy; the old
+		// spellings survive in --help only as tombstones that abort at launch
+		// with "the argument has been removed".
+		"spec-ngram-size-n":   true,
+		"spec-ngram-size-m":   true,
+		"spec-ngram-min-hits": true,
 	}
 	removedAliases := map[string]bool{
 		"draft": true, "draft-max": true, "draft-n": true,

@@ -7,7 +7,9 @@ import (
 
 // EmbeddedSchema returns the compile-time fallback FlagSchema covering the
 // curated essential flags listed in the design spec. The schema is pinned to
-// llama.cpp build "v10152 (0324696b8)" — last validated on 2026-07-27.
+// llama.cpp build "v10152 (0324696b8)" — last validated on 2026-08-10 against
+// llama.cpp-stable "10148 (ddfc2288e)", whose --help output is byte-identical
+// to testdata/help-v10152.txt, so the parsed surface is unchanged.
 //
 // To refresh against a newer llama.cpp build:
 //   1. capture the help into testdata: llama-server --help > testdata/help-vXXXX.txt

@@ -530,6 +530,122 @@ func TestMergeWithCurated_OverridesParsedEnumValues(t *testing.T) {
 	}
 }
 
+// The curated llama-server schema is a compatibility union across every
+// registered llama-server catalog entry, whose binaries track different
+// upstream bases. Each flag below exists on at least one registered binary and
+// is missing from at least one other, so a future sync must not "clean up" the
+// union by deleting whichever entry the binary it happened to probe lacks.
+func TestCuratedLlama_ForkUnionFlagsRetained(t *testing.T) {
+	fs := CuratedLlamaSchema().ToFlagSchema()
+	// flag -> the entries whose binary declares it.
+	union := map[string]string{
+		"kv-mean-center":        "prisma-ml only",
+		"tools-runtime":         "newest upstream only",
+		"load-mode":             "absent on prisma-ml and poolside-laguna",
+		"cors-origins":          "absent on prisma-ml and poolside-laguna",
+		"cors-methods":          "absent on prisma-ml and poolside-laguna",
+		"cors-headers":          "absent on prisma-ml and poolside-laguna",
+		"cors-credentials":      "absent on prisma-ml and poolside-laguna",
+		"mcp-servers-config":    "absent on prisma-ml and poolside-laguna",
+		"mcp-servers-json":      "absent on prisma-ml and poolside-laguna",
+		"mtmd-batch-max-tokens": "absent on prisma-ml",
+		"reasoning-preserve":    "absent on prisma-ml",
+		"agent":                 "absent on prisma-ml",
+		"hf-repo-v":             "dropped from the server example upstream",
+		"hf-file-v":             "dropped from the server example upstream",
+		"model-vocoder":         "dropped from the server example upstream",
+		"tts-use-guide-tokens":  "dropped from the server example upstream",
+	}
+	for flag, why := range union {
+		if _, ok := fs.Lookup(flag); !ok {
+			t.Errorf("union flag %q missing from the curated schema (%s)", flag, why)
+		}
+	}
+}
+
+// --spec-type is the one enum whose allowed values genuinely differ per binary
+// (draft-dflash on upstream, draft-dspark on prisma-ml, both on the newest
+// upstream). The curated list must stay the union so the golden-fallback path
+// accepts every spelling; the live-parse path narrows it per binary (S17).
+func TestCuratedLlama_SpecTypeUnion(t *testing.T) {
+	spec, ok := CuratedLlamaSchema().ToFlagSchema().Lookup("spec-type")
+	if !ok {
+		t.Fatal("spec-type missing from curated schema")
+	}
+	if !spec.List || spec.Type != domain.FlagTypeEnum {
+		t.Fatalf("spec-type must be a comma-separated enum list, got type=%v list=%v", spec.Type, spec.List)
+	}
+	have := map[string]bool{}
+	for _, v := range spec.EnumValues {
+		have[v] = true
+	}
+	for _, want := range []string{"none", "draft-simple", "draft-eagle3", "draft-mtp", "draft-dflash", "draft-dspark", "ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod", "ngram-cache"} {
+		if !have[want] {
+			t.Errorf("spec-type enum missing %q (values: %v)", want, spec.EnumValues)
+		}
+	}
+}
+
+// Defaults that upstream moved and that the curated overlay supplies on the
+// golden-fallback path, where no live binary is available to correct them.
+func TestCuratedLlama_SourceTrueDefaults(t *testing.T) {
+	fs := CuratedLlamaSchema().ToFlagSchema()
+	tests := []struct {
+		flag string
+		def  any
+	}{
+		{"checkpoint-min-step", 8192},
+		{"cache-ram", 8192},
+		{"repeat-last-n", 64},
+		{"models-max", 4},
+		{"fit-ctx", 4096},
+	}
+	for _, tc := range tests {
+		t.Run(tc.flag, func(t *testing.T) {
+			spec, ok := fs.Lookup(tc.flag)
+			if !ok {
+				t.Fatalf("%s missing from curated schema", tc.flag)
+			}
+			if spec.Default != tc.def {
+				t.Fatalf("%s default = %v (%T), want %v", tc.flag, spec.Default, spec.Default, tc.def)
+			}
+		})
+	}
+}
+
+// The draft-side flags are declared in --help under their --spec-draft-* name
+// with a short and a legacy *-draft long alias. The golden-fallback path has no
+// parsed aliases to fall back on, so a profile written with either spelling
+// must still validate.
+func TestCuratedLlama_DraftFlagAliases(t *testing.T) {
+	fs := CuratedLlamaSchema().ToFlagSchema()
+	tests := []struct {
+		canonical string
+		short     string
+		alias     string
+	}{
+		{"spec-draft-model", "md", "model-draft"},
+		{"spec-draft-hf", "hfd", "hf-repo-draft"},
+		{"spec-draft-device", "devd", "device-draft"},
+		{"spec-draft-ngl", "ngld", "n-gpu-layers-draft"},
+		{"spec-draft-threads", "td", "threads-draft"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.canonical, func(t *testing.T) {
+			spec, ok := fs.Lookup(tc.canonical)
+			if !ok {
+				t.Fatalf("%s missing from curated schema", tc.canonical)
+			}
+			if spec.Short != tc.short {
+				t.Errorf("%s short = %q, want %q", tc.canonical, spec.Short, tc.short)
+			}
+			if _, ok := fs.Lookup(tc.alias); !ok {
+				t.Errorf("%s alias %q does not resolve", tc.canonical, tc.alias)
+			}
+		})
+	}
+}
+
 // S17c: mergeWithCuratedEnrich must fill in curated EnumValues when the parser
 // couldn't extract them (e.g. --prio N where the help text just says "N").
 // These are curated metadata the parser structurally can't recover.

@@ -156,7 +156,7 @@ func buildDFlashArgs(p domain.Profile) []string {
 // emitted verbatim as --<key> <value>. --port is injected by prepareLaunch.
 // The wrapper script forces the headless/loopback flags.
 func buildUnslothArgs(p domain.Profile) []string {
-	return buildArgs(p, argBuildOpts{skipKeys: []string{"model"}, modelFlag: "--model"})
+	return buildArgs(p, argBuildOpts{skipKeys: []string{"model"}, modelFlag: "--model", canonical: true})
 }
 
 // tabbyNargsFlags are TabbyAPI list-valued flags whose argparse definition uses

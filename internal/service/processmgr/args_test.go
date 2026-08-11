@@ -233,6 +233,39 @@ func TestBuildArgsForBackend_Unsloth(t *testing.T) {
 	}
 }
 
+// TestBuildArgsForBackend_Unsloth_ShortForms verifies that unsloth arguments
+// stored under short/alias keys are canonicalized to the long flags the
+// `unsloth studio run` Typer CLI actually accepts (OCR #7). Both the alias
+// short form ("np") and the schema alias ("n-parallel") must resolve to the
+// long "--parallel" flag; long-form keys pass through unchanged.
+func TestBuildArgsForBackend_Unsloth_ShortForms(t *testing.T) {
+	p := domain.Profile{
+		Model: "unsloth/Qwen3-1.7B-GGUF",
+		Args: map[string]any{
+			"np":           float64(8), // Short for "parallel"
+			"n-parallel":   float64(8), // Aliases entry for "parallel"
+			"cache-type-k": "q8_0",     // long form, unchanged
+			"ctx-size":     float64(8192),
+			"port":         8123,
+		},
+	}
+	got, err := BuildArgsForBackend(p, domain.BackendKindUnsloth, "")
+	if err != nil {
+		t.Fatalf("BuildArgsForBackend(unsloth short forms): %v", err)
+	}
+	want := []string{
+		"--model", "unsloth/Qwen3-1.7B-GGUF",
+		"--cache-type-k", "q8_0",
+		"--ctx-size", "8192",
+		"--n-parallel", "8", // Aliases entry is itself a real accepted flag
+		"--parallel", "8", // np (Short) canonicalizes to long form
+		"--port", "8123",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("BuildArgsForBackend(unsloth short forms):\n got = %v\nwant = %v", got, want)
+	}
+}
+
 func TestBuildArgsForBackend_Tabby(t *testing.T) {
 	p := domain.Profile{
 		Model: "/models/exl3/Qwen3.6-35B-A3B-exl3-4bpw",

@@ -1,0 +1,477 @@
+{
+  "node_labels": [
+    {
+      "label": "Function",
+      "count": 2686,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line",
+        "alloc_in_loop",
+        "bt",
+        "cognitive",
+        "complexity",
+        "docstring",
+        "fp",
+        "is_entry_point",
+        "is_exported",
+        "is_test",
+        "linear_scan_in_loop",
+        "lines",
+        "loop_count",
+        "loop_depth",
+        "max_access_depth",
+        "param_count",
+        "param_names",
+        "param_types",
+        "recursion_in_loop",
+        "recursive",
+        "return_type",
+        "self_recursive",
+        "signature",
+        "sp",
+        "transitive_loop_depth",
+        "unguarded_recursion"
+      ]
+    },
+    {
+      "label": "Method",
+      "count": 825,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line",
+        "alloc_in_loop",
+        "bt",
+        "cognitive",
+        "complexity",
+        "docstring",
+        "fp",
+        "is_entry_point",
+        "is_exported",
+        "is_test",
+        "linear_scan_in_loop",
+        "lines",
+        "loop_count",
+        "loop_depth",
+        "max_access_depth",
+        "param_count",
+        "param_names",
+        "param_types",
+        "parent_class",
+        "recursion_in_loop",
+        "recursive",
+        "return_type",
+        "self_recursive",
+        "signature",
+        "sp",
+        "transitive_loop_depth",
+        "unguarded_recursion"
+      ]
+    },
+    {
+      "label": "Variable",
+      "count": 745,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line",
+        "complexity",
+        "is_entry_point",
+        "is_exported",
+        "is_test",
+        "lines"
+      ]
+    },
+    {
+      "label": "File",
+      "count": 538,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line",
+        "change_count",
+        "extension",
+        "last_modified"
+      ]
+    },
+    {
+      "label": "Struct",
+      "count": 531,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line",
+        "complexity",
+        "docstring",
+        "is_entry_point",
+        "is_exported",
+        "is_test",
+        "lines"
+      ]
+    },
+    {
+      "label": "Section",
+      "count": 117,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line",
+        "complexity",
+        "is_entry_point",
+        "is_exported",
+        "is_test",
+        "lines"
+      ]
+    },
+    {
+      "label": "Route",
+      "count": 64,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line",
+        "key_path",
+        "method",
+        "source"
+      ]
+    },
+    {
+      "label": "Package",
+      "count": 59,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line",
+        "external",
+        "source"
+      ]
+    },
+    {
+      "label": "Folder",
+      "count": 51,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line"
+      ]
+    },
+    {
+      "label": "Interface",
+      "count": 42,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line",
+        "complexity",
+        "docstring",
+        "is_entry_point",
+        "is_exported",
+        "is_test",
+        "lines"
+      ]
+    },
+    {
+      "label": "Module",
+      "count": 40,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line",
+        "complexity",
+        "is_entry_point",
+        "is_exported",
+        "is_test",
+        "lines"
+      ]
+    },
+    {
+      "label": "Class",
+      "count": 29,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line",
+        "complexity",
+        "docstring",
+        "is_entry_point",
+        "is_exported",
+        "is_test",
+        "lines"
+      ]
+    },
+    {
+      "label": "Type",
+      "count": 2,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line",
+        "complexity",
+        "is_entry_point",
+        "is_exported",
+        "is_test",
+        "lines"
+      ]
+    },
+    {
+      "label": "Branch",
+      "count": 1,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line",
+        "base_sha",
+        "branch",
+        "canonical_root",
+        "git_common_dir",
+        "head_sha",
+        "is_detached",
+        "is_git",
+        "is_worktree",
+        "root_exists",
+        "worktree_root"
+      ]
+    },
+    {
+      "label": "Project",
+      "count": 1,
+      "properties": [
+        "name",
+        "qualified_name",
+        "file_path",
+        "start_line",
+        "end_line"
+      ]
+    }
+  ],
+  "edge_types": [
+    {
+      "type": "CALLS",
+      "count": 8392,
+      "properties": [
+        "source_id",
+        "target_id",
+        "args",
+        "callee",
+        "candidates",
+        "confidence",
+        "line",
+        "strategy",
+        "url_path",
+        "via"
+      ]
+    },
+    {
+      "type": "USAGE",
+      "count": 7001,
+      "properties": [
+        "source_id",
+        "target_id",
+        "callee"
+      ]
+    },
+    {
+      "type": "DEFINES",
+      "count": 5894,
+      "properties": [
+        "source_id",
+        "target_id"
+      ]
+    },
+    {
+      "type": "TESTS",
+      "count": 3617,
+      "properties": [
+        "source_id",
+        "target_id"
+      ]
+    },
+    {
+      "type": "DEFINES_METHOD",
+      "count": 1183,
+      "properties": [
+        "source_id",
+        "target_id"
+      ]
+    },
+    {
+      "type": "IMPORTS",
+      "count": 705,
+      "properties": [
+        "source_id",
+        "target_id",
+        "local_name"
+      ]
+    },
+    {
+      "type": "SEMANTICALLY_RELATED",
+      "count": 578,
+      "properties": [
+        "source_id",
+        "target_id",
+        "same_file",
+        "score"
+      ]
+    },
+    {
+      "type": "CONTAINS_FILE",
+      "count": 533,
+      "properties": [
+        "source_id",
+        "target_id"
+      ]
+    },
+    {
+      "type": "WRITES",
+      "count": 518,
+      "properties": [
+        "source_id",
+        "target_id"
+      ]
+    },
+    {
+      "type": "OVERRIDE",
+      "count": 338,
+      "properties": [
+        "source_id",
+        "target_id"
+      ]
+    },
+    {
+      "type": "SIMILAR_TO",
+      "count": 241,
+      "properties": [
+        "source_id",
+        "target_id",
+        "jaccard",
+        "same_file"
+      ]
+    },
+    {
+      "type": "IMPLEMENTS",
+      "count": 210,
+      "properties": [
+        "source_id",
+        "target_id"
+      ]
+    },
+    {
+      "type": "TESTS_FILE",
+      "count": 179,
+      "properties": [
+        "source_id",
+        "target_id"
+      ]
+    },
+    {
+      "type": "FILE_CHANGES_WITH",
+      "count": 135,
+      "properties": [
+        "source_id",
+        "target_id",
+        "co_changes",
+        "coupling_score",
+        "last_co_change"
+      ]
+    },
+    {
+      "type": "HTTP_CALLS",
+      "count": 102,
+      "properties": [
+        "source_id",
+        "target_id",
+        "args",
+        "callee",
+        "url_path",
+        "via"
+      ]
+    },
+    {
+      "type": "DEPENDS_ON",
+      "count": 59,
+      "properties": [
+        "source_id",
+        "target_id"
+      ]
+    },
+    {
+      "type": "CONTAINS_FOLDER",
+      "count": 46,
+      "properties": [
+        "source_id",
+        "target_id"
+      ]
+    },
+    {
+      "type": "HANDLES",
+      "count": 34,
+      "properties": [
+        "source_id",
+        "target_id",
+        "handler",
+        "source"
+      ]
+    },
+    {
+      "type": "DATA_FLOWS",
+      "count": 18,
+      "properties": [
+        "source_id",
+        "target_id",
+        "edge_type",
+        "handler_params",
+        "route",
+        "via"
+      ]
+    },
+    {
+      "type": "HAS_BRANCH",
+      "count": 1,
+      "properties": [
+        "source_id",
+        "target_id",
+        "base_sha",
+        "branch",
+        "canonical_root",
+        "git_common_dir",
+        "head_sha",
+        "is_detached",
+        "is_git",
+        "is_worktree",
+        "root_exists",
+        "worktree_root"
+      ]
+    }
+  ],
+  "adr_present": false,
+  "adr_hint": "No ADR found. Use manage_adr(mode='update') to persist architectural decisions across sessions. Run get_architecture(aspects=['all']) first."
+}

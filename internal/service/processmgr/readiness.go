@@ -15,7 +15,9 @@ import (
 var ErrReadyTimeout = errors.New("backend did not become ready within timeout")
 
 // unslothKeyRe matches the per-boot API key unsloth prints once the model is
-// loaded: "API Key:      sk-unsloth-<32 hex>".
+// loaded. The label differs by mode -- "API Key: <key>" under the wrapper's
+// forced --silent, "API Key:      <key>" otherwise -- so match the key itself
+// anywhere in the log rather than the surrounding text.
 var unslothKeyRe = regexp.MustCompile(`sk-unsloth-[0-9a-f]{32}`)
 
 // WaitReady blocks until the backend is ready to serve and returns any upstream
