@@ -65,9 +65,9 @@ The `ErrStillAlive` path is critical: `TerminateTree` returns it if a process we
 ## Health, readiness, and Python backends
 
 - `WaitHealthy` polls `GET /health` with exponential backoff (100ms→1s). On 200: `MarkLastUsed`, `RestartCount=0`.
-- `WaitReady` (`readiness.go`): unsloth backends tail the log for `sk-unsloth-[0-9a-f]{32}` (the token is both the readiness signal and the upstream auth key; incremental reads carry 64 bytes so a split token still matches). Others poll `/health`. Returns the auth token the proxy injects outbound.
+- `WaitReady` (`readiness.go`): unsloth backends tail the log for `sk-unsloth-[0-9a-f]{32}` (the token is both the readiness signal and the upstream auth key; incremental reads carry 64 bytes so a split token still matches). TokenSpeed polls the smg gateway's `/readiness`, because its `/health` reports gateway liveness before the engine loads. Other kinds poll `/health`. Returns the auth token the proxy injects outbound.
 - `healthCheckTimeout` default is **180s** in the proxy; **360s** in `serve` (a 35B int4 TP=2 multimodal MoE whose Marlin expert repack can run minutes).
-- `PYTHONUNBUFFERED=1` is injected at spawn for vLLM/SGLang/Unsloth/Tabby (Python backends). Without it their block-buffered output appears in late bursts under the Server-tab tail.
+- `PYTHONUNBUFFERED=1` is injected at spawn for vLLM/SGLang/Unsloth/Tabby/TokenSpeed (Python backends). Without it their block-buffered output appears in late bursts under the Server-tab tail.
 - `extractExit` uses `syscall.WaitStatus` for signal detection (Linux-leaning, with a graceful `, ok` guard).
 
 ## Reconcile and recovery
@@ -81,8 +81,8 @@ The `ErrStillAlive` path is critical: `TerminateTree` returns it if a process we
 | `processmgr.go` | `Manager` interface + `LaunchMode` enum + sentinel errors (`ErrModelNotFound`, `ErrForegroundBusy`, `ErrHealthCheckTimeout`, `ErrStillAlive`). |
 | `manager.go` | `fsManager` impl; holds `tracked`, `hasReaper`, `killRequested`, `restartScheduled`, `pendingRestarts`; `Kill`/`List`/`MarkOperatorStop`/`GetExitInfo`/`Close`. |
 | `launch.go` | `Launch`/`launchForeground`/`prepareLaunch`; port allocation, `Setsid`, `buildLaunchEnv` (`PYTHONUNBUFFERED`), `makeCommand`. |
-| `enrichment.go` | `WaitHealthy` + `waitEnrichment` reaper + `extractExit`. |
-| `readiness.go` | `WaitReady` (unsloth log-token vs `/health`). |
+| `enrichment.go` | `WaitHealthy` + path-selectable `waitHTTPReady` + `waitEnrichment` reaper + `extractExit`. |
+| `readiness.go` | `WaitReady` (unsloth log-token, TokenSpeed `/readiness`, otherwise `/health`). |
 | `recover.go` | `Reconcile`/`RefreshFromDisk`/`entryAlive`. |
 | `liveness.go` | `startLiveness` — 5s ticker, identity-aware crash detection. |
 | `restart.go` | `maybeScheduleRestart` — the restart policy engine. |

@@ -25,7 +25,7 @@ Backends are not hard-coded — operators register each via `model-loader backen
 | `docker` | `terminalbench.go`, `deepswe.go`, `swebenchpro.go` (required by agentic modes). |
 | `tb` (Terminal-Bench CLI) | `tbDefaultCmd` in `terminalbench.go`. |
 | `pier` (datacurve-ai/pier) | `deepDefaultCmd` in `deepswe.go`. |
-| `vllm`, `sglang`, `dflash_server`, `unsloth`, `beellama`, `buun`, `tabbyapi` | User-registered; never hard-coded. |
+| `vllm`, `sglang`, `dflash_server`, `unsloth`, `beellama`, `buun`, `tabbyapi`, `tokenspeed` | User-registered; never hard-coded. |
 
 ## Configuration
 

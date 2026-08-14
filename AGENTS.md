@@ -32,7 +32,7 @@ become healthy, and forwards the request.
     `instance`, `backend`, `model`, `benchmark`, …) with JSON output.
 - Backends are registered as **executables + kinds** (`llama-server`, `vllm`,
   `sglang`, `dflash`, `beellama-cpp`, `buun-llama-cpp`, `ik-llama-cpp`,
-  `tabby`, `unsloth`). Profiles are validated, portable JSON that resolve to a
+  `tabby`, `unsloth`, `tokenspeed`). Profiles are validated, portable JSON that resolve to a
   concrete backend binary and argument list at launch time.
 - The proxy binds to **loopback by default and has no authentication** — do not
   expose it to an untrusted network without an authenticated reverse proxy.
