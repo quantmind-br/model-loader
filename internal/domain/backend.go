@@ -15,6 +15,7 @@ const (
 	BackendKindIkLlamaCpp   BackendKind = "ik-llama-cpp"
 	BackendKindUnsloth      BackendKind = "unsloth"
 	BackendKindTabby        BackendKind = "tabby"
+	BackendKindTokenSpeed   BackendKind = "tokenspeed"
 )
 
 // BackendMeta holds timestamps and bookkeeping for a backend entry.

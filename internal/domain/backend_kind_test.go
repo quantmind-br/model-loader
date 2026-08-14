@@ -25,3 +25,9 @@ func TestBackendKindTabbyValue(t *testing.T) {
 		t.Fatalf("got %q, want %q", BackendKindTabby, "tabby")
 	}
 }
+
+func TestBackendKindTokenSpeedValue(t *testing.T) {
+	if BackendKindTokenSpeed != "tokenspeed" {
+		t.Errorf("BackendKindTokenSpeed = %q, want %q", BackendKindTokenSpeed, "tokenspeed")
+	}
+}
