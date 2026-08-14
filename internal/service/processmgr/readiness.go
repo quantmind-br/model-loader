@@ -21,9 +21,9 @@ var ErrReadyTimeout = errors.New("backend did not become ready within timeout")
 var unslothKeyRe = regexp.MustCompile(`sk-unsloth-[0-9a-f]{32}`)
 
 // WaitReady blocks until the backend is ready to serve and returns any upstream
-// auth token the proxy must inject. For unsloth, the printed key is both the
-// readiness signal (it appears only after the model loads) and the token. For
-// every other kind it polls /health and returns an empty token.
+// auth token the proxy must inject. Unsloth waits for its printed API key;
+// TokenSpeed polls the smg gateway's /readiness endpoint; every other kind
+// polls /health and returns an empty token.
 func (m *fsManager) WaitReady(inst domain.RunningInstance, timeout time.Duration, attemptID string) (string, error) {
 	if inst.Kind == domain.BackendKindUnsloth {
 		lg := m.logger.With("pid", inst.PID, "port", inst.Port, "attempt_id", attemptID)
@@ -35,6 +35,9 @@ func (m *fsManager) WaitReady(inst domain.RunningInstance, timeout time.Duration
 		}
 		lg.Info("readiness_ok", "mode", "unsloth_log_token")
 		return token, nil
+	}
+	if inst.Kind == domain.BackendKindTokenSpeed {
+		return "", m.waitHTTPReady(inst.PID, inst.Port, "/readiness", timeout, attemptID)
 	}
 	return "", m.WaitHealthy(inst.PID, inst.Port, timeout, attemptID)
 }
