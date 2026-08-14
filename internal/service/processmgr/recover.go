@@ -27,7 +27,6 @@ var kindLegacyToken = map[domain.BackendKind]string{
 	domain.BackendKindDFlash:       "dflash",
 	domain.BackendKindUnsloth:      "unsloth",
 	domain.BackendKindTabby:        "main.py",
-	domain.BackendKindTokenSpeed:   "tokenspeed",
 }
 
 // entryAlive reports whether a registry entry still refers to the process it

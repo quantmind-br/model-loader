@@ -44,8 +44,6 @@ func BuildArgsForBackend(p domain.Profile, kind domain.BackendKind, executable s
 		return buildUnslothArgs(p), nil
 	case domain.BackendKindTabby:
 		return buildTabbyArgs(p), nil
-	case domain.BackendKindTokenSpeed:
-		return buildTokenSpeedArgs(p), nil
 	default:
 		return nil, fmt.Errorf("unsupported backend kind for arg building: %s", kind)
 	}
@@ -159,15 +157,6 @@ func buildDFlashArgs(p domain.Profile) []string {
 // The wrapper script forces the headless/loopback flags.
 func buildUnslothArgs(p domain.Profile) []string {
 	return buildArgs(p, argBuildOpts{skipKeys: []string{"model"}, modelFlag: "--model", canonical: true})
-}
-
-// buildTokenSpeedArgs builds args for `tokenspeed serve`. The model (local path
-// or HF repo id) is the leading positional argument, matching the documented
-// form `tokenspeed serve <model> --flags`; --model/--model-path are accepted
-// aliases upstream, so both keys are skipped to avoid a duplicate. --port is
-// injected by prepareLaunch; the wrapper forces --host 127.0.0.1.
-func buildTokenSpeedArgs(p domain.Profile) []string {
-	return buildArgs(p, argBuildOpts{skipKeys: []string{"model", "model-path"}})
 }
 
 // tabbyNargsFlags are TabbyAPI list-valued flags whose argparse definition uses

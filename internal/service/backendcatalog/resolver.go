@@ -137,7 +137,7 @@ func findBackend(backends []domain.Backend, id string) (domain.Backend, bool) {
 // are preserved when falling back to python3.
 func resolveExecutable(backend domain.Backend) (string, error) {
 	switch backend.Kind {
-	case domain.BackendKindSGLang, domain.BackendKindVLLM, domain.BackendKindTokenSpeed:
+	case domain.BackendKindSGLang, domain.BackendKindVLLM:
 		return llamabin.ResolveCommandWithPythonFallback(backend.Executable)
 	default:
 		return llamabin.Resolve(backend.Executable)

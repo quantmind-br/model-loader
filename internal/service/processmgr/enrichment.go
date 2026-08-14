@@ -16,19 +16,12 @@ import (
 // WaitHealthy polls GET http://127.0.0.1:<port>/health with capped exponential
 // backoff (100ms, 200ms, 400ms, ..., max 1s) until 200 OK or timeout.
 func (m *fsManager) WaitHealthy(pid int, port int, timeout time.Duration, attemptID string) error {
-	return m.waitHTTPReady(pid, port, "/health", timeout, attemptID)
-}
-
-// waitHTTPReady is WaitHealthy with a selectable probe path: TokenSpeed's smg
-// gateway answers /health as soon as it binds, so its readiness probe is
-// /readiness (which upstream `tokenspeed serve` polls itself).
-func (m *fsManager) waitHTTPReady(pid int, port int, path string, timeout time.Duration, attemptID string) error {
-	lg := m.logger.With("pid", pid, "port", port, "path", path, "attempt_id", attemptID)
+	lg := m.logger.With("pid", pid, "port", port, "attempt_id", attemptID)
 	lg.Info("healthcheck_start", "timeout", timeout)
 	deadline := time.Now().Add(timeout)
 	delay := 100 * time.Millisecond
 	const maxDelay = time.Second
-	url := fmt.Sprintf("http://127.0.0.1:%d%s", port, path)
+	url := fmt.Sprintf("http://127.0.0.1:%d/health", port)
 	client := &http.Client{Timeout: 2 * time.Second}
 	for time.Now().Before(deadline) {
 		if !procutil.Alive(pid) {
