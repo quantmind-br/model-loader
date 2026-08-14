@@ -6,6 +6,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 	"github.com/quantmind-br/model-loader/internal/service/dflashhelp"
 	"github.com/quantmind-br/model-loader/internal/service/tabbyhelp"
+	"github.com/quantmind-br/model-loader/internal/service/tokenspeedhelp"
 	"github.com/quantmind-br/model-loader/internal/service/unslothhelp"
 )
 
@@ -51,6 +52,7 @@ func TestEssentialSeed_ReferencesOnlyExistingFlags(t *testing.T) {
 		{domain.BackendKindDFlash, dflashhelp.EmbeddedSchema()},
 		{domain.BackendKindUnsloth, unslothhelp.EmbeddedSchema()},
 		{domain.BackendKindTabby, tabbyhelp.EmbeddedSchema()},
+		{domain.BackendKindTokenSpeed, tokenspeedhelp.EmbeddedSchema()},
 	} {
 		t.Run(string(tt.kind), func(t *testing.T) {
 			for _, long := range essentialSeed[tt.kind] {

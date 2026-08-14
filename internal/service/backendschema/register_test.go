@@ -22,6 +22,7 @@ func TestRegisterDefaults_RegistersAllGeneratorKinds(t *testing.T) {
 		domain.BackendKindIkLlamaCpp,
 		domain.BackendKindUnsloth,
 		domain.BackendKindTabby,
+		domain.BackendKindTokenSpeed,
 	}
 	gens := m.Generators()
 	if len(gens) != len(want) {
