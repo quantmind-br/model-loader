@@ -388,3 +388,17 @@ func TestConfigureToggleWrapsCheckboxInLabel(t *testing.T) {
 		t.Fatalf("Reset must stay outside the label: %s", block)
 	}
 }
+
+func TestBackendPageKindsIncludeUnslothAndExcludeRemovedKind(t *testing.T) {
+	s := &Session{deps: Deps{InitialBackendDraft: BackendDraft{IsNew: true}}}
+	rec := httptest.NewRecorder()
+	s.handleBackendIndex(rec, httptest.NewRequest("GET", "/backend/", nil))
+	body := rec.Body.String()
+
+	if !strings.Contains(body, `value="unsloth"`) {
+		t.Fatalf("backend kind selector must include unsloth: %s", body)
+	}
+	if strings.Contains(body, `value="tokenspeed"`) {
+		t.Fatalf("backend kind selector must not include tokenspeed: %s", body)
+	}
+}

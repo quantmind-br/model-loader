@@ -18,5 +18,4 @@ func RegisterDefaults(m *Manager, schemaStore backendcatalog.SchemaStore) {
 	m.Register(domain.BackendKindIkLlamaCpp, NewIkLlamaServerGenerator(schemaStore))
 	m.Register(domain.BackendKindUnsloth, NewUnslothGenerator(schemaStore))
 	m.Register(domain.BackendKindTabby, NewTabbyGenerator(schemaStore))
-	m.Register(domain.BackendKindTokenSpeed, NewTokenSpeedGenerator(schemaStore))
 }

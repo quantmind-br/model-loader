@@ -241,3 +241,18 @@ func TestBackendShow_ArgValidation(t *testing.T) {
 		t.Fatal("expected arg-validation error for `backend show` with no args")
 	}
 }
+
+func TestAddBackend_RemovedKindRejected(t *testing.T) {
+	schemaStore := newFakeSchemaStore()
+	mgr := backendschema.NewManager(nil, schemaStore)
+	backendschema.RegisterDefaults(mgr, schemaStore)
+
+	var out bytes.Buffer
+	err := addBackend(&out, &fakeBackendManager{gens: mgr.Generators()}, "TokenSpeed", "/tmp/tokenspeed", "tokenspeed")
+	if err == nil {
+		t.Fatal("expected tokenspeed to be rejected as an unknown backend kind")
+	}
+	if !strings.Contains(err.Error(), `unknown backend kind "tokenspeed"`) {
+		t.Fatalf("error = %q, want unknown-kind error", err)
+	}
+}

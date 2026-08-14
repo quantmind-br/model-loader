@@ -29,7 +29,6 @@ func (s *Session) handleBackendIndex(w http.ResponseWriter, r *http.Request) {
 			domain.BackendKindIkLlamaCpp,
 			domain.BackendKindUnsloth,
 			domain.BackendKindTabby,
-			domain.BackendKindTokenSpeed,
 		},
 		IsNew:        s.deps.InitialBackendDraft.IsNew,
 		ReadOnlyKind: !s.deps.InitialBackendDraft.IsNew,
