@@ -266,6 +266,35 @@ func TestBuildArgsForBackend_Unsloth_ShortForms(t *testing.T) {
 	}
 }
 
+func TestBuildArgsForBackend_TokenSpeed(t *testing.T) {
+	p := domain.Profile{
+		Model: "/models/Qwen3.6-27B",
+		Args: map[string]any{
+			"model":                "ignored-duplicate",
+			"model-path":           "ignored-duplicate",
+			"max-model-len":        262144,
+			"port":                 8123,
+			"tensor-parallel-size": 2,
+			"trust-remote-code":    true,
+			"enforce-eager":        false,
+		},
+	}
+	got, err := BuildArgsForBackend(p, domain.BackendKindTokenSpeed, "/x/tokenspeed-serve.sh")
+	if err != nil {
+		t.Fatalf("BuildArgsForBackend(tokenspeed): %v", err)
+	}
+	want := []string{
+		"/models/Qwen3.6-27B",
+		"--max-model-len", "262144",
+		"--port", "8123",
+		"--tensor-parallel-size", "2",
+		"--trust-remote-code",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("BuildArgsForBackend(tokenspeed):\n got = %v\nwant = %v", got, want)
+	}
+}
+
 func TestBuildArgsForBackend_Tabby(t *testing.T) {
 	p := domain.Profile{
 		Model: "/models/exl3/Qwen3.6-35B-A3B-exl3-4bpw",

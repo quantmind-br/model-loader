@@ -308,10 +308,11 @@ func (m *fsManager) launchForeground(p domain.Profile, plan launchPlan, attemptI
 // which flushes per line. PYTHONUNBUFFERED=1 forces unbuffered stdio so the
 // logs stream live. (dflash is the native dflash_server binary, not Python.)
 var pythonBackends = map[domain.BackendKind]bool{
-	domain.BackendKindVLLM:    true,
-	domain.BackendKindSGLang:  true,
-	domain.BackendKindUnsloth: true,
-	domain.BackendKindTabby:   true,
+	domain.BackendKindVLLM:       true,
+	domain.BackendKindSGLang:     true,
+	domain.BackendKindUnsloth:    true,
+	domain.BackendKindTabby:      true,
+	domain.BackendKindTokenSpeed: true,
 }
 
 // buildLaunchEnv overlays the profile env (applyProfileEnv) and, for
