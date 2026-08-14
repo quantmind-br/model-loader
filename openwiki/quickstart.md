@@ -1,7 +1,7 @@
 ---
 type: Overview
 title: model-loader quickstart
-description: Entry point for the model-loader code wiki. A Go terminal UI and headless CLI that manages local LLM inference servers across ten backends, fronted by a single multi-API HTTP proxy that hot-swaps the active model on demand.
+description: Entry point for the model-loader code wiki. A Go terminal UI and headless CLI that manages local LLM inference servers across nine backends, fronted by a single multi-API HTTP proxy that hot-swaps the active model on demand.
 tags: [quickstart, overview, index]
 ---
 
@@ -11,7 +11,7 @@ tags: [quickstart, overview, index]
 
 - **Module:** `github.com/quantmind-br/model-loader`
 - **For:** a single operator curating tuned launch configs for one GPU. Loopback-only proxy, no auth, single-instance lock.
-- **Backends (10 `BackendKind`s):** `llama-server`, `vllm`, `sglang`, `dflash`, `buun-llama-cpp`, `beellama-cpp`, `ik-llama-cpp`, `unsloth`, `tabby`, `tokenspeed`. Operators register each backend (binary + kind) via `model-loader backend add`.
+- **Backends (9 `BackendKind`s):** `llama-server`, `vllm`, `sglang`, `dflash`, `buun-llama-cpp`, `beellama-cpp`, `ik-llama-cpp`, `unsloth`, `tabby`. Operators register each backend (binary + kind) via `model-loader backend add`.
 - **Three surfaces:** the 5-tab Bubble Tea TUI (default), headless `serve` proxy daemon, and a full Cobra CLI mirroring every TUI action.
 
 ## What this wiki covers

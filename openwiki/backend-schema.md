@@ -97,8 +97,8 @@ Note llama-server and BeeLlama no longer share an identical enum: llama-server a
 | `merge.go` | `mergeWithCurated` / `mergeWithCuratedEnrich` / `mergeCurated`. |
 | `presentation.go` | `essentialSeed`, `BuildPresentation`, `ReconcilePresentation`. |
 | `goldembed.go` | `//go:embed testdata/help-v10152.golden.json` fallback. |
-| `register.go` | `RegisterDefaults` — wires all 10 generators. |
+| `register.go` | `RegisterDefaults` — wires all 9 generators. |
 | `curated_{llama,beellama,buun,ik,vllm,sglang}.go` | Hand-curated overlays. |
-| `{vllm,sglang,tabby,unsloth,tokenspeed,beellama,buun,ik,embedded}_generator.go` | Per-kind generators. |
+| `{vllm,sglang,tabby,unsloth,beellama,buun,ik,embedded}_generator.go` | Per-kind generators. |
 
-Per-kind help parsers: `internal/service/{llamahelp,vllmhelp,sglanghelp,dflashhelp,buunhelp,unslothhelp,tabbyhelp,tokenspeedhelp}/` each export an `EmbeddedSchema()` via `BuildFlagSchema`.
+Per-kind help parsers: `internal/service/{llamahelp,vllmhelp,sglanghelp,dflashhelp,buunhelp,unslothhelp,tabbyhelp}/` each export an `EmbeddedSchema()` via `BuildFlagSchema`.
