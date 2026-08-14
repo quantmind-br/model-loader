@@ -228,6 +228,17 @@ func TestValidator_HFRepoIDAllowedForUnsloth(t *testing.T) {
 	}
 }
 
+func TestValidator_HFRepoIDAllowedForTokenSpeed(t *testing.T) {
+	v := New(log.Nop())
+	p := domain.Profile{ID: "x", Model: "Qwen/Qwen3.6-27B"}
+	rep := v.Validate(p, domain.FlagSchema{}, domain.BackendKindTokenSpeed)
+	for _, issue := range rep.Errors {
+		if issue.Field == "model" {
+			t.Fatalf("tokenspeed HF repo produced model issue: %v", issue)
+		}
+	}
+}
+
 func TestValidator_ExistingLocalPathNotTreatedAsHFRepo(t *testing.T) {
 	tmp := t.TempDir()
 	existingDir := tmp + "/models"

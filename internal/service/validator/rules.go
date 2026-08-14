@@ -188,9 +188,12 @@ func checkType(spec domain.FlagSpec, val any) string {
 			return msg
 		}
 		return checkFloatRange(spec, val)
-	case domain.FlagTypeBool:   return checkBool(val)
-	case domain.FlagTypeString: return checkString(val)
-	case domain.FlagTypeEnum:   return checkEnum(spec, val)
+	case domain.FlagTypeBool:
+		return checkBool(val)
+	case domain.FlagTypeString:
+		return checkString(val)
+	case domain.FlagTypeEnum:
+		return checkEnum(spec, val)
 	}
 	return ""
 }
@@ -338,11 +341,10 @@ func applyExistenceRules(p domain.Profile, kind domain.BackendKind, rep Report) 
 	if err == nil {
 		return rep
 	}
-	// File does not exist locally. Only skip the error for
-	// HuggingFace-style repo IDs (e.g. "meta-llama/Llama-3-8B")
-	// on backends that support them natively (vLLM, SGLang).
-	// Local paths that happen to match the heuristic but exist
-	// are caught by the os.Stat success path above.
+	// File does not exist locally. Only skip the error for Hugging Face-style
+	// repo IDs (e.g. "meta-llama/Llama-3-8B") on backends that support them
+	// natively. Local paths that happen to match the heuristic but exist are
+	// caught by the os.Stat success path above.
 	if domain.LooksLikeHFRepo(p.Model) && supportsHFRepo(kind) {
 		return rep
 	}
@@ -369,7 +371,7 @@ func applyExistenceRules(p domain.Profile, kind domain.BackendKind, rep Report) 
 
 func supportsHFRepo(kind domain.BackendKind) bool {
 	switch kind {
-	case domain.BackendKindVLLM, domain.BackendKindSGLang, domain.BackendKindUnsloth:
+	case domain.BackendKindVLLM, domain.BackendKindSGLang, domain.BackendKindUnsloth, domain.BackendKindTokenSpeed:
 		return true
 	}
 	return false
