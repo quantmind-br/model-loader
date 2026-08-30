@@ -183,6 +183,28 @@ func TestValidator_HFRepoIDAllowedForVLLM(t *testing.T) {
 	}
 }
 
+// LM Studio addresses models by daemon-side key that `lms load` resolves
+// server-side; neither bare keys nor HF-style IDs may trip the existence rule.
+func TestValidator_LMStudioKeyNoExistenceError(t *testing.T) {
+	v := New(log.Nop())
+	cases := []struct {
+		name  string
+		model string
+	}{
+		{"bare daemon key", "qwen3-coder-30b"},
+		{"HF-style repo ID", "lmstudio-community/Qwen3-30B-GGUF"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := domain.Profile{ID: "x", Model: tc.model}
+			rep := v.Validate(p, domain.FlagSchema{}, domain.BackendKindLMStudio)
+			if len(rep.Errors) > 0 {
+				t.Errorf("Errors=%v, want none for lmstudio model key", rep.Errors)
+			}
+		})
+	}
+}
+
 func TestValidator_HFRepoIDErrorsForLlamaServer(t *testing.T) {
 	v := New(log.Nop())
 	cases := []struct {

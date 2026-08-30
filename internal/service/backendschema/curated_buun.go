@@ -309,7 +309,7 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 // build number printed by `llama-server --version` and the checkout's
 // `git describe --tags --always`. Both are recorded so the value is
 // unambiguous.
-const buunSourceVersion = "11155 (ba09e2a80) / b9637-1518-gba09e2a80"
+const buunSourceVersion = "11361 (2174ad63b) / b9637-1724-g2174ad63b"
 
 func buunSpecTypes() []string {
 	return []string{"none", "draft-simple", "draft-eagle3", "draft-mtp", "draft-dflash", "draft-dspark", "ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod", "ngram-cache", "suffix", "copyspec", "recycle", "dflash"}

@@ -290,7 +290,7 @@ func CuratedIkLlamaSchema() domain.BackendValidationSchema {
 		BackendID:     "ik-llama-cpp-default",
 		Source: domain.SchemaSource{
 			GeneratedFrom: "ik_llama.cpp curated reference",
-			SourceVersion: "curated-ik-llama-cpp-t0002-1002-g5763a901",
+			SourceVersion: "curated-ik-llama-cpp-4867 (t0002-1053-g15dddc60)",
 			Editable:      true,
 		},
 		Flags:        flags,

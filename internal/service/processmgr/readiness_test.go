@@ -2,12 +2,18 @@ package processmgr
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"testing"
 	"time"
+
+	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
 var testKeyRe = regexp.MustCompile(`sk-unsloth-[0-9a-f]{32}`)
@@ -100,5 +106,64 @@ func TestWaitForLogToken_SplitAcrossAppends(t *testing.T) {
 	}
 	if got != "sk-unsloth-0123456789abcdef0123456789abcdef" {
 		t.Fatalf("token = %q", got)
+	}
+}
+
+func TestHealthPathForKind(t *testing.T) {
+	cases := []struct {
+		kind domain.BackendKind
+		want string
+	}{
+		{domain.BackendKindLlamaServer, "/health"},
+		{domain.BackendKindVLLM, "/health"},
+		{domain.BackendKindUnsloth, "/health"},
+		{domain.BackendKindLMStudio, "/v1/models"},
+		{"", "/health"},
+	}
+	for _, tc := range cases {
+		if got := healthPathForKind(tc.kind); got != tc.want {
+			t.Errorf("healthPathForKind(%q) = %q, want %q", tc.kind, got, tc.want)
+		}
+	}
+}
+
+// WaitHealthy must probe the endpoint the launched kind actually serves:
+// LM Studio has no /health route, so a llama-style probe would time out even
+// though /v1/models answers immediately.
+func TestWaitHealthy_LMStudioUsesV1Models(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	u, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatalf("parse srv URL: %v", err)
+	}
+	port, err := strconv.Atoi(u.Port())
+	if err != nil {
+		t.Fatalf("parse port: %v", err)
+	}
+
+	m := New(Config{})
+	pid := os.Getpid()
+	m.mu.Lock()
+	m.tracked[pid] = domain.RunningInstance{PID: pid, Kind: domain.BackendKindLMStudio}
+	m.mu.Unlock()
+
+	if err := m.WaitHealthy(pid, port, 2*time.Second, ""); err != nil {
+		t.Fatalf("WaitHealthy(lmstudio): %v", err)
+	}
+
+	// Same server probed as an alive-but-untracked pid keeps the legacy
+	// /health default, which this stub does not serve.
+	m.mu.Lock()
+	delete(m.tracked, pid)
+	m.mu.Unlock()
+	if err := m.WaitHealthy(os.Getpid(), port, 300*time.Millisecond, ""); !errors.Is(err, ErrHealthCheckTimeout) {
+		t.Fatalf("WaitHealthy(untracked) = %v, want ErrHealthCheckTimeout", err)
 	}
 }

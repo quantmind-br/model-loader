@@ -32,7 +32,7 @@ become healthy, and forwards the request.
     `instance`, `backend`, `model`, `benchmark`, …) with JSON output.
 - Backends are registered as **executables + kinds** (`llama-server`, `vllm`,
   `sglang`, `dflash`, `beellama-cpp`, `buun-llama-cpp`, `ik-llama-cpp`,
-  `tabby`, `unsloth`). Profiles are validated, portable JSON that resolve to a
+  `tabby`, `unsloth`, `lmstudio`). Profiles are validated, portable JSON that resolve to a
   concrete backend binary and argument list at launch time.
 - The proxy binds to **loopback by default and has no authentication** — do not
   expose it to an untrusted network without an authenticated reverse proxy.
@@ -159,7 +159,7 @@ Use the Server tab or `model-loader instance stop` to stop one.
 | `configweb` | On-demand web GUI the TUI uses to edit profiles |
 | `llamabin` | Resolve/validate `llama-server` binary path (+ python fallback) |
 | `llamahelp` | Parse `llama-server --help` into FlagSchema; embedded fallback |
-| `vllmhelp`, `sglanghelp`, `tabbyhelp`, `unslothhelp`, `buunhelp`, `dflashhelp` | Embedded curated schemas for Python/other backends |
+| `vllmhelp`, `sglanghelp`, `tabbyhelp`, `unslothhelp`, `buunhelp`, `dflashhelp`, `lmstudiohelp` | Embedded curated schemas for Python/other backends |
 | `sizing`, `metricsstore`, `migration` | Context-window sizing, metric persistence, legacy migrations |
 | `internal/{fsx,procutil,shellsplit,ptrutil}` | Internal helpers (atomic JSON, process utils, shell splitting) |
 

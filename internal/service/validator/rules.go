@@ -337,6 +337,12 @@ func applyExistenceRules(p domain.Profile, kind domain.BackendKind, rep Report) 
 	if p.Model == "" {
 		return rep
 	}
+	// LM Studio addresses models by daemon-side key (e.g. "qwen2.5-7b-instruct")
+	// that `lms load` resolves fuzzy server-side; it is neither a local file
+	// nor an HF repo ID, so existence cannot be checked here.
+	if kind == domain.BackendKindLMStudio {
+		return rep
+	}
 	_, err := os.Stat(p.Model)
 	if err == nil {
 		return rep

@@ -23,15 +23,15 @@ import (
 // the profile's Model field (emitted as --model), so it is not a row here.
 // `port` carries IsPort so the validator knows the manager owns it.
 //
-// Schema tracks unsloth checkout 32d84afc5 (git describe
-// v0.1.61-beta-10-g32d84afc5), installed as an editable Studio runtime under
-// ~/.unsloth/studio reporting pip package unsloth 2026.8.12 (2026-08-10);
-// flags read from unsloth_cli/commands/studio.py::run() (the `unsloth studio
-// run` Typer command), the pass-through denylist and value parsers in
+// Schema tracks unsloth checkout dc9118e4b (git describe
+// v0.1.804-beta-63-gdc9118e4b); flags read from
+// unsloth_cli/commands/studio.py::run() (the `unsloth studio run` Typer
+// command), the SpeculativeType literal in unsloth_cli/_inference.py, the
+// pass-through denylist and value parsers in
 // studio/backend/core/inference/llama_server_args.py, and the bundled
-// llama-server b10333 (8231608b0) --help.
+// llama-server b10687 (92b19177a) --help.
 func EmbeddedSchema() domain.FlagSchema {
-	return domain.BuildFlagSchema("embedded-unsloth-v3", unslothRows)
+	return domain.BuildFlagSchema("embedded-unsloth-v4", unslothRows)
 }
 
 var unslothRows = []domain.FlagSpecRow{
@@ -42,7 +42,7 @@ var unslothRows = []domain.FlagSpecRow{
 	{Long: "gguf-variant", Type: domain.FlagTypeString, Default: "", HelpText: "GGUF quant variant to fetch (e.g. UD-Q4_K_XL); ignored for local GGUF paths", Group: "common"},
 	{Long: "max-seq-length", Aliases: []string{"context-length"}, Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(1048576), HelpText: "Runtime context length in tokens (0 = model default for GGUF; 2048 for hub models)", Group: "common"},
 	{Long: "gpu-memory-mode", Type: domain.FlagTypeEnum, EnumValues: []string{"auto", "manual"}, Default: "auto", HelpText: "GPU memory strategy for GGUF models. Auto lets Unsloth select GPUs and cap context to fit VRAM; manual delegates layer placement and context sizing to llama.cpp --fit", Group: "common"},
-	{Long: "speculative-type", Type: domain.FlagTypeEnum, EnumValues: []string{"auto", "mtp", "dspark", "ngram", "mtp+ngram", "off", "ngram-simple"}, Default: "", HelpText: "Speculative decoding mode for GGUF models; dspark auto-uses a matching dspark-*.gguf sidecar when available. Unset = Studio auto", Group: "common"},
+	{Long: "speculative-type", Type: domain.FlagTypeEnum, EnumValues: []string{"auto", "mtp", "dspark", "dflash", "ngram", "mtp+ngram", "off", "ngram-simple"}, Default: "", HelpText: "Speculative decoding mode for GGUF models; dspark and dflash auto-use a matching dspark-*.gguf / dflash drafter sidecar when available. Unset = Studio auto", Group: "common"},
 	{Long: "spec-draft-n-max", Type: domain.FlagTypeInt, Min: ptrutil.Ptr(1), Max: ptrutil.Ptr(16), HelpText: "Maximum draft tokens per step for MTP or DSpark (unset = backend default)", Group: "common"},
 	{Long: "parallel", Short: "np", Aliases: []string{"n-parallel"}, Type: domain.FlagTypeInt, Default: float64(4), Min: ptrutil.Ptr(1), Max: ptrutil.Ptr(64), HelpText: "llama-server parallel decode slots; N requests share one loaded model, each gets ctx/N KV. Owned by unsloth's --parallel (a raw llama-server -np/--parallel pass-through is rejected)", Group: "common"},
 	{Long: "tensor-parallel", Type: domain.FlagTypeBool, Default: false, HelpText: "Split a GGUF across GPUs by tensor (--split-mode tensor) instead of by layer; multi-GPU only (no effect on one GPU), dense models gain decode speed, MoE usually don't", Group: "common"},

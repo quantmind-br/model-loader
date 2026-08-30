@@ -31,8 +31,8 @@ changes:
 
 ```bash
 go test ./internal/service/llamahelp -update
-cp testdata/help-v10152.golden.json \
-  internal/service/backendschema/testdata/help-v10152.golden.json
+cp testdata/help-v10686.golden.json \
+  internal/service/backendschema/testdata/help-v10686.golden.json
 ```
 
 The two golden copies must remain byte-identical. If the embedded backend build

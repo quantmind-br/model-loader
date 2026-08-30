@@ -44,6 +44,8 @@ func BuildArgsForBackend(p domain.Profile, kind domain.BackendKind, executable s
 		return buildUnslothArgs(p), nil
 	case domain.BackendKindTabby:
 		return buildTabbyArgs(p), nil
+	case domain.BackendKindLMStudio:
+		return buildLMStudioArgs(p), nil
 	default:
 		return nil, fmt.Errorf("unsupported backend kind for arg building: %s", kind)
 	}
@@ -157,6 +159,16 @@ func buildDFlashArgs(p domain.Profile) []string {
 // The wrapper script forces the headless/loopback flags.
 func buildUnslothArgs(p domain.Profile) []string {
 	return buildArgs(p, argBuildOpts{skipKeys: []string{"model"}, modelFlag: "--model", canonical: true})
+}
+
+// buildLMStudioArgs builds args for the lmstudio backend, launched through
+// backends/lms/lmstudio-serve.sh. The profile's Model is the LM Studio model
+// key (or local GGUF path) and is emitted under --model; every other flag in
+// p.Args (--port included, injected by prepareLaunch) is emitted verbatim as
+// --<key> <value>. The wrapper routes server-start flags (--port/--bind/
+// --cors) to `lms server start` and the rest to `lms load`.
+func buildLMStudioArgs(p domain.Profile) []string {
+	return buildArgs(p, argBuildOpts{skipKeys: []string{"model"}, modelFlag: "--model"})
 }
 
 // tabbyNargsFlags are TabbyAPI list-valued flags whose argparse definition uses

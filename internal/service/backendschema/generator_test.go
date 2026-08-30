@@ -18,7 +18,7 @@ import (
 // reasoning-preserve / mtmd-batch-max-tokens) but adds one fork-only flag.
 func forkHelpFrom(t *testing.T, drop []string) string {
 	t.Helper()
-	data, err := os.ReadFile("../../../testdata/help-v10152.txt")
+	data, err := os.ReadFile("../../../testdata/help-v10686.txt")
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}

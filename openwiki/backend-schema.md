@@ -19,7 +19,7 @@ flowchart TD
     KIND{"Backend kind?"}
     KIND -->|"llama-server family"| LIVE["live --help parse<br/>llamahelp.ParseHelp"]
     LIVE -->|"parse succeeds"| ENRICH["mergeWithCuratedEnrich<br/>appendMissing=false<br/>parsed authoritative on existence + enums"]
-    LIVE -->|"parse fails"| GOLDEN["embedded golden JSON<br/>help-v10152.golden.json, 246 flags"]
+    LIVE -->|"parse fails"| GOLDEN["embedded golden JSON<br/>help-v10686.golden.json, 252 flags"]
     GOLDEN --> APPEND["mergeWithCurated<br/>appendMissing=true<br/>curated adds missing flags"]
     ENRICH --> OUT["BackendValidationSchema"]
     APPEND --> OUT
@@ -54,7 +54,7 @@ Inside `mergeCurated`: clone both sides (defensive copies eliminate shared-slice
 - **Enum extraction** (three forms): bracket/brace placeholders; **inline comma-lists** (a18569e: bare lowercase-alphanumeric+hyphen/underscore lists like `none,draft-simple,...`); `allowed values:` continuation blocks.
 - **Defaults**: pulls `(default: X)`; a18569e skips inherited defaults containing `--` ("same as --cpu-strict") and drops non-numeric coerced results for numeric types ("read from model").
 
-Embedded fallbacks: `llamahelp/embedded.go::EmbeddedSchema()` returns 13 essential flags (`embedded-v10152`); `backendschema/golden_embed.go` `//go:embed`s the full 246-flag golden (`testdata/help-v10152.golden.json`). The root `testdata/help-v9761.{txt,golden.json}` pair was renamed to `help-v10152` in the recent schema-sync work; a duplicate embed copy at `internal/service/backendschema/testdata/` must be kept byte-identical by hand when the root golden is regenerated.
+Embedded fallbacks: `llamahelp/embedded.go::EmbeddedSchema()` returns 13 essential flags (`embedded-v10686`); `backendschema/golden_embed.go` `//go:embed`s the full 252-flag golden (`testdata/help-v10686.golden.json`). A duplicate embed copy at `internal/service/backendschema/testdata/` must be kept byte-identical by hand when the root golden is regenerated.
 
 ## Spec-types
 
@@ -96,7 +96,7 @@ Note llama-server and BeeLlama no longer share an identical enum: llama-server a
 | `generator.go` | `Generator` interface, `LlamaServerGenerator`, `parseHelpSchema`, `WriteEmbeddedFallback`. |
 | `merge.go` | `mergeWithCurated` / `mergeWithCuratedEnrich` / `mergeCurated`. |
 | `presentation.go` | `essentialSeed`, `BuildPresentation`, `ReconcilePresentation`. |
-| `goldembed.go` | `//go:embed testdata/help-v10152.golden.json` fallback. |
+| `golden_embed.go` | `//go:embed testdata/help-v10686.golden.json` fallback. |
 | `register.go` | `RegisterDefaults` — wires all 9 generators. |
 | `curated_{llama,beellama,buun,ik,vllm,sglang}.go` | Hand-curated overlays. |
 | `{vllm,sglang,tabby,unsloth,beellama,buun,ik,embedded}_generator.go` | Per-kind generators. |

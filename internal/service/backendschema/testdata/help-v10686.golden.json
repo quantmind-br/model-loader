@@ -688,8 +688,8 @@
       "Aliases": null,
       "Type": 1,
       "EnumValues": null,
-      "Default": -1,
-      "HelpText": "set DRY penalty for the last n tokens (default: -1, 0 = disable, -1 = context size)",
+      "Default": 64,
+      "HelpText": "set DRY penalty for the last n tokens (default: 64, 0 = disable)",
       "Group": "sampling"
     },
     "dry-sequence-breaker": {
@@ -933,16 +933,6 @@
       "HelpText": "Hugging Face model file. If specified, it will override the quant in --hf-repo (default: unused)",
       "Group": "common"
     },
-    "hf-file-v": {
-      "Long": "hf-file-v",
-      "Short": "hffv",
-      "Aliases": null,
-      "Type": 3,
-      "EnumValues": null,
-      "Default": "unused",
-      "HelpText": "Hugging Face model file for the vocoder model (default: unused)",
-      "Group": "common"
-    },
     "hf-repo": {
       "Long": "hf-repo",
       "Short": "hf",
@@ -964,16 +954,6 @@
       "Default": "unused",
       "HelpText": "Same as --hf-repo, but for the draft model (default: unused)",
       "Group": "speculative"
-    },
-    "hf-repo-v": {
-      "Long": "hf-repo-v",
-      "Short": "hfv",
-      "Aliases": null,
-      "Type": 3,
-      "EnumValues": null,
-      "Default": "unused",
-      "HelpText": "Hugging Face model repository for the vocoder model (default: unused)",
-      "Group": "common"
     },
     "hf-token": {
       "Long": "hf-token",
@@ -1091,6 +1071,16 @@
       "HelpText": "use single unified KV buffer shared across all sequences (default: enabled if number of slots is auto)",
       "Group": "example-specific"
     },
+    "kv-unified-per-slot": {
+      "Long": "kv-unified-per-slot",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "context limit per parallel slot (default: unset, behavior unchanged). when set without -c/--ctx-size, the shared KV pool is sized to n_parallel*N",
+      "Group": "example-specific"
+    },
     "list-devices": {
       "Long": "list-devices",
       "Short": "",
@@ -1107,8 +1097,8 @@
       "Aliases": null,
       "Type": 3,
       "EnumValues": null,
-      "Default": "mmap",
-      "HelpText": "model loading mode (default: mmap) - none: no special loading mode - mmap: memory-map model (if mmap disabled, slower load but may reduce pageouts if not using mlock) - mlock: force system to keep model in RAM rather than swapping or compressing - mmap+mlock: mmap + force system to keep model in RAM rather than swapping or compressing - dio: use DirectIO if available",
+      "Default": "auto",
+      "HelpText": "model loading mode (default: auto) - auto: mmap, unless a device does not support it - none: no special loading mode - mmap: memory-map model (if mmap disabled, slower load but may reduce pageouts if not using mlock) - mlock: force system to keep model in RAM rather than swapping or compressing - mmap+mlock: mmap + force system to keep model in RAM rather than swapping or compressing - dio: use DirectIO if available",
       "Group": "common"
     },
     "log-colors": {
@@ -1398,6 +1388,16 @@
       "HelpText": "whether to use multimodal projector file (if available), useful when using -hf (default: enabled)",
       "Group": "example-specific"
     },
+    "mmproj-device": {
+      "Long": "mmproj-device",
+      "Short": "mmdev",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "auto",
+      "HelpText": "device to use for multimodal projector (none = don't offload, default: auto) use --list-devices to see a list of available devices",
+      "Group": "example-specific"
+    },
     "mmproj-offload": {
       "Long": "mmproj-offload",
       "Short": "",
@@ -1452,16 +1452,6 @@
       "HelpText": "model download url (default: unused)",
       "Group": "common"
     },
-    "model-vocoder": {
-      "Long": "model-vocoder",
-      "Short": "mv",
-      "Aliases": null,
-      "Type": 3,
-      "EnumValues": null,
-      "Default": "unused",
-      "HelpText": "vocoder model for audio generation (default: unused)",
-      "Group": "example-specific"
-    },
     "models-autoload": {
       "Long": "models-autoload",
       "Short": "",
@@ -1513,6 +1503,16 @@
       "Default": 1024,
       "HelpText": "maximum number of image tokens per batch when encoding images (default: 1024)",
       "Group": "example-specific"
+    },
+    "n-cpu-ffn": {
+      "Long": "n-cpu-ffn",
+      "Short": "ncffn",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "keep the dense FFN weights of the first N layers in the CPU (dense models; for MoE expert weights use --n-cpu-moe)",
+      "Group": "common"
     },
     "n-cpu-moe": {
       "Long": "n-cpu-moe",
@@ -1868,6 +1868,16 @@
       "HelpText": "message injected before the end-of-thinking tag when reasoning budget is exhausted (default: none)",
       "Group": "example-specific"
     },
+    "reasoning-effort": {
+      "Long": "reasoning-effort",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "default",
+      "HelpText": "reasoning effort level given to the chat template: 'default' to keep the template default, or a level such as 'minimal', 'low', 'medium', 'high', 'xhigh' or 'max' (default: default)",
+      "Group": "example-specific"
+    },
     "reasoning-format": {
       "Long": "reasoning-format",
       "Short": "",
@@ -1909,7 +1919,7 @@
       "Type": 1,
       "EnumValues": null,
       "Default": 64,
-      "HelpText": "last n tokens to consider for penalize (default: 64, 0 = disabled, -1 = ctx_size)",
+      "HelpText": "last n tokens to consider for penalize (default: 64, 0 = disabled)",
       "Group": "sampling"
     },
     "repeat-penalty": {
@@ -2276,6 +2286,26 @@
       "HelpText": "the argument has been removed. use the respective --spec-ngram-*-size-n or --spec-ngram-mod-n-match",
       "Group": "speculative"
     },
+    "spec-synth-len": {
+      "Long": "spec-synth-len",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "target mean synthetic acceptance length, including the target token (benchmarking only)",
+      "Group": "speculative"
+    },
+    "spec-synth-rates": {
+      "Long": "spec-synth-rates",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "comma-separated unconditional per-position synthetic acceptance probabilities (benchmarking only)",
+      "Group": "speculative"
+    },
     "spec-type": {
       "Long": "spec-type",
       "Short": "",
@@ -2287,6 +2317,7 @@
         "draft-eagle3",
         "draft-mtp",
         "draft-dflash",
+        "draft-dspark",
         "ngram-simple",
         "ngram-map-k",
         "ngram-map-k4v",
@@ -2406,6 +2437,16 @@
       "HelpText": "temperature (default: 0.80)",
       "Group": "sampling"
     },
+    "tensor-read-lazy": {
+      "Long": "tensor-read-lazy",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "auto",
+      "HelpText": "on-demand reading of certain tensors, for example per-layer embeddings (default: auto) - on: read the rows of such tensors from disk on demand instead of keeping them resident (requires mmap) - auto: on, but only for tensors larger than 4 GiB - off: always keep them resident",
+      "Group": "common"
+    },
     "tensor-split": {
       "Long": "tensor-split",
       "Short": "ts",
@@ -2487,7 +2528,17 @@
       "Type": 3,
       "EnumValues": null,
       "Default": "no tools",
-      "HelpText": "experimental: whether to enable built-in tools for AI agents - do not enable in untrusted environments (default: no tools) specify \"all\" to enable all tools available tools: read_file, file_glob_search, grep_search, exec_shell_command, write_file, edit_file, get_datetime note: for security reasons, this will limit --cors-origins to localhost by default",
+      "HelpText": "experimental: whether to enable built-in tools for AI agents - do not enable in untrusted environments (default: no tools) specify \"all\" to enable all tools available tools: read_file, file_glob_search, grep_search, exec_shell_command, write_file, edit_file, get_info note: for security reasons, this will limit --cors-origins to localhost by default",
+      "Group": "example-specific"
+    },
+    "tools-runtime": {
+      "Long": "tools-runtime",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "none",
+      "HelpText": "experimental: run tools in a separate runtime environment (default: none, use host environment) available options: 'docker:\u003cimage\u003e', 'podman:\u003cimage\u003e': spin up a new container and reuse it for all invocations, clean up on server exit 'docker-container:\u003cid\u003e', 'podman-container:\u003cid\u003e': use an existing container by ID, won't stop on server exit 'ssh:\u003ctarget\u003e': run tools on a remote POSIX host over SSH, key-based auth and a trusted host key are required",
       "Group": "example-specific"
     },
     "top-k": {
@@ -2521,16 +2572,6 @@
       "Default": 0.95,
       "HelpText": "top-p sampling (default: 0.95, 1.0 = disabled)",
       "Group": "sampling"
-    },
-    "tts-use-guide-tokens": {
-      "Long": "tts-use-guide-tokens",
-      "Short": "",
-      "Aliases": null,
-      "Type": 0,
-      "EnumValues": null,
-      "Default": null,
-      "HelpText": "Use guide tokens to improve TTS word recall",
-      "Group": "example-specific"
     },
     "typical-p": {
       "Long": "typical-p",
@@ -2603,6 +2644,36 @@
       "Default": null,
       "HelpText": "show version and build info",
       "Group": "common"
+    },
+    "video-ffmpeg-dir": {
+      "Long": "video-ffmpeg-dir",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "search in PATH",
+      "HelpText": "path to the directory containing ffmpeg and ffprobe (default: search in PATH)",
+      "Group": "example-specific"
+    },
+    "video-fps": {
+      "Long": "video-fps",
+      "Short": "",
+      "Aliases": null,
+      "Type": 2,
+      "EnumValues": null,
+      "Default": 4,
+      "HelpText": "target video frame rate (default: 4.0)",
+      "Group": "example-specific"
+    },
+    "video-timestamp-interval": {
+      "Long": "video-timestamp-interval",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 5000,
+      "HelpText": "interval in milliseconds between text timestamps (default: 5000)",
+      "Group": "example-specific"
     },
     "vision-gemma-12b-default": {
       "Long": "vision-gemma-12b-default",

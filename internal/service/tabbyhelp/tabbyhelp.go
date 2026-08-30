@@ -6,8 +6,8 @@
 // not stable enough to parse, so we ship a hand-curated schema of the
 // load/tuning flags that matter on a single workstation.
 //
-// Tracks TabbyAPI checkout 3d2848d (2026-08-08); its venv pins exllamav3
-// 1.4.1+cu128.torch2.9.0 (the minimum the exllamav3 backend asserts) on torch
+// Tracks TabbyAPI checkout fcc1a10 (2026-08-26); its venv pins exllamav3
+// 1.4.4+cu128.torch2.9.0 (the minimum the exllamav3 backend asserts) on torch
 // 2.9.0+cu128. exllamav2 0.3.2 is still installed in that venv but TabbyAPI no
 // longer has an ExLlamaV2 backend, so it is never loaded.
 //
@@ -31,17 +31,17 @@ import (
 // EmbeddedSchema returns the curated tabby schema. `port` carries IsPort so the
 // validator knows the process manager owns it.
 func EmbeddedSchema() domain.FlagSchema {
-	return domain.BuildFlagSchema("embedded-tabby-v3", tabbyRows)
+	return domain.BuildFlagSchema("embedded-tabby-v4", tabbyRows)
 }
 
 // tabbyToolFormats is the closed set of keys TabbyAPI accepts for --tool-format
 // (endpoints/OAI/utils/tools.py::ALL_TOOLCALL_FORMATS). An unrecognized value
 // is not an error: the server warns and silently disables tool-call parsing.
 var tabbyToolFormats = []string{
-	"deepseek_v4", "dsv4", "gemma4", "glm4_5", "glm4_6", "glm4_7", "harmony",
-	"hy3", "hy_v3", "laguna", "minimax_m2", "minimax_m2_1", "minimax_m2_5",
-	"mistral", "mistral_old", "poolside_v1", "qwen3_5", "qwen3_coder",
-	"step3_5", "step3_7",
+	"deepseek_v4", "dsv4", "gemma4", "glimmer", "glm4_5", "glm4_6", "glm4_7",
+	"harmony", "hy3", "hy_v3", "laguna", "minimax_m2", "minimax_m2_1",
+	"minimax_m2_5", "mistral", "mistral_old", "muse_glimmer", "poolside_v1",
+	"qwen3_5", "qwen3_coder", "step3_5", "step3_7",
 }
 
 var tabbyRows = []domain.FlagSpecRow{
@@ -56,6 +56,8 @@ var tabbyRows = []domain.FlagSpecRow{
 	{Long: "chunk-size", Type: domain.FlagTypeInt, Default: float64(2048), Min: ptrutil.Ptr(256), Max: ptrutil.Ptr(32768), HelpText: "Prompt-ingestion chunk size (VRAM vs prefill speed; 512-4096 typical). Raised to 256 and rounded up to a multiple of 256", Group: "common"},
 	{Long: "max-batch-size", Type: domain.FlagTypeInt, Min: ptrutil.Ptr(1), Max: ptrutil.Ptr(2048), HelpText: "Max concurrent generation jobs (must be >= 1 if set; engine default is 128, 4 for recurrent/linear-attention models; omit the flag to use it)", Group: "common"},
 	{Long: "cpu-moe-offload-layers", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(999), HelpText: "Number of MoE layers to offload to CPU inference (0 = none; MoE models only; use a large value like 999 to offload all)", Group: "common"},
+	{Long: "cpu-moe-split-experts", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(999), HelpText: "Number of routed experts per MoE layer offloaded to CPU inference (0 = none). Unlike cpu-moe-offload-layers this splits every MoE layer: the coldest experts stay in system RAM and are computed on the CPU, overlapping that layer's GPU compute, with hot experts kept in VRAM. Mutually exclusive with cpu-moe-offload-layers; not supported with tensor-parallel", Group: "common"},
+	{Long: "cpu-moe-threads", Type: domain.FlagTypeInt, Min: ptrutil.Ptr(1), HelpText: "Worker thread count for CPU MoE inference, for either CPU-offload mode (omit = the EXL3_MOE_CPU_THREADS env var, else half the CPU core count)", Group: "common"},
 	{Long: "output-chunking", Type: domain.FlagTypeBool, Default: true, HelpText: "Allocate completion cache space in chunk-size steps instead of reserving the whole completion up front", Group: "common"},
 
 	// Multi-GPU.
@@ -71,15 +73,19 @@ var tabbyRows = []domain.FlagSpecRow{
 
 	// Capabilities / parsing.
 	{Long: "vision", Type: domain.FlagTypeBool, Default: false, HelpText: "Enable vision/multimodal if the model supports it (warns and stays off when the architecture has no ExLlamaV3 vision component)", Group: "common"},
+	{Long: "vision-offload", Type: domain.FlagTypeBool, Default: false, HelpText: "Keep the vision tower's weights in pinned system RAM instead of VRAM, streaming them to the GPU during inference (trades vision speed for VRAM). Only applies when vision is enabled", Group: "common"},
 	{Long: "reasoning", Type: domain.FlagTypeBool, Default: false, HelpText: "Enable the reasoning parser: split the reply into reasoning_content and content", Group: "common"},
 	{Long: "reasoning-start-token", Type: domain.FlagTypeString, Default: "<think>", HelpText: "Opening tag the reasoning parser looks for (set it when the model uses something other than <think>)", Group: "common"},
 	{Long: "reasoning-end-token", Type: domain.FlagTypeString, Default: "</think>", HelpText: "Closing tag the reasoning parser looks for", Group: "common"},
 	{Long: "start-in-reasoning", Type: domain.FlagTypeEnum, EnumValues: []string{"auto", "always", "never"}, Default: "auto", HelpText: "Whether generation starts inside a reasoning block (auto scans the templated prompt for an unclosed reasoning start token)", Group: "common"},
 	{Long: "tool-calls-in-reasoning", Type: domain.FlagTypeBool, Default: true, HelpText: "Parse tool calls that occur inside reasoning content (false = treat them as plain reasoning text)", Group: "common"},
+	{Long: "reasoning-budget-tokens", Type: domain.FlagTypeInt, HelpText: "Default reasoning token budget: once exceeded the server injects reasoning-budget-message plus the model's end-of-reasoning tokens. 0 ends reasoning as soon as it starts; omit or pass a negative value to disable. Requires a reasoning format (reasoning tags, harmony or muse-glimmer)", Group: "common"},
+	{Long: "reasoning-budget-message", Type: domain.FlagTypeString, Default: "", HelpText: "Text injected before the forced end-of-reasoning tokens when reasoning-budget-tokens is exhausted (empty = only the tokens are forced)", Group: "common"},
 	{Long: "backend", Type: domain.FlagTypeEnum, EnumValues: []string{"exllamav3"}, Default: "", HelpText: "Force the engine (empty = auto-detect; exllamav2 is no longer supported upstream, exl2/gptq models are rejected)", Group: "common"},
 	{Long: "prompt-template", Type: domain.FlagTypeString, Default: "", HelpText: "Chat template name/override (empty = model's own; a name selects one entry of a multi-template tokenizer_config.json, or a file in templates/)", Group: "common"},
 	{Long: "tool-format", Type: domain.FlagTypeEnum, EnumValues: tabbyToolFormats, Default: "", HelpText: "Tool-call parser (empty = tool calls are not parsed). An unknown name only warns and disables parsing, so a typo silently breaks tool use", Group: "common"},
 	{Long: "harmony", Type: domain.FlagTypeBool, HelpText: "Force the Harmony message format (gpt-oss) on or off; omit for auto-detection from the model's special tokens. When active it supersedes reasoning and tool-format", Group: "common"},
+	{Long: "muse-glimmer", Type: domain.FlagTypeBool, HelpText: "Force the Muse Glimmer message format on or off; omit for auto-detection from the model's special tokens. Equivalent to tool-format: muse_glimmer. When active it supersedes reasoning and tool-format", Group: "common"},
 	{Long: "force-enable-thinking", Type: domain.FlagTypeBool, Default: false, HelpText: "DEPRECATED upstream, but the only CLI route to force enable_thinking in the chat template (template-vars-force is dict-only and has no CLI form)", Group: "common"},
 
 	// Speculative decoding (draft model / MTP).

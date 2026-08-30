@@ -36,11 +36,11 @@ model-loader uses **stdlib `testing` only** for assertions — no `testify`, `go
 
 ## Golden files
 
-Exactly one canonical pair at `testdata/` (recently renamed from `help-v9761` to `help-v10152` during the schema-sync work):
+Exactly one canonical pair at `testdata/`:
 
 ```
-testdata/help-v10152.txt         # input fixture (real --help capture)
-testdata/help-v10152.golden.json # expected parsed JSON
+testdata/help-v10686.txt         # input fixture (real --help capture)
+testdata/help-v10686.golden.json # expected parsed JSON
 ```
 
 Generator: `internal/service/llamahelp/parser_test.go::TestParseHelp_Golden`:
@@ -50,7 +50,7 @@ if *updateGolden { os.WriteFile(goldenPath, got, 0o644); … }
 // else: bytes.Equal + fail with hint: go test -update
 ```
 
-A duplicate `//go:embed` copy at `internal/service/backendschema/testdata/help-v10152.golden.json` **must be kept byte-identical by hand** when the root golden is regenerated. `//go:embed` is used heavily in production code (curated schemas, benchmark datasets, configweb assets) but **in zero** `_test.go` files.
+A duplicate `//go:embed` copy at `internal/service/backendschema/testdata/help-v10686.golden.json` **must be kept byte-identical by hand** when the root golden is regenerated. `//go:embed` is used heavily in production code (curated schemas, benchmark datasets, configweb assets) but **in zero** `_test.go` files.
 
 ## Test categories
 

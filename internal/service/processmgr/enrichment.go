@@ -13,15 +13,36 @@ import (
 	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
 )
 
-// WaitHealthy polls GET http://127.0.0.1:<port>/health with capped exponential
-// backoff (100ms, 200ms, 400ms, ..., max 1s) until 200 OK or timeout.
+// healthPathForKind selects the readiness endpoint a backend kind serves.
+// Most backends answer GET /health with 200 once the model is loaded. LM
+// Studio has no /health route; its OpenAI-compatible /v1/models answers 200
+// as soon as the HTTP server is up (the wrapper loads the model BEFORE
+// starting the server, so port-up still implies model-loaded).
+func healthPathForKind(kind domain.BackendKind) string {
+	if kind == domain.BackendKindLMStudio {
+		return "/v1/models"
+	}
+	return "/health"
+}
+
+// WaitHealthy polls GET http://127.0.0.1:<port><healthPath> with capped
+// exponential backoff (100ms, 200ms, 400ms, ..., max 1s) until 200 OK or
+// timeout. The probe path follows the launched instance's backend kind; an
+// untracked pid defaults to /health.
 func (m *fsManager) WaitHealthy(pid int, port int, timeout time.Duration, attemptID string) error {
 	lg := m.logger.With("pid", pid, "port", port, "attempt_id", attemptID)
 	lg.Info("healthcheck_start", "timeout", timeout)
 	deadline := time.Now().Add(timeout)
 	delay := 100 * time.Millisecond
 	const maxDelay = time.Second
-	url := fmt.Sprintf("http://127.0.0.1:%d/health", port)
+	m.mu.Lock()
+	inst, tracked := m.tracked[pid]
+	m.mu.Unlock()
+	path := "/health"
+	if tracked {
+		path = healthPathForKind(inst.Kind)
+	}
+	url := fmt.Sprintf("http://127.0.0.1:%d%s", port, path)
 	client := &http.Client{Timeout: 2 * time.Second}
 	for time.Now().Before(deadline) {
 		if !procutil.Alive(pid) {

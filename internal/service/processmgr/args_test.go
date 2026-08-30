@@ -322,3 +322,31 @@ func TestBuildArgsForBackend_Tabby_BoolValueAndListExpand(t *testing.T) {
 		t.Fatalf("BuildArgsForBackend(tabby list):\n got = %v\nwant = %v", got, want)
 	}
 }
+
+func TestBuildArgsForBackend_LMStudio(t *testing.T) {
+	p := domain.Profile{
+		Model: "qwen3-coder-30b",
+		Args: map[string]any{
+			"context-length": float64(65536),
+			"gpu":            "max",
+			"port":           8123,
+			"cors":           true,
+		},
+		ExtraArgs: []string{"--no-speculative-draft-mtp"},
+	}
+	got, err := BuildArgsForBackend(p, domain.BackendKindLMStudio, "")
+	if err != nil {
+		t.Fatalf("BuildArgsForBackend(lmstudio): %v", err)
+	}
+	want := []string{
+		"--model", "qwen3-coder-30b",
+		"--context-length", "65536",
+		"--cors",
+		"--gpu", "max",
+		"--port", "8123",
+		"--no-speculative-draft-mtp",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("BuildArgsForBackend(lmstudio):\n got = %v\nwant = %v", got, want)
+	}
+}

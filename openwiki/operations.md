@@ -75,7 +75,7 @@ go run ./cmd/scripts/print_args.go <profile-id>       # inspect resolved exe + a
 ./bin/model-loader serve                               # headless proxy daemon (no flock)
 ```
 
-When touching a `*help` package, re-run `go run ./cmd/regenerate-schemas`. The root golden pair is `testdata/help-v10152.{txt,golden.json}`; a duplicate embed copy at `internal/service/backendschema/testdata/` must be kept byte-identical by hand.
+When touching a `*help` package, re-run `go run ./cmd/regenerate-schemas`. The root golden pair is `testdata/help-v10686.{txt,golden.json}`; a duplicate embed copy at `internal/service/backendschema/testdata/` must be kept byte-identical by hand.
 
 ## Troubleshooting
 

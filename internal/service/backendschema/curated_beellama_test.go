@@ -22,8 +22,8 @@ func TestCuratedBeeLlama_SpecTypeEnum(t *testing.T) {
 	}
 	want := []string{
 		"none", "draft-simple", "draft-eagle3", "draft-mtp", "draft-dflash",
-		"ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod",
-		"ngram-cache",
+		"draft-dspark", "ngram-simple", "ngram-map-k", "ngram-map-k4v",
+		"ngram-mod", "ngram-cache",
 	}
 	if !reflect.DeepEqual(spec.EnumValues, want) {
 		t.Fatalf("spec-type enum = %v, want %v", spec.EnumValues, want)

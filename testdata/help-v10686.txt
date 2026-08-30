@@ -91,7 +91,8 @@
 -dio,  --direct-io, -ndio, --no-direct-io
                                         DEPRECATED in favor of `--load-mode`: use DirectIO if available
                                         (env: LLAMA_ARG_DIO)
--lm,   --load-mode MODE                 model loading mode (default: mmap)
+-lm,   --load-mode MODE                 model loading mode (default: auto)
+                                        - auto: mmap, unless a device does not support it
                                         - none: no special loading mode
                                         - mmap: memory-map model (if mmap disabled, slower load but may reduce
                                         pageouts if not using mlock)
@@ -102,6 +103,13 @@
                                         - dio: use DirectIO if available
                                         
                                         (env: LLAMA_ARG_LOAD_MODE)
+--tensor-read-lazy MODE                 on-demand reading of certain tensors, for example per-layer embeddings
+                                        (default: auto)
+                                        - on: read the rows of such tensors from disk on demand instead of
+                                        keeping them resident (requires mmap)
+                                        - auto: on, but only for tensors larger than 4 GiB
+                                        - off: always keep them resident
+                                        (env: LLAMA_ARG_TENSOR_READ_LAZY)
 --numa TYPE                             attempt optimizations that help on some NUMA systems
                                         - distribute: spread execution evenly over all nodes
                                         - isolate: only spawn threads on CPUs on the node that execution
@@ -124,6 +132,9 @@
 -ncmoe, --n-cpu-moe N                   keep the Mixture of Experts (MoE) weights of the first N layers in the
                                         CPU
                                         (env: LLAMA_ARG_N_CPU_MOE)
+-ncffn, --n-cpu-ffn N                   keep the dense FFN weights of the first N layers in the CPU
+                                        (dense models; for MoE expert weights use --n-cpu-moe)
+                                        (env: LLAMA_ARG_N_CPU_FFN)
 -ngl,  --gpu-layers, --n-gpu-layers N   max. number of layers to store in VRAM, either an exact number,
                                         'auto', or 'all' (default: auto)
                                         (env: LLAMA_ARG_N_GPU_LAYERS)
@@ -190,11 +201,6 @@
 -hff,  --hf-file FILE                   Hugging Face model file. If specified, it will override the quant in
                                         --hf-repo (default: unused)
                                         (env: LLAMA_ARG_HF_FILE)
--hfv,  -hfrv, --hf-repo-v <user>/<model>[:quant]
-                                        Hugging Face model repository for the vocoder model (default: unused)
-                                        (env: LLAMA_ARG_HF_REPO_V)
--hffv, --hf-file-v FILE                 Hugging Face model file for the vocoder model (default: unused)
-                                        (env: LLAMA_ARG_HF_FILE_V)
 -hft,  --hf-token TOKEN                 Hugging Face access token (default: value from HF_TOKEN environment
                                         variable)
                                         (env: HF_TOKEN)
@@ -256,16 +262,14 @@
 --xtc-probability N                     xtc probability (default: 0.00, 0.0 = disabled)
 --xtc-threshold N                       xtc threshold (default: 0.10, 1.0 = disabled)
 --typical, --typical-p N                locally typical sampling, parameter p (default: 1.00, 1.0 = disabled)
---repeat-last-n N                       last n tokens to consider for penalize (default: 64, 0 = disabled, -1
-                                        = ctx_size)
+--repeat-last-n N                       last n tokens to consider for penalize (default: 64, 0 = disabled)
 --repeat-penalty N                      penalize repeat sequence of tokens (default: 1.00, 1.0 = disabled)
 --presence-penalty N                    repeat alpha presence penalty (default: 0.00, 0.0 = disabled)
 --frequency-penalty N                   repeat alpha frequency penalty (default: 0.00, 0.0 = disabled)
 --dry-multiplier N                      set DRY sampling multiplier (default: 0.00, 0.0 = disabled)
 --dry-base N                            set DRY sampling base value (default: 1.75)
 --dry-allowed-length N                  set allowed length for DRY sampling (default: 2)
---dry-penalty-last-n N                  set DRY penalty for the last n tokens (default: -1, 0 = disable, -1 =
-                                        context size)
+--dry-penalty-last-n N                  set DRY penalty for the last n tokens (default: 64, 0 = disable)
 --dry-sequence-breaker STRING           add sequence breaker for DRY sampling, clearing out default breakers
                                         ('\n', ':', '"', '*') in the process; use "none" to not use any
                                         sequence breakers
@@ -347,6 +351,12 @@
 --spec-draft-n-min N                    minimum number of draft tokens to use for speculative decoding
                                         (default: 0)
                                         (env: LLAMA_ARG_SPEC_DRAFT_N_MIN)
+--spec-synth-len L                      target mean synthetic acceptance length, including the target token
+                                        (benchmarking only)
+                                        (env: LLAMA_ARG_SPEC_SYNTH_LEN)
+--spec-synth-rates P0,P1,...            comma-separated unconditional per-position synthetic acceptance
+                                        probabilities (benchmarking only)
+                                        (env: LLAMA_ARG_SPEC_SYNTH_RATES)
 --spec-draft-p-split, --draft-p-split P
                                         speculative decoding split probability (default: 0.10)
                                         (env: LLAMA_ARG_SPEC_DRAFT_P_SPLIT)
@@ -366,7 +376,7 @@
 --spec-draft-model, -md, --model-draft FNAME
                                         draft model for speculative decoding (default: unused)
                                         (env: LLAMA_ARG_SPEC_DRAFT_MODEL)
---spec-type none,draft-simple,draft-eagle3,draft-mtp,draft-dflash,ngram-simple,ngram-map-k,ngram-map-k4v,ngram-mod,ngram-cache
+--spec-type none,draft-simple,draft-eagle3,draft-mtp,draft-dflash,draft-dspark,ngram-simple,ngram-map-k,ngram-map-k4v,ngram-mod,ngram-cache
                                         comma-separated list of types of speculative decoding to use (default:
                                         none)
                                         
@@ -411,6 +421,10 @@
                                         generation)
 -lcd,  --lookup-cache-dynamic FNAME     path to dynamic lookup cache to use for lookup decoding (updated by
                                         generation)
+--kv-unified-per-slot N                 context limit per parallel slot (default: unset, behavior unchanged).
+                                        when set without -c/--ctx-size, the shared KV pool is sized to
+                                        n_parallel*N
+                                        (env: LLAMA_ARG_KV_UNIFIED_PER_SLOT)
 -ctxcp, --ctx-checkpoints, --swa-checkpoints N
                                         max number of context checkpoints to create per slot (default:
                                         32)[(more info)](https://github.com/ggml-org/llama.cpp/pull/15293)
@@ -458,6 +472,10 @@
 --mmproj-offload, --no-mmproj-offload   whether to enable GPU offloading for multimodal projector (default:
                                         enabled)
                                         (env: LLAMA_ARG_MMPROJ_OFFLOAD)
+-mmdev, --mmproj-device DEVICE          device to use for multimodal projector (none = don't offload, default:
+                                        auto)
+                                        use --list-devices to see a list of available devices
+                                        (env: MTMD_BACKEND_DEVICE)
 --image-min-tokens N                    minimum number of tokens each image can take, only used by vision
                                         models with dynamic resolution (default: read from model)
                                         (env: LLAMA_ARG_IMAGE_MIN_TOKENS)
@@ -467,6 +485,13 @@
 --mtmd-batch-max-tokens N               maximum number of image tokens per batch when encoding images
                                         (default: 1024)
                                         (env: LLAMA_ARG_MTMD_BATCH_MAX_TOKENS)
+--video-fps N                           target video frame rate (default: 4.0)
+                                        (env: LLAMA_ARG_VIDEO_FPS)
+--video-timestamp-interval N            interval in milliseconds between text timestamps (default: 5000)
+                                        (env: LLAMA_ARG_VIDEO_TIMESTAMP_INTERVAL)
+--video-ffmpeg-dir DIR                  path to the directory containing ffmpeg and ffprobe (default: search
+                                        in PATH)
+                                        (env: LLAMA_ARG_VIDEO_FFMPEG_DIR)
 -a,    --alias STRING                   set model name aliases, comma-separated (to be used by API)
                                         (env: LLAMA_ARG_ALIAS)
 --tags STRING                           set model tags, comma-separated (informational, not used for routing)
@@ -513,10 +538,21 @@
                                         enable in untrusted environments (default: no tools)
                                         specify "all" to enable all tools
                                         available tools: read_file, file_glob_search, grep_search,
-                                        exec_shell_command, write_file, edit_file, get_datetime
+                                        exec_shell_command, write_file, edit_file, get_info
                                         note: for security reasons, this will limit --cors-origins to
                                         localhost by default
                                         (env: LLAMA_ARG_TOOLS)
+--tools-runtime OPTION                  experimental: run tools in a separate runtime environment (default:
+                                        none, use host environment)
+                                        available options:
+                                        'docker:<image>', 'podman:<image>': spin up a new container and reuse
+                                        it for all invocations, clean up on server exit
+                                        'docker-container:<id>', 'podman-container:<id>': use an existing
+                                        container by ID, won't stop on server exit
+                                        'ssh:<target>': run tools on a remote POSIX host over SSH, key-based
+                                        auth and a trusted host key are required
+                                        
+                                        (env: LLAMA_ARG_TOOLS_RUNTIME)
 --mcp-servers-config PATH               experimental: path to JSON file with MCP server definitions
                                         (Cursor-compatible format) - do not enable in untrusted environments
                                         (default: none)
@@ -600,6 +636,11 @@
 -rea,  --reasoning [on|off|auto]        Use reasoning/thinking in the chat ('on', 'off', or 'auto', default:
                                         'auto' (detect from template))
                                         (env: LLAMA_ARG_REASONING)
+--reasoning-effort LEVEL                reasoning effort level given to the chat template: 'default' to keep
+                                        the template default,
+                                        or a level such as 'minimal', 'low', 'medium', 'high', 'xhigh' or
+                                        'max' (default: default)
+                                        (env: LLAMA_ARG_REASONING_EFFORT)
 --reasoning-budget N                    token budget for thinking: -1 for unrestricted, 0 for immediate end,
                                         N>0 for token budget (default: -1)
                                         (env: LLAMA_ARG_THINK_BUDGET)
@@ -668,8 +709,6 @@
                                         (default: -1; -1 = disabled)
 --log-prompts-dir PATH                  Log prompts to directory (auto-created if not present; only used for
                                         debugging, default: disabled)
--mv,   --model-vocoder FNAME            vocoder model for audio generation (default: unused)
---tts-use-guide-tokens                  Use guide tokens to improve TTS word recall
 --embd-gemma-default                    use default EmbeddingGemma model (note: can download weights from the
                                         internet)
 --fim-qwen-1.5b-default                 use default Qwen 2.5 Coder 1.5B (note: can download weights from the

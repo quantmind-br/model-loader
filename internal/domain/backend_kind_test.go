@@ -25,3 +25,9 @@ func TestBackendKindTabbyValue(t *testing.T) {
 		t.Fatalf("got %q, want %q", BackendKindTabby, "tabby")
 	}
 }
+
+func TestBackendKindLMStudioValue(t *testing.T) {
+	if BackendKindLMStudio != "lmstudio" {
+		t.Fatalf("got %q, want %q", BackendKindLMStudio, "lmstudio")
+	}
+}

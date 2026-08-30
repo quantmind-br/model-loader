@@ -44,6 +44,7 @@ tied to that exact hardware.
 | `ik-llama-cpp` | ik_llama.cpp |
 | `unsloth` | Unsloth |
 | `tabby` | TabbyAPI |
+| `lmstudio` | LM Studio (`lms` CLI + daemon) |
 
 Backends are catalog entries, not bundled dependencies. Register the executable
 you want to run and associate it with one of these kinds.

@@ -8,7 +8,7 @@ import (
 
 func TestEmbeddedSchema_HasKeyFlagsAndNoManagedFlags(t *testing.T) {
 	fs := EmbeddedSchema()
-	if fs.Version != "embedded-unsloth-v3" {
+	if fs.Version != "embedded-unsloth-v4" {
 		t.Fatalf("version = %q", fs.Version)
 	}
 	for _, want := range []string{"gguf-variant", "ctx-size", "n-gpu-layers", "parallel", "port"} {

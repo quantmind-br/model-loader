@@ -78,21 +78,26 @@ func (m *fsManager) Launch(p domain.Profile, mode LaunchMode, attemptID string) 
 	if p.Model == "" {
 		return domain.RunningInstance{}, ErrModelNotFound
 	}
-	_, err := os.Stat(p.Model)
-	if err != nil {
-		// Only skip the missing-file error for HuggingFace-style repo IDs.
-		// Local paths that exist are accepted above; local paths that
-		// don't exist AND don't look like a HF repo are rejected.
-		if !domain.LooksLikeHFRepo(p.Model) {
-			if errors.Is(err, fs.ErrNotExist) {
-				return domain.RunningInstance{}, fmt.Errorf("%w: %s", ErrModelNotFound, p.Model)
-			}
-			return domain.RunningInstance{}, fmt.Errorf("stat model: %w", err)
-		}
-	}
+	// Resolve the backend first: whether the model needs a local file depends
+	// on the kind. LM Studio addresses models by daemon-side key resolved
+	// fuzzy server-side by `lms load`, so there is nothing to stat.
 	plan, err := m.prepareLaunch(p)
 	if err != nil {
 		return domain.RunningInstance{}, err
+	}
+	if plan.kind != domain.BackendKindLMStudio {
+		_, err := os.Stat(p.Model)
+		if err != nil {
+			// Only skip the missing-file error for HuggingFace-style repo IDs.
+			// Local paths that exist are accepted above; local paths that
+			// don't exist AND don't look like a HF repo are rejected.
+			if !domain.LooksLikeHFRepo(p.Model) {
+				if errors.Is(err, fs.ErrNotExist) {
+					return domain.RunningInstance{}, fmt.Errorf("%w: %s", ErrModelNotFound, p.Model)
+				}
+				return domain.RunningInstance{}, fmt.Errorf("stat model: %w", err)
+			}
+		}
 	}
 	if mode == LaunchForeground {
 		return m.launchForeground(p, plan, attemptID)
