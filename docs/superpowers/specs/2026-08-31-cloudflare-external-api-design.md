@@ -55,7 +55,7 @@ No application-code change is required. Its existing bind address remains `127.0
 
 ### Caddy authentication gateway
 
-A dedicated Caddy instance listens on `127.0.0.1:4322` with automatic HTTPS and the Caddy admin API disabled.
+A dedicated Caddy instance listens with plain HTTP on `127.0.0.1:4322`; automatic HTTPS and the Caddy admin API are disabled. Public TLS terminates at Cloudflare, and the Tunnel-to-gateway hop never leaves loopback.
 
 Request handling:
 
