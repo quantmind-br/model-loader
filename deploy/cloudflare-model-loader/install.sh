@@ -190,8 +190,10 @@ fi
 # ---------------------------------------------------------------------------
 caddy_bin="$(command -v caddy)"
 cloudflared_bin="$(command -v cloudflared)"
+watch_bin="$SOURCE_DIR/watch-proxy.sh"
 require_safe_unit_path 'caddy binary path' "$caddy_bin"
 require_safe_unit_path 'cloudflared binary path' "$cloudflared_bin"
+require_safe_unit_path 'proxy watcher path' "$watch_bin"
 
 sed \
   -e "s|__CONFIG_DIR__|$CONFIG_DIR|g" \
@@ -206,13 +208,23 @@ sed \
   "$SOURCE_DIR/model-loader-cloudflared.service.tmpl" \
   >"$UNIT_DIR/model-loader-cloudflared.service"
 
+sed \
+  -e "s|__WATCH_BIN__|$watch_bin|g" \
+  "$SOURCE_DIR/model-loader-api-gateway-watch.service.tmpl" \
+  >"$UNIT_DIR/model-loader-api-gateway-watch.service"
+
+install -m 0600 \
+  "$SOURCE_DIR/model-loader-api-gateway-watch.timer.tmpl" \
+  "$UNIT_DIR/model-loader-api-gateway-watch.timer"
+
 chmod 0600 \
   "$UNIT_DIR/model-loader-api-gateway.service" \
-  "$UNIT_DIR/model-loader-cloudflared.service"
+  "$UNIT_DIR/model-loader-cloudflared.service" \
+  "$UNIT_DIR/model-loader-api-gateway-watch.service"
 
 # ---------------------------------------------------------------------------
-# Validate and start services (gateway first; the Tunnel unit also carries
-# Requires= and ordering as defense in depth)
+# Validate configs, then enable the watcher timer. The gateway and Tunnel
+# services are not enabled: they start and stop with the proxy listener.
 # ---------------------------------------------------------------------------
 caddy validate \
   --config "$CONFIG_DIR/Caddyfile" \
@@ -220,8 +232,10 @@ caddy validate \
   --envfile "$CONFIG_DIR/gateway.env"
 
 systemctl --user daemon-reload
-systemctl --user enable --now model-loader-api-gateway.service
-systemctl --user enable --now model-loader-cloudflared.service
+systemctl --user disable --now model-loader-api-gateway.service >/dev/null 2>&1 || true
+systemctl --user disable --now model-loader-cloudflared.service >/dev/null 2>&1 || true
+systemctl --user enable --now model-loader-api-gateway-watch.timer
+systemctl --user start model-loader-api-gateway-watch.service
 
 if command -v loginctl >/dev/null 2>&1; then
   loginctl enable-linger "$USER" || fail 'could not enable user lingering for boot startup'

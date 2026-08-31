@@ -1,7 +1,8 @@
 [Unit]
 Description=model-loader external API authentication gateway
 After=network-online.target
-Wants=network-online.target
+Wants=network-online.target model-loader-cloudflared.service
+Before=model-loader-cloudflared.service
 
 [Service]
 Type=notify
@@ -17,6 +18,3 @@ PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-
-[Install]
-WantedBy=default.target

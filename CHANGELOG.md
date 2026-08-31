@@ -8,7 +8,8 @@ All notable user-facing changes are documented here. This project follows
 ### Added
 
 - Reproducible Cloudflare Tunnel deployment for an externally authenticated,
-  loopback-origin model-loader API.
+  loopback-origin model-loader API. The Tunnel and Caddy gateway follow the
+  local proxy listener on `127.0.0.1:4321` instead of remaining up at login.
 
 ## [0.1.0] - 2026-08-02
 

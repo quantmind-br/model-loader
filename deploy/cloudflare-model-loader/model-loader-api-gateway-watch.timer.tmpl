@@ -1,0 +1,12 @@
+[Unit]
+Description=Poll the model-loader proxy listener for external API sync
+
+[Timer]
+OnBootSec=2s
+OnUnitActiveSec=1s
+AccuracySec=1s
+Persistent=false
+Unit=model-loader-api-gateway-watch.service
+
+[Install]
+WantedBy=timers.target

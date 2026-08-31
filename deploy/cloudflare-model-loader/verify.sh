@@ -168,15 +168,32 @@ pass 'authenticated administrative route reached model-loader without changing s
 # ---------------------------------------------------------------------------
 # Services, listeners, and permissions
 # ---------------------------------------------------------------------------
-systemctl --user is-enabled --quiet model-loader-api-gateway.service \
-  || fail 'gateway service is not enabled'
-systemctl --user is-active --quiet model-loader-api-gateway.service \
-  || fail 'gateway service is not active'
-systemctl --user is-enabled --quiet model-loader-cloudflared.service \
-  || fail 'cloudflared service is not enabled'
-systemctl --user is-active --quiet model-loader-cloudflared.service \
-  || fail 'cloudflared service is not active'
-pass 'user services are enabled and active'
+systemctl --user is-enabled --quiet model-loader-api-gateway-watch.timer \
+  || fail 'proxy watcher timer is not enabled'
+systemctl --user is-active --quiet model-loader-api-gateway-watch.timer \
+  || fail 'proxy watcher timer is not active'
+proxy_listening=0
+if ss -ltnH 'src = 127.0.0.1:4321' | grep -q .; then
+  proxy_listening=1
+fi
+if [[ "$proxy_listening" == 1 ]]; then
+  synced=0
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if systemctl --user is-active --quiet model-loader-api-gateway.service \
+      && systemctl --user is-active --quiet model-loader-cloudflared.service; then
+      synced=1
+      break
+    fi
+    sleep 1
+  done
+  [[ "$synced" == 1 ]] || fail 'gateway/cloudflared did not start while the proxy is listening'
+else
+  systemctl --user is-active --quiet model-loader-api-gateway.service \
+    && fail 'gateway service is active while the proxy is not listening'
+  systemctl --user is-active --quiet model-loader-cloudflared.service \
+    && fail 'cloudflared service is active while the proxy is not listening'
+fi
+pass 'external API services follow the proxy listener'
 ss -ltnH '( sport = :4321 or sport = :4322 or sport = :49321 )' >"$work_dir/listeners"
 
 # Allowlist, not blocklist: every local address selected on the API ports
