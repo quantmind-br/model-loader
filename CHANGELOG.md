@@ -5,6 +5,11 @@ All notable user-facing changes are documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+
+- Reproducible Cloudflare Tunnel deployment for an externally authenticated,
+  loopback-origin model-loader API.
+
 ## [0.1.0] - 2026-08-02
 
 ### Added

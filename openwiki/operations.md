@@ -77,6 +77,59 @@ go run ./cmd/scripts/print_args.go <profile-id>       # inspect resolved exe + a
 
 When touching a `*help` package, re-run `go run ./cmd/regenerate-schemas`. The root golden pair is `testdata/help-v10686.{txt,golden.json}`; a duplicate embed copy at `internal/service/backendschema/testdata/` must be kept byte-identical by hand.
 
+## External API through Cloudflare
+
+`deploy/cloudflare-model-loader/` exposes the proxy externally **without model-loader authenticating anything**. The trust chain is: Cloudflare edge → named Tunnel `model-loader-quantforge` → Caddy gateway on `127.0.0.1:4322` (checks `Authorization: Bearer $MODELLOADER_API_KEY`) → model-loader proxy on `127.0.0.1:4321`. The public hostname is `model-loader.quantforge.com.br`; cloudflared keeps its metrics endpoint on loopback `127.0.0.1:49321`.
+
+**Loopback bind, no Host matcher (operator ruling).** The gateway site is `:4322` with `bind 127.0.0.1` and no hostname condition. Traffic that reaches that port comes from the Tunnel or from this machine — both already inside the boundary the bind draws — so repeating the DNS name in a matcher adds no protection. Enforcement is the `@authorized` header matcher; every other request gets the fixed `invalid_api_key` JSON 401 with `WWW-Authenticate: Bearer`.
+
+### Install
+
+Needs `caddy`, `cloudflared`, `curl`, `jq`, `python3`, and user systemd. The key is read only from the environment and never appears in argv, logs, or output:
+
+```bash
+export MODELLOADER_API_KEY
+deploy/cloudflare-model-loader/install.sh
+```
+
+The installer renders `Caddyfile`, `gateway.env` (mode `0600`), `cloudflared.yml`, and the `dns-route` marker into `~/.config/model-loader/external-api/`, writes `model-loader-api-gateway.service` and `model-loader-cloudflared.service` into `~/.config/systemd/user/`, reuses or creates the Tunnel, provisions DNS with `--overwrite-dns=false` (an existing conflicting record stays a hard failure), scrubs inherited `TUNNEL_*` variables, enables lingering, and finishes by running the verifier. It rejects keys outside `A-Za-z0-9._~+/:,@=-`: quotes, whitespace, `#`, `$`, `%`, or backslash parse differently across Caddy's envfile loader, systemd's `EnvironmentFile`, and the `{$MODELLOADER_API_KEY}` expansion.
+
+### Verify
+
+```bash
+deploy/cloudflare-model-loader/verify.sh
+systemctl --user status model-loader-api-gateway.service
+systemctl --user status model-loader-cloudflared.service
+```
+
+`verify.sh` keeps the secret off argv (curl reads headers from a mode-`0600` file in a mode-`0700` temp directory, `--disable` ignores `~/.curlrc` and option-setting env vars, `--noproxy` stops ambient proxies from diverting loopback probes) and prints only non-secret PASS/FAIL evidence: 401/200 boundaries locally and on the public hostname, a non-destructive `/_admin/load` smoke check, a loopback allowlist over ports 4321/4322/49321, service state, and file permissions.
+
+### Client contract
+
+```bash
+curl https://model-loader.quantforge.com.br/v1/models \
+  -H "Authorization: Bearer $MODELLOADER_API_KEY"
+```
+
+The gateway strips the `Authorization` header before proxying, so model-loader never sees the key. **The public key grants the whole proxy surface, including `/_admin/load` and `/_admin/unload`** — treat it as an operator credential. Local `127.0.0.1:4321` remains unauthenticated: anything on this machine can call the admin routes without a key, which is the pre-existing local trust model, unchanged by this feature.
+
+### Key rotation
+
+1. If the new value contains a newline or carriage return, stop — the envfile format cannot represent it.
+2. Write `MODELLOADER_API_KEY="<escaped-value>"` to `~/.config/model-loader/external-api/gateway.env` with mode `0600` using a local secret-aware editor, or rerun `install.sh` with the new exported value.
+3. `systemctl --user restart model-loader-api-gateway.service`
+4. `deploy/cloudflare-model-loader/verify.sh`
+
+### Rollback
+
+```bash
+systemctl --user disable --now model-loader-cloudflared.service
+systemctl --user disable --now model-loader-api-gateway.service
+cloudflared tunnel delete model-loader-quantforge
+```
+
+The installed cloudflared CLI has **no DNS-route deletion command**. Delete the `model-loader.quantforge.com.br` record in the Cloudflare dashboard first, then run `cloudflared tunnel delete model-loader-quantforge`, then remove `~/.config/model-loader/external-api/` plus the two user unit files and run `systemctl --user daemon-reload`. Do not use `tunnel delete --force`, which can hide remaining dependencies.
+
 ## Troubleshooting
 
 - **`llama-server` not found** — ensure it is compiled and in `PATH`. Backends tab (`4`) → `n` registers a custom binary location as a backend.
