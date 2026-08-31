@@ -125,10 +125,20 @@ The gateway strips the `Authorization` header before proxying, so model-loader n
 ```bash
 systemctl --user disable --now model-loader-cloudflared.service
 systemctl --user disable --now model-loader-api-gateway.service
+# 1. Manual step, required before the Tunnel delete: the installed
+#    cloudflared CLI has NO DNS-route deletion command, so delete the
+#    model-loader.quantforge.com.br record in the Cloudflare dashboard.
+# 2. Only after that record is gone, delete the Tunnel. Do not use
+#    `tunnel delete --force`, which can hide remaining dependencies.
 cloudflared tunnel delete model-loader-quantforge
+# 3. Finally remove the local state and reload systemd.
+rm -rf ~/.config/model-loader/external-api/
+rm ~/.config/systemd/user/model-loader-api-gateway.service \
+   ~/.config/systemd/user/model-loader-cloudflared.service
+systemctl --user daemon-reload
 ```
 
-The installed cloudflared CLI has **no DNS-route deletion command**. Delete the `model-loader.quantforge.com.br` record in the Cloudflare dashboard first, then run `cloudflared tunnel delete model-loader-quantforge`, then remove `~/.config/model-loader/external-api/` plus the two user unit files and run `systemctl --user daemon-reload`. Do not use `tunnel delete --force`, which can hide remaining dependencies.
+Order matters: deleting the DNS route first keeps the tunnel deletion from orphaning the `model-loader.quantforge.com.br` record, and `--force` would paper over any dependency Cloudflare still reports. After the block above, nothing of the external API remains on this machine or in Cloudflare.
 
 ## Troubleshooting
 
