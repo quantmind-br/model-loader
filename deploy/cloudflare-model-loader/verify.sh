@@ -145,6 +145,7 @@ systemctl --user is-enabled --quiet model-loader-cloudflared.service \
 systemctl --user is-active --quiet model-loader-cloudflared.service \
   || fail 'cloudflared service is not active'
 pass 'user services are enabled and active'
+ss -ltnH '( sport = :4321 or sport = :4322 or sport = :49321 )' >"$work_dir/listeners"
 
 # Allowlist, not blocklist: every local address selected on the API ports
 # must itself be loopback. Wildcards (`*:PORT`, `0.0.0.0`, `[::]`) and any
