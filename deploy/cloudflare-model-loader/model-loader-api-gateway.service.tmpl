@@ -1,0 +1,22 @@
+[Unit]
+Description=model-loader external API authentication gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+EnvironmentFile=__CONFIG_DIR__/gateway.env
+ExecStart=__CADDY_BIN__ run --config __CONFIG_DIR__/Caddyfile --adapter caddyfile
+ExecReload=__CADDY_BIN__ reload --config __CONFIG_DIR__/Caddyfile --adapter caddyfile --force
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=10s
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=default.target
