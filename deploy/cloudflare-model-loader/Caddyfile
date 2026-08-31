@@ -3,7 +3,8 @@
 	auto_https off
 }
 
-http://127.0.0.1:4322 {
+:4322 {
+	bind 127.0.0.1
 	@authorized header Authorization "Bearer {$MODELLOADER_API_KEY}"
 
 	handle @authorized {
