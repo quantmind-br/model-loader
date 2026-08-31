@@ -39,8 +39,14 @@ set +a
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
 chmod 0700 "$work_dir"
+# The wrong-key probe is derived from the installed secret rather than hardcoded,
+# so it can never accidentally *be* the installed key: the fixed suffix makes the
+# probe strictly different from — and longer than — any value an equality
+# matcher could accept. The derived value goes straight into a mode-0600 header
+# file and is never printed.
 printf 'Authorization: Bearer %s\n' "$MODELLOADER_API_KEY" >"$work_dir/auth.header"
-printf 'Authorization: Bearer definitely-wrong-key\n' >"$work_dir/wrong.header"
+printf 'Authorization: Bearer %s\n' \
+  "${MODELLOADER_API_KEY}-definitely-not-the-installed-key" >"$work_dir/wrong.header"
 chmod 0600 "$work_dir"/*.header
 unset MODELLOADER_API_KEY
 
@@ -114,15 +120,41 @@ before_profile="$(vcurl --header @"$work_dir/auth.header" \
   "https://$HOSTNAME/_status" | jq -r '.loaded_profile_id // ""')" \
   || fail 'could not read the loaded profile from /_status'
 
+# The smoke target must be a syntactically valid profile id (the proxy rejects
+# anything outside `^[A-Za-z0-9._-]+$` with 400, which would prove nothing about
+# the admin boundary) that is *not* a real profile, so the request can never
+# load or swap a model. Instead of trusting a fixed literal, derive a nonce id
+# and prove it absent from the authenticated /v1/models listing (the same store
+# /_admin/load resolves against) before using it.
+vcurl --header @"$work_dir/auth.header" "https://$HOSTNAME/v1/models" \
+  >"$work_dir/models.json" \
+  || fail 'could not read the authenticated /v1/models listing'
+jq -e '.object == "list" and (.data | type == "array")' "$work_dir/models.json" >/dev/null \
+  || fail 'authenticated /v1/models did not return a model list'
+
+admin_probe=''
+for attempt in $(seq 0 9); do
+  candidate="external-api-verify-$(date +%s%N)-${RANDOM:-$attempt}-$attempt"
+  [[ "$candidate" =~ ^[A-Za-z0-9._-]+$ ]] || continue
+  [[ "$candidate" != "$before_profile" ]] || continue
+  if jq -e --arg id "$candidate" 'any(.data[]?; .id == $id)' \
+    "$work_dir/models.json" >/dev/null; then
+    continue
+  fi
+  admin_probe="$candidate"
+  break
+done
+[[ -n "$admin_probe" ]] || fail 'could not derive a profile id absent from /v1/models'
+
 admin_rc=0
 admin_code="$(vcurl --output "$work_dir/admin-body" \
   --write-out '%{http_code}' --header @"$work_dir/auth.header" \
   --header 'Content-Type: application/json' \
-  --data '{"profile_id":"__external-api-auth-smoke__"}' \
+  --data "$(jq -cn --arg id "$admin_probe" '{profile_id: $id}')" \
   "https://$HOSTNAME/_admin/load")" || admin_rc=$?
 [[ "$admin_rc" == 0 ]] || fail "admin smoke curl failed (exit $admin_rc, HTTP $admin_code)"
 [[ "$admin_code" == 404 ]] \
-  || fail "unknown-profile admin smoke expected model-loader HTTP 404, got $admin_code"
+  || fail "unknown-profile admin smoke ($admin_probe) expected model-loader HTTP 404, got $admin_code"
 jq -e '.error.code == "model_not_found"' "$work_dir/admin-body" >/dev/null \
   || fail 'admin smoke did not return model-loader model_not_found JSON'
 
