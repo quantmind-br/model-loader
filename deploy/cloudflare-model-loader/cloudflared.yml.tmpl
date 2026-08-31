@@ -1,0 +1,13 @@
+tunnel: __TUNNEL_ID__
+credentials-file: __CREDENTIALS_FILE__
+
+originRequest:
+  connectTimeout: 10s
+  tcpKeepAlive: 30s
+  keepAliveTimeout: 90s
+  noHappyEyeballs: false
+
+ingress:
+  - hostname: model-loader.quantforge.com.br
+    service: http://127.0.0.1:4322
+  - service: http_status:404

@@ -1,0 +1,21 @@
+[Unit]
+Description=Cloudflare Tunnel for model-loader external API
+After=network-online.target model-loader-api-gateway.service
+Wants=network-online.target
+Requires=model-loader-api-gateway.service
+
+[Service]
+Type=simple
+ExecStart=__CLOUDFLARED_BIN__ tunnel --no-autoupdate --config __CONFIG_DIR__/cloudflared.yml --loglevel info --metrics 127.0.0.1:49321 run __TUNNEL_ID__
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=15s
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=default.target
