@@ -19,6 +19,7 @@ readonly SOURCE_DIR="$SCRIPT_SOURCE_DIR"
 readonly CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/model-loader/external-api"
 readonly UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 readonly CLOUDFLARED_DIR="$HOME/.cloudflared"
+readonly CERT_PATH="$CLOUDFLARED_DIR/cert.pem"
 
 fail() {
   printf 'error: %s\n' "$*" >&2
@@ -29,26 +30,71 @@ for command in caddy cloudflared curl jq python3 systemctl install sed stat; do
   command -v "$command" >/dev/null 2>&1 || fail "required command not found: $command"
 done
 
+# cloudflared binds most management flags to inherited TUNNEL_* environment
+# variables: TUNNEL_ORIGIN_CERT (account selection), TUNNEL_CRED_FILE (where
+# `tunnel create` writes the secret), TUNNEL_CREATE_SECRET (the generated
+# tunnel secret), TUNNEL_FORCE_PROVISIONING_DNS (silent DNS overwrite) and
+# others. Scrub the whole prefix plus NO_AUTOUPDATE so provisioning is driven
+# only by the explicit pinned arguments below, never by caller state.
+while IFS= read -r control_var; do
+  unset -v "$control_var"
+done < <(compgen -e | sed -n '/^TUNNEL_/p')
+unset -v NO_AUTOUPDATE
+
+# Every cloudflared management invocation runs through this pinned wrapper:
+# no self-update, and the intended origin certificate inside CLOUDFLARED_DIR
+# (the same path the login branch below checks and generates).
+cf() {
+  cloudflared --no-autoupdate --origincert "$CERT_PATH" "$@"
+}
+
 [[ -n "${MODELLOADER_API_KEY:-}" ]] || fail 'MODELLOADER_API_KEY is empty or unset'
 [[ "$MODELLOADER_API_KEY" != *$'\n'* ]] || fail 'MODELLOADER_API_KEY must not contain a newline'
 [[ "$MODELLOADER_API_KEY" != *$'\r'* ]] || fail 'MODELLOADER_API_KEY must not contain a carriage return'
-# Bash variables cannot contain NUL bytes, so the NUL constraint holds inherently.
-# The key value itself is never printed.
+# Boring character contract: the key must round-trip byte-identically through
+# gateway.env parsed by Caddy's envfile loader and by systemd's
+# EnvironmentFile, and through the Caddyfile {$MODELLOADER_API_KEY} expansion.
+# Quotes, backslash, '#', '$', '%' or whitespace make at least one parser
+# diverge (a trailing backslash breaks the quoted token; '#' truncates the
+# Caddy-side value), so unsupported characters are rejected explicitly.
+[[ "$MODELLOADER_API_KEY" =~ ^[A-Za-z0-9._~+/:,@=-]+$ ]] ||
+  fail 'MODELLOADER_API_KEY must contain only letters, digits, or any of . _ ~ + / : , @ = -'
+# Bash variables cannot contain NUL bytes, so the NUL constraint holds
+# inherently. The key value itself is never printed.
 
-# Reject any value destined for a sed replacement: a '|' would collide with the
-# delimiter and an '&' would expand to the matched text, silently corrupting
-# rendered YAML/units. Newlines and carriage returns would split the unit files.
+# Reject any value destined for a sed replacement: '|' collides with the
+# delimiter, '&' expands to the matched text, and a backslash is an escape
+# character in GNU sed replacement text; newlines/CRs would split output.
 require_safe_sed_value() {
   local label="$1" value="$2"
   [[ -n "$value" ]] || fail "$label is empty"
   [[ "$value" != *'|'* ]] || fail "$label must not contain '|'"
   [[ "$value" != *'&'* ]] || fail "$label must not contain '&'"
+  [[ "$value" != *$'\\'* ]] || fail "$label must not contain a backslash"
   [[ "$value" != *$'\n'* ]] || fail "$label must not contain a newline"
   [[ "$value" != *$'\r'* ]] || fail "$label must not contain a carriage return"
 }
 
+# Values rendered into systemd unit files must additionally be absolute and
+# free of characters systemd parses specially: whitespace would split
+# ExecStart arguments into several words, quotes would alter parsing, '%'
+# triggers specifier expansion, and '$'/backticks are expanded on ExecStart
+# command lines. Unsupported paths are rejected explicitly, before any
+# filesystem mutation.
+require_safe_unit_path() {
+  local label="$1" value="$2"
+  require_safe_sed_value "$label" "$value"
+  [[ "$value" == /* ]] || fail "$label must be an absolute path"
+  [[ "$value" != *[[:space:]]* ]] || fail "$label must not contain whitespace"
+  [[ "$value" != *'%'* ]] || fail "$label must not contain '%'"
+  [[ "$value" != *'$'* ]] || fail "$label must not contain '\$'"
+  [[ "$value" != *'`'* ]] || fail "$label must not contain a backtick"
+  [[ "$value" != *'"'* ]] || fail "$label must not contain a double quote"
+  [[ "$value" != *"'"* ]] || fail "$label must not contain a single quote"
+}
+
 for path_var in CONFIG_DIR UNIT_DIR CLOUDFLARED_DIR; do
-  require_safe_sed_value "${path_var} (derived from XDG_CONFIG_HOME/HOME)" "${!path_var}"
+  require_safe_unit_path "${path_var} (derived from XDG_CONFIG_HOME/HOME)" "${!path_var}"
 done
 
 # ---------------------------------------------------------------------------
@@ -61,14 +107,18 @@ install -m 0600 "$SOURCE_DIR/Caddyfile" "$CONFIG_DIR/Caddyfile"
 MODELLOADER_API_KEY="$MODELLOADER_API_KEY" python3 - "$CONFIG_DIR/gateway.env" <<'PY'
 import os
 import pathlib
+import re
 import sys
 
 path = pathlib.Path(sys.argv[1])
 value = os.environ["MODELLOADER_API_KEY"]
-if "\n" in value or "\r" in value or "\x00" in value:
-    raise SystemExit("invalid API key")
-escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-path.write_text(f'MODELLOADER_API_KEY="{escaped}"\n', encoding="utf-8")
+# Same contract as the shell check above (defense in depth). Inside the
+# character set there are no quotes, backslashes, '$', '%' or '#', so the
+# double-quoted line is parsed identically by Caddy's envfile loader,
+# systemd's EnvironmentFile, and the Caddyfile {$...} expansion.
+if not re.fullmatch(r"[A-Za-z0-9._~+/:,@=-]+", value):
+    raise SystemExit("MODELLOADER_API_KEY contains unsupported characters")
+path.write_text(f'MODELLOADER_API_KEY="{value}"\n', encoding="utf-8")
 path.chmod(0o600)
 PY
 
@@ -77,16 +127,16 @@ unset MODELLOADER_API_KEY
 # ---------------------------------------------------------------------------
 # Interactive Tunnel creation or exact-name reuse
 # ---------------------------------------------------------------------------
-if [[ ! -f "$CLOUDFLARED_DIR/cert.pem" ]]; then
+if [[ ! -f "$CERT_PATH" ]]; then
   printf 'Cloudflare authorization is required for %s.\n' "$HOSTNAME"
-  cloudflared tunnel login
+  cf tunnel login
 fi
 
-existing_json="$(cloudflared tunnel list --name "$TUNNEL_NAME" --output json)"
+existing_json="$(cf tunnel list --name "$TUNNEL_NAME" --output json)"
 existing_count="$(jq 'length' <<<"$existing_json")"
 case "$existing_count" in
   0)
-    created_json="$(cloudflared tunnel create --output json "$TUNNEL_NAME")"
+    created_json="$(cf tunnel create --output json "$TUNNEL_NAME")"
     tunnel_id="$(jq -er '.id // .ID' <<<"$created_json")"
     ;;
   1)
@@ -97,12 +147,14 @@ case "$existing_count" in
     ;;
 esac
 
+# Cloudflare Tunnel ids are lowercase UUIDs; anything else cannot reach the
+# YAML/unit renderers below.
+[[ "$tunnel_id" =~ ^[0-9a-fA-F-]{1,64}$ ]] || fail 'unexpected Cloudflare Tunnel id format'
+
 credentials_file="$CLOUDFLARED_DIR/$tunnel_id.json"
 [[ -f "$credentials_file" ]] || fail "Tunnel credential file not found: $credentials_file"
 chmod 0600 "$credentials_file"
-
-require_safe_sed_value 'tunnel id' "$tunnel_id"
-require_safe_sed_value 'credentials file path' "$credentials_file"
+require_safe_unit_path 'credentials file path' "$credentials_file"
 
 # ---------------------------------------------------------------------------
 # Render and validate cloudflared configuration
@@ -112,18 +164,22 @@ sed \
   -e "s|__CREDENTIALS_FILE__|$credentials_file|g" \
   "$SOURCE_DIR/cloudflared.yml.tmpl" >"$CONFIG_DIR/cloudflared.yml"
 chmod 0600 "$CONFIG_DIR/cloudflared.yml"
-cloudflared tunnel --config "$CONFIG_DIR/cloudflared.yml" ingress validate
+cf tunnel --config "$CONFIG_DIR/cloudflared.yml" ingress validate
 
 # ---------------------------------------------------------------------------
 # DNS route without silent overwrite
 # ---------------------------------------------------------------------------
+# --overwrite-dns=false is passed explicitly and TUNNEL_FORCE_PROVISIONING_DNS
+# was scrubbed above, so neither caller state nor defaults can replace an
+# existing record: a conflict stays a hard failure. The marker is written only
+# after Cloudflare accepts the route.
 readonly DNS_MARKER="$CONFIG_DIR/dns-route"
 expected_route="$tunnel_id $HOSTNAME"
 
 if [[ -f "$DNS_MARKER" && "$(<"$DNS_MARKER")" == "$expected_route" ]]; then
   printf 'DNS route already provisioned for %s.\n' "$HOSTNAME"
 else
-  cloudflared tunnel route dns "$tunnel_id" "$HOSTNAME" \
+  cf tunnel route dns --overwrite-dns=false "$tunnel_id" "$HOSTNAME" \
     || fail "DNS route creation failed; inspect the existing $HOSTNAME record before retrying"
   printf '%s\n' "$expected_route" >"$DNS_MARKER"
   chmod 0600 "$DNS_MARKER"
@@ -134,8 +190,8 @@ fi
 # ---------------------------------------------------------------------------
 caddy_bin="$(command -v caddy)"
 cloudflared_bin="$(command -v cloudflared)"
-require_safe_sed_value 'caddy binary path' "$caddy_bin"
-require_safe_sed_value 'cloudflared binary path' "$cloudflared_bin"
+require_safe_unit_path 'caddy binary path' "$caddy_bin"
+require_safe_unit_path 'cloudflared binary path' "$cloudflared_bin"
 
 sed \
   -e "s|__CONFIG_DIR__|$CONFIG_DIR|g" \
