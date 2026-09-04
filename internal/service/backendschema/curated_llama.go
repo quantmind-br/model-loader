@@ -164,7 +164,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 
 		strFlag("chat-template", "", nil, nil, "Defines the chat template (embedded or customized).", llamaGroupChat, false),
 		strFlag("chat-template-file", "", nil, nil, "Reads the chat template from a Jinja file.", llamaGroupChat, false),
-		strFlag("chat-template-kwargs", "", nil, nil, "Extra JSON arguments for the template parser.", llamaGroupChat, false),
+		strFlag("chat-template-kwargs", "", nil, nil, "Extra JSON arguments for the template parser; setting 'preserve_reasoning' here is deprecated on llama.cpp >= b10770, use --reasoning-preserve / --no-reasoning-preserve instead.", llamaGroupChat, false),
 		boolFlag("jinja", "", []string{"no-jinja"}, true, "Toggles the Jinja engine for chat.", llamaGroupChat),
 		boolFlag("skip-chat-parsing", "", nil, false, "Forces pure content parsing, without structural parsing.", llamaGroupChat),
 		boolFlag("prefill-assistant", "", []string{"no-prefill-assistant"}, true, "Controls response prefill when the last message is already from the assistant.", llamaGroupChat),
@@ -172,7 +172,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		enumFlag("reasoning", "rea", nil, []string{"on", "off", "auto"}, "auto", "Reasoning/thinking mode in chat.", llamaGroupChat),
 		enumFlag("reasoning-format", "", nil, []string{"none", "deepseek", "deepseek-legacy", "auto"}, "auto", "How thought tags are parsed and returned.", llamaGroupChat),
 		strFlag("reasoning-budget-message", "", nil, nil, "Message injected before the end-of-thinking tag when the reasoning budget is exhausted.", llamaGroupChat, false),
-		boolFlag("reasoning-preserve", "", []string{"no-reasoning-preserve"}, false, "Preserve the reasoning trace in the full history, not just the last assistant message (requires a template with 'supports_preserve_reasoning'); unset defers to the template default.", llamaGroupChat),
+		boolFlag("reasoning-preserve", "", []string{"no-reasoning-preserve"}, false, "Preserve the reasoning trace in the full history, not just the last assistant message (requires a template with 'supports_preserve_reasoning'). Unset defers to the backend default, which differs across registered binaries: enabled since llama.cpp b10770 (nightly), template default on stable b10686 / prisma-ml b10663 / nanbeige42 10151 / poolside-laguna. Force it off with --no-reasoning-preserve via ExtraArgs.", llamaGroupChat),
 		strFlag("reasoning-effort", "", nil, "default", "Reasoning effort level given to the chat template: default, minimal, low, medium, high, xhigh, max.", llamaGroupChat, false),
 
 		strFlag("host", "", nil, "127.0.0.1", "Server listen address.", llamaGroupHTTP, false),
@@ -287,7 +287,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		BackendID:     "llama-cpp-default",
 		Source: domain.SchemaSource{
 			GeneratedFrom: "llama.cpp common/arg.cpp (LLAMA_EXAMPLE_SERVER), cross-checked against every registered llama-server binary",
-			SourceVersion: "curated-llama-server-b10703 (union: stable 10686, nightly 10703, prisma-ml 10663, nanbeige42 10151, poolside-laguna 06f8ceb)",
+			SourceVersion: "curated-llama-server-b10770 (union: stable 10686, nightly 10770, prisma-ml 10663, nanbeige42 10151, poolside-laguna 06f8ceb)",
 			Editable:      true,
 		},
 		Flags:        flags,

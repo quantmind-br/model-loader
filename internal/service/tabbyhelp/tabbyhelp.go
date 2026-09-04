@@ -6,8 +6,8 @@
 // not stable enough to parse, so we ship a hand-curated schema of the
 // load/tuning flags that matter on a single workstation.
 //
-// Tracks TabbyAPI checkout fcc1a10 (2026-08-26); its venv pins exllamav3
-// 1.4.4+cu128.torch2.9.0 (the minimum the exllamav3 backend asserts) on torch
+// Tracks TabbyAPI checkout 109629b (2026-09-02); its venv pins exllamav3
+// 1.4.6+cu128.torch2.9.0 (the minimum the exllamav3 backend asserts) on torch
 // 2.9.0+cu128. exllamav2 0.3.2 is still installed in that venv but TabbyAPI no
 // longer has an ExLlamaV2 backend, so it is never loaded.
 //
@@ -31,7 +31,7 @@ import (
 // EmbeddedSchema returns the curated tabby schema. `port` carries IsPort so the
 // validator knows the process manager owns it.
 func EmbeddedSchema() domain.FlagSchema {
-	return domain.BuildFlagSchema("embedded-tabby-v4", tabbyRows)
+	return domain.BuildFlagSchema("embedded-tabby-v5", tabbyRows)
 }
 
 // tabbyToolFormats is the closed set of keys TabbyAPI accepts for --tool-format
@@ -104,6 +104,7 @@ var tabbyRows = []domain.FlagSpecRow{
 	{Long: "sysmem-kv-cache", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), HelpText: "Size of the system-memory second-tier K/V cache, in MB (0 = disabled, KV lives in VRAM only)", Group: "memory"},
 	{Long: "sysmem-recurrent-cache", Type: domain.FlagTypeInt, Default: float64(4096), Min: ptrutil.Ptr(0), HelpText: "Max size of the system-memory recurrent-state cache, in MB (linear/sliding-attention models only)", Group: "memory"},
 	{Long: "cuda-malloc-async", Type: domain.FlagTypeBool, Default: true, HelpText: "Use the cudaMallocAsync Torch allocator (sets PYTORCH_ALLOC_CONF). Disable if you hit intermittent OoM errors", Group: "memory"},
+	{Long: "ngram-ram", Type: domain.FlagTypeBool, Default: false, HelpText: "Load a PLE model's n-gram embedding table fully into system RAM instead of streaming it from disk during inference (e.g. Qwen3.8-Flash-Next); avoids per-token disk reads at the cost of tens of GB of system memory", Group: "memory"},
 
 	// Sampling fallbacks.
 	{Long: "override-preset", Type: domain.FlagTypeString, Default: "", HelpText: "Basename (no .yml) of a preset in the backend's sampler_overrides/ folder, applied as fallbacks for sampling params a request omits (e.g. a repetition penalty for clients that send none); safe_defaults ships with TabbyAPI", Group: "sampling"},

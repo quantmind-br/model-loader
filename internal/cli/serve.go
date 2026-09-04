@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/quantmind-br/model-loader/internal/app"
+	"github.com/quantmind-br/model-loader/internal/sdnotify"
 	"github.com/quantmind-br/model-loader/internal/service/httpproxy"
 )
 
@@ -66,6 +67,20 @@ func init() {
 				fmt.Fprintf(cmd.ErrOrStderr(), "start: %v\n", err)
 				return &ExitError{Code: 1}
 			}
+
+			// Under systemd (Type=notify) signal readiness only after the
+			// listener answers /_status healthy; a failure aborts startup so
+			// the unit can restart. Manual runs skip this entirely.
+			if err := serveReadiness(svc.Cfg.Serve.Host, svc.Cfg.Serve.Port, 25*time.Second); err != nil {
+				svc.Logger.Error("serve_readiness_failed", "err", err)
+				fmt.Fprintf(cmd.ErrOrStderr(), "readiness: %v\n", err)
+				shCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				_ = srv.Stop(shCtx)
+				cancel()
+				return &ExitError{Code: 1}
+			}
+			stopWatchdog := startServeWatchdog(svc.Cfg.Serve.Host, svc.Cfg.Serve.Port, svc.Logger)
+			svc.Logger.Info("serve_notify_armed", "systemd", sdnotify.Enabled())
 			displayHost := curlHost(svc.Cfg.Serve.Host)
 			fmt.Fprintf(cmd.OutOrStdout(), "Listening on %s:%d (logs: %s)\n",
 				svc.Cfg.Serve.Host, svc.Cfg.Serve.Port, svc.Cfg.Paths.LogDir)
@@ -75,6 +90,10 @@ func init() {
 
 			<-ctx.Done()
 			svc.Logger.Info("serve_signal_received")
+			stopServeWatchdog(stopWatchdog)
+			if err := sdnotify.Stopping(); err != nil {
+				svc.Logger.Warn("serve_notify_stopping_failed", "err", err)
+			}
 
 			shCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()

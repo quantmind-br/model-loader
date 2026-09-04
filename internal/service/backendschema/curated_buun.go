@@ -36,11 +36,14 @@ const (
 // flags.
 //
 // Fork-only surfaces kept here that upstream llama.cpp does not define:
-// the VBR family (--vbr-bits/--vbr-floor/--vbr-vram/--vbr-reclaim-floor/
-// --vbr-reset-keep-frac/--vbr-policy plus the vbr and turbo* cache types),
-// -ct/--cache-type, --logits-all, --no-fused-gdn, --mmproj-gpu-swap,
+// the VBR family (--vbr-bits/--vbr-floor/--vbr-vram/--vbr-entry/
+// --vbr-reclaim-floor/--vbr-reset-keep-frac/--vbr-policy plus the vbr and
+// turbo* cache types), -ct/--cache-type, --logits-all, --no-fused-gdn,
+// --mmproj-gpu-swap, --mmap-prefetch, --moe-cache-profile,
 // -cd/--ctx-size-draft, --spec-draft-replace, --spec-dflash-default,
 // --dflash-max-slots, and the cache-plan/cache-receipt group.
+// --tensor-read-lazy is the pre-b10703 upstream spelling of what mainline now
+// calls --lazy-mode; the fork still ships the old name.
 // --vbr-bits and --vbr-policy are declared with set_hidden() in the fork, so
 // they never appear in --help and this curated file is their only source.
 func CuratedBuunSchema() domain.BackendValidationSchema {
@@ -79,6 +82,8 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 		boolFlag("no-host", "", nil, false, "Bypasses the host buffer to allow extra buffers.", buunGroupMemory),
 		boolFlag("logits-all", "", []string{"no-logits-all"}, true, "Reserves a logits buffer for every token in the batch; disable it to save VRAM on big-vocab chat/completion workloads.", buunGroupMemory),
 		boolFlag("check-tensors", "", nil, false, "Checks model tensors for invalid values.", buunGroupMemory),
+		enumFlag("tensor-read-lazy", "", nil, []string{"on", "auto", "off"}, "auto", "On-demand reading of certain tensors (for example per-layer embeddings): 'on' reads their rows from disk on demand and requires mmap, 'auto' does so only for tensors larger than 4 GiB, 'off' keeps them resident.", buunGroupMemory),
+		enumFlag("mmap-prefetch", "", nil, []string{"on", "auto", "off"}, "auto", "Bulk mmap prefetch policy: 'auto' prefetches only when the mapped model comfortably fits available system RAM, 'on' keeps eager whole-model prefetch, 'off' relies on sequential readahead and demand paging.", buunGroupMemory),
 
 		strFlag("device", "dev", nil, nil, "Selects the devices used for offload.", buunGroupDevice, false),
 		boolFlag("list-devices", "", nil, false, "Lists available devices and exits.", buunGroupDevice),
@@ -89,6 +94,8 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 		strFlag("override-tensor", "ot", nil, nil, "Override tensor buffer type, <pattern>=<buffer type> (comma-separated).", buunGroupDevice, false),
 		boolFlag("cpu-moe", "cmoe", nil, false, "Keep all Mixture-of-Experts weights on the CPU.", buunGroupDevice),
 		intFlag("n-cpu-moe", "ncmoe", nil, nil, "Keep the first N Mixture-of-Experts layers on the CPU.", buunGroupDevice, ptrutil.Ptr(0), nil),
+		intFlag("n-cpu-ffn", "ncffn", nil, nil, "Keep the dense FFN weights of the first N layers in the CPU (dense models; use --n-cpu-moe for MoE expert weights).", buunGroupDevice, ptrutil.Ptr(0), nil),
+		boolFlag("moe-cache-profile", "", []string{"no-moe-cache-profile"}, true, "Persists a versioned per-model expert heatmap in the llama.cpp cache directory and uses it for bounded expert prewarming.", buunGroupDevice),
 		boolFlag("no-fused-gdn", "", nil, false, "Disables the fused Gated Delta Net kernels and uses decomposed ops instead.", buunGroupDevice),
 		enumFlag("fit", "fit", nil, []string{"on", "off"}, "on", "Adjusts unset parameters to fit device memory.", buunGroupDevice),
 		strFlag("fit-target", "fitt", nil, "1024", "Target memory margin in MiB per device used by --fit; a single value is broadcast to all devices.", buunGroupDevice, false),
@@ -105,6 +112,7 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 		floatFlag("vbr-reclaim-floor", "", nil, 8.125, "Dynamic VBR reclaim threshold in bits per value; idle slot caches are reclaimed before degradation falls below this floor.", buunGroupKV, nil, nil),
 		floatFlag("vbr-reset-keep-frac", "", nil, 0.25, "Dynamic VBR reset threshold; discard a degraded cached prefix when less than this fraction remains reusable.", buunGroupKV, nil, nil),
 		strFlag("vbr-policy", "", nil, nil, "VBR policy ladder JSON file or directory; unset uses the automatic policy ladder. Requires a fixed --vbr-budget. Hidden from --help.", buunGroupKV, false),
+		enumFlag("vbr-entry", "", nil, []string{"f16", "t8", "t4", "t3", "t2", "t1"}, "f16", "Dynamic VBR entry tier; entering below f16 is an explicit quality-for-bandwidth trade and tensors still degrade toward --vbr-min-bits as the KV VRAM budget fills. Rejected when --vbr-budget selects a fixed tier.", buunGroupKV),
 
 		enumFlag("rope-scaling", "", nil, []string{"none", "linear", "yarn"}, nil, "RoPE frequency scaling method; unset defers to the model (linear otherwise).", buunGroupRope),
 		floatFlag("rope-scale", "", nil, nil, "Context expansion factor via RoPE.", buunGroupRope, nil, nil),
@@ -123,6 +131,7 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 
 		intFlag("cache-ram", "cram", nil, 8192, "Maximum RAM cache size in MiB for KV/prompt reuse; -1 = no limit, 0 = disable.", buunGroupCacheRAM, ptrutil.Ptr(-1), nil),
 		boolFlagAuto("kv-unified", "kvu", []string{"no-kv-unified"}, "Uses a single unified KV buffer shared across all sequences; enabled by default only when the slot count is auto.", buunGroupCacheRAM),
+		intFlag("kv-unified-per-slot", "", nil, nil, "Context limit per parallel slot; when set without --ctx-size the shared unified KV pool is sized to parallel*N.", buunGroupCacheRAM, ptrutil.Ptr(0), nil),
 		boolFlag("cache-idle-slots", "", []string{"no-cache-idle-slots"}, true, "Saves idle slots to the prompt cache for new tasks and clears them when using unified KV; requires cache-ram.", buunGroupCacheRAM),
 		withAllowedInts(intFlag("sleep-idle-seconds", "", nil, -1, "Seconds of idleness before the server sleeps; -1 disables sleeping.", buunGroupCacheRAM, ptrutil.Ptr(1), nil), -1),
 
@@ -174,6 +183,7 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 		intFlag("reasoning-budget", "", nil, -1, "Token budget for reasoning; -1 = unrestricted, 0 ends thinking immediately.", buunGroupChat, ptrutil.Ptr(-1), nil),
 		strFlag("reasoning-budget-message", "", nil, nil, "Message/instruction used to communicate the reasoning budget to the model.", buunGroupChat, false),
 		boolFlagAuto("reasoning-preserve", "", []string{"no-reasoning-preserve"}, "Preserve the reasoning trace in the full history, not just the last assistant message; defaults to the template's behaviour.", buunGroupChat),
+		strFlag("reasoning-effort", "", nil, "default", "Reasoning effort level given to the chat template: 'default' keeps the template default, or a level such as minimal, low, medium, high, xhigh, max.", buunGroupChat, false),
 
 		strFlag("host", "", nil, "127.0.0.1", "Server listen address.", buunGroupHTTP, false),
 		portFlag("port", "", 8080, "HTTP server port.", buunGroupHTTP),
@@ -213,9 +223,13 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 		boolFlag("mmproj-auto", "", []string{"no-mmproj-auto", "no-mmproj"}, true, "Automatic multimodal projector use.", buunGroupMultimodal),
 		boolFlag("mmproj-offload", "", []string{"no-mmproj-offload"}, true, "Projector offload to GPU.", buunGroupMultimodal),
 		boolFlag("mmproj-gpu-swap", "", nil, false, "Temporarily swaps the MTP draft context out of VRAM so mmproj can encode images on the GPU, then swaps it back.", buunGroupMultimodal),
+		strFlag("mmproj-device", "mmdev", nil, nil, "Device used for the multimodal projector; 'none' disables offload and 'auto' is the default.", buunGroupMultimodal, false),
 		intFlag("image-min-tokens", "", nil, nil, "Minimum tokens per image.", buunGroupMultimodal, ptrutil.Ptr(0), nil),
 		intFlag("image-max-tokens", "", nil, nil, "Maximum tokens per image.", buunGroupMultimodal, ptrutil.Ptr(0), nil),
 		intFlag("mtmd-batch-max-tokens", "", nil, 1024, "Maximum image tokens per batch when encoding images.", buunGroupMultimodal, ptrutil.Ptr(1), nil),
+		floatFlag("video-fps", "", nil, 4.0, "Target video frame rate.", buunGroupMultimodal, nil, nil),
+		intFlag("video-timestamp-interval", "", nil, 5000, "Interval in milliseconds between text timestamps for video.", buunGroupMultimodal, ptrutil.Ptr(0), nil),
+		strFlag("video-ffmpeg-dir", "", nil, nil, "Directory containing ffmpeg and ffprobe; unset searches PATH.", buunGroupMultimodal, false),
 
 		strFlag("models-dir", "", nil, nil, "Directory monitored by the multi-model router.", buunGroupRouter, false),
 		strFlag("models-preset", "", nil, nil, "Model preset loaded by the multi-model router.", buunGroupRouter, false),
@@ -246,6 +260,8 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 		intFlag("ctx-size-draft", "cd", nil, 0, "Draft-model context size; 0 inherits the target's --ctx-size.", buunGroupSpeculative, ptrutil.Ptr(0), nil),
 		intFlag("spec-draft-n-max", "", []string{"draft", "draft-n", "draft-max"}, 3, "Maximum tokens proposed by the draft model.", buunGroupSpeculative, ptrutil.Ptr(0), nil),
 		intFlag("spec-draft-n-min", "", []string{"draft-min", "draft-n-min"}, 0, "Minimum number of draft tokens.", buunGroupSpeculative, ptrutil.Ptr(0), nil),
+		floatFlag("spec-synth-len", "", nil, nil, "Target mean synthetic acceptance length, including the target token (benchmarking only).", buunGroupSpeculative, nil, nil),
+		strFlag("spec-synth-rates", "", nil, nil, "Comma-separated unconditional per-position synthetic acceptance probabilities (benchmarking only).", buunGroupSpeculative, false),
 		floatFlag("spec-draft-p-split", "", []string{"draft-p-split"}, 0.1, "Speculative decoding split probability.", buunGroupSpeculative, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
 		floatFlag("spec-draft-p-min", "", []string{"draft-p-min"}, 0.0, "Minimum speculative decoding probability for the greedy path.", buunGroupSpeculative, ptrutil.Ptr(0.0), ptrutil.Ptr(1.0)),
 		strFlag("spec-draft-device", "devd", []string{"device-draft"}, nil, "Devices used to offload the draft model; follows --device by default.", buunGroupSpeculative, false),
@@ -309,7 +325,7 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 // build number printed by `llama-server --version` and the checkout's
 // `git describe --tags --always`. Both are recorded so the value is
 // unambiguous.
-const buunSourceVersion = "11361 (2174ad63b) / b9637-1724-g2174ad63b"
+const buunSourceVersion = "11723 (7a918624b) / b9637-2086-g7a918624b"
 
 func buunSpecTypes() []string {
 	return []string{"none", "draft-simple", "draft-eagle3", "draft-mtp", "draft-dflash", "draft-dspark", "ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod", "ngram-cache", "suffix", "copyspec", "recycle", "dflash"}
@@ -338,23 +354,23 @@ func BuunPresentation() *domain.Presentation {
 		{Name: buunGroupModelLoad, Flags: []string{"hf-repo", "hf-file", "hf-token", "model-url", "docker-repo", "override-kv", "offline"}},
 		{Name: buunGroupContext, Flags: []string{"ctx-size", "n-predict", "batch-size", "ubatch-size", "keep"}},
 		{Name: buunGroupCPU, Flags: []string{"threads", "threads-batch", "poll", "prio", "numa"}},
-		{Name: buunGroupMemory, Flags: []string{"load-mode", "mlock", "mmap", "direct-io", "repack", "op-offload", "no-host", "logits-all", "check-tensors"}},
-		{Name: buunGroupDevice, Flags: []string{"device", "list-devices", "n-gpu-layers", "split-mode", "tensor-split", "main-gpu", "override-tensor", "cpu-moe", "n-cpu-moe", "no-fused-gdn", "fit", "fit-target", "fit-ctx"}},
-		{Name: buunGroupKV, Flags: []string{"kv-offload", "flash-attn", "cache-type", "cache-type-k", "cache-type-v", "vbr-budget", "vbr-min-bits", "vbr-vram-budget", "vbr-reclaim-floor", "vbr-reset-keep-frac", "vbr-policy"}},
+		{Name: buunGroupMemory, Flags: []string{"load-mode", "mlock", "mmap", "direct-io", "tensor-read-lazy", "mmap-prefetch", "repack", "op-offload", "no-host", "logits-all", "check-tensors"}},
+		{Name: buunGroupDevice, Flags: []string{"device", "list-devices", "n-gpu-layers", "split-mode", "tensor-split", "main-gpu", "override-tensor", "cpu-moe", "n-cpu-moe", "n-cpu-ffn", "moe-cache-profile", "no-fused-gdn", "fit", "fit-target", "fit-ctx"}},
+		{Name: buunGroupKV, Flags: []string{"kv-offload", "flash-attn", "cache-type", "cache-type-k", "cache-type-v", "vbr-budget", "vbr-min-bits", "vbr-vram-budget", "vbr-reclaim-floor", "vbr-reset-keep-frac", "vbr-policy", "vbr-entry"}},
 		{Name: buunGroupRope, Flags: []string{"rope-scaling", "rope-scale", "rope-freq-base", "rope-freq-scale", "yarn-orig-ctx", "yarn-ext-factor", "yarn-attn-factor", "yarn-beta-slow", "yarn-beta-fast"}},
 		{Name: buunGroupShift, Flags: []string{"swa-full", "context-shift", "ctx-checkpoints", "checkpoint-min-step"}},
-		{Name: buunGroupCacheRAM, Flags: []string{"cache-ram", "kv-unified", "cache-idle-slots", "sleep-idle-seconds"}},
+		{Name: buunGroupCacheRAM, Flags: []string{"cache-ram", "kv-unified", "kv-unified-per-slot", "cache-idle-slots", "sleep-idle-seconds"}},
 		{Name: buunGroupSamplers, Flags: []string{"samplers", "sampler-seq", "seed", "temperature", "top-k", "top-p", "min-p", "typical-p", "top-n-sigma", "xtc-probability", "xtc-threshold", "ignore-eos", "logit-bias", "backend-sampling"}},
 		{Name: buunGroupPenalties, Flags: []string{"repeat-last-n", "repeat-penalty", "presence-penalty", "frequency-penalty", "dry-multiplier", "dry-base", "dry-allowed-length", "dry-penalty-last-n", "dry-sequence-breaker", "mirostat", "mirostat-lr", "mirostat-ent", "dynatemp-range", "dynatemp-exp", "adaptive-target", "adaptive-decay"}},
 		{Name: buunGroupGrammar, Flags: []string{"grammar", "grammar-file", "json-schema", "json-schema-file"}},
-		{Name: buunGroupChat, Flags: []string{"chat-template", "chat-template-file", "chat-template-kwargs", "jinja", "skip-chat-parsing", "prefill-assistant", "reasoning-format", "reasoning", "reasoning-budget", "reasoning-budget-message", "reasoning-preserve"}},
+		{Name: buunGroupChat, Flags: []string{"chat-template", "chat-template-file", "chat-template-kwargs", "jinja", "skip-chat-parsing", "prefill-assistant", "reasoning-format", "reasoning", "reasoning-budget", "reasoning-budget-message", "reasoning-preserve", "reasoning-effort"}},
 		{Name: buunGroupHTTP, Flags: []string{"host", "port", "reuse-port", "api-prefix", "path", "ui", "ui-config", "ui-config-file", "ui-mcp-proxy", "api-key", "api-key-file", "ssl-key-file", "ssl-cert-file", "cors-origins", "cors-methods", "cors-headers", "cors-credentials", "timeout", "sse-ping-interval", "threads-http", "metrics", "slots", "props", "parallel", "cont-batching", "cache-prompt", "cache-reuse", "slot-save-path", "slot-prompt-similarity", "media-path", "alias", "tags"}},
-		{Name: buunGroupMultimodal, Flags: []string{"mmproj", "mmproj-url", "mmproj-auto", "mmproj-offload", "mmproj-gpu-swap", "image-min-tokens", "image-max-tokens", "mtmd-batch-max-tokens"}},
+		{Name: buunGroupMultimodal, Flags: []string{"mmproj", "mmproj-url", "mmproj-auto", "mmproj-offload", "mmproj-gpu-swap", "mmproj-device", "image-min-tokens", "image-max-tokens", "mtmd-batch-max-tokens", "video-fps", "video-timestamp-interval", "video-ffmpeg-dir"}},
 		{Name: buunGroupRouter, Flags: []string{"models-dir", "models-preset", "models-max", "models-autoload"}},
 		{Name: buunGroupTools, Flags: []string{"tools", "tools-runtime", "mcp-servers-config", "mcp-servers-json", "agent"}},
 		{Name: buunGroupEmbeddings, Flags: []string{"embeddings", "pooling", "embd-normalize", "reranking"}},
 		{Name: buunGroupLora, Flags: []string{"lora", "lora-scaled", "lora-init-without-apply", "control-vector", "control-vector-scaled", "control-vector-layer-range"}},
-		{Name: buunGroupSpeculative, Flags: []string{"spec-type", "spec-draft-model", "spec-draft-hf", "ctx-size-draft", "spec-draft-n-max", "spec-draft-n-min", "spec-draft-p-split", "spec-draft-p-min", "spec-draft-device", "spec-draft-ngl", "spec-draft-threads", "spec-draft-threads-batch", "spec-draft-cpu-moe", "spec-draft-n-cpu-moe", "spec-draft-override-tensor", "spec-draft-replace", "spec-draft-backend-sampling", "cache-type-k-draft", "cache-type-v-draft", "spec-ngram-mod-n-min", "spec-ngram-mod-n-max", "spec-ngram-mod-n-match", "spec-ngram-simple-size-n", "spec-ngram-simple-size-m", "spec-ngram-simple-min-hits", "spec-ngram-map-k-size-n", "spec-ngram-map-k-size-m", "spec-ngram-map-k-min-hits", "spec-ngram-map-k4v-size-n", "spec-ngram-map-k4v-size-m", "spec-ngram-map-k4v-min-hits", "lookup-cache-static", "lookup-cache-dynamic", "spec-default", "spec-dflash-default", "dflash-max-slots"}},
+		{Name: buunGroupSpeculative, Flags: []string{"spec-type", "spec-draft-model", "spec-draft-hf", "ctx-size-draft", "spec-draft-n-max", "spec-draft-n-min", "spec-synth-len", "spec-synth-rates", "spec-draft-p-split", "spec-draft-p-min", "spec-draft-device", "spec-draft-ngl", "spec-draft-threads", "spec-draft-threads-batch", "spec-draft-cpu-moe", "spec-draft-n-cpu-moe", "spec-draft-override-tensor", "spec-draft-replace", "spec-draft-backend-sampling", "cache-type-k-draft", "cache-type-v-draft", "spec-ngram-mod-n-min", "spec-ngram-mod-n-max", "spec-ngram-mod-n-match", "spec-ngram-simple-size-n", "spec-ngram-simple-size-m", "spec-ngram-simple-min-hits", "spec-ngram-map-k-size-n", "spec-ngram-map-k-size-m", "spec-ngram-map-k-min-hits", "spec-ngram-map-k4v-size-n", "spec-ngram-map-k4v-size-m", "spec-ngram-map-k4v-min-hits", "lookup-cache-static", "lookup-cache-dynamic", "spec-default", "spec-dflash-default", "dflash-max-slots"}},
 		{Name: buunGroupCachePlan, Flags: []string{"cache-debug", "cache-plan-preflight", "cache-control-api", "cache-plan-authority", "cache-lifecycle", "cache-receipt", "cache-receipt-key", "cache-receipt-unkeyed-debug"}},
 	}}
 }

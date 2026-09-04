@@ -53,7 +53,7 @@ type Supervisor struct {
 	// never the reverse. Status/Reconcile/processAliveLocked take only mu.
 	startMu sync.Mutex
 	mu      sync.RWMutex
-	state *State
+	state   *State
 	// portFails counts consecutive failed port probes so a transient dial
 	// timeout under GPU load does not destroy supervision of a healthy proxy
 	// (audit A9). Reset on any successful probe. Guarded by mu.
@@ -62,6 +62,13 @@ type Supervisor struct {
 	// probe is a shared client for /_status GETs, built once (audit C4) to
 	// stop allocating an http.Client on every 1 Hz Status call.
 	probe *http.Client
+
+	// useSystemd selects the systemctl strategy (proxy unit owns the
+	// process; gateway/Tunnel follow via BindsTo) over the legacy
+	// detached-process strategy. Detected once in New; never flipped
+	// mid-operation, so a systemd supervisor never spawns a second
+	// proxy behind the unit's back.
+	useSystemd bool
 }
 
 // probeFailThreshold is the number of consecutive port-probe failures Status
@@ -77,7 +84,7 @@ func New(cfg Config) *Supervisor {
 	if cfg.Logger == nil {
 		cfg.Logger = log.Nop()
 	}
-	return &Supervisor{
+	s := &Supervisor{
 		statePath:  cfg.StatePath,
 		logDir:     cfg.LogDir,
 		host:       cfg.Host,
@@ -85,7 +92,70 @@ func New(cfg Config) *Supervisor {
 		binaryPath: cfg.BinaryPath,
 		logger:     cfg.Logger,
 		probe:      &http.Client{Timeout: 500 * time.Millisecond},
+		useSystemd: detectSystemd(),
 	}
+	strategy := "process"
+	if s.useSystemd {
+		strategy = "systemd"
+	}
+	s.logger.Info("proxy_supervisor_strategy", "strategy", strategy, "unit", ProxyUnitName)
+	return s
+}
+
+// Start launches the proxy: through the user-systemd unit when it is
+// loaded, otherwise as a detached OS process (legacy). The public
+// signatures are strategy-agnostic; see startProcess / startSystemd.
+func (s *Supervisor) Start(ctx context.Context) error {
+	if s.useSystemd {
+		return s.startSystemd(ctx)
+	}
+	return s.startProcess(ctx)
+}
+
+// Stop terminates the proxy gracefully: unit stop under systemd, process
+// group kill otherwise.
+func (s *Supervisor) Stop(ctx context.Context) error {
+	if s.useSystemd {
+		return s.stopSystemd(ctx)
+	}
+	return s.stopProcess(ctx)
+}
+
+// Status probes the proxy: unit state + /_status under systemd, PID + port
+// hysteresis otherwise. Both preserve the degraded Running=true semantics
+// the UI needs to offer ForceStop.
+func (s *Supervisor) Status() httpproxy.Status {
+	if s.useSystemd {
+		return s.statusSystemd()
+	}
+	return s.statusProcess()
+}
+
+// Reconcile validates persisted state at boot. Under systemd it only drops
+// provably-obsolete legacy state; the unit is the source of truth.
+func (s *Supervisor) Reconcile() error {
+	if s.useSystemd {
+		return s.reconcileSystemd()
+	}
+	return s.reconcileProcess()
+}
+
+// ForceStop SIGKILLs a wedged proxy: whole cgroup under systemd, process
+// tree otherwise.
+func (s *Supervisor) ForceStop() error {
+	if s.useSystemd {
+		return s.forceStopSystemd()
+	}
+	return s.forceStopProcess()
+}
+
+// Strategy reports the selected supervision strategy ("systemd" or
+// "process"), for diagnostics and tests.
+func (s *Supervisor) Strategy() string {
+	if s.useSystemd {
+		return "systemd"
+	}
+	return "process"
 }
 
 func (s *Supervisor) resolveExe() (string, error) {
@@ -98,7 +168,7 @@ func (s *Supervisor) resolveExe() (string, error) {
 // Start launches the proxy as a detached OS process via the current binary's
 // "serve" subcommand. The process survives TUI exit. State is persisted so
 // future TUI sessions can discover it.
-func (s *Supervisor) Start(ctx context.Context) error {
+func (s *Supervisor) startProcess(ctx context.Context) error {
 	s.startMu.Lock()
 	defer s.startMu.Unlock()
 
@@ -197,7 +267,7 @@ func (s *Supervisor) Start(ctx context.Context) error {
 // SIGKILLs the serve before it can kill its own backend (audit A8). The ctx
 // deadline still clamps when earlier. If the serve was killed before it could
 // free VRAM, the loaded backend is swept afterward.
-func (s *Supervisor) Stop(ctx context.Context) error {
+func (s *Supervisor) stopProcess(ctx context.Context) error {
 	// Serialize against an in-flight Start (previously provided by mu). ForceStop
 	// deliberately does NOT take startMu — it must not queue behind a stuck Start.
 	s.startMu.Lock()
@@ -248,7 +318,7 @@ func (s *Supervisor) Stop(ctx context.Context) error {
 
 // Status probes the persisted state and returns the proxy status. If the
 // process died since the last check, state is cleaned automatically.
-func (s *Supervisor) Status() httpproxy.Status {
+func (s *Supervisor) statusProcess() httpproxy.Status {
 	s.mu.Lock()
 	if s.state == nil {
 		s.mu.Unlock()
@@ -310,7 +380,7 @@ func (s *Supervisor) Status() httpproxy.Status {
 
 // Reconcile reads the on-disk state, validates the PID is still alive and the
 // port is listening, and drops orphaned state. Call once at TUI boot.
-func (s *Supervisor) Reconcile() error {
+func (s *Supervisor) reconcileProcess() error {
 	st, err := loadState(s.statePath)
 	if err != nil {
 		s.logger.Error("proxy_reconcile_load_failed", "err", err)
@@ -369,7 +439,7 @@ func (s *Supervisor) processAliveLocked() bool {
 // persisted state. Escape hatch for a wedged/degraded proxy that no longer
 // answers /_status (audit A13). Identity-checked: a recycled PID is never
 // signaled. Returns an error when no proxy state exists.
-func (s *Supervisor) ForceStop() error {
+func (s *Supervisor) forceStopProcess() error {
 	s.mu.Lock()
 	st := s.state
 	s.mu.Unlock()

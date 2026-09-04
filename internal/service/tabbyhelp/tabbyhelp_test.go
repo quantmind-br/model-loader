@@ -8,7 +8,7 @@ import (
 
 func TestEmbeddedSchema(t *testing.T) {
 	fs := EmbeddedSchema()
-	if fs.Version != "embedded-tabby-v4" {
+	if fs.Version != "embedded-tabby-v5" {
 		t.Fatalf("version = %q", fs.Version)
 	}
 

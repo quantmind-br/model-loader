@@ -1,8 +1,17 @@
 [Unit]
 Description=Cloudflare Tunnel for model-loader external API
-After=network-online.target model-loader-api-gateway.service
+# Lifecycle-bound to the proxy unit: starts only after the proxy signals
+# READY=1, stops (and never restarts alone) when the proxy stops or dies.
+# Ordered after the gateway for initial startup only — a gateway restart
+# does NOT stop this unit (no Requires on the gateway): the Tunnel stays
+# connected and forwards again as soon as the gateway recovers.
+BindsTo=model-loader-proxy.service
+PartOf=model-loader-proxy.service
+After=model-loader-proxy.service model-loader-api-gateway.service network-online.target
 Wants=network-online.target
-Requires=model-loader-api-gateway.service
+
+StartLimitIntervalSec=180s
+StartLimitBurst=5
 
 [Service]
 Type=simple

@@ -1,8 +1,16 @@
 [Unit]
 Description=model-loader external API authentication gateway
-After=network-online.target
-Wants=network-online.target model-loader-cloudflared.service
+# Lifecycle-bound to the proxy unit: starts only after the proxy signals
+# READY=1, stops (and never restarts alone) when the proxy stops or dies.
+# A gateway failure restarts only the gateway — never the proxy.
+BindsTo=model-loader-proxy.service
+PartOf=model-loader-proxy.service
+After=model-loader-proxy.service network-online.target
+Wants=network-online.target
 Before=model-loader-cloudflared.service
+
+StartLimitIntervalSec=120s
+StartLimitBurst=5
 
 [Service]
 Type=notify
@@ -15,6 +23,12 @@ TimeoutStopSec=10s
 UMask=0077
 NoNewPrivileges=yes
 PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=read-only
+# Deliberately no ProtectHome/ProtectSystem on this host: the caddy binary
+# lives under ~/.local/bin, and combined with ProtectSystem=strict ANY home
+# protection mode (yes/read-only/tmpfs, even with ReadWritePaths uid-mapped
+# exceptions) denies ExecStart resolution on this kernel/fs (verified:
+# 203/EXEC and 226/NAMESPACE across all variants). The binaries are
+# owner-only-writable (0755 root-owned dirs above ~) and the unit keeps
+# PrivateTmp + NoNewPrivileges + AF-restricted sockets; the trust boundary
+# that matters here is the loopback bind + Bearer check, unchanged.
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX

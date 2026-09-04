@@ -1,0 +1,43 @@
+[Unit]
+Description=model-loader local inference proxy (OpenAI-compatible)
+Documentation=https://github.com/quantmind-br/model-loader
+# Gateway and Tunnel wait for READY=1 from this unit (Type=notify) before
+# starting; they stop with it via BindsTo+PartOf. The proxy itself never
+# depends on them: an exposure failure must not kill local inference.
+Wants=model-loader-api-gateway.service model-loader-cloudflared.service
+Before=model-loader-api-gateway.service model-loader-cloudflared.service
+After=network-online.target
+
+StartLimitIntervalSec=120s
+StartLimitBurst=5
+
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStart=__MODEL_LOADER_BIN__ serve --host=127.0.0.1 --port=4321
+# Readiness (READY=1 after a healthy /_status probe) and the watchdog pulse
+# (WATCHDOG=1 only after a healthy probe) are implemented inside serve via
+# sd_notify; a wedged HTTP layer stops the heartbeat and this unit restarts.
+WatchdogSec=15s
+TimeoutStartSec=30s
+TimeoutStopSec=45s
+Restart=on-failure
+RestartSec=3s
+# Contain the proxy and everything it spawns: a forced stop leaves no orphan
+# backend holding VRAM. The supervisor's residual sweep stays as second layer.
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=yes
+# Deliberately no ProtectSystem/ProtectHome/PrivateTmp hardening: the proxy
+# binary itself lives under ~/.local/bin, backends execute from the vendored
+# trees plus ~/.local/bin, and model weights live anywhere under $HOME
+# (search_paths). Filesystem namespacing (even ProtectHome=yes) hides
+# ~/.local/bin and breaks ExecStart (status=203/EXEC) on this host. The
+# gateway and Tunnel units keep their strict profiles; the proxy is
+# loopback-only and unauthenticated by design, so its boundary is the
+# network (AF_INET/AF_INET6/AF_UNIX + loopback bind), not the filesystem.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+# No [Install] section by design: this unit is started on demand by the
+# TUI (or the operator), never enabled at boot. Linger keeps it alive
+# after logout once started.
+

@@ -83,7 +83,10 @@ When touching a `*help` package, re-run `go run ./cmd/regenerate-schemas`. The r
 
 **Loopback bind, no Host matcher (operator ruling).** The gateway site is `:4322` with `bind 127.0.0.1` and no hostname condition. Traffic that reaches that port comes from the Tunnel or from this machine — both already inside the boundary the bind draws — so repeating the DNS name in a matcher adds no protection. Enforcement is the `@authorized` header matcher; every other request gets the fixed `invalid_api_key` JSON 401 with `WWW-Authenticate: Bearer`.
 
-**Follows the proxy process.** `model-loader-api-gateway.service` and `model-loader-cloudflared.service` are not enabled at login. A 1s user timer (`model-loader-api-gateway-watch.timer`) starts them when `127.0.0.1:4321` is listening (TUI Start or `model-loader serve`) and stops them when that listener disappears. Stopping the Caddy unit also stops the Tunnel (`Requires=`). Linger remains enabled so the timer survives logout.
+**Follows the proxy unit.** `model-loader-proxy.service` (`Type=notify`) owns the proxy when the TUI manages it: it signals `READY=1` only after its own `/_status` probes healthy and pulses the systemd watchdog only while HTTP stays healthy. `model-loader-api-gateway.service` and `model-loader-cloudflared.service` are `BindsTo`+`PartOf`-bound to it — they start after `READY=1`, stop when the proxy stops or dies (even on `SIGKILL`, via cgroup containment), and restart independently on isolated failures without touching the proxy. A manual `model-loader serve` never starts or stops the exposure stack.
+
+The TUI supervisor auto-detects the loaded proxy unit and drives it via `systemctl --user`; without the unit (other OSes, no user systemd, unit not installed) it keeps the legacy detached-process supervision with `proxy-state.json`. Neither the proxy unit nor the gateway/Tunnel are enabled at boot — the TUI (or the operator) starts the proxy on demand. Linger keeps them alive after logout.
+> **Field note (2026-09-03, Arch Linux, systemd 261):** `ProtectHome`/`ProtectSystem` on a unit whose binary lives under `~/.local/bin` breaks `ExecStart` resolution on this host — verified `203/EXEC` and `226/NAMESPACE` across `yes`/`read-only`/`tmpfs`, even with `ReadWritePaths` exceptions. The proxy and gateway units therefore carry no `Protect*` filesystem namespacing (they keep `PrivateTmp`, `NoNewPrivileges`, and AF-restricted sockets); their trust boundary is the loopback bind plus the gateway's Bearer check. The Tunnel unit keeps its strict profile (binary at `/usr/bin`). Revisit if the binaries move out of `$HOME`.
 
 ### Install
 
@@ -94,18 +97,18 @@ export MODELLOADER_API_KEY
 deploy/cloudflare-model-loader/install.sh
 ```
 
-The installer renders `Caddyfile`, `gateway.env` (mode `0600`), `cloudflared.yml`, and the `dns-route` marker into `~/.config/model-loader/external-api/`, writes the gateway, Tunnel, watcher, and timer units into `~/.config/systemd/user/`, reuses or creates the Tunnel, provisions DNS with `--overwrite-dns=false` (an existing conflicting record stays a hard failure), scrubs inherited `TUNNEL_*` variables, enables lingering, enables the watcher timer, and finishes by running the verifier. It rejects keys outside `A-Za-z0-9._~+/:,@=-`: quotes, whitespace, `#`, `$`, `%`, or backslash parse differently across Caddy's envfile loader, systemd's `EnvironmentFile`, and the `{$MODELLOADER_API_KEY}` expansion.
+The installer renders `Caddyfile`, `gateway.env` (mode `0600`), `cloudflared.yml`, and the `dns-route` marker into `~/.config/model-loader/external-api/`, copies the PATH `caddy` into the private `~/.local/lib/model-loader/bin/caddy` (mode `0755`, pinned by the gateway unit), stages and `systemd-analyze`-validates the proxy, gateway, and Tunnel units before installing them into `~/.config/systemd/user/`, retires the legacy 1s polling watcher units, reuses or creates the Tunnel, provisions DNS with `--overwrite-dns=false` (an existing conflicting record stays a hard failure), scrubs inherited `TUNNEL_*` variables, refuses to proceed when `127.0.0.1:4321` is held by a non-unit legacy proxy, enables lingering, starts the proxy unit (which pulls gateway + Tunnel after `READY=1`), and finishes by running the verifier. It rejects keys outside `A-Za-z0-9._~+/:,@=-`: quotes, whitespace, `#`, `$`, `%`, or backslash parse differently across Caddy's envfile loader, systemd's `EnvironmentFile`, and the `{$MODELLOADER_API_KEY}` expansion.
 
 ### Verify
 
 ```bash
 deploy/cloudflare-model-loader/verify.sh
-systemctl --user status model-loader-api-gateway-watch.timer
+systemctl --user status model-loader-proxy.service
 systemctl --user status model-loader-api-gateway.service
 systemctl --user status model-loader-cloudflared.service
 ```
 
-`verify.sh` keeps the secret off argv (curl reads headers from a mode-`0600` file in a mode-`0700` temp directory, `--disable` ignores `~/.curlrc` and option-setting env vars, `--noproxy` stops ambient proxies from diverting loopback probes) and prints only non-secret PASS/FAIL evidence: 401/200 boundaries locally and on the public hostname, a non-destructive `/_admin/load` smoke check, a loopback allowlist over ports 4321/4322/49321, service state following the proxy listener, and file permissions.
+`verify.sh` keeps the secret off argv (curl reads headers from a mode-`0600` file in a mode-`0700` temp directory, `--disable` ignores `~/.curlrc` and option-setting env vars, `--noproxy` stops ambient proxies from diverting loopback probes) and prints only non-secret PASS/FAIL evidence: 401/200 boundaries locally and on the public hostname, a non-destructive `/_admin/load` smoke check, a loopback allowlist over ports 4321/4322/49321, proxy-unit activeness with valid `MainPID`, readiness + watchdog state, gateway/Tunnel `BindsTo` attachment, absence of the retired polling watcher, the pinned private Caddy copy validating the config, cloudflared HA metrics, and file permissions.
 
 ### Client contract
 
@@ -126,7 +129,7 @@ The gateway strips the `Authorization` header before proxying, so model-loader n
 ### Rollback
 
 ```bash
-systemctl --user disable --now model-loader-api-gateway-watch.timer
+systemctl --user stop model-loader-proxy.service
 systemctl --user stop model-loader-cloudflared.service
 systemctl --user stop model-loader-api-gateway.service
 # 1. Manual step, required before the Tunnel delete: the installed
@@ -137,10 +140,9 @@ systemctl --user stop model-loader-api-gateway.service
 cloudflared tunnel delete model-loader-quantforge
 # 3. Finally remove the local state and reload systemd.
 rm -rf ~/.config/model-loader/external-api/
-rm ~/.config/systemd/user/model-loader-api-gateway.service \
-   ~/.config/systemd/user/model-loader-cloudflared.service \
-   ~/.config/systemd/user/model-loader-api-gateway-watch.service \
-   ~/.config/systemd/user/model-loader-api-gateway-watch.timer
+rm ~/.config/systemd/user/model-loader-proxy.service \
+   ~/.config/systemd/user/model-loader-api-gateway.service \
+   ~/.config/systemd/user/model-loader-cloudflared.service
 systemctl --user daemon-reload
 ```
 

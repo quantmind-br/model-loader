@@ -166,34 +166,55 @@ after_profile="$(vcurl --header @"$work_dir/auth.header" \
 pass 'authenticated administrative route reached model-loader without changing state'
 
 # ---------------------------------------------------------------------------
-# Services, listeners, and permissions
+# Proxy unit lifecycle, exposure topology, listeners, and permissions
 # ---------------------------------------------------------------------------
-systemctl --user is-enabled --quiet model-loader-api-gateway-watch.timer \
-  || fail 'proxy watcher timer is not enabled'
-systemctl --user is-active --quiet model-loader-api-gateway-watch.timer \
-  || fail 'proxy watcher timer is not active'
+# The proxy unit owns the lifecycle now: gateway + Tunnel bind to it via
+# BindsTo/PartOf, so no polling timer exists anymore.
+systemctl --user is-active --quiet model-loader-proxy.service \
+  || fail 'model-loader-proxy.service is not active'
+proxy_pid="$(systemctl --user show model-loader-proxy.service -p MainPID --value)"
+[[ "$proxy_pid" =~ ^[1-9][0-9]*$ ]] || fail 'proxy unit has no valid MainPID'
+pass "proxy unit active with MainPID $proxy_pid"
+
+# Readiness done (READY=1 consumed) and watchdog armed.
+systemctl --user show model-loader-proxy.service -p ActiveState --value | grep -qx 'active' \
+  || fail 'proxy unit is not in active state'
+watchdog_usec="$(systemctl --user show model-loader-proxy.service -p WatchdogUSec --value)"
+# WatchdogUSec prints humanized ("15s") on systemd >= 250 and raw
+# microseconds on older ones — accept both.
+[[ "$watchdog_usec" =~ ^[1-9][0-9]* ]] || fail 'proxy unit watchdog is not configured'
+pass 'proxy readiness complete and watchdog configured'
+
+# Gateway and Tunnel follow the same lifecycle generation.
+systemctl --user is-active --quiet model-loader-api-gateway.service \
+  || fail 'gateway service is not active while the proxy is active'
+systemctl --user is-active --quiet model-loader-cloudflared.service \
+  || fail 'cloudflared service is not active while the proxy is active'
+systemctl --user show model-loader-api-gateway.service -p BindsTo --value | grep -q 'model-loader-proxy.service' \
+  || fail 'gateway is not BindsTo-bound to the proxy unit'
+systemctl --user show model-loader-cloudflared.service -p BindsTo --value | grep -q 'model-loader-proxy.service' \
+  || fail 'cloudflared is not BindsTo-bound to the proxy unit'
+pass 'gateway and Tunnel follow the proxy unit lifecycle'
+
+# The 1s polling watcher must be gone: timer dead, unit files retired.
+if systemctl --user is-active --quiet model-loader-api-gateway-watch.timer 2>/dev/null; then
+  fail 'legacy proxy watcher timer is still active'
+fi
+watch_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+if [[ -e "$watch_dir/model-loader-api-gateway-watch.service" || -e "$watch_dir/model-loader-api-gateway-watch.timer" ]]; then
+  fail 'legacy proxy watcher unit files still installed'
+fi
+pass 'legacy polling watcher retired'
+
+# Local reachability gates the rest: without the loopback proxy there is
+# nothing to expose, and the units above already prove lifecycle state.
 proxy_listening=0
 if ss -ltnH 'src = 127.0.0.1:4321' | grep -q .; then
   proxy_listening=1
 fi
-if [[ "$proxy_listening" == 1 ]]; then
-  synced=0
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
-    if systemctl --user is-active --quiet model-loader-api-gateway.service \
-      && systemctl --user is-active --quiet model-loader-cloudflared.service; then
-      synced=1
-      break
-    fi
-    sleep 1
-  done
-  [[ "$synced" == 1 ]] || fail 'gateway/cloudflared did not start while the proxy is listening'
-else
-  systemctl --user is-active --quiet model-loader-api-gateway.service \
-    && fail 'gateway service is active while the proxy is not listening'
-  systemctl --user is-active --quiet model-loader-cloudflared.service \
-    && fail 'cloudflared service is active while the proxy is not listening'
-fi
-pass 'external API services follow the proxy listener'
+[[ "$proxy_listening" == 1 ]] || fail 'proxy loopback listener missing while its unit is active'
+pass 'external API services follow the proxy unit'
+
 ss -ltnH '( sport = :4321 or sport = :4322 or sport = :49321 )' >"$work_dir/listeners"
 
 # Allowlist, not blocklist: every local address selected on the API ports
@@ -226,6 +247,31 @@ done
 [[ "$(stat -c '%a' "$CONFIG_DIR")" == 700 ]] || fail "unsafe permissions on $CONFIG_DIR"
 [[ "$(stat -c '%a' "$HOME/.cloudflared")" == 700 ]] || fail "unsafe permissions on $HOME/.cloudflared"
 pass 'secret and Tunnel files have restrictive permissions'
+
+# ---------------------------------------------------------------------------
+# Private gateway binary and Tunnel health (no secrets involved)
+# ---------------------------------------------------------------------------
+private_caddy="$HOME/.local/lib/model-loader/bin/caddy"
+[[ -x "$private_caddy" ]] || fail 'private caddy copy missing or not executable'
+[[ "$(stat -c '%a' "$private_caddy")" == 755 ]] || fail 'private caddy copy has wrong permissions'
+# The gateway unit must pin the private copy, never PATH.
+systemctl --user show model-loader-api-gateway.service -p ExecStart --value | grep -Fq "$private_caddy" \
+  || fail 'gateway unit does not pin the private caddy binary'
+"$private_caddy" validate \
+  --config "$CONFIG_DIR/Caddyfile" \
+  --adapter caddyfile \
+  --envfile "$CONFIG_DIR/gateway.env" >/dev/null \
+  || fail 'private caddy copy rejects the installed Caddyfile'
+pass 'private caddy copy is pinned, executable, and validates the config'
+
+# cloudflared metrics on loopback: HA connections registered, no hard error
+# counters tripping right now. Field names follow cloudflared's Prometheus
+# exposition (cloudflared_tunnel_ha_connections, cloudflared_tunnel_errors).
+metrics="$(vcurl http://127.0.0.1:49321/metrics)" || fail 'cloudflared metrics endpoint unreachable'
+ha="$(grep -E '^cloudflared_tunnel_ha_connections [0-9]+' <<<"$metrics" | awk '{print $2}' | head -n 1)"
+[[ -n "$ha" && "$ha" -ge 1 ]] 2>/dev/null || fail 'cloudflared reports no HA Tunnel connection'
+pass "cloudflared Tunnel connected (ha_connections=$ha)"
+
 
 # ---------------------------------------------------------------------------
 # Conditional streaming smoke test (never loads or swaps a model)

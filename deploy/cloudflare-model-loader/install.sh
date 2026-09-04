@@ -26,7 +26,7 @@ fail() {
   exit 1
 }
 
-for command in caddy cloudflared curl jq python3 systemctl install sed stat; do
+for command in caddy cloudflared curl jq python3 systemctl systemd-analyze ss install sed stat; do
   command -v "$command" >/dev/null 2>&1 || fail "required command not found: $command"
 done
 
@@ -186,56 +186,155 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Render user-systemd units using absolute paths
+# Pre-migration guards: systemd capability, proxy port ownership
 # ---------------------------------------------------------------------------
-caddy_bin="$(command -v caddy)"
+# Type=notify, WatchdogSec, BindsTo/PartOf and [Unit] StartLimit*= need a
+# reasonably modern user systemd; refuse to half-provision on an old one.
+systemd_version="$(systemctl --version | head -n 1 | grep -oE '[0-9]+' | head -n 1)"
+[[ -n "$systemd_version" && "$systemd_version" -ge 240 ]] \
+  || fail "user systemd is too old (found ${systemd_version:-unknown}, need >= 240) for Type=notify/watchdog lifecycle units"
+
+# Resolve the model-loader binary once and pin its absolute path into the
+# proxy unit. Never rely on PATH inside the unit environment.
+# Idempotency: an existing identical proxy unit is left untouched so a
+# rerun never restarts a healthy proxy.
+if [[ "${MODEL_LOADER_BIN:-}" == "" ]]; then
+  model_loader_bin="$(command -v model-loader)"
+else
+  model_loader_bin="$MODEL_LOADER_BIN"
+fi
+[[ -n "$model_loader_bin" ]] || fail 'model-loader not found in PATH; install it (make install) before provisioning (or export MODEL_LOADER_BIN)'
+[[ -x "$model_loader_bin" ]] || fail "model-loader is not executable: $model_loader_bin"
+require_safe_unit_path 'model-loader binary path' "$model_loader_bin"
+
+# If 127.0.0.1:4321 is already listening and the new proxy unit does not own
+# it, the legacy detached proxy is still running. Fail BEFORE mutating any
+# unit so the operator can stop it first — installing the units underneath a
+# live legacy proxy would split-brain the port.
+if ss -ltnH 'src = 127.0.0.1:4321' | grep -q .; then
+  if systemctl --user is-active --quiet model-loader-proxy.service 2>/dev/null; then
+    printf 'Proxy port 127.0.0.1:4321 is held by the installed proxy unit; continuing.\n'
+  else
+    fail '127.0.0.1:4321 is already listening but model-loader-proxy.service is not active — stop the legacy proxy first (TUI Server tab Stop, or model-loader instance stop), then rerun this installer'
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Private Caddy copy: a stable path the gateway unit can pin, immune to
+# later PATH changes. No network download — the operator provides caddy.
+# ---------------------------------------------------------------------------
+system_caddy="$(command -v caddy)"
+require_safe_unit_path 'caddy binary path' "$system_caddy"
+"$system_caddy" version >/dev/null 2>&1 || fail 'caddy binary failed to run (caddy version)'
+readonly PRIVATE_BIN_DIR="$HOME/.local/lib/model-loader/bin"
+require_safe_unit_path 'private binary dir' "$PRIVATE_BIN_DIR"
+install -d -m 0755 "$PRIVATE_BIN_DIR"
+# Atomic copy: temp file + rename, so a concurrent gateway reload never
+# executes a half-written binary.
+tmp_caddy="$PRIVATE_BIN_DIR/.caddy.tmp.$$"
+trap 'rm -f "$tmp_caddy"' EXIT
+install -m 0755 "$system_caddy" "$tmp_caddy"
+mv -f "$tmp_caddy" "$PRIVATE_BIN_DIR/caddy"
+trap - EXIT
+readonly CADDY_BIN="$PRIVATE_BIN_DIR/caddy"
+"$CADDY_BIN" version >/dev/null 2>&1 || fail 'private caddy copy failed to run'
+
+# ---------------------------------------------------------------------------
+# Render user-systemd units using absolute paths (staged, then validated)
+# ---------------------------------------------------------------------------
 cloudflared_bin="$(command -v cloudflared)"
-watch_bin="$SOURCE_DIR/watch-proxy.sh"
-require_safe_unit_path 'caddy binary path' "$caddy_bin"
 require_safe_unit_path 'cloudflared binary path' "$cloudflared_bin"
-require_safe_unit_path 'proxy watcher path' "$watch_bin"
+
+stage_dir="$(mktemp -d)"
+trap 'rm -rf "$stage_dir"' EXIT
+chmod 0700 "$stage_dir"
 
 sed \
   -e "s|__CONFIG_DIR__|$CONFIG_DIR|g" \
-  -e "s|__CADDY_BIN__|$caddy_bin|g" \
+  -e "s|__CADDY_BIN__|$CADDY_BIN|g" \
   "$SOURCE_DIR/model-loader-api-gateway.service.tmpl" \
-  >"$UNIT_DIR/model-loader-api-gateway.service"
+  >"$stage_dir/model-loader-api-gateway.service"
 
 sed \
   -e "s|__CONFIG_DIR__|$CONFIG_DIR|g" \
   -e "s|__CLOUDFLARED_BIN__|$cloudflared_bin|g" \
   -e "s|__TUNNEL_ID__|$tunnel_id|g" \
   "$SOURCE_DIR/model-loader-cloudflared.service.tmpl" \
-  >"$UNIT_DIR/model-loader-cloudflared.service"
+  >"$stage_dir/model-loader-cloudflared.service"
 
 sed \
-  -e "s|__WATCH_BIN__|$watch_bin|g" \
-  "$SOURCE_DIR/model-loader-api-gateway-watch.service.tmpl" \
-  >"$UNIT_DIR/model-loader-api-gateway-watch.service"
+  -e "s|__MODEL_LOADER_BIN__|$model_loader_bin|g" \
+  "$SOURCE_DIR/model-loader-proxy.service.tmpl" \
+  >"$stage_dir/model-loader-proxy.service"
 
-install -m 0600 \
-  "$SOURCE_DIR/model-loader-api-gateway-watch.timer.tmpl" \
-  "$UNIT_DIR/model-loader-api-gateway-watch.timer"
+# No placeholder may survive rendering; a leaked __TOKEN__ would fail
+# loudly here instead of producing a broken unit.
+if grep -rE '__[A-Z_]+__' "$stage_dir" 2>/dev/null; then
+  fail 'unreplaced placeholder in rendered units'
+fi
 
-chmod 0600 \
-  "$UNIT_DIR/model-loader-api-gateway.service" \
-  "$UNIT_DIR/model-loader-cloudflared.service" \
-  "$UNIT_DIR/model-loader-api-gateway-watch.service"
+# Validate everything before touching the live unit dir.
+systemd-analyze verify \
+  "$stage_dir/model-loader-proxy.service" \
+  "$stage_dir/model-loader-api-gateway.service" \
+  "$stage_dir/model-loader-cloudflared.service" \
+  || fail 'rendered units failed systemd-analyze verify'
 
 # ---------------------------------------------------------------------------
-# Validate configs, then enable the watcher timer. The gateway and Tunnel
-# services are not enabled: they start and stop with the proxy listener.
+# Install validated units; retire the 1s polling watcher
 # ---------------------------------------------------------------------------
-caddy validate \
+# Idempotency: byte-identical units are not rewritten, so a rerun neither
+# restarts healthy services nor churns mtimes (existing secrets, Tunnel
+# credentials, and DNS markers are never touched by this script).
+units_changed=0
+for unit in model-loader-proxy.service model-loader-api-gateway.service model-loader-cloudflared.service; do
+  if [[ -f "$UNIT_DIR/$unit" ]] && cmp -s "$stage_dir/$unit" "$UNIT_DIR/$unit"; then
+    printf 'Unit %s unchanged; leaving it alone.\n' "$unit"
+  else
+    install -m 0600 "$stage_dir/$unit" "$UNIT_DIR/$unit"
+    units_changed=1
+  fi
+done
+install -m 0600 "$stage_dir/model-loader-api-gateway.service" "$UNIT_DIR/model-loader-api-gateway.service"
+install -m 0600 "$stage_dir/model-loader-cloudflared.service" "$UNIT_DIR/model-loader-cloudflared.service"
+trap - EXIT
+rm -rf "$stage_dir"
+
+# ---------------------------------------------------------------------------
+# Validate configs, retire polling, start the proxy unit
+# ---------------------------------------------------------------------------
+"$CADDY_BIN" validate \
   --config "$CONFIG_DIR/Caddyfile" \
   --adapter caddyfile \
   --envfile "$CONFIG_DIR/gateway.env"
 
+if [[ "$units_changed" == 1 ]]; then
+  systemctl --user daemon-reload
+fi
+
+# The 1s TCP-polling watcher is superseded by BindsTo lifecycle units.
+# Remove it only now that the new topology validated and installed.
+systemctl --user disable --now model-loader-api-gateway-watch.timer >/dev/null 2>&1 || true
+systemctl --user disable --now model-loader-api-gateway-watch.service >/dev/null 2>&1 || true
+rm -f "$UNIT_DIR/model-loader-api-gateway-watch.service" "$UNIT_DIR/model-loader-api-gateway-watch.timer"
 systemctl --user daemon-reload
-systemctl --user disable --now model-loader-api-gateway.service >/dev/null 2>&1 || true
-systemctl --user disable --now model-loader-cloudflared.service >/dev/null 2>&1 || true
-systemctl --user enable --now model-loader-api-gateway-watch.timer
-systemctl --user start model-loader-api-gateway-watch.service
+
+# The gateway and Tunnel are not enabled: BindsTo on the proxy unit starts
+# and stops them with it. The proxy unit itself is never enabled at boot —
+# the TUI (or the operator) starts it on demand. The gateway/Tunnel are only
+# stopped here when their unit files actually changed (stale config on disk);
+# otherwise a no-op rerun must not flap healthy services — and the BindsTo
+# pull on the next proxy start (or the restart below) converges them.
+# gateway.env (the API key) is read by caddy at startup, so a key rotation
+# always restarts the gateway to pick it up.
+if [[ "$units_changed" == 1 ]]; then
+  systemctl --user disable --now model-loader-api-gateway.service >/dev/null 2>&1 || true
+  systemctl --user disable --now model-loader-cloudflared.service >/dev/null 2>&1 || true
+fi
+if ! systemctl --user is-active --quiet model-loader-proxy.service; then
+  systemctl --user start model-loader-proxy.service
+fi
+systemctl --user restart model-loader-api-gateway.service
 
 if command -v loginctl >/dev/null 2>&1; then
   loginctl enable-linger "$USER" || fail 'could not enable user lingering for boot startup'

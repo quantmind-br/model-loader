@@ -27,7 +27,7 @@ const (
 )
 
 // CuratedIkLlamaSchema returns the hand-curated ik-llama-cpp schema, synced
-// against ik_llama.cpp t0002-1002-g5763a901 (backends/ik_llama.cpp). Flag facts
+// against ik_llama.cpp 4874 / t0002-1060-gcaf7eae5 (backends/ik_llama.cpp). Flag facts
 // come from gpt_params_find_arg and gpt_params_print_usage in common/common.cpp:
 // its --help uses the pre-arg.cpp format that llamahelp cannot parse, so this
 // curated catalog is the only flag source. find_arg is shared by every example,
@@ -81,6 +81,7 @@ func CuratedIkLlamaSchema() domain.BackendValidationSchema {
 		boolFlag("transparent-huge-pages", "thp", nil, false, "Back model allocations with transparent huge pages.", ikGroupMemory),
 		boolFlag("prefetch-experts", "", nil, false, "Stream mmap'd MoE expert weights into the page cache (Linux).", ikGroupMemory),
 		intFlag("prefetch-experts-threads", "", nil, 0, "Number of expert-prefetch workers; 0 = automatic.", ikGroupMemory, ptrutil.Ptr(0), nil),
+		boolFlag("defer-ple", "", nil, false, "Keep the per-layer token embedding on the file instead of resident in memory (Linux).", ikGroupMemory),
 
 		// 5. Devices and GPU
 		intFlag("n-gpu-layers", "ngl", []string{"gpu-layers"}, -1, "Number of model layers offloaded to GPU; -1 = all.", ikGroupDevice, nil, nil),
@@ -290,7 +291,7 @@ func CuratedIkLlamaSchema() domain.BackendValidationSchema {
 		BackendID:     "ik-llama-cpp-default",
 		Source: domain.SchemaSource{
 			GeneratedFrom: "ik_llama.cpp curated reference",
-			SourceVersion: "curated-ik-llama-cpp-4867 (t0002-1053-g15dddc60)",
+			SourceVersion: "curated-ik-llama-cpp-4874 (t0002-1060-gcaf7eae5)",
 			Editable:      true,
 		},
 		Flags:        flags,
@@ -316,7 +317,7 @@ func IkLlamaPresentation() *domain.Presentation {
 		{Name: ikGroupModelLoad, Flags: []string{"hf-repo", "hf-file", "hf-token", "model-url", "override-kv", "control-vector", "control-vector-scaled", "control-vector-layer-range", "validate-quants", "no-warmup"}},
 		{Name: ikGroupContext, Flags: []string{"ctx-size", "n-predict", "batch-size", "ubatch-size", "keep", "sequences"}},
 		{Name: ikGroupCPU, Flags: []string{"threads", "threads-batch", "threads-draft", "threads-batch-draft", "threads-mtmd", "numa"}},
-		{Name: ikGroupMemory, Flags: []string{"mlock", "no-mmap", "run-time-repack", "check-tensors", "transparent-huge-pages", "prefetch-experts", "prefetch-experts-threads"}},
+		{Name: ikGroupMemory, Flags: []string{"mlock", "no-mmap", "run-time-repack", "check-tensors", "transparent-huge-pages", "prefetch-experts", "prefetch-experts-threads", "defer-ple"}},
 		{Name: ikGroupDevice, Flags: []string{"n-gpu-layers", "gpu-layers-draft", "split-mode", "tensor-split", "main-gpu", "max-gpu", "device", "override-tensor", "cpu-moe", "n-cpu-moe", "defer-experts", "no-offload-only-active-experts", "offload-policy", "fit", "fit-margin", "gpu-fit-margin", "max-extra-alloc", "worst-graph-tokens", "rpc", "cuda-params", "graph-reduce-type", "graph-attn-precision", "split-mode-graph-scheduling", "scheduler-async"}},
 		{Name: ikGroupAttention, Flags: []string{"flash-attn", "mla-use", "attention-max-batch", "no-fused-moe", "grouped-expert-routing", "no-fused-up-gate", "no-fused-mul-multiadd", "merge-qkv", "merge-up-gate-experts", "smart-expert-reduction", "graph-reuse", "grp-attn-n", "grp-attn-w", "dsa", "fused-indexer-topk", "dsa-top-k"}},
 		{Name: ikGroupKV, Flags: []string{"cache-type-k", "cache-type-v", "cache-type-k-draft", "cache-type-v-draft", "cache-type-k-first", "cache-type-k-last", "cache-type-v-first", "cache-type-v-last", "indexer-cache-type-k", "k-cache-hadamard", "v-cache-hadamard", "no-kv-offload", "defrag-thold", "swa-compress"}},

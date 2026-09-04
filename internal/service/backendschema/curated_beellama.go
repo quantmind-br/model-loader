@@ -361,8 +361,8 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		BackendKind:   domain.BackendKindBeeLlamaCpp,
 		BackendID:     "beellama-cpp-default",
 		Source: domain.SchemaSource{
-			GeneratedFrom: "beellama.cpp curated reference (common/arg.cpp @ f8cd4e6dd)",
-			SourceVersion: "curated-beellama-cpp-v0.4.4-gf8cd4e6dd-b11573",
+			GeneratedFrom: "beellama.cpp curated reference (common/arg.cpp @ cd3c41e73)",
+			SourceVersion: "curated-beellama-cpp-v0.4.4-gcd3c41e73-b11574",
 			Editable:      true,
 		},
 		Flags:        flags,
