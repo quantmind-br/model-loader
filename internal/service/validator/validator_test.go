@@ -250,6 +250,34 @@ func TestValidator_HFRepoIDAllowedForUnsloth(t *testing.T) {
 	}
 }
 
+// FreeToken's --model takes a local dir, an FTW dir, or a hub repo id
+// (server/args.py; --model-source picks huggingface or modelscope), so a bare
+// repo id must validate while a missing local path still errors.
+func TestValidator_HFRepoIDAllowedForFreeToken(t *testing.T) {
+	v := New(log.Nop())
+	cases := []struct {
+		name    string
+		model   string
+		wantErr bool
+	}{
+		{"dotted HF repo ID allowed for freetoken", "Qwen/Qwen3.6-35B-A3B", false},
+		{"nvidia NVFP4 repo ID allowed", "nvidia/GLM-5.2-NVFP4", false},
+		// Absolute, so LooksLikeHFRepo rejects it up front: a real local
+		// checkpoint path that does not exist still has to fail.
+		{"local checkpoint dir missing still errors", "/nonexistent/models/Qwen3.6-35B-A3B", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := domain.Profile{ID: "x", Model: tc.model}
+			rep := v.Validate(p, domain.FlagSchema{}, domain.BackendKindFreeToken)
+			gotErr := len(rep.Errors) > 0
+			if gotErr != tc.wantErr {
+				t.Errorf("Errors=%v, wantErr=%v", rep.Errors, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestValidator_ExistingLocalPathNotTreatedAsHFRepo(t *testing.T) {
 	tmp := t.TempDir()
 	existingDir := tmp + "/models"

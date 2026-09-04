@@ -225,6 +225,7 @@ func TestBuildLaunchEnv(t *testing.T) {
 			domain.BackendKindVLLM,
 			domain.BackendKindSGLang,
 			domain.BackendKindUnsloth,
+			domain.BackendKindFreeToken,
 		} {
 			got := buildLaunchEnv(kind, nil)
 			if !envContains(got, "PYTHONUNBUFFERED=1") {

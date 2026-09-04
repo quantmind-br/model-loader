@@ -16,6 +16,7 @@ const (
 	BackendKindUnsloth      BackendKind = "unsloth"
 	BackendKindTabby        BackendKind = "tabby"
 	BackendKindLMStudio     BackendKind = "lmstudio"
+	BackendKindFreeToken    BackendKind = "freetoken"
 )
 
 // BackendMeta holds timestamps and bookkeeping for a backend entry.

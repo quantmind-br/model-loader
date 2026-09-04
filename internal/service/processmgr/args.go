@@ -46,6 +46,8 @@ func BuildArgsForBackend(p domain.Profile, kind domain.BackendKind, executable s
 		return buildTabbyArgs(p), nil
 	case domain.BackendKindLMStudio:
 		return buildLMStudioArgs(p), nil
+	case domain.BackendKindFreeToken:
+		return buildFreeTokenArgs(p), nil
 	default:
 		return nil, fmt.Errorf("unsupported backend kind for arg building: %s", kind)
 	}
@@ -169,6 +171,16 @@ func buildUnslothArgs(p domain.Profile) []string {
 // --cors) to `lms server start` and the rest to `lms load`.
 func buildLMStudioArgs(p domain.Profile) []string {
 	return buildArgs(p, argBuildOpts{skipKeys: []string{"model"}, modelFlag: "--model"})
+}
+
+// buildFreeTokenArgs builds args for FreeToken (`ft serve`), launched through
+// backends/freetoken/freetoken-serve.sh. The profile's Model is the checkpoint
+// directory, FTW directory, or HF/ModelScope repo id and is emitted under
+// --model; --model-path is the same argparse option under its canonical
+// spelling, so both are skipped as p.Args keys to avoid emitting the model
+// twice. --port is injected by prepareLaunch; the wrapper forces --host.
+func buildFreeTokenArgs(p domain.Profile) []string {
+	return buildArgs(p, argBuildOpts{skipKeys: []string{"model", "model-path"}, modelFlag: "--model"})
 }
 
 // tabbyNargsFlags are TabbyAPI list-valued flags whose argparse definition uses

@@ -45,6 +45,7 @@ tied to that exact hardware.
 | `unsloth` | Unsloth |
 | `tabby` | TabbyAPI |
 | `lmstudio` | LM Studio (`lms` CLI + daemon) |
+| `freetoken` | FreeToken (FlashML edge-native MoE offload engine) |
 
 Backends are catalog entries, not bundled dependencies. Register the executable
 you want to run and associate it with one of these kinds.

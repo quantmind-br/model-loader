@@ -375,9 +375,14 @@ func applyExistenceRules(p domain.Profile, kind domain.BackendKind, rep Report) 
 	})
 }
 
+// supportsHFRepo reports whether the backend resolves a bare Hugging Face repo
+// id itself (downloading it on first launch) instead of requiring a local
+// path. FreeToken's --model takes a local dir, an FTW dir, or a hub repo id
+// (server/args.py; --model-source picks huggingface or modelscope).
 func supportsHFRepo(kind domain.BackendKind) bool {
 	switch kind {
-	case domain.BackendKindVLLM, domain.BackendKindSGLang, domain.BackendKindUnsloth:
+	case domain.BackendKindVLLM, domain.BackendKindSGLang, domain.BackendKindUnsloth,
+		domain.BackendKindFreeToken:
 		return true
 	}
 	return false

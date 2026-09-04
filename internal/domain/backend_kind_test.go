@@ -31,3 +31,9 @@ func TestBackendKindLMStudioValue(t *testing.T) {
 		t.Fatalf("got %q, want %q", BackendKindLMStudio, "lmstudio")
 	}
 }
+
+func TestBackendKindFreeTokenValue(t *testing.T) {
+	if BackendKindFreeToken != "freetoken" {
+		t.Fatalf("got %q, want %q", BackendKindFreeToken, "freetoken")
+	}
+}

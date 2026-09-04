@@ -305,18 +305,25 @@ func (m *fsManager) launchForeground(p domain.Profile, plan launchPlan, attemptI
 }
 
 // pythonBackends are launched through a Python interpreter (vllm serve,
-// unsloth studio run, python -m sglang.launch_server). Python block-buffers
-// stdout when it is redirected to a file (the managed log) instead of a TTY,
-// so log lines reach the file in large delayed chunks instead of per-line.
-// The monitor tails that file via fsnotify Write events, so buffered output
-// makes the Server tab show logs in late bursts — unlike the C++ llama-server,
-// which flushes per line. PYTHONUNBUFFERED=1 forces unbuffered stdio so the
-// logs stream live. (dflash is the native dflash_server binary, not Python.)
+// unsloth studio run, python -m sglang.launch_server, ft serve). Python
+// block-buffers stdout when it is redirected to a file (the managed log)
+// instead of a TTY, so log lines reach the file in large delayed chunks
+// instead of per-line. The monitor tails that file via fsnotify Write events,
+// so buffered output makes the Server tab show logs in late bursts — unlike
+// the C++ llama-server, which flushes per line. PYTHONUNBUFFERED=1 forces
+// unbuffered stdio so the logs stream live. (dflash is the native
+// dflash_server binary, not Python.)
+//
+// For freetoken this is load-bearing rather than cosmetic: its readiness
+// probe reads the managed log for the ready line (see readiness.go), so a
+// buffered stdio would delay readiness by however long the buffer takes to
+// fill.
 var pythonBackends = map[domain.BackendKind]bool{
-	domain.BackendKindVLLM:    true,
-	domain.BackendKindSGLang:  true,
-	domain.BackendKindUnsloth: true,
-	domain.BackendKindTabby:   true,
+	domain.BackendKindVLLM:      true,
+	domain.BackendKindSGLang:    true,
+	domain.BackendKindUnsloth:   true,
+	domain.BackendKindTabby:     true,
+	domain.BackendKindFreeToken: true,
 }
 
 // buildLaunchEnv overlays the profile env (applyProfileEnv) and, for

@@ -350,3 +350,65 @@ func TestBuildArgsForBackend_LMStudio(t *testing.T) {
 		t.Fatalf("BuildArgsForBackend(lmstudio):\n got = %v\nwant = %v", got, want)
 	}
 }
+
+func TestBuildArgsForBackend_FreeToken(t *testing.T) {
+	p := domain.Profile{
+		Model: "/models/Qwen3.6-35B-A3B",
+		Args: map[string]any{
+			"moe-backend":          "hybrid",
+			"moe-cache-auto":       true,
+			"disable-pynccl":       false,
+			"memory-ratio":         0.82,
+			"kv-reserve-tokens":    float64(16384),
+			"tensor-parallel-size": 2,
+			"attention-backend":    "fa,triton",
+			"port":                 8123,
+		},
+		ExtraArgs: []string{"--enable-cache-report"},
+	}
+	got, err := BuildArgsForBackend(p, domain.BackendKindFreeToken, "")
+	if err != nil {
+		t.Fatalf("BuildArgsForBackend(freetoken): %v", err)
+	}
+	// A false bool omits its flag: --disable-pynccl is argparse store_false,
+	// so emitting it would turn PyNCCL OFF, the opposite of the profile value.
+	want := []string{
+		"--model", "/models/Qwen3.6-35B-A3B",
+		"--attention-backend", "fa,triton",
+		"--kv-reserve-tokens", "16384",
+		"--memory-ratio", "0.82",
+		"--moe-backend", "hybrid",
+		"--moe-cache-auto",
+		"--port", "8123",
+		"--tensor-parallel-size", "2",
+		"--enable-cache-report",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("BuildArgsForBackend(freetoken):\n got = %v\nwant = %v", got, want)
+	}
+}
+
+// The model is emitted from Profile.Model under --model; --model-path is the
+// same argparse option under its canonical spelling, so a profile carrying
+// either key must not produce a second model argument.
+func TestBuildArgsForBackend_FreeToken_SkipsModelAliasKeys(t *testing.T) {
+	p := domain.Profile{
+		Model: "/models/GLM-5.3-Flash-NVFP4",
+		Args: map[string]any{
+			"model":      "/stale/path",
+			"model-path": "/stale/path",
+			"cache-type": "radix",
+		},
+	}
+	got, err := BuildArgsForBackend(p, domain.BackendKindFreeToken, "")
+	if err != nil {
+		t.Fatalf("BuildArgsForBackend(freetoken): %v", err)
+	}
+	want := []string{
+		"--model", "/models/GLM-5.3-Flash-NVFP4",
+		"--cache-type", "radix",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("BuildArgsForBackend(freetoken alias skip):\n got = %v\nwant = %v", got, want)
+	}
+}

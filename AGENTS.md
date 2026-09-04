@@ -32,8 +32,9 @@ become healthy, and forwards the request.
     `instance`, `backend`, `model`, `benchmark`, …) with JSON output.
 - Backends are registered as **executables + kinds** (`llama-server`, `vllm`,
   `sglang`, `dflash`, `beellama-cpp`, `buun-llama-cpp`, `ik-llama-cpp`,
-  `tabby`, `unsloth`, `lmstudio`). Profiles are validated, portable JSON that resolve to a
-  concrete backend binary and argument list at launch time.
+  `tabby`, `unsloth`, `lmstudio`, `freetoken`). Profiles are validated, portable
+  JSON that resolve to a concrete backend binary and argument list at launch
+  time.
 - The proxy binds to **loopback by default and has no authentication** — do not
   expose it to an untrusted network without an authenticated reverse proxy.
 
@@ -159,7 +160,7 @@ Use the Server tab or `model-loader instance stop` to stop one.
 | `configweb` | On-demand web GUI the TUI uses to edit profiles |
 | `llamabin` | Resolve/validate `llama-server` binary path (+ python fallback) |
 | `llamahelp` | Parse `llama-server --help` into FlagSchema; embedded fallback |
-| `vllmhelp`, `sglanghelp`, `tabbyhelp`, `unslothhelp`, `buunhelp`, `dflashhelp`, `lmstudiohelp` | Embedded curated schemas for Python/other backends |
+| `vllmhelp`, `sglanghelp`, `tabbyhelp`, `unslothhelp`, `buunhelp`, `dflashhelp`, `lmstudiohelp`, `freetokenhelp` | Embedded curated schemas for Python/other backends |
 | `sizing`, `metricsstore`, `migration` | Context-window sizing, metric persistence, legacy migrations |
 | `internal/{fsx,procutil,shellsplit,ptrutil}` | Internal helpers (atomic JSON, process utils, shell splitting) |
 
@@ -183,8 +184,9 @@ failing loudly.
 
 One directory per backend variant (e.g. `llama.cpp-stable`,
 `llama.cpp-nightly`, `vllm-stable`, `vllm-nightly`, `sglang-*`, `dflash`,
-`tabby`, `unsloth`, `buun-llama-cpp`, `beellama.cpp`, `sndr-vllm`, …). These
-are **vendored checkouts/venvs, gitignored, no submodules** — each tree has
+`tabby`, `unsloth`, `buun-llama-cpp`, `beellama.cpp`, `sndr-vllm`,
+`freetoken`, …). These are **vendored checkouts/venvs, gitignored, no
+submodules** — each tree has
 its own `backend-build.sh` and is managed as its own checkout. Never rely on
 them being present in a fresh clone.
 
@@ -399,7 +401,7 @@ Required minimum:
 ### Binary dependencies (on PATH or registered in catalog)
 
 `llama-server` (llama.cpp), `vllm`, `sglang`, `dflash_server`, `unsloth`,
-`beellama`, `buun`, `tabbyapi`. User-registered via
+`beellama`, `buun`, `tabbyapi`, `ft` (FreeToken). User-registered via
 `model-loader backend add --executable <path> --kind <kind>`. Not hard-coded.
 
 Compound Python commands (`python -m sglang.launch_server`, …) are built in

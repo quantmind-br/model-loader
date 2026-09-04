@@ -167,3 +167,57 @@ func TestWaitHealthy_LMStudioUsesV1Models(t *testing.T) {
 		t.Fatalf("WaitHealthy(untracked) = %v, want ErrHealthCheckTimeout", err)
 	}
 }
+
+// FreeToken binds uvicorn BEFORE the weights load and answers GET /health with
+// 200 + {"status":"loading"} the whole time, so WaitReady must NOT fall through
+// to WaitHealthy for it: the ready line in the managed log is the only signal
+// that the admission gate flipped to "serving".
+func TestWaitReady_FreeTokenIgnoresLoadingHealth(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"loading","phase":"weights"}`))
+	}))
+	defer srv.Close()
+	u, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatalf("parse srv URL: %v", err)
+	}
+	port, err := strconv.Atoi(u.Port())
+	if err != nil {
+		t.Fatalf("parse port: %v", err)
+	}
+
+	logPath := filepath.Join(t.TempDir(), "freetoken.log")
+	if err := os.WriteFile(logPath, []byte("[initializer] Parsed arguments:\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	inst := domain.RunningInstance{
+		PID:     os.Getpid(),
+		Port:    port,
+		Kind:    domain.BackendKindFreeToken,
+		LogPath: logPath,
+	}
+	m := New(Config{})
+
+	// A 200-but-loading /health must not satisfy readiness.
+	if _, err := m.WaitReady(inst, 400*time.Millisecond, ""); !errors.Is(err, ErrReadyTimeout) {
+		t.Fatalf("WaitReady(freetoken, loading) = %v, want ErrReadyTimeout", err)
+	}
+
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		f, _ := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0o644)
+		_, _ = f.WriteString("[FrontendAPI] API server is ready to serve on 127.0.0.1:1919\n")
+		_ = f.Close()
+	}()
+	token, err := m.WaitReady(inst, 3*time.Second, "")
+	if err != nil {
+		t.Fatalf("WaitReady(freetoken, ready): %v", err)
+	}
+	// FreeToken serves unauthenticated: the matched line is a log marker, not
+	// a credential, so the proxy must be handed no upstream token.
+	if token != "" {
+		t.Fatalf("token = %q, want empty", token)
+	}
+}
