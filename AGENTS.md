@@ -58,13 +58,14 @@ internal/
   config/                # config.toml load/save (paths, models.search_paths, ui, logging, serve)
   domain/                # shared types, zero external deps (Profile, Instance, Backend, flags, schemas)
   log/                   # slog wrapper; file-only logging, log.Nop()
+  sdnotify/              # systemd notify client (READY/WATCHDOG/STOPPING), no external deps
   ui/                    # Bubble Tea root + 5 tab pages, components, theme, contracts
   service/               # every domain service (see §3)
 backends/                # vendored backend checkouts/venvs (gitignored, each with backend-build.sh)
 docs/  openwiki/  testdata/
 ```
 
-501 Go files in the project proper (498 under `internal/`, 3 under `cmd/`), 219 `*_test.go` files. The gitignored `backends/` trees are vendored checkouts with their own sources and are not counted.
+522 Go files in the project proper (519 under `internal/`, 3 under `cmd/`), 228 `*_test.go` files. The gitignored `backends/` trees are vendored checkouts with their own sources and are not counted.
 
 ### DI entry points
 
@@ -128,8 +129,8 @@ Use the Server tab or `model-loader instance stop` to stop one.
 - **`internal/app`** — `Bootstrap()` DI graph + single-instance lock
   (`AcquireSingleInstanceLock`, `bootstrapWithLock`).
 - **`internal/cli`** — Cobra tree (see §5 CLI conventions). Commands:
-  `serve`, `profile {list,show,add,delete,set-default,export,import,validate,
-  duplicate,rename,pin,unpin}`, `instance {list,show,history,start,stop,
+  `serve`, `profile {list,show,create,edit,delete,duplicate,rename,pin,unpin,
+  export,import,validate}`, `instance {list,show,history,start,stop,
   restart,logs,metrics}`, `backend {list,probe,show,schema,refresh,apply,
   add,delete,set-default}`, `model {list,search,info,download,downloads,cancel,
   resume}`, `benchmark {run,list,compare,history,show,transcript,export,delete,
@@ -147,7 +148,7 @@ Use the Server tab or `model-loader instance stop` to stop one.
 | `profilestore` | Persist/import/export/migrate Profile JSON on disk |
 | `validator` | Validate profiles against FlagSchema + fixed rules (`rules.go`, `crossfield.go`) |
 | `modelscanner` | Walk search paths, emit `ScanEvent` for GGUF files (quant + param count) |
-| `processmgr` | Launch/track/kill/recover/prune/restart LLM server processes; `instances.json` registry; 35 files, largest service |
+| `processmgr` | Launch/track/kill/recover/prune/restart LLM server processes; `instances.json` registry; 33 files, largest service |
 | `monitor` | Stream logs, slot snapshots, GPU stats, aggregated metrics |
 | `httpproxy` | OpenAI-shaped reverse proxy with on-demand backend swap |
 | `proxysupervisor` | Run the HTTP proxy as a detached OS process with persistent state |
@@ -185,7 +186,7 @@ failing loudly.
 One directory per backend variant (e.g. `llama.cpp-stable`,
 `llama.cpp-nightly`, `vllm-stable`, `vllm-nightly`, `sglang-*`, `dflash`,
 `tabby`, `unsloth`, `buun-llama-cpp`, `beellama.cpp`, `sndr-vllm`,
-`freetoken`, …). These are **vendored checkouts/venvs, gitignored, no
+`freetoken`, `lms`, …). These are **vendored checkouts/venvs, gitignored, no
 submodules** — each tree has
 its own `backend-build.sh` and is managed as its own checkout. Never rely on
 them being present in a fresh clone.
@@ -194,12 +195,12 @@ them being present in a fresh clone.
 
 - `testdata/fake-llama-server.sh` — fake llama-server for processmgr tests
   (serves `/health`, echoes argv to stderr, SIGTERM-clean; Linux-only, needs
-  `python3` or `nc`). `fake-llama-help.sh`, `help-v10152.txt`,
-  `help-v10152.golden.json` support llamahelp golden tests.
-- 219 `_test.go` files: 0 in `cmd/`, 141 in `internal/service/**` (incl. 3 in
-  `internal/service/internal/`), 25 in `internal/cli/`, 39 in `internal/ui/**`,
+  `python3` or `nc`). `fake-llama-help.sh`, `help-v10686.txt`,
+  `help-v10686.golden.json` support llamahelp golden tests.
+- 228 `_test.go` files: 0 in `cmd/`, 146 in `internal/service/**` (incl. 3 in
+  `internal/service/internal/`), 27 in `internal/cli/`, 39 in `internal/ui/**`,
   3 in `internal/app/`, 8 in `internal/domain/`, 2 in `internal/config/`,
-  1 in `internal/log/`.
+  1 in `internal/log/`, 2 in `internal/sdnotify/`.
 
 ### Scripts — `cmd/`
 
@@ -213,7 +214,8 @@ them being present in a fresh clone.
 `README.md` (user guide), `ARCHITECTURE.md` (pointer into openwiki),
 `CHANGELOG.md`, `BUGS.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
 `LICENSE`, `docs/{BENCHMARK.md, config.md, backend-schema-update.md,
-sndr-backend.md, deep-swe.md, profile-schema.json}` and historical
+sndr-backend.md, deep-swe.md, swe-bench-pro.md, troubleshooting.md,
+profile-schema.json, reports/}` and historical
 `docs/superpowers/plans/`. The maintained topic docs are in `openwiki/` (§8).
 
 ---
@@ -386,7 +388,7 @@ Required minimum:
 | `internal/service/httpproxy/` | OpenAI-shaped reverse proxy + API translations |
 | `internal/service/backendschema/presentation.go` | `essentialSeed`, `BuildPresentation`, `ReconcilePresentation` |
 | `internal/service/backendschema/curated_*.go` | Curated Backends-tab presentations per kind |
-| `internal/service/llamahelp/` | `--help` parser + embedded v9761 schema + golden files |
+| `internal/service/llamahelp/` | `--help` parser + embedded v10686 schema + golden files |
 | `internal/service/backendcatalog/` | `catalog.json` + sentinel `ErrNotFound` |
 | `internal/service/benchmark/` | `Runner` — 12 modes + regression bundles |
 
@@ -401,7 +403,7 @@ Required minimum:
 ### Binary dependencies (on PATH or registered in catalog)
 
 `llama-server` (llama.cpp), `vllm`, `sglang`, `dflash_server`, `unsloth`,
-`beellama`, `buun`, `tabbyapi`, `ft` (FreeToken). User-registered via
+`beellama`, `buun`, `tabbyapi`, `lms` (LM Studio), `ft` (FreeToken). User-registered via
 `model-loader backend add --executable <path> --kind <kind>`. Not hard-coded.
 
 Compound Python commands (`python -m sglang.launch_server`, …) are built in
@@ -474,7 +476,7 @@ updating source code/docs and letting OpenWiki regenerate. Local
 
 `llamahelp/parser_test.go::TestGenerateGolden` runs only with `-update`; it
 commits the parsed schema so the golden test can diff without a live
-`llama-server` binary (`help-v10152.golden.json` + `fake-llama-help.sh`).
+`llama-server` binary (`help-v10686.golden.json` + `fake-llama-help.sh`).
 
 ### Test categories
 
@@ -485,7 +487,7 @@ commits the parsed schema so the golden test can diff without a live
 - **Real processes + port allocation:** `processmgr/*`, `proxysupervisor/*`,
   `internal/service/internal/procutil/*`, `benchmark/*_watchdog_test.go`,
   `benchmark/{llamabench,longcontext}_probe_test.go`.
-- **CLI-level integration:** 25 files in `internal/cli/*`. Uses `bytes.Buffer`
+- **CLI-level integration:** 27 files in `internal/cli/*`. Uses `bytes.Buffer`
   as `io.Writer`; calls leaf command funcs directly; never `exec.Command` of
   the binary itself.
 - **TUI integration:** `internal/ui/root_test.go` +
@@ -521,3 +523,19 @@ audit id in a comment.
 No codecov config and no `-coverprofile` Make target. `.gitignore` excludes
 `coverage.out` / `coverage.html`. The CI quality gate is build + test + `go vet`
 on `main` push/PR.
+
+<!-- OPENWIKI:START -->
+
+## OpenWiki
+
+See [AGENTS.md](AGENTS.md) for OpenWiki agent instructions.
+
+<!-- OPENWIKI:END -->
+time context, not required startup reading.
+
+- Treat source code and tests as authoritative. A brief's unknowns and review items are verification gaps, not automatic requirements.
+- Prefer the narrowest quiet validation that proves the changed behavior. Preserve complete failure output.
+
+The scheduled OpenWiki GitHub Actions workflow refreshes the repository wiki. Do not hand-edit generated OpenWiki pages unless explicitly asked; prefer updating source code/docs and letting OpenWiki regenerate.
+
+<!-- OPENWIKI:END -->

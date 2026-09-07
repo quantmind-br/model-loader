@@ -287,7 +287,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		BackendID:     "llama-cpp-default",
 		Source: domain.SchemaSource{
 			GeneratedFrom: "llama.cpp common/arg.cpp (LLAMA_EXAMPLE_SERVER), cross-checked against every registered llama-server binary",
-			SourceVersion: "curated-llama-server-b10770 (union: stable 10686, nightly 10770, prisma-ml 10663, nanbeige42 10151, poolside-laguna 06f8ceb)",
+			SourceVersion: "curated-llama-server-b10816 (union: stable 10686, nightly 10816, prisma-ml 10663, nanbeige42 10151, poolside-laguna 06f8ceb)",
 			Editable:      true,
 		},
 		Flags:        flags,

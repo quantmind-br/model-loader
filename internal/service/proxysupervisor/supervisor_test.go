@@ -14,7 +14,19 @@ import (
 	"github.com/quantmind-br/model-loader/internal/service/internal/procutil"
 )
 
+func disableSystemdForTest(t *testing.T) {
+	t.Helper()
+	orig := runSystemctl
+	runSystemctl = func(ctx context.Context, args ...string) (string, error) {
+		return "not-found\n", nil
+	}
+	t.Cleanup(func() {
+		runSystemctl = orig
+	})
+}
+
 func TestSupervisorLifecycle(t *testing.T) {
+	disableSystemdForTest(t)
 	tmp := t.TempDir()
 	statePath := filepath.Join(tmp, "proxy-state.json")
 
@@ -38,6 +50,7 @@ func TestSupervisorLifecycle(t *testing.T) {
 }
 
 func TestStatusProbeFailureSetsLastError(t *testing.T) {
+	disableSystemdForTest(t)
 	// A raw TCP listener that never accepts: pidAlive and portOpen succeed
 	// (the process is "alive" and the port dials), but the /_status HTTP GET
 	// times out — the degraded case Status must surface via LastError.
@@ -94,6 +107,7 @@ func TestStateRoundTrip(t *testing.T) {
 }
 
 func TestReconcileCleansDeadState(t *testing.T) {
+	disableSystemdForTest(t)
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "state.json")
 
@@ -140,6 +154,7 @@ func freePortSup(t *testing.T) int {
 // probe failure keeps a healthy proxy supervised (degraded) for two strikes;
 // the third drops state.
 func TestStatusHysteresisDropsAfterThreeFailures(t *testing.T) {
+	disableSystemdForTest(t)
 	tmp := t.TempDir()
 	statePath := filepath.Join(tmp, "proxy-state.json")
 	port := freePortSup(t) // nobody listening → portOpen fails
@@ -172,6 +187,7 @@ func TestStatusHysteresisDropsAfterThreeFailures(t *testing.T) {
 // child dies while a pre-existing proxy holds the port must fail Start and
 // never write proxy-state.json.
 func TestStartFailsWhenChildDiesButPortHeld(t *testing.T) {
+	disableSystemdForTest(t)
 	tmp := t.TempDir()
 	statePath := filepath.Join(tmp, "proxy-state.json")
 	ln, err := net.Listen("tcp", "127.0.0.1:0") // occupy the port
@@ -195,6 +211,7 @@ func TestStartFailsWhenChildDiesButPortHeld(t *testing.T) {
 // TestStopEscalatesToSIGKILL — audit A8: a serve that ignores SIGTERM is still
 // dead after Stop, via SIGKILL escalation through TerminateTree.
 func TestStopEscalatesToSIGKILL(t *testing.T) {
+	disableSystemdForTest(t)
 	tmp := t.TempDir()
 	statePath := filepath.Join(tmp, "proxy-state.json")
 	cmd := exec.Command("bash", "-c", "trap '' TERM; sleep 300")
@@ -226,6 +243,7 @@ func TestStopEscalatesToSIGKILL(t *testing.T) {
 // caller's ctx, so a cancellation (TUI quit / CLI Ctrl-C) aborts it well before
 // the 10s timeout instead of always blocking the full duration.
 func TestStart_HonorsCallerContext(t *testing.T) {
+	disableSystemdForTest(t)
 	tmp := t.TempDir()
 	// Fake binary that stays alive but never binds the port.
 	fake := filepath.Join(tmp, "fake-proxy.sh")

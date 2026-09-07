@@ -224,7 +224,7 @@ func TestCuratedBuun_EssentialsAndSource(t *testing.T) {
 	}
 	// The fork's build number and its git describe are different numbering
 	// schemes, so both are tracked.
-	if schema.Source.SourceVersion != "11723 (7a918624b) / b9637-2086-g7a918624b" {
+	if schema.Source.SourceVersion != "11806 (c9c52d718) / b9637-2169-gc9c52d718" {
 		t.Errorf("SourceVersion = %q", schema.Source.SourceVersion)
 	}
 

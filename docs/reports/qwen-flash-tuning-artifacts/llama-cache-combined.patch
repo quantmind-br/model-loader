@@ -1,0 +1,1648 @@
+diff --git a/common/arg.cpp b/common/arg.cpp
+index 2669cacd6..d3493da97 100644
+--- a/common/arg.cpp
++++ b/common/arg.cpp
+@@ -2540,6 +2540,20 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
+             LOG_WRN("DEPRECATED: --defrag-thold is deprecated and no longer necessary to specify\n");
+         }
+     ).set_env("LLAMA_ARG_DEFRAG_THOLD"));
++    add_opt(common_arg(
++        {"--moe-expert-cache"}, "N",
++        string_format("GPU cache slots per host-resident MoE expert layer, 0 = disabled (default: %d)", params.n_moe_cache_slots),
++        [](common_params & params, int value) {
++            params.n_moe_cache_slots = value;
++        }
++    ).set_env("LLAMA_ARG_MOE_EXPERT_CACHE"));
++    add_opt(common_arg(
++        {"--moe-expert-cache-inserts"}, "N",
++        string_format("max expert uploads per layer per decode step for the MoE expert cache (default: %d)", params.n_moe_cache_inserts),
++        [](common_params & params, int value) {
++            params.n_moe_cache_inserts = value;
++        }
++    ).set_env("LLAMA_ARG_MOE_EXPERT_CACHE_INSERTS"));
+     if (ex == LLAMA_EXAMPLE_SERVER) {
+         // this is to make sure this option appears in the server-specific section of the help message
+         add_opt(common_arg(
+@@ -2737,10 +2751,12 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
+         {"-lzm", "--lazy-mode"}, "MODE",
+         "on-demand reading of certain tensors, for example per-layer embeddings (default: auto)\n"
+         "- on: read the rows of such tensors from disk on demand instead of keeping them resident (requires mmap)\n"
++        "- on-direct: like on, but the arch reads the rows with explicit pread()s instead of demand paging the mmap (currently only PLE tables)\n"
+         "- auto: on, but only for tensors larger than 4 GiB\n"
+         "- off: always keep them resident",
+         [](common_params & params, const std::string & value) {
+             /**/ if (value == "on")   { params.lazy_mode = LLAMA_LAZY_MODE_ON;   }
++            else if (value == "on-direct") { params.lazy_mode = LLAMA_LAZY_MODE_DIRECT; }
+             else if (value == "auto") { params.lazy_mode = LLAMA_LAZY_MODE_AUTO; }
+             else if (value == "off")  { params.lazy_mode = LLAMA_LAZY_MODE_OFF;  }
+             else { throw std::invalid_argument("invalid value"); }
+diff --git a/common/common.cpp b/common/common.cpp
+index d162a3880..b5317e079 100644
+--- a/common/common.cpp
++++ b/common/common.cpp
+@@ -1726,6 +1726,8 @@ struct llama_context_params common_context_params_to_llama(const common_params &
+     cparams.n_outputs_max_per_seq = std::max(params.n_outputs_max_per_seq, 0);
+     cparams.n_batch           = params.n_batch;
+     cparams.n_ubatch          = params.n_ubatch;
++    cparams.n_moe_cache_slots   = params.n_moe_cache_slots;
++    cparams.n_moe_cache_inserts = params.n_moe_cache_inserts;
+     cparams.n_threads         = params.cpuparams.n_threads;
+     cparams.n_threads_batch   = params.cpuparams_batch.n_threads == -1 ?
+                                 params.cpuparams.n_threads : params.cpuparams_batch.n_threads;
+diff --git a/common/common.h b/common/common.h
+index 63d0badd0..658775217 100644
+--- a/common/common.h
++++ b/common/common.h
+@@ -450,6 +450,8 @@ struct common_params {
+     int32_t n_ctx                 =     0; // context size, 0 == context the model was trained with
+     int32_t n_batch               =  2048; // logical batch size for prompt processing (must be >=32 to use BLAS)
+     int32_t n_ubatch              =   512; // physical batch size for prompt processing (must be >=32 to use BLAS)
++    int32_t n_moe_cache_slots     = 0;    // GPU cache slots per host-resident MoE expert layer (0 = disabled)
++    int32_t n_moe_cache_inserts   = 2;    // max expert uploads per layer per decode step
+     int32_t n_keep                =     0; // number of tokens to keep from initial prompt
+     int32_t n_chunks              =    -1; // max number of chunks to process (-1 = unlimited)
+     int32_t n_parallel            =     1; // number of parallel sequences to decode
+diff --git a/ggml/include/ggml.h b/ggml/include/ggml.h
+index b88b7e54a..d30637c82 100644
+--- a/ggml/include/ggml.h
++++ b/ggml/include/ggml.h
+@@ -352,6 +352,15 @@ extern "C" {
+     // Returns the old callback for chaining
+     GGML_API ggml_abort_callback_t ggml_set_abort_callback(ggml_abort_callback_t callback);
+ 
++    struct ggml_tensor;
++
++    // MoE expert-routing observation callback: invoked by the CPU mul_mat_id
++    // with the op's expert-id tensor (I32 [n_expert_used, n_tokens]). Used by
++    // the llama MoE expert cache to drive LRU placement decisions.
++    typedef void (*ggml_moe_obs_cb_t)(const char * tensor_name, const struct ggml_tensor * ids, void * ud);
++    GGML_API void            ggml_set_moe_obs_callback(ggml_moe_obs_cb_t cb, void * ud);
++    GGML_API ggml_moe_obs_cb_t ggml_get_moe_obs_callback(void ** ud);
++
+     GGML_NORETURN GGML_ATTRIBUTE_FORMAT(3, 4)
+     GGML_API void ggml_abort(const char * file, int line, const char * fmt, ...);
+ 
+diff --git a/ggml/src/ggml-cpu/ggml-cpu.c b/ggml/src/ggml-cpu/ggml-cpu.c
+index 87a329f26..1ea34eea0 100644
+--- a/ggml/src/ggml-cpu/ggml-cpu.c
++++ b/ggml/src/ggml-cpu/ggml-cpu.c
+@@ -1641,6 +1641,17 @@ static void ggml_compute_forward_mul_mat_id(
+         // initialize matrix_row_counts
+         memset(matrix_row_counts, 0, n_as*sizeof(int64_t));
+ 
++        // llama MoE expert cache: when src[3] is set it is an I32 table mapping
++        // expert id -> device cache slot, with op_params[0] holding the "not
++        // cached" dummy value. Cached ids are served by the device-side cache
++        // chain, so this op skips them and zeroes their dst rows instead.
++        const int32_t * moe_tbl   = NULL;
++        int32_t         moe_dummy = 0;
++        if (dst->src[3]) {
++            moe_tbl   = (const int32_t *) dst->src[3]->data;
++            moe_dummy = ggml_get_op_params_i32(dst, 0);
++        }
++
+         // group rows by src0 matrix
+         for (int64_t iid1 = 0; iid1 < ids->ne[1]; ++iid1) {
+             for (int id = 0; id < n_ids; ++id) {
+@@ -1648,10 +1659,51 @@ static void ggml_compute_forward_mul_mat_id(
+ 
+                 assert(i02 >= 0 && i02 < n_as);
+ 
++                if (moe_tbl && moe_tbl[i02] != moe_dummy) {
++                    memset((char *) dst->data + id*nb1 + iid1*nb2, 0, ne0*sizeof(float));
++                    continue;
++                }
++
+                 MMID_MATRIX_ROW(i02, matrix_row_counts[i02]) = (struct mmid_row_mapping) {id, iid1};
+                 matrix_row_counts[i02] += 1;
+             }
+         }
++
++        // MoE routing observation for the llama expert cache
++        {
++            void * moe_obs_ud = NULL;
++            ggml_moe_obs_cb_t moe_obs_cb = ggml_get_moe_obs_callback(&moe_obs_ud);
++            if (moe_obs_cb && strstr(src0->name, "ffn_gate_exps")) {
++                moe_obs_cb(src0->name, ids, moe_obs_ud);
++            }
++        }
++
++        // GGML_MOE_LOG: append the routed expert ids of every ffn_gate_exps
++        // mul_mat_id to the file named by the env var. Diagnostic only; the
++        // whole block is inert unless GGML_MOE_LOG is set at first use.
++        {
++            static FILE * moe_log_file  = NULL;
++            static int    moe_log_state = -1;
++            if (moe_log_state == -1) {
++                const char * moe_log_path = getenv("GGML_MOE_LOG");
++                if (moe_log_path && moe_log_path[0]) {
++                    moe_log_file = fopen(moe_log_path, "a");
++                }
++                moe_log_state = moe_log_file ? 1 : 0;
++            }
++            if (moe_log_state == 1 && strstr(src0->name, "ffn_gate_exps")) {
++                flockfile(moe_log_file);
++                for (int64_t iid1 = 0; iid1 < ids->ne[1]; ++iid1) {
++                    fprintf(moe_log_file, "%s", src0->name);
++                    for (int id = 0; id < n_ids; ++id) {
++                        const int32_t i02 = *(const int32_t *) ((const char *) ids->data + iid1*ids->nb[1] + id*ids->nb[0]);
++                        fprintf(moe_log_file, " %d", i02);
++                    }
++                    fputc('\n', moe_log_file);
++                }
++                funlockfile(moe_log_file);
++            }
++        }
+     }
+ 
+     // reset current_chunk
+diff --git a/ggml/src/ggml.c b/ggml/src/ggml.c
+index 2d5fdb7c1..19d2b4641 100644
+--- a/ggml/src/ggml.c
++++ b/ggml/src/ggml.c
+@@ -249,6 +249,21 @@ GGML_API ggml_abort_callback_t ggml_set_abort_callback(ggml_abort_callback_t cal
+     return ret_val;
+ }
+ 
++static ggml_moe_obs_cb_t g_moe_obs_cb = NULL;
++static void *             g_moe_obs_ud = NULL;
++
++void ggml_set_moe_obs_callback(ggml_moe_obs_cb_t cb, void * ud) {
++    g_moe_obs_cb = cb;
++    g_moe_obs_ud = ud;
++}
++
++ggml_moe_obs_cb_t ggml_get_moe_obs_callback(void ** ud) {
++    if (ud) {
++        *ud = g_moe_obs_ud;
++    }
++    return g_moe_obs_cb;
++}
++
+ void ggml_abort(const char * file, int line, const char * fmt, ...) {
+     fflush(stdout);
+ 
+diff --git a/include/llama.h b/include/llama.h
+index ef7a012c4..712a64c06 100644
+--- a/include/llama.h
++++ b/include/llama.h
+@@ -218,6 +218,7 @@ extern "C" {
+         LLAMA_LAZY_MODE_OFF  = 0, // always read the whole tensor up front
+         LLAMA_LAZY_MODE_AUTO = 1, // lazy only for marked tensors larger than 4 GiB (requires mmap)
+         LLAMA_LAZY_MODE_ON   = 2, // read the rows of tensors marked by the arch on demand (requires mmap)
++        LLAMA_LAZY_MODE_DIRECT = 3, // like ON, but the arch reads the rows with explicit pread()s instead of demand paging the mmap
+     };
+ 
+     enum llama_context_type {
+@@ -383,6 +384,10 @@ extern "C" {
+         uint32_t yarn_orig_ctx;    // YaRN original context size
+         float    defrag_thold;     // [DEPRECATED] defragment the KV cache if holes/size > thold, <= 0 disabled (default)
+ 
++        // GPU-resident LRU cache for host-offloaded MoE expert weights [EXPERIMENTAL]
++        int32_t  n_moe_cache_slots;   // cache slots per host-resident expert layer (0 = disabled)
++        int32_t  n_moe_cache_inserts; // max expert uploads per layer per decode step
++
+         ggml_backend_sched_eval_callback cb_eval;
+         void * cb_eval_user_data;
+ 
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 8922dc12a..d349b56b2 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -37,6 +37,7 @@ add_library(llama
+             llama-model-loader.cpp
+             llama-model-saver.cpp
+             llama-model.cpp
++            llama-moecache.cpp
+             llama-quant.cpp
+             llama-sampler.cpp
+             llama-vocab.cpp
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index 01014b137..b538b51b3 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -1,5 +1,7 @@
+ #include "llama-context.h"
+ 
++#include "llama-moecache.h"
++
+ #include "ggml.h"
+ #include "llama-arch.h"
+ #include "llama-graph.h"
+@@ -91,6 +93,8 @@ llama_context::llama_context(
+     //     may need to be backend-dependent
+     LLAMA_LOG_INFO("%s: constructing llama_context\n", __func__);
+ 
++    llama_moe_cache_init(model, params.n_moe_cache_slots, params.n_moe_cache_inserts);
++
+     t_start_us = model.t_start_us;
+     t_load_us  = model.t_load_us;
+ 
+@@ -2033,6 +2037,9 @@ int llama_context::decode(const llama_batch & batch_inp) {
+     // wait for the computation to finish (automatically done when obtaining the model output)
+     //synchronize();
+ 
++    // apply throttled MoE expert-cache updates between graph executions
++    llama_moe_cache_step();
++
+     return 0;
+ }
+ 
+@@ -3636,6 +3643,8 @@ llama_context_params llama_context_default_params() {
+         /*.yarn_beta_slow              =*/ -1.0f,
+         /*.yarn_orig_ctx               =*/ 0,
+         /*.defrag_thold                =*/ -1.0f,
++        /*.n_moe_cache_slots           =*/ 0,
++        /*.n_moe_cache_inserts         =*/ 2,
+         /*.cb_eval                     =*/ nullptr,
+         /*.cb_eval_user_data           =*/ nullptr,
+         /*.type_k                      =*/ GGML_TYPE_F16,
+diff --git a/src/llama-graph.cpp b/src/llama-graph.cpp
+index 274a62643..c0c6d65c3 100644
+--- a/src/llama-graph.cpp
++++ b/src/llama-graph.cpp
+@@ -1,5 +1,7 @@
+ #include "llama-graph.h"
+ 
++#include "llama-moecache.h"
++
+ #include "llama-impl.h"
+ #include "llama-model.h"
+ #include "llama-batch.h"
+@@ -1087,7 +1089,11 @@ void llm_graph_input_mem_hybrid::set_input(const llama_ubatch * ubatch) {
+     mctx->get_attn()->set_input_k_idxs(inp_attn->self_k_idxs, ubatch);
+     mctx->get_attn()->set_input_v_idxs(inp_attn->self_v_idxs, ubatch);
+ 
+-    mctx->get_attn()->set_input_kq_mask(inp_attn->self_kq_mask, ubatch, cparams.causal_attn);
++    // qwen4exp's QSA gather graphs never reference the mask, so it has no buffer;
++    // the same guard the other attention inputs carry
++    if (inp_attn->self_kq_mask && inp_attn->self_kq_mask->buffer) {
++        mctx->get_attn()->set_input_kq_mask(inp_attn->self_kq_mask, ubatch, cparams.causal_attn);
++    }
+ 
+     if (inp_attn->self_k_rot) {
+         mctx->get_attn()->set_input_k_rot(inp_attn->self_k_rot);
+@@ -2099,7 +2105,27 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
+     //call early so that topk-moe can be used
+     ggml_build_forward_expand(gf, weights);
+ 
++    // MoE expert cache (see llama-moecache.h): during single-token decode on a
++    // layer whose experts live in host memory, run a parallel mul_mat_id chain
++    // over a device-resident cache of hot experts. Cached ids are skipped by
++    // the CPU chain (src[3] table) and served by the cache chain; uncached ids
++    // map to the cache's zero slot. The two outputs sum to the exact result.
++    const llama_moe_cache_layer * mcache = nullptr;
++    ggml_tensor * mc_slot_ids = nullptr;
++    if (n_tokens == 1 && !gate_up_exps && gate_exps && down_exps &&
++        !up_exps_b && !gate_exps_b && !down_exps_b &&
++        !up_exps_s && !gate_exps_s && !down_exps_s &&
++        type_op == LLM_FFN_SILU && !weight_before_ffn && loras->empty()) {
++        mcache = llama_moe_cache_lookup(up_exps);
++    }
++    if (mcache) {
++        mc_slot_ids = ggml_get_rows(ctx0, mcache->dev_table, selected_experts); // [1, n_expert_used, 1]
++        mc_slot_ids = ggml_reshape_2d(ctx0, mc_slot_ids, n_expert_used, 1);
++        cb(mc_slot_ids, "ffn_moe_cache_slots", il);
++    }
++
+     cur = ggml_reshape_3d(ctx0, cur, n_embd, 1, n_tokens);
++    ggml_tensor * mc_inp = cur;
+ 
+     if (weight_before_ffn) {
+         // repeat cur to [n_embd, n_expert_used, n_tokens]
+@@ -2135,6 +2161,11 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
+         up = build_lora_mm_id(up_exps, cur, selected_experts, up_exps_s); // [n_ff, n_expert_used, n_tokens]
+         cb(up, "ffn_moe_up", il);
+ 
++        if (mcache) {
++            up->src[3] = mcache->host_table;
++            up->op_params[0] = mcache->n_slots;
++        }
++
+         if (up_exps_s) {
+             cb(up, "ffn_moe_up_scaled", il);
+         }
+@@ -2147,6 +2178,11 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
+         if (gate_exps) {
+             cur = build_lora_mm_id(gate_exps, cur, selected_experts, gate_exps_s); // [n_ff, n_expert_used, n_tokens]
+             cb(cur, "ffn_moe_gate", il);
++
++            if (mcache) {
++                cur->src[3] = mcache->host_table;
++                cur->op_params[0] = mcache->n_slots;
++            }
+         } else {
+             cur = up;
+         }
+@@ -2249,6 +2285,43 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
+     experts = build_lora_mm_id(down_exps, cur, selected_experts, down_exps_s); // [n_embd, n_expert_used, n_tokens]
+     cb(experts, "ffn_moe_down", il);
+ 
++    if (mcache) {
++        experts->src[3] = mcache->host_table;
++        experts->op_params[0] = mcache->n_slots;
++
++        // device-side chain over the cached experts, mirroring the LLM_FFN_SILU
++        // activation above (the only type_op the cache path is enabled for)
++        ggml_tensor * up_g   = ggml_mul_mat_id(ctx0, mcache->up_c,   mc_inp, mc_slot_ids);
++        ggml_tensor * gate_g = ggml_mul_mat_id(ctx0, mcache->gate_c, mc_inp, mc_slot_ids);
++        cb(up_g,   "ffn_moe_cache_up",   il);
++        cb(gate_g, "ffn_moe_cache_gate", il);
++
++        ggml_tensor * act_g = nullptr;
++        {
++            const float limit = il >= 0 ? hparams.swiglu_clamp_exp[il] : 0.0f;
++            constexpr float eps = 1e-6f;
++            if (limit > eps) {
++                up_g = ggml_clamp(ctx0, up_g, -limit, limit);
++                if (arch == LLM_ARCH_DEEPSEEK4 || (arch == LLM_ARCH_DFLASH && hparams.dsv4_hc_mult > 0)) {
++                    gate_g = ggml_clamp(ctx0, gate_g, -INFINITY, limit);
++                    act_g  = ggml_swiglu_split(ctx0, gate_g, up_g);
++                } else {
++                    ggml_tensor * ga = ggml_silu(ctx0, gate_g);
++                    ga    = ggml_clamp(ctx0, ga, -INFINITY, limit);
++                    act_g = ggml_mul(ctx0, ga, up_g);
++                }
++            } else {
++                act_g = ggml_swiglu_split(ctx0, gate_g, up_g);
++            }
++        }
++
++        ggml_tensor * down_g = ggml_mul_mat_id(ctx0, mcache->down_c, act_g, mc_slot_ids);
++        cb(down_g, "ffn_moe_cache_down", il);
++
++        experts = ggml_add(ctx0, experts, down_g);
++        cb(experts, "ffn_moe_cache_merged", il);
++    }
++
+     if (down_exps_s) {
+         cb(experts, "ffn_moe_down_scaled", il);
+     }
+diff --git a/src/llama-memory-hybrid-idx.cpp b/src/llama-memory-hybrid-idx.cpp
+index 93b468784..3972ce9ce 100644
+--- a/src/llama-memory-hybrid-idx.cpp
++++ b/src/llama-memory-hybrid-idx.cpp
+@@ -55,6 +55,10 @@ llama_memory_hybrid_idx::llama_memory_hybrid_idx(
+         // K-shift must not rotate them while the stream copies in the same update still apply
+         hparams_idx.rope_type = LLAMA_ROPE_TYPE_NONE;
+ 
++        // fool llama_kv_cache into thinking this is a MLA cache, so it won't cache V tensors
++        hparams_idx.n_embd_head_k_mla_impl = model.hparams.indexer_head_size;
++        hparams_idx.n_embd_head_v_mla_impl = model.hparams.indexer_head_size;
++
+         LLAMA_LOG_INFO("%s: creating indexer KV cache, size = %u cells\n", __func__, kv_size);
+ 
+         return new llama_kv_cache(
+diff --git a/src/llama-mmap.cpp b/src/llama-mmap.cpp
+index 4d183cbc9..a29abe7f3 100644
+--- a/src/llama-mmap.cpp
++++ b/src/llama-mmap.cpp
+@@ -83,7 +83,7 @@ struct llama_file::impl {
+         return ret;
+     }
+ 
+-    impl(const char * fname, const char * mode, [[maybe_unused]] const bool use_direct_io = false) {
++    impl(const char * fname, const char * mode, [[maybe_unused]] const bool use_direct_io = false) : fname(fname) {
+         fp = ggml_fopen(fname, mode);
+         if (fp == NULL) {
+             throw std::runtime_error(format("failed to open %s: %s", fname, strerror(errno)));
+@@ -93,8 +93,7 @@ struct llama_file::impl {
+         size = tell();
+         seek(0, SEEK_SET);
+     }
+-
+-    impl(FILE * file) : owns_fp(false) {
++    impl(FILE * file) : fname("(file*)"), owns_fp(false) {
+         fp = file;
+         fp_win32 = (HANDLE) _get_osfhandle(_fileno(fp));
+         seek(0, SEEK_END);
+@@ -381,9 +380,10 @@ struct llama_file::impl {
+         }
+     }
+     int fd = -1;
+-    std::string fname;
+ #endif
+ 
++    std::string fname;
++
+     size_t read_alignment() const {
+         return alignment;
+     }
+@@ -408,6 +408,10 @@ size_t llama_file::size() const { return pimpl->size; }
+ size_t llama_file::read_alignment() const { return pimpl->read_alignment(); }
+ bool llama_file::has_direct_io() const { return pimpl->has_direct_io(); }
+ 
++const std::string & llama_file::name() const {
++    return pimpl->fname;
++}
++
+ int llama_file::file_id() const {
+ #ifdef _WIN32
+     return _fileno(pimpl->fp);
+diff --git a/src/llama-mmap.h b/src/llama-mmap.h
+index cc28c8a73..795c083da 100644
+--- a/src/llama-mmap.h
++++ b/src/llama-mmap.h
+@@ -2,6 +2,7 @@
+ 
+ #include <cstdint>
+ #include <memory>
++#include <string>
+ #include <utility>
+ #include <vector>
+ #include <cstdio>
+@@ -22,6 +23,8 @@ struct llama_file {
+     size_t tell() const;
+     size_t size() const;
+ 
++    const std::string & name() const; // path this file was opened from
++
+     int file_id() const; // fileno overload
+ 
+     void seek(size_t offset, int whence) const;
+diff --git a/src/llama-model-loader.cpp b/src/llama-model-loader.cpp
+index 49f3c4f8e..4fc8e2746 100644
+--- a/src/llama-model-loader.cpp
++++ b/src/llama-model-loader.cpp
+@@ -1085,7 +1085,7 @@ bool llama_model_loader::lazy_read::add(const std::string & name, const ggml_ten
+ 
+     // do not lazy-read small tensors, it has significant overhead and is not worth it
+     constexpr size_t auto_min_size = 4ull * 1024 * 1024 * 1024;
+-    if (mode != LLAMA_LAZY_MODE_ON && ggml_nbytes(t) <= auto_min_size) {
++    if (mode == LLAMA_LAZY_MODE_AUTO && ggml_nbytes(t) <= auto_min_size) {
+         return false;
+     }
+ 
+diff --git a/src/llama-model.cpp b/src/llama-model.cpp
+index 8592ce99f..9f7675b11 100644
+--- a/src/llama-model.cpp
++++ b/src/llama-model.cpp
+@@ -28,7 +28,15 @@
+ #include <algorithm>
+ #include <cassert>
+ #include <cfloat>
++#include <cinttypes>
+ #include <cstdint>
++#include <thread>
++
++#ifndef _WIN32
++#include <fcntl.h>
++#include <unistd.h>
++#endif
++
+ #include <cstring>
+ #include <cmath>
+ #include <functional>
+@@ -1840,6 +1848,65 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
+     return true;
+ }
+ 
++#ifndef _WIN32
++const llama_lazy_reader * llama_model_base::load_lazy_reader(llama_model_loader & ml, const char * tensor_name, const ggml_tensor * t) {
++    if (ml.lazy.mode != LLAMA_LAZY_MODE_DIRECT) {
++        return nullptr;
++    }
++
++    if (!t) {
++        return nullptr;
++    }
++
++    if (const auto it = lazy_readers.find(tensor_name); it != lazy_readers.end()) {
++        return it->second.get();
++    }
++
++    const auto * w = ml.get_weight(tensor_name);
++    if (!w) {
++        // e.g. synthesised from metadata, no file rows to read
++        return nullptr;
++    }
++
++    // an independently opened buffered descriptor: dup() would share the
++    // loader's open file description, whose readahead advice and O_DIRECT
++    // flag would fight the small scattered row reads
++    const int fd = ::open(ml.files[w->idx]->name().c_str(), O_RDONLY | O_CLOEXEC);
++    if (fd < 0) {
++        // e.g. a FILE*-backed model has no reopenable path; the tensor is
++        // still lazy, so keep serving it through the mmap reads
++        LLAMA_LOG_WARN("%s: could not open %s for direct reads (%s), using lazy mmap reads\n",
++                __func__, ml.files[w->idx]->name().c_str(), strerror(errno));
++        return nullptr;
++    }
++
++#ifdef __linux__
++    // rows are tiny and scattered, so sequential readahead would be pure waste
++    ::posix_fadvise(fd, 0, 0, POSIX_FADV_RANDOM);
++#endif
++
++    // in-flight reads are IO queue depth, not compute; 2x cores worked well
++    // on NVMe and stays sane on smaller machines
++    const int n_threads = 2 * (int) std::max(1u, std::thread::hardware_concurrency());
++
++    auto reader = std::make_unique<llama_lazy_reader>(fd, w->offs,
++            ggml_row_size(t->type, t->ne[0]), t->ne[1], n_threads, t->type, t->ne[0]);
++
++    LLAMA_LOG_INFO("%s: direct reads enabled for %s: %" PRId64 " rows of %zu bytes at file offset %zu, %d threads\n",
++            __func__, tensor_name, reader->n_rows, reader->row_size, w->offs, n_threads);
++
++    lazy_readers[tensor_name] = std::move(reader);
++    return lazy_readers.at(tensor_name).get();
++}
++#else
++const llama_lazy_reader * llama_model_base::load_lazy_reader(llama_model_loader & ml, const char *, const ggml_tensor *) {
++    if (ml.lazy.mode == LLAMA_LAZY_MODE_DIRECT) {
++        LLAMA_LOG_WARN("%s: --lazy-mode on-direct is not supported on this platform, using lazy mmap reads\n", __func__);
++    }
++    return nullptr;
++}
++#endif
++
+ ggml_tensor * llama_model_base::create_tensor(llama_model_loader & ml, const LLM_TN_IMPL & tn, const std::initializer_list<int64_t> & ne, int flags) {
+     const buft_list_t * buft_list_layer = tn.bid == -1 ? nullptr : pimpl->dev_layer.at(tn.bid).buft_list;
+     return ml.create_tensor(
+diff --git a/src/llama-model.h b/src/llama-model.h
+index 1a07bd267..686cec750 100644
+--- a/src/llama-model.h
++++ b/src/llama-model.h
+@@ -5,6 +5,7 @@
+ #include "llama-graph.h"
+ #include "llama-hparams.h"
+ #include "llama-memory.h"
++#include "llama-lazy-reader.h"
+ #include "llama-vocab.h"
+ 
+ #include <map>
+@@ -821,6 +822,14 @@ struct llama_model_base : public llama_model {
+     void load_arch_hparams(llama_model_loader & ml) override = 0;
+     void load_arch_tensors(llama_model_loader & ml) override = 0;
+     std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override = 0;
++
++    // --lazy-mode on-direct: read the rows of a lazy tensor with explicit
++    // pread()s instead of demand-faulting them in through the mmap. Call once
++    // per lazy tensor after creating it; returns null if the platform cannot
++    // serve direct reads (the tensor then stays on the lazy mmap path).
++    const llama_lazy_reader * load_lazy_reader(llama_model_loader & ml, const char * tensor_name, const ggml_tensor * t);
++
++    std::map<std::string, std::unique_ptr<llama_lazy_reader>> lazy_readers;
+ };
+ 
+ const char * llm_type_name(llm_type type);
+diff --git a/src/models/gemma4.cpp b/src/models/gemma4.cpp
+index c6dd7d1bf..8599b5a96 100644
+--- a/src/models/gemma4.cpp
++++ b/src/models/gemma4.cpp
+@@ -28,7 +28,7 @@ void llama_model_gemma4::load_arch_hparams(llama_model_loader & ml) {
+     }
+ }
+ 
+-void llama_model_gemma4::load_arch_tensors(llama_model_loader &) {
++void llama_model_gemma4::load_arch_tensors(llama_model_loader & ml) {
+     LLAMA_LOAD_LOCALS;
+ 
+     const uint32_t n_embd_per_layer = hparams.n_embd_per_layer;
+@@ -53,6 +53,8 @@ void llama_model_gemma4::load_arch_tensors(llama_model_loader &) {
+         per_layer_tok_embd   = create_tensor(tn(LLM_TENSOR_PER_LAYER_TOKEN_EMBD, "weight"),    {n_embd_per_layer * n_layer, n_vocab}, TENSOR_READ_LAZY);
+         per_layer_model_proj = create_tensor(tn(LLM_TENSOR_PER_LAYER_MODEL_PROJ, "weight", 0), {n_embd, n_embd_per_layer * n_layer}, 0);
+         per_layer_proj_norm  = create_tensor(tn(LLM_TENSOR_PER_LAYER_PROJ_NORM,  "weight", 0), {n_embd_per_layer}, 0);
++
++        ple_reader = load_lazy_reader(ml, tn(LLM_TENSOR_PER_LAYER_TOKEN_EMBD, "weight").str().c_str(), per_layer_tok_embd);
+     }
+ 
+     output_norm = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd}, 0);
+@@ -408,24 +410,65 @@ llama_model_gemma4::graph::graph(const llama_model & model, const llm_graph_para
+     ggml_build_forward_expand(gf, cur);
+ }
+ 
++// --lazy-mode on-direct: stage the per-layer rows host-side instead of
++// letting ggml_get_rows demand-fault them in through the mmap. Row indices
++// are the token ids of the ubatch, known before the graph runs.
++class llm_graph_input_gemma4_ple : public llm_graph_input_i {
++public:
++    explicit llm_graph_input_gemma4_ple(const llama_lazy_reader * reader) : reader(reader) {}
++
++    void set_input(const llama_ubatch * ubatch) override {
++        if (!ubatch->token) {
++            return; // multimodal batches use the static row-0 path, no gather
++        }
++
++        staging.resize(ubatch->n_tokens * reader->head_dim * sizeof(float));
++        reader->gather(ubatch->token, ubatch->n_tokens, (float *) staging.data());
++        ggml_backend_tensor_set(data, staging.data(), 0, staging.size());
++    }
++
++    bool can_reuse(const llm_graph_params & params) override {
++        return (!params.ubatch.token) || (data && data->ne[1] == (int64_t) params.ubatch.n_tokens);
++    }
++
++    ggml_tensor * data = nullptr; // F32 [row_elems, n_tokens]
++
++private:
++    const llama_lazy_reader * reader;
++
++    // scratch, reused across set_input() calls
++    std::vector<uint8_t> staging;
++};
++
+ // equivalent to get_per_layer_inputs() in python code
+ // output shape: [n_embd_per_layer, n_layer, n_tokens]
+ ggml_tensor * llama_model_gemma4::graph::build_inp_per_layer() {
+-    auto inp = std::make_unique<llm_graph_input_embd>(n_embd);
+-
+     ggml_tensor * inp_per_layer;
+     float tok_embd_scale = sqrtf((float) n_embd_per_layer);
+     if (ubatch.token) {
+-        inp->tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ubatch.n_tokens);
+-        ggml_set_input(inp->tokens);
+-        res->t_inp_tokens = inp->tokens;
++        if (static_cast<const llama_model_gemma4 &>(model).ple_reader) {
++            // --lazy-mode on-direct: the reader stages the per-layer rows
++            // host-side, so the table pages are never touched by the graph
++            auto inp = std::make_unique<llm_graph_input_gemma4_ple>(static_cast<const llama_model_gemma4 &>(model).ple_reader);
++            inp->data = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, model.per_layer_tok_embd->ne[0], ubatch.n_tokens);
++            ggml_set_input(inp->data);
++            ggml_tensor * data = inp->data;
++            res->add_input(std::move(inp));
++
++            inp_per_layer = ggml_reshape_3d(ctx0, data, n_embd_per_layer, n_layer, n_tokens);
++        } else {
++            auto inp = std::make_unique<llm_graph_input_embd>(n_embd);
++            inp->tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ubatch.n_tokens);
++            ggml_set_input(inp->tokens);
++            res->t_inp_tokens = inp->tokens;
+ 
+-        inp_per_layer = ggml_get_rows  (ctx0, model.per_layer_tok_embd, inp->tokens);
+-        inp_per_layer = ggml_reshape_3d(ctx0, inp_per_layer, n_embd_per_layer, n_layer, n_tokens);
+-        inp_per_layer = ggml_scale     (ctx0, inp_per_layer, tok_embd_scale);
+-        cb(inp_per_layer, "inp_per_layer_selected", -1);
++            inp_per_layer = ggml_get_rows(ctx0, model.per_layer_tok_embd, inp->tokens);
++            inp_per_layer = ggml_reshape_3d(ctx0, inp_per_layer, n_embd_per_layer, n_layer, n_tokens);
+ 
+-        res->add_input(std::move(inp));
++            res->add_input(std::move(inp));
++        }
++        inp_per_layer = ggml_scale(ctx0, inp_per_layer, tok_embd_scale);
++        cb(inp_per_layer, "inp_per_layer_selected", -1);
+     } else {
+         // Multimodal embedding path: use padding token (ID=0) embedding
+         // TODO: verify if this is the correct behavior in transformers implementation
+diff --git a/src/models/models.h b/src/models/models.h
+index 815a4957f..e6d77baeb 100644
+--- a/src/models/models.h
++++ b/src/models/models.h
+@@ -856,6 +856,11 @@ struct llama_model_gemma3n : public llama_model_base {
+ 
+ struct llama_model_gemma4 : public llama_model_base {
+     llama_model_gemma4(const struct llama_model_params & params) : llama_model_base(params) {}
++
++    // --lazy-mode on-direct: pread() the lazy per-layer table rows
++    // host-side instead of faulting them in through the mmap; see gemma4.cpp
++    const llama_lazy_reader * ple_reader = nullptr;
++
+     void load_arch_hparams(llama_model_loader & ml) override;
+     void load_arch_tensors(llama_model_loader & ml) override;
+ 
+@@ -2280,6 +2285,10 @@ struct llama_model_qwen4exp : public llama_model_base {
+ 
+     class llm_graph_input_qsa;
+ 
++    // --lazy-mode on-direct: pread() the lazy PLE table rows
++    // host-side instead of faulting them in through the mmap; see qwen4exp.cpp
++    const llama_lazy_reader * ple_reader = nullptr;
++
+     void load_arch_hparams(llama_model_loader & ml) override;
+     void load_arch_tensors(llama_model_loader & ml) override;
+ 
+@@ -2321,8 +2330,10 @@ struct llama_model_qwen4exp : public llama_model_base {
+                     ggml_tensor * k_cur,
+                     ggml_tensor * v_cur,
+                     ggml_tensor * top_k,
++                    ggml_tensor * qsa_bias,
+                           float   kq_scale,
+-                            int   il);
++                            int   il,
++                           bool   gather = false);
+ 
+         // the QSA cache layout inputs do not depend on the layer, only on its compress ratio,
+         // so the layers sharing a ratio share one input set
+@@ -2335,7 +2346,8 @@ struct llama_model_qwen4exp : public llama_model_base {
+                     ggml_tensor * inp_pos,
+                     ggml_tensor * kq_mask,
+                             int * sections,
+-                            int   il);
++                            int   il,
++                           bool   gather = false);
+ 
+         ggml_tensor * build_layer_attn_linear(
+              llm_graph_input_rs * inp,
+diff --git a/src/models/qwen4exp.cpp b/src/models/qwen4exp.cpp
+index e00d32ddc..0c8d6b21b 100644
+--- a/src/models/qwen4exp.cpp
++++ b/src/models/qwen4exp.cpp
+@@ -205,6 +205,9 @@ void llama_model_qwen4exp::load_arch_tensors(llama_model_loader & ml) {
+ 
+         per_layer_tok_embd = create_tensor(tn(LLM_TENSOR_PER_LAYER_TOKEN_EMBD, "weight"),
+                                            { hparams.ple_head_dim, ple_rows }, TENSOR_READ_LAZY);
++
++        // Keep the MTP-aware loader; direct reads apply only to an existing PLE tensor.
++        ple_reader = load_lazy_reader(ml, ple_name.c_str(), per_layer_tok_embd);
+     }
+ 
+     const int mtp_flags = !ml.load_mtp ? TENSOR_SKIP : 0;
+@@ -765,7 +768,8 @@ ggml_tensor * llama_model_qwen4exp::graph::build_qsa_top_k(
+         ggml_tensor *                           inp_pos,
+         ggml_tensor *                           kq_mask,
+         int *                                   sections,
+-        int                                     il) {
++        int                                     il,
++        bool                                    gather) {
+     const llama_kv_cache_context * mctx_idx = mctx_hyb->get_idx();
+ 
+     const int64_t idx_dim  = hparams.indexer_head_size;
+@@ -786,7 +790,10 @@ ggml_tensor * llama_model_qwen4exp::graph::build_qsa_top_k(
+     // the rest is the visible/not test the attention mask already carries, so upload the per-block half only: 1/ratio of the cells
+     // alibi writes distances instead of a mask and non-causal keeps future cells, so both opt out
+     // the mask also holds an mrope rule for the query's own position, but only 2d image positions can differ there
+-    const bool blk_bias = kq_mask != nullptr &&
++    // the gather path needs the per-cell bias: it carries the full visibility of every
++    // cell (foreign, future, unpooled, tail), so the gathered cells' bias values can
++    // serve directly as the attention mask over the gathered set
++    const bool blk_bias = !gather && kq_mask != nullptr &&
+         kq_mask->ne[0] == n_kv && kq_mask->ne[1] == n_tps && kq_mask->ne[3] == n_stream &&
+         cparams.causal_attn && !hparams.use_alibi;
+ 
+@@ -899,7 +906,12 @@ ggml_tensor * llama_model_qwen4exp::graph::build_qsa_top_k(
+     cb(expanded, "indexer_score_tokens", il);
+ 
+     // the reference returns indexer_top_k + compress_ratio - 1: whole blocks plus the tail
+-    const int64_t width = std::min<int64_t>(n_kv, (int64_t) hparams.indexer_top_k + r - 1);
++    // the gather path pads the width to a multiple of 256 so the gathered K/V satisfy flash
++    // attention's padding without extra ops; surplus cells arrive with a -inf bias and are
++    // masked out of the gathered attention
++    const int64_t width = gather
++        ? std::min<int64_t>(n_kv, GGML_PAD((int64_t) hparams.indexer_top_k + r - 1, 256))
++        : std::min<int64_t>(n_kv, (int64_t) hparams.indexer_top_k + r - 1);
+ 
+     ggml_tensor * top_k = ggml_cont(ctx0, ggml_top_k(ctx0, expanded, width));
+ 
+@@ -918,8 +930,10 @@ ggml_tensor * llama_model_qwen4exp::graph::build_attn_qsa(
+         ggml_tensor *             k_cur,
+         ggml_tensor *             v_cur,
+         ggml_tensor *             top_k,
++        ggml_tensor *             qsa_bias,
+         float                     kq_scale,
+-        int                       il) {
++        int                       il,
++        bool                      gather) {
+     // rotate q/k/v before they reach a quantized cache, as the dense path does. the indexer
+     // has already scored with its own query in build_qsa_top_k, so top_k is unaffected.
+     if (inp->self_k_rot) {
+@@ -949,6 +963,70 @@ ggml_tensor * llama_model_qwen4exp::graph::build_attn_qsa(
+         ggml_build_forward_expand(gf, mctx_cur->cpy_v(ctx0, v_cur, v_idxs, il));
+     }
+ 
++    // decode-time sparse gather: instead of masking the full cache (which makes flash
++    // attention scan all n_kv cells to use only indexer_top_k of them), copy the selected
++    // cells out of the cache and attend densely over just those. this bounds the per-token
++    // attention cost by the top-k width instead of the context depth.
++    // restricted to single-token-per-stream ubatches (decode), where every stream carries
++    // exactly one top-k list, so the gathered K/V stay one tensor per stream.
++    if (gather) {
++        ggml_tensor * kf = mctx_cur->get_k(ctx0, il); // [hd_k, n_head_kv, n_kv, ns]
++        ggml_tensor * vf = mctx_cur->get_v(ctx0, il); // [hd_v, n_head_kv, n_kv, ns]
++
++        const int64_t hd_k   = kf->ne[0];
++        const int64_t hd_v   = vf->ne[0];
++        const int64_t n_h_kv = kf->ne[1];
++        const int64_t n_kv   = kf->ne[2];
++        const int64_t ns     = kf->ne[3];
++        const int64_t n_topk = top_k->ne[0];
++
++        GGML_ASSERT(top_k->ne[1] == 1 && "QSA gather requires single-token-per-stream ubatches");
++        GGML_ASSERT(qsa_bias != nullptr && qsa_bias->ne[0] == n_kv && "QSA gather requires the per-cell bias");
++
++        // the heads of a cell are contiguous in the cache, so a cell can be gathered as one row
++        GGML_ASSERT(kf->nb[2] == ggml_row_size(kf->type, hd_k*n_h_kv));
++        GGML_ASSERT(vf->nb[2] == ggml_row_size(vf->type, hd_v*n_h_kv));
++
++        ggml_tensor * k_cells = ggml_view_4d(ctx0, kf, hd_k*n_h_kv, n_kv, 1, ns,
++                kf->nb[2], kf->nb[2]*n_kv, kf->nb[3], 0);
++        ggml_tensor * v_cells = ggml_view_4d(ctx0, vf, hd_v*n_h_kv, n_kv, 1, ns,
++                vf->nb[2], vf->nb[2]*n_kv, vf->nb[3], 0);
++
++        // top_k [n_topk, 1, 1, ns] -> the index layout ggml_get_rows expects: [n_topk, 1, ns, 1]
++        ggml_tensor * idx = ggml_reshape_4d(ctx0, top_k, n_topk, 1, ns, 1);
++
++        // get_rows dequantizes the cells to F32; build_attn_mha casts to F16 for flash attention
++        ggml_tensor * k_g = ggml_get_rows(ctx0, k_cells, idx); // F32 [hd_k*n_h_kv, n_topk, 1, ns]
++        ggml_tensor * v_g = ggml_get_rows(ctx0, v_cells, idx); // F32 [hd_v*n_h_kv, n_topk, 1, ns]
++
++        k_g = ggml_reshape_4d(ctx0, k_g, hd_k, n_h_kv, n_topk, ns);
++        v_g = ggml_reshape_4d(ctx0, v_g, hd_v, n_h_kv, n_topk, ns);
++        cb(k_g, "qsa_k_gathered", il);
++        cb(v_g, "qsa_v_gathered", il);
++
++        // the gathered cells' bias values already encode visibility: 0 for a selected block
++        // member, 1e9 for the always-visible tail, -inf for anything the padded top-k width
++        // pulled in that the query must not see. clamping to (-inf, 0] turns that into the
++        // attention mask over the gathered set.
++        ggml_tensor * b1 = ggml_view_4d(ctx0, qsa_bias, 1, n_kv, 1, ns,
++                qsa_bias->nb[0], qsa_bias->nb[1], qsa_bias->nb[3], 0);
++        ggml_tensor * m_g = ggml_get_rows(ctx0, b1, idx);            // F32 [1, n_topk, 1, ns]
++        m_g = ggml_reshape_4d(ctx0, m_g, n_topk, 1, 1, ns);
++        m_g = ggml_clamp(ctx0, m_g, -INFINITY, 0.0f);
++        m_g = ggml_cast(ctx0, m_g, GGML_TYPE_F16);                   // FA wants contiguous F16
++        cb(m_g, "qsa_mask_gathered", il);
++
++        ggml_tensor * cur = build_attn_mha(q_cur, k_g, v_g, nullptr, m_g, nullptr, nullptr, 0, kq_scale, il);
++        cb(cur, "kqv_out", il);
++
++        // the rotation is its own inverse, so undo it on the value side of the output
++        if (inp->self_v_rot) {
++            cur = llama_mul_mat_hadamard(ctx0, cur, inp->self_v_rot);
++        }
++
++        return cur;
++    }
++
+     ggml_tensor * kq_mask = inp->get_kq_mask();
+ 
+     // prepare new kq mask - starts filled with -INFINITY
+@@ -1008,7 +1086,26 @@ ggml_tensor * llama_model_qwen4exp::graph::build_layer_attn(
+     // indexer reads the same block input as q/k/v; no cache or no ratio means dense
+     const bool qsa = mctx_hyb->get_idx() != nullptr && hparams.dsv4_compress_ratios[il] > 0;
+ 
+-    ggml_tensor * top_k = qsa ? build_qsa_top_k(mctx_hyb, cur, inp_pos, inp->get_kq_mask(), sections, il) : nullptr;
++    // gather-based QSA decode: worth it once the cache is meaningfully deeper than the
++    // top-k width; below that the masked path costs about the same. QWEN4EXP_QSA_GATHER=0
++    // disables it (A/B lever, and an escape hatch).
++    static const bool gather_enabled = [] {
++        const char * e = getenv("QWEN4EXP_QSA_GATHER");
++        return e == nullptr || atoi(e) != 0;
++    }();
++
++    bool gather = false;
++    if (qsa && gather_enabled) {
++        const int64_t r     = hparams.dsv4_compress_ratios[il];
++        const int64_t n_kv  = mctx_hyb->get_idx()->get_n_kv();
++        const int64_t width = GGML_PAD((int64_t) hparams.indexer_top_k + r - 1, 256);
++
++        const int64_t n_stream = mctx_hyb->get_n_stream();
++
++        gather = n_tokens == n_stream && n_kv >= 4*width;
++    }
++
++    ggml_tensor * top_k = qsa ? build_qsa_top_k(mctx_hyb, cur, inp_pos, inp->get_kq_mask(), sections, il, gather) : nullptr;
+ 
+     // Qwen3Next uses a single Q projection that outputs query + gate
+     ggml_tensor * Qcur_full = build_lora_mm(model.layers[il].wq, cur, model.layers[il].wq_s); // [ (n_embd_head * 2) * n_head, n_tokens ]
+@@ -1061,7 +1158,9 @@ ggml_tensor * llama_model_qwen4exp::graph::build_layer_attn(
+     const float kq_scale = hparams.f_attention_scale == 0.0f ? 1.0f / sqrtf(float(n_embd_head)) : hparams.f_attention_scale;
+ 
+     if (top_k) {
+-        cur = build_attn_qsa(inp, Qcur, Kcur, Vcur, top_k, kq_scale, il);
++        ggml_tensor * qsa_bias = gather ? qsa_inps.at((uint32_t) hparams.dsv4_compress_ratios[il])->bias : nullptr;
++
++        cur = build_attn_qsa(inp, Qcur, Kcur, Vcur, top_k, qsa_bias, kq_scale, il, gather);
+     } else {
+         cur = build_attn(inp,
+                     nullptr, nullptr, nullptr,
+@@ -1271,10 +1370,12 @@ public:
+ 
+     bool can_reuse(const llm_graph_params & params) override {
+         mctx = static_cast<const llama_memory_hybrid_idx_context *>(params.mctx)->get_attn();
+-        return rows->ne[0] == (int64_t) pmodel.hparams.ple_n_heads * params.ubatch.n_tokens;
++        const int64_t n = (int64_t) pmodel.hparams.ple_n_heads * params.ubatch.n_tokens;
++        return pmodel.ple_reader ? data->ne[1] == n : rows->ne[0] == n;
+     }
+ 
+     ggml_tensor * rows = nullptr;   // I32 [ple_n_heads * n_tokens]
++    ggml_tensor * data = nullptr;   // direct mode: staged rows [ple_head_dim, ple_n_heads * n_tokens]
+ 
+     const llama_model_qwen4exp & pmodel;
+ 
+@@ -1283,6 +1384,7 @@ public:
+ 
+     // scratch, reused across set_input() calls
+     std::vector<llama_token> prev;
++    std::vector<uint8_t> staging; // direct mode: host side of `data`
+ };
+ 
+ void llm_graph_input_ple::set_input(const llama_ubatch * ubatch) {
+@@ -1345,7 +1447,13 @@ void llm_graph_input_ple::set_input(const llama_ubatch * ubatch) {
+         }
+     }
+ 
+-    ggml_backend_tensor_set(rows, idx.data(), 0, idx.size()*ggml_element_size(rows));
++    if (pmodel.ple_reader) {
++        staging.resize(idx.size() * pmodel.ple_reader->head_dim * sizeof(float));
++        pmodel.ple_reader->gather(idx.data(), (int64_t) idx.size(), (float *) staging.data());
++        ggml_backend_tensor_set(data, staging.data(), 0, staging.size());
++    } else {
++        ggml_backend_tensor_set(rows, idx.data(), 0, idx.size()*ggml_element_size(rows));
++    }
+ }
+ 
+ // Read a conv history out of its own recurrent row and write the new tail back.
+@@ -1412,14 +1520,31 @@ ggml_tensor * llama_model_qwen4exp::graph::build_inp_ple(
+     auto ple_inp = std::make_unique<llm_graph_input_ple>(
+             static_cast<const llama_model_qwen4exp &>(model), mctx_hyb->get_attn());
+ 
+-    ple_inp->rows = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_heads * n_tokens);
+-    ggml_set_input(ple_inp->rows);
+-    ggml_tensor * rows = ple_inp->rows;
+-    res->add_input(std::move(ple_inp));
+-
+-    // gather then flatten the heads: get_rows lays the head dimension out slowest, as the reference does
+-    ggml_tensor * emb = ggml_get_rows(ctx0, model.per_layer_tok_embd, rows);
+-    emb = ggml_reshape_2d(ctx0, emb, hparams.ple_head_dim * n_heads, n_tokens);
++    ggml_tensor * emb = nullptr;
++
++    if (static_cast<const llama_model_qwen4exp &>(model).ple_reader) {
++        // direct-read mode: set_input() pre-gathers the rows host-side, so the
++        // staged tensor replaces ggml_get_rows and the table pages stay untouched.
++        // F32 matches the ggml_get_rows output type, so the downstream mul_mats
++        // take the same kernels as the baseline path
++        ple_inp->data = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32,
++                                           hparams.ple_head_dim, n_heads * n_tokens);
++        ggml_set_input(ple_inp->data);
++        ggml_tensor * data = ple_inp->data;
++        res->add_input(std::move(ple_inp));
++
++        // flatten the heads the same way ggml_get_rows would: slowest dimension
++        emb = ggml_reshape_2d(ctx0, data, hparams.ple_head_dim * n_heads, n_tokens);
++    } else {
++        ple_inp->rows = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_heads * n_tokens);
++        ggml_set_input(ple_inp->rows);
++        ggml_tensor * rows = ple_inp->rows;
++        res->add_input(std::move(ple_inp));
++
++        // gather then flatten the heads: get_rows lays the head dimension out slowest, as the reference does
++        emb = ggml_get_rows(ctx0, model.per_layer_tok_embd, rows);
++        emb = ggml_reshape_2d(ctx0, emb, hparams.ple_head_dim * n_heads, n_tokens);
++    }
+     cb(emb, "ple_embd", -1);
+ 
+     return emb;
+diff --git a/tools/llama-bench/llama-bench.cpp b/tools/llama-bench/llama-bench.cpp
+index 1fff21f70..bf308a7e1 100644
+--- a/tools/llama-bench/llama-bench.cpp
++++ b/tools/llama-bench/llama-bench.cpp
+@@ -279,6 +279,8 @@ static const char * lazy_mode_str(llama_lazy_mode mode) {
+             return "auto";
+         case LLAMA_LAZY_MODE_ON:
+             return "on";
++        case LLAMA_LAZY_MODE_DIRECT:
++            return "on-direct";
+         default:
+             GGML_ABORT("invalid lazy mode");
+     }
+@@ -475,7 +477,7 @@ static void print_usage(int /* argc */, char ** argv) {
+     printf("  -fa, --flash-attn <on|off|auto>                   (default: %s)\n", join(transform_to_str(cmd_params_defaults.flash_attn, llama_flash_attn_type_name), ",").c_str());
+     printf("  -dev, --device <dev0/dev1/...>                    (default: auto)\n");
+     printf("  -lm, --load-mode <auto|none|mmap|mlock|mmap+mlock|dio> (default: %s)\n", join(transform_to_str(cmd_params_defaults.load_mode, llama_load_mode_name), ",").c_str());
+-    printf("  -lzm, --lazy-mode <on|auto|off>                   (default: %s)\n", join(transform_to_str(cmd_params_defaults.lazy_mode, lazy_mode_str), ",").c_str());
++    printf("  -lzm, --lazy-mode <on|on-direct|auto|off>                   (default: %s)\n", join(transform_to_str(cmd_params_defaults.lazy_mode, lazy_mode_str), ",").c_str());
+     printf("  -mmp, --mmap <0|1>                                (DEPRECATED IN FAVOUR OF --load-mode)\n");
+     printf("  -dio, --direct-io <0|1>                           (DEPRECATED IN FAVOUR OF --load-mode)\n");
+     printf("  -embd, --embeddings <0|1>                         (default: %s)\n", join(cmd_params_defaults.embeddings, ",").c_str());
+@@ -814,6 +816,8 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
+                     llama_lazy_mode mode;
+                     if (m == "on") {
+                         mode = LLAMA_LAZY_MODE_ON;
++                    } else if (m == "on-direct") {
++                        mode = LLAMA_LAZY_MODE_DIRECT;
+                     } else if (m == "auto") {
+                         mode = LLAMA_LAZY_MODE_AUTO;
+                     } else if (m == "off") {
+diff --git a/src/llama-lazy-reader.h b/src/llama-lazy-reader.h
+new file mode 100644
+index 000000000..4b97487c8
+--- /dev/null
++++ b/src/llama-lazy-reader.h
+@@ -0,0 +1,147 @@
++#pragma once
++
++// Serves rows of a lazy tensor with explicit pread()s instead of demand paging.
++// This works because the row indices of a whole ubatch are known host-side
++// before the graph runs. Hands out F32 rows, like ggml_get_rows does.
++
++#include "ggml.h"
++#include "llama-impl.h"
++
++#include <algorithm>
++#include <cerrno>
++#include <cstdio>
++#include <cstring>
++#include <stdexcept>
++#include <thread>
++#include <utility>
++#include <vector>
++
++#ifndef _WIN32
++#include <fcntl.h>
++#include <unistd.h>
++#endif
++
++struct llama_lazy_reader {
++#ifdef _WIN32
++    // pread()/open() are unavailable on Windows; --lazy-mode on-direct falls
++    // back to the lazy mmap reads there (see llama_model_base::load_lazy_reader)
++    const int64_t head_dim = 0;
++
++    void gather(const int32_t *, int64_t, float *) const {
++        GGML_ABORT("lazy direct reads are not supported on this platform");
++    }
++#else
++    llama_lazy_reader(int fd, size_t base, size_t row_size, int64_t n_rows, int n_threads,
++                      enum ggml_type type, int64_t head_dim)
++        : fd(fd), base(base), row_size(row_size), n_rows(n_rows), n_threads(n_threads),
++          head_dim(head_dim), to_float(type == GGML_TYPE_F32 ? nullptr : ggml_get_type_traits(type)->to_float) {
++        // F32 rows have no dequantizer; they are staged as-is, like ggml_get_rows
++        GGML_ASSERT((type == GGML_TYPE_F32 || to_float != nullptr) && head_dim > 0);
++    }
++
++    llama_lazy_reader(const llama_lazy_reader &) = delete;
++    llama_lazy_reader & operator=(const llama_lazy_reader &) = delete;
++
++    ~llama_lazy_reader() {
++        if (fd >= 0) {
++            ::close(fd);
++        }
++    }
++
++    const int      fd;
++    const size_t   base;       // file offset of row 0
++    const size_t   row_size;   // bytes per quantized row
++    const int64_t  n_rows;
++    const int      n_threads;  // in-flight read workers
++    const int64_t  head_dim;   // F32 elements per staged row
++    ggml_to_float_t to_float;  // same dequantizer the ggml_get_rows CPU kernel uses
++
++    // fill dst with the n gathered rows, dequantized to F32:
++    // dst[slot * head_dim, ...) = to_float(table[rows[slot]])
++    // thread-safe; never lets an exception escape a worker thread
++    void gather(const int32_t * rows, int64_t n, float * dst) const {
++        std::vector<std::pair<int32_t, int32_t>> pairs; // (row, dst slot)
++        pairs.reserve(n);
++        for (int64_t i = 0; i < n; ++i) {
++            GGML_ASSERT(rows[i] >= 0 && (int64_t) rows[i] < n_rows);
++            pairs.emplace_back(rows[i], (int32_t) i);
++        }
++
++        std::sort(pairs.begin(), pairs.end()); // equal rows adjacent, file order
++
++        // small gathers are not worth a thread per row
++        const int n_workers = (int) std::min<int64_t>(n_threads, std::max<int64_t>(1, n / 32));
++
++        // worker w reads rows pairs[n*w/n_workers, n*(w+1)/n_workers)
++        auto run_chunk = [&](int w, std::exception_ptr & err) {
++            try {
++                run_range(pairs, n * w / n_workers, n * (w + 1) / n_workers, dst);
++            } catch (...) {
++                err = std::current_exception();
++            }
++        };
++
++        // an exception leaving a joinable std::thread, or destroying one,
++        // terminates the process; keep worker creation failure-safe
++        std::vector<std::exception_ptr> errs(n_workers);
++        std::vector<std::thread> workers;
++        try {
++            for (int w = 1; w < n_workers; ++w) {
++                workers.emplace_back([&run_chunk, &errs, w]() {
++                    run_chunk(w, errs[w]);
++                });
++            }
++        } catch (...) {
++            for (auto & t : workers) {
++                t.join();
++            }
++            throw;
++        }
++
++        run_chunk(0, errs[0]); // this thread takes the first chunk
++        for (auto & t : workers) {
++            t.join();
++        }
++
++        for (const auto & err : errs) {
++            if (err) {
++                std::rethrow_exception(err);
++            }
++        }
++    }
++
++private:
++    void run_range(const std::vector<std::pair<int32_t, int32_t>> & pairs,
++                   int64_t begin, int64_t end, float * dst) const {
++        std::vector<uint8_t> bounce(row_size);
++        for (int64_t i = begin; i < end; ) {
++            int64_t j = i;
++            while (j + 1 < end && pairs[j + 1].first == pairs[i].first) {
++                ++j; // dedup: one read serves the whole run
++            }
++            const size_t off = base + (size_t) pairs[i].first * row_size;
++            for (size_t done = 0; done < row_size; ) {
++                const ssize_t n_read = ::pread(fd, bounce.data() + done, row_size - done, off + done);
++                if (n_read < 0 && errno == EINTR) {
++                    continue; // interrupted by a signal without SA_RESTART
++                }
++                if (n_read <= 0) {
++                    throw std::runtime_error(format("lazy direct read of %zu bytes at file offset %zu failed: %s",
++                            row_size, off, n_read == 0 ? "unexpected EOF" : strerror(errno)));
++                }
++                done += n_read;
++            }
++            float * first = dst + (size_t) pairs[i].second * head_dim;
++            if (to_float) {
++                to_float(bounce.data(), first, head_dim);
++            } else {
++                memcpy(first, bounce.data(), (size_t) head_dim * sizeof(float));
++            }
++            for (int64_t k = i + 1; k <= j; ++k) {
++                memcpy(dst + (size_t) pairs[k].second * head_dim, first, (size_t) head_dim * sizeof(float));
++            }
++            i = j + 1;
++        }
++    }
++#endif
++};
+diff --git a/src/llama-moecache.cpp b/src/llama-moecache.cpp
+new file mode 100644
+index 000000000..4e0732e80
+--- /dev/null
++++ b/src/llama-moecache.cpp
+@@ -0,0 +1,407 @@
++#include "llama-moecache.h"
++
++#include "llama-impl.h"
++#include "llama-model.h"
++
++#include "ggml.h"
++#include "ggml-backend.h"
++
++#include <cinttypes>
++#include <condition_variable>
++#include <cstdlib>
++#include <cstring>
++#include <deque>
++#include <map>
++#include <mutex>
++#include <string>
++#include <thread>
++#include <vector>
++
++namespace {
++
++struct layer_state {
++    llama_moe_cache_layer pub;
++
++    // LRU bookkeeping (host side; the tables mirror expert_slot)
++    std::vector<int32_t>  slot_expert;   // slot -> expert id, -1 when empty
++    std::vector<int32_t>  expert_slot;   // expert id -> slot, -1 when uncached
++    std::vector<uint64_t> slot_last_use; // slot -> lamport clock of last hit
++    std::vector<int32_t>  pending;       // uncached ids observed since last step (dedup, obs order)
++
++    std::vector<bool>     slot_in_flight; // slot has an upload pending
++
++    uint64_t n_hit  = 0;
++    uint64_t n_miss = 0;
++};
++
++struct upload_job {
++    size_t  layer_idx;
++    int32_t expert;
++    int32_t slot;
++    bool    done = false;
++};
++
++struct moe_cache {
++    int32_t n_slots     = 0;
++    int32_t max_inserts = 2;
++
++    uint64_t clock   = 0;
++    uint64_t n_steps = 0;
++
++    std::mutex mtx; // guards pending lists + clock (observe runs during graph exec)
++
++    std::vector<layer_state> layers;
++    std::map<const ggml_tensor *, size_t> by_up_src;
++
++    std::vector<ggml_context *>         ctxs;
++    std::vector<ggml_backend_buffer_t>  bufs;
++
++    // async upload worker: slices are copied to the device off the decode
++    // thread; the new table mapping is only published at a later step() once
++    // the upload has completed, so a running graph never reads a torn slot
++    std::thread              worker;
++    std::mutex               wmtx;
++    std::condition_variable  wcv;
++    std::deque<upload_job>   todo;
++    std::vector<upload_job>  done;
++    bool                     stop = false;
++};
++
++moe_cache * g_cache = nullptr;
++std::mutex g_init_mtx;
++bool g_init_done = false;
++
++int parse_layer_from_name(const char * name) {
++    // "blk.<il>.ffn_gate_exps.weight"
++    if (strncmp(name, "blk.", 4) != 0) {
++        return -1;
++    }
++    return atoi(name + 4);
++}
++
++void moe_obs_cb(const char * name, const struct ggml_tensor * ids, void * ud) {
++    moe_cache * mc = (moe_cache *) ud;
++
++    const int64_t n_ids    = ids->ne[0];
++    const int64_t n_tokens = ids->ne[1];
++    if (n_tokens > 4) {
++        return; // batch/prefill: the cache graph is not built there, don't pollute the LRU
++    }
++
++    const int il = parse_layer_from_name(name);
++    if (il < 0) {
++        return;
++    }
++
++    layer_state * ls = nullptr;
++    for (auto & l : mc->layers) {
++        if (l.pub.il == il) { ls = &l; break; }
++    }
++    if (!ls) {
++        return;
++    }
++
++    std::lock_guard<std::mutex> lock(mc->mtx);
++    for (int64_t t = 0; t < n_tokens; ++t) {
++        for (int64_t i = 0; i < n_ids; ++i) {
++            const int32_t id = *(const int32_t *) ((const char *) ids->data + t*ids->nb[1] + i*ids->nb[0]);
++            if (id < 0 || id >= (int32_t) ls->expert_slot.size()) {
++                continue;
++            }
++            const int32_t slot = ls->expert_slot[id];
++            if (slot >= 0) {
++                ls->n_hit++;
++                ls->slot_last_use[slot] = ++mc->clock;
++            } else {
++                ls->n_miss++;
++                bool dup = false;
++                for (int32_t p : ls->pending) {
++                    if (p == id) { dup = true; break; }
++                }
++                if (!dup) {
++                    ls->pending.push_back(id);
++                }
++            }
++        }
++    }
++}
++
++void upload_slice(ggml_tensor * dst_c, const ggml_tensor * src, int32_t expert, int32_t slot) {
++    const size_t sz = src->nb[2];
++    if ((size_t) slot*dst_c->nb[2] + sz > ggml_nbytes(dst_c) || (size_t) expert*sz + sz > ggml_nbytes(src)) {
++        LLAMA_LOG_ERROR("moe-cache: bad upload %s <- %s expert=%d slot=%d sz=%zu dst_nb2=%zu dst_bytes=%zu src_bytes=%zu\n",
++                dst_c->name, src->name, expert, slot, sz, dst_c->nb[2], ggml_nbytes(dst_c), ggml_nbytes(src));
++        return;
++    }
++    ggml_backend_tensor_set(dst_c, (const char *) src->data + (size_t) expert*sz, (size_t) slot*dst_c->nb[2], sz);
++}
++
++void set_table_entry(llama_moe_cache_layer & pub, int32_t expert, int32_t slot_or_dummy) {
++    const int32_t v = slot_or_dummy;
++    ggml_backend_tensor_set(pub.dev_table,  &v, (size_t) expert*sizeof(int32_t), sizeof(int32_t));
++    ggml_backend_tensor_set(pub.host_table, &v, (size_t) expert*sizeof(int32_t), sizeof(int32_t));
++}
++
++} // namespace
++
++void llama_moe_cache_init(const llama_model & model, int32_t n_slots, int32_t max_inserts) {
++    std::lock_guard<std::mutex> init_lock(g_init_mtx);
++    if (g_init_done) {
++        return;
++    }
++    [&]() {
++        if (n_slots <= 0) {
++            g_init_done = true;
++            return;
++        }
++
++        auto * mc = new moe_cache();
++        mc->n_slots = n_slots;
++        if (max_inserts > 0) {
++            mc->max_inserts = max_inserts;
++        }
++
++        // collect the host-resident expert layers, grouped by the device buffer
++        // type of that layer's router (the cache lives next to the router)
++        struct cand { int il; const llama_layer * l; };
++        std::map<ggml_backend_buffer_type_t, std::vector<cand>> groups;
++
++        for (size_t il = 0; il < model.layers.size(); ++il) {
++            const auto & l = model.layers[il];
++            if (!l.ffn_up_exps || !l.ffn_gate_exps || !l.ffn_down_exps || !l.ffn_gate_inp) {
++                continue;
++            }
++            if (!l.ffn_up_exps->data || !l.ffn_gate_exps->data || !l.ffn_down_exps->data) {
++                continue; // dry-run / memory-estimation model: weights not loaded, don't bind to it
++            }
++            if (!l.ffn_up_exps->buffer || !ggml_backend_buffer_is_host(l.ffn_up_exps->buffer)) {
++                continue; // experts already on a device: nothing to cache
++            }
++            if (!l.ffn_gate_inp->buffer || ggml_backend_buffer_is_host(l.ffn_gate_inp->buffer)) {
++                continue; // no device home for the cache
++            }
++            groups[ggml_backend_buffer_get_type(l.ffn_gate_inp->buffer)].push_back({(int) il, &l});
++        }
++
++        if (groups.empty()) {
++            LLAMA_LOG_INFO("%s: LLAMA_MOE_CACHE_SLOTS=%d but no host-resident expert layers found - disabled\n", __func__, n_slots);
++            delete mc;
++            return;
++        }
++
++        // host buffer for the CPU-side tables
++        std::vector<cand> all;
++        for (auto & g : groups) {
++            all.insert(all.end(), g.second.begin(), g.second.end());
++        }
++
++        auto alloc_group = [&](ggml_backend_buffer_type_t buft, const std::vector<cand> & cands, bool tables_only) -> bool {
++            ggml_init_params ip = {
++                /*.mem_size  =*/ ggml_tensor_overhead()*(cands.size()*4 + 8),
++                /*.mem_buffer=*/ nullptr,
++                /*.no_alloc  =*/ true,
++            };
++            ggml_context * ctx = ggml_init(ip);
++            if (!ctx) {
++                return false;
++            }
++            mc->ctxs.push_back(ctx);
++
++            for (const auto & c : cands) {
++                layer_state * ls = nullptr;
++                for (auto & l : mc->layers) {
++                    if (l.pub.il == c.il) { ls = &l; break; }
++                }
++                if (!ls) {
++                    mc->layers.push_back({});
++                    ls = &mc->layers.back();
++                    ls->pub.il       = c.il;
++                    ls->pub.n_slots  = n_slots;
++                    ls->pub.up_src   = c.l->ffn_up_exps;
++                    ls->pub.gate_src = c.l->ffn_gate_exps;
++                    ls->pub.down_src = c.l->ffn_down_exps;
++                }
++
++                if (tables_only) {
++                    ls->pub.host_table = ggml_new_tensor_2d(ctx, GGML_TYPE_I32, 1, ls->pub.up_src->ne[2]);
++                    ggml_format_name(ls->pub.host_table, "moe_cache_htbl.%d", c.il);
++                } else {
++                    const ggml_tensor * u = c.l->ffn_up_exps;
++                    const ggml_tensor * g = c.l->ffn_gate_exps;
++                    const ggml_tensor * d = c.l->ffn_down_exps;
++                    ls->pub.up_c   = ggml_new_tensor_3d(ctx, u->type, u->ne[0], u->ne[1], n_slots + 1);
++                    ls->pub.gate_c = ggml_new_tensor_3d(ctx, g->type, g->ne[0], g->ne[1], n_slots + 1);
++                    ls->pub.down_c = ggml_new_tensor_3d(ctx, d->type, d->ne[0], d->ne[1], n_slots + 1);
++                    ls->pub.dev_table = ggml_new_tensor_2d(ctx, GGML_TYPE_I32, 1, u->ne[2]);
++                    ggml_format_name(ls->pub.up_c,      "moe_cache_up.%d",   c.il);
++                    ggml_format_name(ls->pub.gate_c,    "moe_cache_gate.%d", c.il);
++                    ggml_format_name(ls->pub.down_c,    "moe_cache_down.%d", c.il);
++                    ggml_format_name(ls->pub.dev_table, "moe_cache_tbl.%d",  c.il);
++                }
++            }
++
++            ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
++            if (!buf) {
++                LLAMA_LOG_WARN("%s: failed to allocate MoE cache buffer on %s - cache disabled\n",
++                        __func__, ggml_backend_buft_name(buft));
++                return false;
++            }
++            ggml_backend_buffer_clear(buf, 0);
++            mc->bufs.push_back(buf);
++            return true;
++        };
++
++        bool ok = alloc_group(ggml_backend_cpu_buffer_type(), all, /*tables_only=*/true);
++        for (auto & g : groups) {
++            if (!ok) {
++                break;
++            }
++            ok = alloc_group(g.first, g.second, /*tables_only=*/false);
++        }
++
++        if (!ok) {
++            for (auto * b : mc->bufs) { ggml_backend_buffer_free(b); }
++            for (auto * c : mc->ctxs) { ggml_free(c); }
++            delete mc;
++            g_init_done = true; // a real model was seen and allocation failed: stay disabled
++            return;
++        }
++
++        // init LRU state + tables (everything uncached -> dummy slot n_slots)
++        size_t vram = 0;
++        for (auto & ls : mc->layers) {
++            const int64_t n_expert = ls.pub.up_src->ne[2];
++            ls.slot_expert.assign(n_slots, -1);
++            ls.expert_slot.assign(n_expert, -1);
++            ls.slot_last_use.assign(n_slots, 0);
++            ls.slot_in_flight.assign(n_slots, false);
++
++            std::vector<int32_t> dummy(n_expert, n_slots);
++            ggml_backend_tensor_set(ls.pub.dev_table,  dummy.data(), 0, n_expert*sizeof(int32_t));
++            ggml_backend_tensor_set(ls.pub.host_table, dummy.data(), 0, n_expert*sizeof(int32_t));
++
++            mc->by_up_src[ls.pub.up_src] = &ls - mc->layers.data();
++            vram += ggml_nbytes(ls.pub.up_c) + ggml_nbytes(ls.pub.gate_c) + ggml_nbytes(ls.pub.down_c);
++            LLAMA_LOG_DEBUG("moe-cache: init layer %d '%s' %zu bytes/expert\n",
++                    ls.pub.il, ls.pub.up_src->name, ls.pub.up_src->nb[2]);
++        }
++
++        mc->worker = std::thread([mc]() {
++            for (;;) {
++                upload_job j;
++                {
++                    std::unique_lock<std::mutex> lk(mc->wmtx);
++                    mc->wcv.wait(lk, [mc]() { return mc->stop || !mc->todo.empty(); });
++                    if (mc->stop) {
++                        return;
++                    }
++                    j = mc->todo.front();
++                    mc->todo.pop_front();
++                }
++                auto & ls = mc->layers[j.layer_idx];
++                upload_slice(ls.pub.up_c,   ls.pub.up_src,   j.expert, j.slot);
++                upload_slice(ls.pub.gate_c, ls.pub.gate_src, j.expert, j.slot);
++                upload_slice(ls.pub.down_c, ls.pub.down_src, j.expert, j.slot);
++                {
++                    std::lock_guard<std::mutex> lk(mc->wmtx);
++                    j.done = true;
++                    mc->done.push_back(j);
++                }
++            }
++        });
++
++        ggml_set_moe_obs_callback(moe_obs_cb, mc);
++        g_cache = mc;
++        g_init_done = true;
++
++        LLAMA_LOG_INFO("%s: MoE expert cache enabled: %zu layers x %d slots, %d inserts/step, %.1f MiB device memory\n",
++                __func__, mc->layers.size(), n_slots, mc->max_inserts, vram/1024.0/1024.0);
++    }();
++}
++
++const llama_moe_cache_layer * llama_moe_cache_lookup(const ggml_tensor * up_exps) {
++    if (!g_cache) {
++        return nullptr;
++    }
++    auto it = g_cache->by_up_src.find(up_exps);
++    if (it == g_cache->by_up_src.end()) {
++        return nullptr;
++    }
++    return &g_cache->layers[it->second].pub;
++}
++
++void llama_moe_cache_step() {
++    moe_cache * mc = g_cache;
++    if (!mc) {
++        return;
++    }
++
++    // 1) publish completed uploads (sync point: no graph is executing)
++    {
++        std::lock_guard<std::mutex> wlk(mc->wmtx);
++        std::lock_guard<std::mutex> lk(mc->mtx);
++        for (const auto & j : mc->done) {
++            auto & ls = mc->layers[j.layer_idx];
++            ls.slot_expert[j.slot]     = j.expert;
++            ls.expert_slot[j.expert]   = j.slot;
++            ls.slot_last_use[j.slot]   = ++mc->clock;
++            ls.slot_in_flight[j.slot]  = false;
++            set_table_entry(ls.pub, j.expert, j.slot);
++        }
++        mc->done.clear();
++    }
++
++    std::lock_guard<std::mutex> lock(mc->mtx);
++    mc->n_steps++;
++
++    // 2) schedule new uploads: evict at a sync point (clear the victim's table
++    //    entry now), then hand the slice copies to the worker
++    for (size_t li = 0; li < mc->layers.size(); ++li) {
++        auto & ls = mc->layers[li];
++        if (ls.pending.empty()) {
++            continue;
++        }
++
++        int budget = mc->max_inserts;
++        for (auto it = ls.pending.rbegin(); it != ls.pending.rend() && budget > 0; ++it, --budget) {
++            const int32_t id = *it;
++            if (ls.expert_slot[id] >= 0) {
++                continue;
++            }
++
++            // victim: an empty non-in-flight slot if any, else the LRU non-in-flight slot
++            int32_t slot = -1;
++            uint64_t best = UINT64_MAX;
++            for (int32_t s = 0; s < mc->n_slots; ++s) {
++                if (ls.slot_in_flight[s]) {
++                    continue;
++                }
++                if (ls.slot_expert[s] < 0) { slot = s; break; }
++                if (ls.slot_last_use[s] < best) { best = ls.slot_last_use[s]; slot = s; }
++            }
++            if (slot < 0) {
++                break; // every slot is in flight; try again next step
++            }
++
++            const int32_t victim = ls.slot_expert[slot];
++            if (victim >= 0) {
++                ls.expert_slot[victim] = -1;
++                ls.slot_expert[slot]   = -1;
++                set_table_entry(ls.pub, victim, mc->n_slots);
++            }
++            ls.slot_in_flight[slot] = true;
++
++            std::lock_guard<std::mutex> wlk(mc->wmtx);
++            mc->todo.push_back({li, id, slot});
++        }
++        ls.pending.clear();
++    }
++    mc->wcv.notify_one();
++
++    if (mc->n_steps % 512 == 0) {
++        uint64_t h = 0, m = 0;
++        for (auto & ls : mc->layers) { h += ls.n_hit; m += ls.n_miss; }
++        LLAMA_LOG_DEBUG("moe-cache: steps=%" PRIu64 " hits=%" PRIu64 " misses=%" PRIu64 " hit-rate=%.1f%%\n",
++                mc->n_steps, h, m, h + m ? 100.0*h/(h + m) : 0.0);
++    }
++}
+diff --git a/src/llama-moecache.h b/src/llama-moecache.h
+new file mode 100644
+index 000000000..ed739f90c
+--- /dev/null
++++ b/src/llama-moecache.h
+@@ -0,0 +1,61 @@
++#pragma once
++
++// GPU-resident LRU cache for MoE expert weights that -ot pinned to host memory.
++//
++// Motivation (measured on Qwen3.8-Flash-Next, 512 experts / 10 routed): expert
++// routing has strong temporal locality (LRU-64 hit rate ~67% over a mixed
++// workload) even though the long-run distribution is near-uniform. Decode on a
++// host-offloaded MoE layer is bound by host RAM bandwidth, so serving the hot
++// experts from VRAM removes most of the per-token DIMM traffic.
++//
++// Mechanism (no custom kernels):
++//  - per cached layer, companion tensors up_c/gate_c/down_c of shape
++//    [ne0, ne1, n_slots+1] live in the device buffer of that layer's router;
++//    slot n_slots is permanently zero (the "dummy" slot).
++//  - an I32 table[512] maps expert id -> slot, or n_slots when uncached.
++//    One copy on device (read by get_rows to remap ids for the cache-side
++//    mul_mat_id chain) and one on host (read by the CPU mul_mat_id via
++//    src[3] to SKIP cached ids, zeroing their dst rows).
++//  - the two down-projection outputs are summed; uncached ids contribute 0
++//    through the cache chain (zero slot) and cached ids contribute 0 through
++//    the CPU chain (skip), so the result is exact.
++//  - llama_moe_cache_step(), called at the end of llama_context::decode(),
++//    performs throttled LRU updates: at most LLAMA_MOE_CACHE_INSERTS expert
++//    uploads per layer per step via ggml_backend_tensor_set.
++//
++// Enabled via llama_context_params.n_moe_cache_slots (CLI: --moe-expert-cache).
++
++#include <cstdint>
++
++struct llama_model;
++struct ggml_tensor;
++
++struct llama_moe_cache_layer {
++    int il = -1;
++
++    int32_t n_slots = 0;
++
++    // host-resident source weights (the authoritative experts)
++    ggml_tensor * up_src   = nullptr;
++    ggml_tensor * gate_src = nullptr;
++    ggml_tensor * down_src = nullptr;
++
++    // device-resident cache slots, ne[2] == n_slots + 1 (last slot all zeros)
++    ggml_tensor * up_c   = nullptr;
++    ggml_tensor * gate_c = nullptr;
++    ggml_tensor * down_c = nullptr;
++
++    // expert id -> slot (or n_slots when uncached); I32 [1, n_expert]
++    ggml_tensor * dev_table  = nullptr;
++    ggml_tensor * host_table = nullptr;
++};
++
++// build the cache for every host-resident expert layer of the model.
++// Safe to call more than once; only the first call does work.
++void llama_moe_cache_init(const llama_model & model, int32_t n_slots, int32_t max_inserts);
++
++// nullptr when the cache is disabled or this tensor has no cached layer
++const llama_moe_cache_layer * llama_moe_cache_lookup(const ggml_tensor * up_exps);
++
++// apply throttled LRU updates; call between graph executions only
++void llama_moe_cache_step();

@@ -1,8 +1,8 @@
 {
-  "updatedAt": "2026-08-10T14:12:05.822Z",
+  "updatedAt": "2026-09-05T20:45:42.116Z",
   "command": "update",
-  "gitHead": "3a07885e0ffcfee3f2587e48825917b166161eb3",
-  "model": "glm-5.2",
+  "gitHead": "0c7db1bfb5d5a6c533b12eb089819fa5f94c249f",
+  "model": "gemini-3.8-flash-high",
   "status": "complete",
   "language": "en"
 }

@@ -7,7 +7,7 @@ tags: [architecture, bootstrap, di, request-flow]
 
 # Architecture
 
-model-loader is one binary with three surfaces (TUI, `serve` daemon, Cobra CLI) that share a single dependency-injection container and a registry of backend processes on disk. The defining behavior is the **single-loaded-backend hot-swap proxy**: every inference request, regardless of which client API it arrives on, routes to at most one live backend process, swapped on demand.
+model-loader is one binary with three surfaces (TUI, `serve` daemon, Cobra CLI) that share a single dependency-injection container and a registry of backend processes on disk across 522 Go files (519 internal, 3 cmd) and 228 test files. The defining behavior is the **single-loaded-backend hot-swap proxy**: every inference request, regardless of which client API it arrives on, routes to at most one live backend process, swapped on demand.
 
 ## Top-level layout
 
@@ -23,8 +23,9 @@ model-loader is one binary with three surfaces (TUI, `serve` daemon, Cobra CLI) 
 | `internal/log/log.go` | File-only `slog`; rotation gated by the state-owner flag. |
 | `internal/cli/` | Cobra tree. **Must not import `internal/ui`** — uses the `TUIRunner` callback to break the cycle. `ExitError{Code}` for non-1 exits. |
 | `internal/ui/` | Bubble Tea `RootModel` (`root.go`), 5 tabs. Subdirs `theme/`, `components/`, `pages/`. |
-| `internal/service/` | 25 packages, one concern each; each exports its own interface, takes `Config` + functional options, falls back to `log.Nop()`. |
-| `internal/service/internal/{fsx,procutil,shellsplit}/` | Leaf utilities. **Never reimplement** `WriteJSONAtomic`/`StartTicks`/quote-aware split outside these packages. |
+| `internal/service/` | 27 service packages, one concern each; each exports its own interface, takes `Config` + functional options, falls back to `log.Nop()`. |
+| `internal/service/internal/{fsx,procutil,ptrutil,shellsplit}/` | Leaf utilities. **Never reimplement** `WriteJSONAtomic`/`StartTicks`/quote-aware split outside these packages. |
+| `internal/sdnotify/` | Dependency-free systemd notify client (READY/WATCHDOG/STOPPING, abstract-socket aware); `serve` participates in `Type=notify` lifecycle — see [HTTP Proxy](http-proxy.md). |
 
 The largest service packages are documented on their own pages: [Process Manager](process-manager.md), [HTTP Proxy](http-proxy.md), [Backend Schema](backend-schema.md), and [Benchmark Engine](benchmark.md).
 
@@ -45,11 +46,10 @@ The largest service packages are documented on their own pages: [Process Manager
 
 Every chat request — whether OpenAI-native, Anthropic Messages, OpenAI Responses, or Gemini — shares one swap path and one upstream call to the loaded backend's `/v1/chat/completions`. The proxy reads the request's `model` field (a profile id) and, if it differs from the currently-loaded backend, swaps under a single mutex. Admin and status endpoints never touch a backend.
 
-<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
-```text
+```mermaid
 flowchart TD
     REQ["Client request"] --> ROUTES{"Route match"}
-    ROUTES -->|"/v1/models"| ML["handleModelsList<br/>profiles -> orModel list"]
+    ROUTES -->|"/v1/models"| ML["handleModelsList - profiles to orModel list"]
     ROUTES -->|"/_status"| ST["Status JSON snapshot"]
     ROUTES -->|"/_admin/load , /_admin/unload"| ADM["admin endpoints"]
     ROUTES -->|"/v1/messages"| AN["Anthropic translate"]
@@ -61,13 +61,13 @@ flowchart TD
     GE --> ENS
     FW --> ENS
     ADM --> ENS
-    ENS{"ensureLoaded<br/>serialized by swapMu"} -->|"same profile + alive"| USE["Backend use phase"]
-    ENS -->|"different model"| SWAP["kill old backend<br/>launch new + WaitReady"]
+    ENS{"ensureLoaded - serialized by swapMu"} -->|"same profile + alive"| USE["Backend use phase"]
+    ENS -->|"different model"| SWAP["kill old backend - launch new + WaitReady"]
     SWAP --> USE
     USE --> BACKEND["loaded backend /v1/chat/completions"]
     ML -.->|no backend touch| DONE["respond"]
     ST -.-> DONE
-    ROUTES -->|"/v1/messages/count_tokens"| CT["local token estimate<br/>no backend"]
+    ROUTES -->|"/v1/messages/count_tokens"| CT["local token estimate - no backend"]
     CT -.-> DONE
 ```
 
@@ -108,7 +108,7 @@ All JSON persistence uses atomic writes from `internal/service/internal/fsx` (`W
 | Profile JSON persistence | `internal/service/profilestore/` |
 | Process lifecycle | `internal/service/processmgr/{launch,manager,enrichment,recover,liveness,restart,registry,prune}.go` |
 | HTTP proxy | `internal/service/httpproxy/{server,handler,proxy,extract}.go` + `*_handlers.go` |
-| Proxy supervisor | `internal/service/proxysupervisor/{supervisor,state,client}.go` |
+| Proxy supervisor | `internal/service/proxysupervisor/{supervisor,state,client,strategy_systemd,systemd_runner}.go` |
 | Backend catalog + schema | `internal/service/backendcatalog/`, `internal/service/backendschema/` |
 | Monitor | `internal/service/monitor/` |
 | Benchmark engine | `internal/service/benchmark/` |

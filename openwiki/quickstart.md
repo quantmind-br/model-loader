@@ -1,7 +1,7 @@
 ---
 type: Overview
 title: model-loader quickstart
-description: Entry point for the model-loader code wiki. A Go terminal UI and headless CLI that manages local LLM inference servers across nine backends, fronted by a single multi-API HTTP proxy that hot-swaps the active model on demand.
+description: Entry point for the model-loader code wiki. A Go terminal UI and headless CLI that manages local LLM inference servers across eleven backends, fronted by a single multi-API HTTP proxy that hot-swaps the active model on demand.
 tags: [quickstart, overview, index]
 ---
 
@@ -11,7 +11,7 @@ tags: [quickstart, overview, index]
 
 - **Module:** `github.com/quantmind-br/model-loader`
 - **For:** a single operator curating tuned launch configs for one GPU. Loopback-only proxy, no auth, single-instance lock.
-- **Backends (9 `BackendKind`s):** `llama-server`, `vllm`, `sglang`, `dflash`, `buun-llama-cpp`, `beellama-cpp`, `ik-llama-cpp`, `unsloth`, `tabby`. Operators register each backend (binary + kind) via `model-loader backend add`.
+- **Backends (11 `BackendKind`s):** `llama-server`, `vllm`, `sglang`, `dflash`, `buun-llama-cpp`, `beellama-cpp`, `ik-llama-cpp`, `unsloth`, `tabby`, `lmstudio`, `freetoken`. Operators register each backend (binary + kind) via `model-loader backend add`.
 - **Three surfaces:** the 5-tab Bubble Tea TUI (default), headless `serve` proxy daemon, and a full Cobra CLI mirroring every TUI action.
 
 ## What this wiki covers
@@ -25,8 +25,20 @@ tags: [quickstart, overview, index]
 | [Backend Schema](backend-schema.md) | How per-backend validation schemas are generated from `--help` and merged with curated metadata. |
 | [Benchmark Engine](benchmark.md) | The 12-mode evaluation engine across five categories, including agentic harness integration. |
 | [Surfaces](surfaces.md) | The TUI tabs, the schema-driven `configweb` editor, and the CLI subcommand tree. |
-| [Operations](operations.md) | Configuration, runtime requirements, binary dependencies, and troubleshooting runbook. |
+| [Operations](operations.md) | Configuration, runtime requirements, binary dependencies, systemd notify/watchdog lifecycle, Cloudflare external exposure, and troubleshooting runbook. |
 | [Testing & QA](testing.md) | Test conventions, golden fixtures, regression-test linkage to `BUGS.md`, and the quality gate. |
+
+## Task routing for developers and agents
+
+| Change area / Intent | Relevant Wiki Page | Exact Source Entry Points | Important Symbols / Types | Focused Tests | Minimal Validation Command |
+|---|---|---|---|---|---|
+| Add or extend a backend family | [Backend Schema](backend-schema.md), [Process Manager](process-manager.md) | `internal/domain/backend.go`, `internal/service/backendschema/register.go`, `internal/service/processmgr/launch.go`, `internal/service/processmgr/readiness.go` | `BackendKind`, `Generator`, `pythonBackends`, `WaitReady` | `internal/domain/backend_kind_test.go`, `internal/service/backendschema/register_test.go`, `internal/service/processmgr/readiness_test.go` | `go test ./internal/domain ./internal/service/backendschema ./internal/service/processmgr -run 'Test(BackendKind\|Register\|WaitReady)'` |
+| Update backend flag schemas or help goldens | [Backend Schema](backend-schema.md), [Testing & QA](testing.md) | `internal/service/llamahelp/parser.go`, `internal/service/backendschema/manager.go`, `testdata/help-v10686.txt` | `ParseHelp`, `EmbeddedSchema`, `Manager.RefreshSchema` | `internal/service/llamahelp/parser_test.go`, `internal/service/backendschema/generator_test.go` | `go test ./internal/service/llamahelp ./internal/service/backendschema` |
+| HTTP proxy routes, translations, or hot-swap | [HTTP Proxy](http-proxy.md) | `internal/service/httpproxy/server.go`, `internal/service/httpproxy/handler.go`, `internal/service/httpproxy/*_handlers.go` | `Server`, `ensureLoaded`, `swapMu`, `translateAnthropicRequest` | `internal/service/httpproxy/swap_test.go`, `internal/service/httpproxy/*_handlers_test.go` | `go test ./internal/service/httpproxy` |
+| Systemd notify, watchdog, or proxy supervisor | [Operations](operations.md), [HTTP Proxy](http-proxy.md) | `internal/sdnotify/sdnotify.go`, `internal/cli/serve_notify.go`, `internal/service/proxysupervisor/strategy_systemd.go` | `sdnotify.Ready`, `sdnotify.Watchdog`, `serveReadiness`, `Supervisor.startSystemd` | `internal/sdnotify/sdnotify_test.go`, `internal/cli/serve_notify_test.go`, `internal/service/proxysupervisor/systemd_test.go` | `go test ./internal/sdnotify ./internal/cli ./internal/service/proxysupervisor` |
+| Process lifecycle, registry deltas, or crash recovery | [Process Manager](process-manager.md) | `internal/service/processmgr/{manager,launch,registry,liveness,recover}.go` | `fsManager`, `mutateRegistry`, `StartTicks`, `SameProcess`, `maybeScheduleRestart` | `internal/service/processmgr/manager_test.go`, `internal/service/processmgr/lifecycle_audit_test.go` | `go test ./internal/service/processmgr` |
+| CLI commands and subcommands | [Surfaces](surfaces.md) | `internal/cli/{profile,backend,instance,model,benchmark,serve}.go` | `profileCmd`, `backendCmd`, `instanceCmd`, `modelCmd`, `TUIRunner` | `internal/cli/{profile,backend,instance,model}_test.go` | `go test ./internal/cli` |
+| Benchmark modes, evaluation, or harnesses | [Benchmark Engine](benchmark.md) | `internal/service/benchmark/{runner,handler,handlers,scorer}.go` | `Runner.Run`, `modeOrder`, `modeHandler`, `llmGrader` | `internal/service/benchmark/handler_test.go`, `internal/service/benchmark/grader_test.go` | `go test ./internal/service/benchmark` |
 
 ## Features
 

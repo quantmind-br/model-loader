@@ -26,6 +26,7 @@ Backends are not hard-coded — operators register each via `model-loader backen
 | `tb` (Terminal-Bench CLI) | `tbDefaultCmd` in `terminalbench.go`. |
 | `pier` (datacurve-ai/pier) | `deepDefaultCmd` in `deepswe.go`. |
 | `vllm`, `sglang`, `dflash_server`, `unsloth`, `beellama`, `buun`, `tabbyapi` | User-registered; never hard-coded. |
+| `lms` (LM Studio), `ft` (FreeToken) | Launched through `backends/lms/lmstudio-serve.sh` / `backends/freetoken/freetoken-serve.sh` wrapper scripts; user-registered, never hard-coded. |
 
 ## Configuration
 

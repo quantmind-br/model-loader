@@ -68,9 +68,9 @@ Key fields:
 
 ## Backend and BackendKind
 
-`Backend` (`internal/domain/backend.go`) is a catalog entry: an `ID` (kebab catalog id like `llama.cpp-stable`, `sglang-dflash`), a `Kind` (one of 9 `BackendKind` constants), the `Executable` path, and a `SchemaRef`. A `kind` may have multiple `backend_id`s — `backend_id ≠ kind`.
+`Backend` (`internal/domain/backend.go`) is a catalog entry: an `ID` (kebab catalog id like `llama.cpp-stable`, `sglang-dflash`), a `Kind` (one of 11 `BackendKind` constants), the `Executable` path, and a `SchemaRef`. A `kind` may have multiple `backend_id`s — `backend_id ≠ kind`.
 
-`BackendKind` constants: `llama-server`, `vllm`, `sglang`, `dflash`, `buun-llama-cpp`, `beellama-cpp`, `ik-llama-cpp`, `unsloth`, `tabby`. Operators register each backend (binary + kind) via `model-loader backend add`.
+`BackendKind` constants: `llama-server`, `vllm`, `sglang`, `dflash`, `buun-llama-cpp`, `beellama-cpp`, `ik-llama-cpp`, `unsloth`, `tabby`, `lmstudio`, `freetoken`. Operators register each backend (binary + kind) via `model-loader backend add`.
 
 ## Instances
 

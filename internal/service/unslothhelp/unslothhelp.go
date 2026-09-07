@@ -23,8 +23,8 @@ import (
 // the profile's Model field (emitted as --model), so it is not a row here.
 // `port` carries IsPort so the validator knows the manager owns it.
 //
-// Schema tracks unsloth checkout f208cdc2d (git describe
-// v0.1.806-beta-5-gf208cdc2d); flags read from
+// Schema tracks unsloth checkout fcaa73634 (git describe
+// v0.1.806-beta-56-gfcaa73634); flags read from
 // unsloth_cli/commands/studio.py::run() (the `unsloth studio run` Typer
 // command), the SpeculativeType literal in unsloth_cli/_inference.py, the
 // pass-through denylist and value parsers in

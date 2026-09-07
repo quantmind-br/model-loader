@@ -13,24 +13,23 @@ Each backend needs a validation schema describing its CLI flags. `internal/servi
 
 Every generator first checks `existing.Source.Customized` and returns early (skips regeneration) to protect operator edits during incidental re-runs. The strategies then diverge:
 
-<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
-```text
+```mermaid
 flowchart TD
     KIND{"Backend kind?"}
-    KIND -->|"llama-server family"| LIVE["live --help parse<br/>llamahelp.ParseHelp"]
-    LIVE -->|"parse succeeds"| ENRICH["mergeWithCuratedEnrich<br/>appendMissing=false<br/>parsed authoritative on existence + enums"]
-    LIVE -->|"parse fails"| GOLDEN["embedded golden JSON<br/>help-v10686.golden.json, 252 flags"]
-    GOLDEN --> APPEND["mergeWithCurated<br/>appendMissing=true<br/>curated adds missing flags"]
+    KIND -->|"llama-server family"| LIVE["live --help parse - llamahelp.ParseHelp"]
+    LIVE -->|"parse succeeds"| ENRICH["mergeWithCuratedEnrich - appendMissing=false - parsed authoritative"]
+    LIVE -->|"parse fails"| GOLDEN["embedded golden JSON - help-v10686.golden.json, 252 flags"]
+    GOLDEN --> APPEND["mergeWithCurated - appendMissing=true - curated adds missing flags"]
     ENRICH --> OUT["BackendValidationSchema"]
     APPEND --> OUT
-    KIND -->|"vLLM, SGLang, ik, Tabby, Unsloth, DFlash"| CURATED["pure hand-curated<br/>Curated*Schema or *help.EmbeddedSchema<br/>no --help execution"]
+    KIND -->|"vLLM, SGLang, ik, Tabby, Unsloth, DFlash, LM Studio, FreeToken"| CURATED["pure hand-curated - Curated*Schema or help.EmbeddedSchema - no help execution"]
     CURATED --> OUT
     KIND -->|"BeeLlama, Buun"| FORK["live --help parse"]
-    FORK --> APPEND2["mergeWithCurated<br/>appendMissing=true<br/>curated injects fork-only flags"]
+    FORK --> APPEND2["mergeWithCurated - appendMissing=true - curated injects fork-only flags"]
     APPEND2 --> OUT
 ```
 
-Caption: the three generation strategies. Live-parse success uses **enrich** mode (parsed is authoritative on flag existence and enum values, so forks do not inherit phantom upstream flags); fallback/fork modes use **append-missing** mode (curated overlay adds flags the parse omits). vLLM/SGLang/ik use pure curation because their argparse/pre-arg.cpp `--help` formats are not parseable by `llamahelp`.
+Caption: the three generation strategies. Live-parse success uses **enrich** mode (parsed is authoritative on flag existence and enum values, so forks do not inherit phantom upstream flags); fallback/fork modes use **append-missing** mode (curated overlay adds flags the parse omits). vLLM/SGLang/ik use pure curation because their argparse/pre-arg.cpp `--help` formats are not parseable by `llamahelp`; LM Studio and FreeToken have no parseable server `--help` at all (`lms` is an RPC client; FreeToken is a Python service), so they are pure curation too.
 
 ## The merge core
 
@@ -85,8 +84,11 @@ Note llama-server and BeeLlama no longer share an identical enum: llama-server a
 
 ## Recent schema-sync changes
 
+- **`0c7db1b` (freetoken backend support)** — added `BackendKindFreeToken` with pure hand-curated schema (`freetoken_generator.go`, `freetokenhelp`); FreeToken is a Python service (no parseable `--help`) with early-bind uvicorn readiness via log scraping.
+- **`9353e9b` (lmstudio backend & help-v10686 golden)** — added `BackendKindLMStudio` with pure hand-curated schema (`lmstudio_generator.go`, `lmstudiohelp`, `lms` is an RPC client); bumped llama-server golden and embedded fallback to `v10686` (`testdata/help-v10686.{txt,golden.json}`, `embedded-v10686`).
+- **`bacdb4b` (tokenspeed backend removal)** — removed tokenspeed kind, schema generator, and validation rules; active kinds settled at 11.
 - **`2cef620` (accept llama-family spec-types)** — added `AllowedInts []int`; major `merge.go` refactor (defensive cloning, deterministic sorted matching, `parsedFlags` snapshot before append, `normalizePresentation`); added `draft-dflash` to spec-type enums; added buun VBR flags + draft aliases; translated buun help strings to English. ~19 files.
-- **`a18569e` (prisma-ml schema sync)** — gated `EnumValues`/`Default`/`Min`/`Max` overrides on `appendMissing || parsed-is-empty` (S16: a prisma-ml fork's `--spec-type draft-dspark` enum was being overwritten); parser inline-comma-list enum detection + angle-bracket int constraints; 30 new llama-server curated flags; golden regeneration to `help-v10152`. ~8 files.
+- **`a18569e` (prisma-ml schema sync)** — gated `EnumValues`/`Default`/`Min`/`Max` overrides on `appendMissing || parsed-is-empty` (S16: a prisma-ml fork's `--spec-type draft-dspark` enum was being overwritten); parser inline-comma-list enum detection + angle-bracket int constraints; 30 new llama-server curated flags. ~8 files.
 
 ## Key files
 
@@ -97,8 +99,8 @@ Note llama-server and BeeLlama no longer share an identical enum: llama-server a
 | `merge.go` | `mergeWithCurated` / `mergeWithCuratedEnrich` / `mergeCurated`. |
 | `presentation.go` | `essentialSeed`, `BuildPresentation`, `ReconcilePresentation`. |
 | `golden_embed.go` | `//go:embed testdata/help-v10686.golden.json` fallback. |
-| `register.go` | `RegisterDefaults` — wires all 9 generators. |
+| `register.go` | `RegisterDefaults` — wires all 11 kind generators. |
 | `curated_{llama,beellama,buun,ik,vllm,sglang}.go` | Hand-curated overlays. |
-| `{vllm,sglang,tabby,unsloth,beellama,buun,ik,embedded}_generator.go` | Per-kind generators. |
+| `{vllm,sglang,dflash,tabby,unsloth,beellama,buun,ik,lmstudio,freetoken,embedded}_generator.go` | Per-kind generators. |
 
-Per-kind help parsers: `internal/service/{llamahelp,vllmhelp,sglanghelp,dflashhelp,buunhelp,unslothhelp,tabbyhelp}/` each export an `EmbeddedSchema()` via `BuildFlagSchema`.
+Per-kind help parsers: `internal/service/{llamahelp,vllmhelp,sglanghelp,dflashhelp,buunhelp,unslothhelp,tabbyhelp,lmstudiohelp,freetokenhelp}/` each export an `EmbeddedSchema()` via `BuildFlagSchema`.

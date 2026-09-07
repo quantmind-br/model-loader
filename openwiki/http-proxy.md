@@ -28,20 +28,19 @@ The translated routes deliberately **bypass `loaded.proxy`** — they call `post
 
 `ensureLoaded` (`handler.go`) is the single swap entry point, reused by the catch-all, all three translated chat routes, and `/_admin/load`. It is serialized by `swapMu`.
 
-<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
-```text
+```mermaid
 flowchart TD
-    START["inference or /_admin/load request"] --> FAST{"fast path: current matches<br/>AND SameProcess pid/startTicks<br/>AND not unavailable?"}
+    START["inference or /_admin/load request"] --> FAST{"fast path: current matches - AND SameProcess pid/startTicks - AND not unavailable?"}
     FAST -->|yes| RETURN["return loaded backend"]
-    FAST -->|no| CRASH{"StartTicks mismatch?<br/>backend died/recycled"}
-    CRASH -->|yes| CLEAR["handleBackendCrash<br/>clear s.current"]
+    FAST -->|no| CRASH{"StartTicks mismatch? - backend died/recycled"}
+    CRASH -->|yes| CLEAR["handleBackendCrash - clear s.current"]
     CRASH -->|no| LOCK["swapMu.Lock + double-check"]
     CLEAR --> LOCK
-    LOCK --> KILL["killOldBackend<br/>ProcessMgr.Kill old pid"]
-    KILL -->|"kill fails ErrStillAlive"| BUSY["503 backend_busy<br/>keep s.current - never launch into contended VRAM"]
-    KILL -->|ok| LAUNCH["launchNewBackend<br/>ProcessMgr.Launch + WaitReady 180s"]
+    LOCK --> KILL["killOldBackend - ProcessMgr.Kill old pid"]
+    KILL -->|"kill fails ErrStillAlive"| BUSY["503 backend_busy - keep s.current - never launch into contended VRAM"]
+    KILL -->|ok| LAUNCH["launchNewBackend - ProcessMgr.Launch + WaitReady 180s"]
     LAUNCH -->|fail| FAIL["Kill + 502/504"]
-    LAUNCH -->|ok| INST["install loadedBackend<br/>newReverseProxy"]
+    LAUNCH -->|ok| INST["install loadedBackend - newReverseProxy"]
     INST --> USE["backend-use phase: serving gauge +1"]
     RETURN --> USE
 ```
@@ -89,6 +88,6 @@ Under systemd, `serve` itself participates: after binding it probes its own `/_s
 
 ## Proxy ↔ process manager
 
-`Server.deps.ProcessMgr` drives `Launch`/`Kill`/`WaitReady`. The proxy does not pre-resolve the backend kind/executable — `processmgr.launch.go:prepareLaunch` resolves both on demand and allocates an ephemeral port. `WaitReady` (`readiness.go`): unsloth backends scan the log for `sk-unsloth-[0-9a-f]{32}` (the token is both the readiness signal and the upstream auth key); all others poll `/health`. Timeout default is **180s** in the proxy, **360s** in `serve` (configurable via `[serve].health_check_timeout_sec`) for large MoE loads.
+`Server.deps.ProcessMgr` drives `Launch`/`Kill`/`WaitReady`. The proxy does not pre-resolve the backend kind/executable — `processmgr.launch.go:prepareLaunch` resolves both on demand and allocates an ephemeral port. `WaitReady` (`readiness.go`): unsloth backends scan the log for `sk-unsloth-[0-9a-f]{32}` (the token is both the readiness signal and the upstream auth key); freetoken backends scan the log for `API server is ready to serve on` (its early-bind uvicorn answers HTTP 200 on `/health` during weights loading, so HTTP polling would give a false-positive ready signal); all other kinds poll `/health`. Timeout default is **180s** in the proxy, **360s** in `serve` (configurable via `[serve].health_check_timeout_sec`) for large MoE loads.
 
 Crash recovery is on the hot path: `loadedBackend.startTicks` + `procutil.SameProcess` detects a crashed/PID-recycled backend → `handleBackendCrash` clears `s.current` → the next request relaunches. The ReverseProxy's `ErrorHandler` → `markBackendUnavailable` (atomic CAS) triggers relaunch on `ECONNREFUSED`/`EOF`/`ECONNRESET`/`EPIPE` when the client hasn't canceled. See [Process Manager](process-manager.md).

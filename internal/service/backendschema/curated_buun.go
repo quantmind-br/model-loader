@@ -42,8 +42,8 @@ const (
 // --mmproj-gpu-swap, --mmap-prefetch, --moe-cache-profile,
 // -cd/--ctx-size-draft, --spec-draft-replace, --spec-dflash-default,
 // --dflash-max-slots, and the cache-plan/cache-receipt group.
-// --tensor-read-lazy is the pre-b10703 upstream spelling of what mainline now
-// calls --lazy-mode; the fork still ships the old name.
+// --lazy-mode is the post-b10703 upstream spelling; the fork renamed
+// --tensor-read-lazy to it, so the old spelling no longer exists in this build.
 // --vbr-bits and --vbr-policy are declared with set_hidden() in the fork, so
 // they never appear in --help and this curated file is their only source.
 func CuratedBuunSchema() domain.BackendValidationSchema {
@@ -82,7 +82,7 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 		boolFlag("no-host", "", nil, false, "Bypasses the host buffer to allow extra buffers.", buunGroupMemory),
 		boolFlag("logits-all", "", []string{"no-logits-all"}, true, "Reserves a logits buffer for every token in the batch; disable it to save VRAM on big-vocab chat/completion workloads.", buunGroupMemory),
 		boolFlag("check-tensors", "", nil, false, "Checks model tensors for invalid values.", buunGroupMemory),
-		enumFlag("tensor-read-lazy", "", nil, []string{"on", "auto", "off"}, "auto", "On-demand reading of certain tensors (for example per-layer embeddings): 'on' reads their rows from disk on demand and requires mmap, 'auto' does so only for tensors larger than 4 GiB, 'off' keeps them resident.", buunGroupMemory),
+		enumFlag("lazy-mode", "lzm", nil, []string{"on", "auto", "off"}, "auto", "On-demand reading of certain tensors (for example per-layer embeddings) from disk; requires mmap. Spelling used from build b10703 onward.", buunGroupMemory),
 		enumFlag("mmap-prefetch", "", nil, []string{"on", "auto", "off"}, "auto", "Bulk mmap prefetch policy: 'auto' prefetches only when the mapped model comfortably fits available system RAM, 'on' keeps eager whole-model prefetch, 'off' relies on sequential readahead and demand paging.", buunGroupMemory),
 
 		strFlag("device", "dev", nil, nil, "Selects the devices used for offload.", buunGroupDevice, false),
@@ -325,7 +325,7 @@ func CuratedBuunSchema() domain.BackendValidationSchema {
 // build number printed by `llama-server --version` and the checkout's
 // `git describe --tags --always`. Both are recorded so the value is
 // unambiguous.
-const buunSourceVersion = "11723 (7a918624b) / b9637-2086-g7a918624b"
+const buunSourceVersion = "11806 (c9c52d718) / b9637-2169-gc9c52d718"
 
 func buunSpecTypes() []string {
 	return []string{"none", "draft-simple", "draft-eagle3", "draft-mtp", "draft-dflash", "draft-dspark", "ngram-simple", "ngram-map-k", "ngram-map-k4v", "ngram-mod", "ngram-cache", "suffix", "copyspec", "recycle", "dflash"}
@@ -354,7 +354,7 @@ func BuunPresentation() *domain.Presentation {
 		{Name: buunGroupModelLoad, Flags: []string{"hf-repo", "hf-file", "hf-token", "model-url", "docker-repo", "override-kv", "offline"}},
 		{Name: buunGroupContext, Flags: []string{"ctx-size", "n-predict", "batch-size", "ubatch-size", "keep"}},
 		{Name: buunGroupCPU, Flags: []string{"threads", "threads-batch", "poll", "prio", "numa"}},
-		{Name: buunGroupMemory, Flags: []string{"load-mode", "mlock", "mmap", "direct-io", "tensor-read-lazy", "mmap-prefetch", "repack", "op-offload", "no-host", "logits-all", "check-tensors"}},
+		{Name: buunGroupMemory, Flags: []string{"load-mode", "mlock", "mmap", "direct-io", "lazy-mode", "mmap-prefetch", "repack", "op-offload", "no-host", "logits-all", "check-tensors"}},
 		{Name: buunGroupDevice, Flags: []string{"device", "list-devices", "n-gpu-layers", "split-mode", "tensor-split", "main-gpu", "override-tensor", "cpu-moe", "n-cpu-moe", "n-cpu-ffn", "moe-cache-profile", "no-fused-gdn", "fit", "fit-target", "fit-ctx"}},
 		{Name: buunGroupKV, Flags: []string{"kv-offload", "flash-attn", "cache-type", "cache-type-k", "cache-type-v", "vbr-budget", "vbr-min-bits", "vbr-vram-budget", "vbr-reclaim-floor", "vbr-reset-keep-frac", "vbr-policy", "vbr-entry"}},
 		{Name: buunGroupRope, Flags: []string{"rope-scaling", "rope-scale", "rope-freq-base", "rope-freq-scale", "yarn-orig-ctx", "yarn-ext-factor", "yarn-attn-factor", "yarn-beta-slow", "yarn-beta-fast"}},

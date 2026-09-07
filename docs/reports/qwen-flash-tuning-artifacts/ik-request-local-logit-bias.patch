@@ -1,0 +1,13 @@
+diff --git a/examples/server/server-context.cpp b/examples/server/server-context.cpp
+index c53e5d15..a246a6da 100644
+--- a/examples/server/server-context.cpp
++++ b/examples/server/server-context.cpp
+@@ -1524,6 +1524,8 @@ bool server_context::launch_slot_with_task(server_slot& slot, server_task& task)
+     }
+ 
+     {  // apply logit bias
++        // Request-local biases (including ignore_eos) must not leak across slot reuse.
++        slot.sparams.logit_bias = default_sparams.logit_bias;
+         const auto& logit_bias = data.find("logit_bias");
+         if (logit_bias != data.end() && (logit_bias->is_object() || logit_bias->is_array())) {
+             slot.sparams.logit_bias.clear(); // only clear if user sets it

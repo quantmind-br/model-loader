@@ -6,7 +6,7 @@
 // not stable enough to parse, so we ship a hand-curated schema of the
 // load/tuning flags that matter on a single workstation.
 //
-// Tracks TabbyAPI checkout 109629b (2026-09-02); its venv pins exllamav3
+// Tracks TabbyAPI checkout 13a8079 (2026-09-04); its venv pins exllamav3
 // 1.4.6+cu128.torch2.9.0 (the minimum the exllamav3 backend asserts) on torch
 // 2.9.0+cu128. exllamav2 0.3.2 is still installed in that venv but TabbyAPI no
 // longer has an ExLlamaV2 backend, so it is never loaded.

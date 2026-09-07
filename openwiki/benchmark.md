@@ -34,20 +34,19 @@ Each handler registers itself in a package `init()` via `registerHandler(...)`. 
 
 `Runner.Run()` (`runner.go`) is the orchestration entry point. `RunConfig` carries the profile, mode, and all knobs; `Config` (built from `app.BenchmarkConfig`) holds the per-mode settings.
 
-<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
-```text
+```mermaid
 flowchart TD
     RC["RunConfig: profile + mode"] --> LOAD["load profile + snapshot config"]
-    LOAD --> PREP["handler.Prepare<br/>validate config + build scorer BEFORE launch"]
+    LOAD --> PREP["handler.Prepare - validate config + build scorer BEFORE launch"]
     PREP -->|"fail"| FASTFAIL["return error fast"]
     PREP --> FEED["install RunFeed + drainer"]
-    FEED --> ENSURE["ensureLoaded<br/>proxy.EnsureRunning + Load profileID"]
+    FEED --> ENSURE["ensureLoaded - proxy.EnsureRunning + Load profileID"]
     ENSURE --> GPU["startGPUSampler peak VRAM / avg util"]
-    GPU --> EXEC["handler.Execute<br/>serial bench OR judge pipelining"]
-    EXEC --> CHK["checkpoint every 15s<br/>partial run flagged in progress"]
-    EXEC -->|"error or cancel"| PARTIAL["partial Run with Err set<br/>aggregate from what completed"]
+    GPU --> EXEC["handler.Execute - serial bench OR judge pipelining"]
+    EXEC --> CHK["checkpoint every 15s - partial run flagged in progress"]
+    EXEC -->|"error or cancel"| PARTIAL["partial Run with Err set - aggregate from what completed"]
     EXEC -->|"done"| ALL{"all items failed?"}
-    ALL -->|yes| INFRA["infrastructure failure<br/>not measured quality"]
+    ALL -->|yes| INFRA["infrastructure failure - not measured quality"]
     ALL -->|no| AGG["aggregate results + GPU stats"]
     AGG --> FIN["handler.Finalize mode-specific fields"]
     FIN --> SAVE["persist Run"]

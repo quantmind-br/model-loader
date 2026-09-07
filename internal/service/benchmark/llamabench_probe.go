@@ -159,11 +159,11 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 		}
 		reqCtx, cancel := context.WithTimeout(ctx, repTimeout)
 		comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
-			Model:       model,
-			MaxTokens:   ps.GenTokens,
-			OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
-			IgnoreEOS:   true, // ask for exactly tg tokens where honored; real code still hits EOS earlier
-			Messages:    msgs,
+			Model:     model,
+			MaxTokens: ps.GenTokens,
+			OnDelta:   r.streamHeartbeat(res.ProblemID, res.ProblemName),
+			IgnoreEOS: true, // ask for exactly tg tokens where honored; real code still hits EOS earlier
+			Messages:  msgs,
 		})
 		cancel()
 		if err != nil {
@@ -227,6 +227,7 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 	res.PromptProcessingTPS = ppTpsSum / n
 	res.TotalMs = int64(totalSum / n)
 	res.PromptTokens = ppSum / ok
+	res.CompletionTokens = tgSum / ok
 	// Display the *target* fill (the preset's intent), not the clamped budget —
 	// the budget shrinks by ~25% to compensate for the buildCodeContext
 	// chars/token underestimate and chat-template overhead. PromptTokens /

@@ -50,11 +50,13 @@ Editing a profile or backend here flows through the [validation schema](backend-
 
 | Group | Commands |
 |-------|----------|
-| `profile` | `list`, `show`, `create`, `edit`, `delete`, `duplicate`, import/export bundle |
-| `backend` | `add`, `list`, `show`, `probe`, `schema refresh/apply` |
-| `instance` | `start`, `stop`, `restart`, `observe` |
-| `model` | `scan`, `list`, hub `search`/`download` |
+| `profile` | `list`, `show`, `create`, `edit`, `delete`, `duplicate`, `rename`, `pin`/`unpin`, export/import bundle, `validate` |
+| `backend` | `add`, `delete`, `list`, `show`, `probe`, `set-default`, `schema show/refresh/apply` |
+| `instance` | `list`, `show`, `history`, `start`, `stop`, `restart`, `logs`, `metrics` |
+| `model` | `list`, `info`, `search`, `download`, `downloads`, `cancel`, `resume` |
 | `benchmark` | `run`, `list`, `compare`, `history`, `show`, `transcript`, `export`, `delete`, `web` |
 | `serve` | headless proxy daemon (no flock) |
+
+Subcommand conventions: `profile` commands use `create`/`edit` (no `add`, and pinning via `pin`/`unpin` rather than `set-default`); `instance` commands provide `logs`/`metrics` directly (no `observe` command); `model` uses `list`/`search`/`download` (no `scan` command); and `backend` provides `add`/`delete`/`list`/`show`/`probe`/`set-default` alongside the `schema` subgroup (`show`, `refresh`, `apply`).
 
 `bootstrap_lock.go` is the shared flock-acquisition helper for one-shot mutating commands (`instance start/stop/restart`, `benchmark run`). See [Architecture](architecture.md) for the owner/observer split. Benchmark mode parsing supports legacy aliases (`long-context`→`longctx`, `llamabench`/`throughput`→`llama-bench`).

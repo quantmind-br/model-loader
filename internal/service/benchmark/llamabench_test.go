@@ -111,6 +111,9 @@ func TestRunLlamaBench_VarianceAndServerTimings(t *testing.T) {
 	if !res.Resolved {
 		t.Fatalf("expected resolved, detail %q", res.Detail)
 	}
+	if res.CompletionTokens != 2 {
+		t.Errorf("completion tokens = %d, want 2", res.CompletionTokens)
+	}
 	if res.TokensPerSecond != 50 {
 		t.Errorf("mean tok/s = %v, want 50 (from server timings)", res.TokensPerSecond)
 	}

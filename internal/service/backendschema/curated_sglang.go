@@ -267,7 +267,7 @@ func CuratedSGLangSchema() domain.BackendValidationSchema {
 		enumFlag("attention-backend", "", nil, []string{"triton", "torch_native", "flex_attention", "nsa", "dsa", "dsv4", "compressed", "cutlass_mla", "cutedsl_mla", "tokenspeed_mla", "fa3", "fa4", "flashinfer", "flashmla", "trtllm_mla", "trtllm_mha", "dual_chunk_flash_attn", "hpc_ops", "minicpm_flashattn", "minicpm_flashinfer", "aiter", "wave", "intel_amx", "ascend", "intel_xpu"}, nil, "Attention backend (`fa`, `torch_sdpa`, `sage_attn`, ...).", sglangGroupBackendsDeAtencaoEGemm),
 		strFlag("prefill-attention-backend", "", nil, "= attention-backend", "Prefill-only kernels (take priority over the general setting).", sglangGroupBackendsDeAtencaoEGemm, false),
 		strFlag("decode-attention-backend", "", nil, "= attention-backend", "Decode-only kernels (take priority over the general setting).", sglangGroupBackendsDeAtencaoEGemm, false),
-		enumFlag("sampling-backend", "", nil, []string{"pytorch", "flashinfer", "ascend"}, nil, "Sampling kernels.", sglangGroupBackendsDeAtencaoEGemm),
+		enumFlag("sampling-backend", "", nil, []string{"pytorch", "flashinfer", "ascend", "token_oracle"}, nil, "Sampling kernels.", sglangGroupBackendsDeAtencaoEGemm),
 		enumFlag("mm-attention-backend", "", nil, []string{"sdpa", "fa3", "fa4", "triton_attn", "ascend_attn", "aiter_attn", "amx_attn", "flashinfer_cudnn", "xpu_attn"}, nil, "Multimodal attention backend.", sglangGroupBackendsDeAtencaoEGemm),
 		enumFlag("fp8-gemm-backend", "", nil, []string{"auto", "deep_gemm", "flashinfer_trtllm", "flashinfer_deepgemm", "flashinfer_cutlass", "flashinfer_cutedsl", "cutlass", "triton", "aiter"}, "auto", "Blockwise FP8 GEMM runner.", sglangGroupBackendsDeAtencaoEGemm),
 		enumFlag("fp4-gemm-backend", "", nil, []string{"auto", "cutlass", "flashinfer_cudnn", "flashinfer_cutedsl", "flashinfer_cutlass", "flashinfer_trtllm", "marlin"}, "auto", "NVFP4 GEMM runner (default `auto`; `flashinfer_cutlass` on sglang 0.5.9).", sglangGroupBackendsDeAtencaoEGemm),
@@ -588,7 +588,7 @@ func CuratedSGLangSchema() domain.BackendValidationSchema {
 	} {
 		add(spec)
 	}
-	return domain.BackendValidationSchema{SchemaVersion: 1, Kind: domain.ValidationSchemaCLIFlagsV1, BackendKind: domain.BackendKindSGLang, BackendID: "sglang-default", Source: domain.SchemaSource{GeneratedFrom: "sglang ServerArgs (srt/server_args.py + srt/arg_groups) union of catalog entries sglang-stable 0.5.9, sglang-nightly 0.5.6.post3.dev9915+gf8cbf000f, sglang-unlimited 0.0.0.dev11416+g92e8bb79e, sglang-dflash 0.5.6.post3.dev6167+g28bcb3f65", SourceVersion: "curated-sglang-serve-union-0.5.9/dev9915/dev11416/dev6167", Editable: true}, Flags: flags, Presentation: sglangPresentation()}
+	return domain.BackendValidationSchema{SchemaVersion: 1, Kind: domain.ValidationSchemaCLIFlagsV1, BackendKind: domain.BackendKindSGLang, BackendID: "sglang-default", Source: domain.SchemaSource{GeneratedFrom: "sglang ServerArgs (srt/server_args.py + srt/arg_groups) union of catalog entries sglang-stable 0.5.18, sglang-nightly 0.5.6.post3.dev10058+gfbf8f1dbf, sglang-unlimited 0.0.0.dev11416+g92e8bb79e, sglang-dflash 0.5.6.post3.dev6167+g28bcb3f65", SourceVersion: "curated-sglang-serve-union-0.5.18/dev10058/dev11416/dev6167", Editable: true}, Flags: flags, Presentation: sglangPresentation()}
 }
 
 func sglangPresentation() *domain.Presentation {
