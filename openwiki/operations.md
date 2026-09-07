@@ -149,10 +149,17 @@ systemctl --user daemon-reload
 
 Order matters: deleting the DNS route first keeps the tunnel deletion from orphaning the `model-loader.quantforge.com.br` record, and `--force` would paper over any dependency Cloudflare still reports. After the block above, nothing of the external API remains on this machine or in Cloudflare.
 
+## Workstation calibrations and audit reports
+
+Workstation-level calibrations, performance audits, and tuning reports for the reference dual-RTX 3090 setup are documented under repository root and `docs/reports/`:
+- **Qwen3.8-27B Syv Audit (`QWEN38_27B_AUDIT_REPORT.md`)**: Full audit against upstream commit `0e951951` for vLLM 0.28.0 (torch 2.13.0+cu130, SM86, TP=2). Details why BF16 KV cache + FLASH_ATTN with verify split-KV (`VLLM_SPEC_DECODE_ATTN=1`) outperforms fp8 KV, how INT8 activations restricted to MLP (`VLLM_MARLIN_INPUT_DTYPE=int8`, `VLLM_MARLIN_INT8_INCLUDE_RE=mlp`) accelerates 44k prefill without accuracy regression, and how `VLLM_DFLASH2_LOOKUP=1` cuts warm TTFT.
+- **Qwen3.8 Flash-Next Tuning (`docs/reports/qwen-flash-tuning-results.md`, `docs/reports/qwen3.8-flash-next-dual-rtx3090-2026-09-04.md`)**: Tuning across llama-cpp (cache96) and ik-llama-cpp (FIFO ubatch1024) at 256k context; covers the upstream ik request-local `ignore_eos` fix and checkpoint FIFO preservation. See [Benchmark Engine](benchmark.md) for probe token aggregation details.
+- **Ornith-1.5 35B-A3B AutoRound W4A16**: Calibrated for 256k context with DFlash2 (7 drafts + lookup), `max-num-batched-tokens 4096`, and balanced performance mode.
+
 ## Troubleshooting
 
 - **`llama-server` not found** — ensure it is compiled and in `PATH`. Backends tab (`4`) → `n` registers a custom binary location as a backend.
-- **Port in use** — edit the profile and change the port number.
+- **Port in use** — backend instance ports are dynamically assigned by the process manager (profile-level port fields are ignored); for proxy port collisions (default `127.0.0.1:4321`), terminate the conflicting process or change `[serve].port` in `config.toml`.
 - **Model not found** — verify the model path in the profile or update `search_paths` in `config.toml`.
 - **Instance not recovering** — check that `instances.json` exists in the state directory; `Reconcile` runs at boot for state owners.
 - **Backend schema missing** — each backend needs a validation schema. Add a backend via the Backends tab (`n`) to auto-generate one from `--help`, or place a manually edited schema in the backends directory.

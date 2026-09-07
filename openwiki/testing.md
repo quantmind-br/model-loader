@@ -58,7 +58,7 @@ The repository contains 228 test files across `cmd` and `internal`:
 
 - **Pure unit (no I/O):** `internal/domain/*`, `internal/log/*`, `internal/service/internal/{fsx,procutil,ptrutil,shellsplit}`.
 - **httptest-based (no real processes):** `httpproxy/*`, `configweb/*`, `hfhub/*`, `backendcatalog/*`, `downloadmgr/*`.
-- **Real processes + port allocation:** `processmgr/*` (including readiness probing and launch recovery), `proxysupervisor/*`, `internal/service/internal/procutil/*`, `benchmark/*_watchdog_test.go`, `benchmark/{llamabench,longcontext}_probe_test.go`.
+- **Real processes + port allocation:** `processmgr/*` (including readiness probing and launch recovery), `proxysupervisor/*` (uses `disableSystemdForTest` to mock `runSystemctl` with "not-found" and isolate unit lifecycle from host systemd), `internal/service/internal/procutil/*`, `benchmark/*_watchdog_test.go`, `benchmark/{llamabench,longcontext}_probe_test.go`.
 - **Systemd notify & lifecycle:** `internal/sdnotify/*`, `internal/cli/serve_notify_test.go`, `internal/service/proxysupervisor/systemd_test.go`.
 - **CLI-level integration:** 27 files in `internal/cli/*`. Uses `bytes.Buffer` as `io.Writer`; calls leaf command funcs directly; never `exec.Command` of the binary itself.
 - **TUI integration:** `internal/ui/root_test.go` + `profiles_test.go` use `teatest.NewTestModel` at 120×30. The rest of `internal/ui/pages/*_test.go` is pure-function style: construct page struct, invoke `Update`, call `drainCmd(cmd)`, assert on `[]tea.Msg`.

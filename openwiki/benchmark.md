@@ -88,6 +88,34 @@ A shared stall watchdog (`runHangWatchdog`, used by terminal-bench and deep-swe)
 
 Feed staleness (separate, for UI rendering): agentic quiet after 3 min / stalled after 9 min; local quiet after 45 s / stalled after 2 min 15 s. Inference timeout scales with `max_tokens` (base `Timeout` + `MaxTokens/decodeFloorTPS(15)`) so a large token budget on a slow model does not spuriously time out.
 
+## Throughput and probe metrics (llama-bench)
+
+`llamabench_probe.go` runs repeated chat completions with `IgnoreEOS: true` across prompt/generation budgets to measure raw prefill and decode speeds.
+- **Server timings vs wall clock**: prefers `timings.predicted_per_second` reported by compatible backends; falls back to measured generation duration.
+- **Token counts**: records `PromptTokens` and `CompletionTokens` (`res.CompletionTokens = tgSum / ok`). Prior to `04c4786`, `CompletionTokens` was left unassigned (0) in aggregated runs despite `tgSum` accumulation; historical JSON files keep 0 while server logs serve as evidence.
+- **Heartbeat & timeout**: streams delta heartbeats (`r.streamHeartbeat`) so long prefills do not trigger the hang watchdog.
+
+## Workstation calibrations and tuning reports
+
+The repository includes reproducible evaluation reports and tuning artifacts for local dual-RTX 3090 workstations:
+
+- **Qwen3.8-27B Syv workstation audit (`QWEN38_27B_AUDIT_REPORT.md`)**:
+  - Evaluated against upstream reference `syv-ai/qwen38-27b-rtx3090` (`0e951951`) on dual RTX 3090 (24 GiB each, PCIe, TP=2, single operator).
+  - vLLM upgraded to 0.28.0 (torch 2.13.0+cu130); `dflash2-backport.patch` retired in favor of native DFlash2.
+  - **BF16 KV cache + FLASH_ATTN** with verify split-KV (`VLLM_SPEC_DECODE_ATTN=1`, `QMAX=8`) delivered +11.9% decode and 2.5× lower warm TTFT over fp8 KV on SM86 (RTX 3090).
+  - **INT8 activations restricted to MLP** (`VLLM_MARLIN_INPUT_DTYPE=int8`, `VLLM_MARLIN_INT8_INCLUDE_RE=mlp` on symmetric checkpoints) shaved 7.2s off 44k prefill while preserving GSM8K score (190/200).
+  - **`VLLM_DFLASH2_LOOKUP=1`** increased context reproduction from ~136 to ~210 tok/s and halved warm 44k TTFT from 0.99s to 0.49s.
+  - Recommended profile: `qwen3.8-27b-w4a16-dflash2-syv-tp2-sharptmpl-256k`.
+
+- **Qwen3.8 Flash-Next local tuning (`docs/reports/qwen-flash-tuning-results.md`)**:
+  - Benchmarked `llama-cpp-qwen4exp-cache` (cache96) vs `ik-llama-cpp-tuning` (FIFO ubatch1024) across context depths up to 244,116 real tokens without truncation.
+  - Discovered and fixed an upstream `ik-llama-cpp` bug where request-local `ignore_eos` leaked across requests via `slot.sparams.logit_bias` (remedied by restoring default biases in `examples/server/server-context.cpp`).
+  - Mitigated ik variance checkpoint eviction at 224k context (TTFT dropped from 23.18s to 388ms via FIFO32 checkpoints).
+  - Verified multi-turn tool calling and code execution in sandboxed `bwrap`.
+
+- **Ornith-1.5 35B-A3B AutoRound W4A16 calibration (`CHANGELOG.md`)**:
+  - Calibrated for single-sequence 262,144 (256k) context on dual RTX 3090: DFlash2 speculative decoding with 7 drafts and lookup enabled (`VLLM_DFLASH2_LOOKUP=1`), `max-num-batched-tokens 4096`, and `performance-mode balanced`.
+
 ## Deterministic sampling
 
 `internal/service/benchmark/sample.go` provides `sampleIDs(ids, n, seed)` — a deterministic `n`-element subset (copy → sort → seeded PCG shuffle → truncate → re-sort). Same `(ids, n, seed)` always selects the same subset regardless of input order. Since the external harnesses lack a uniform seed/count flag, the subset is resolved **locally** before building CLI args: terminal-bench expands `--n-tasks` into an explicit `--task-id` list; swe-bench-pro reads instance ids from the raw sample then samples. The CLI `--limit` flag maps to these per-mode reducers.

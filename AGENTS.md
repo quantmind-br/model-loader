@@ -1,45 +1,35 @@
 # Repository Guidelines
 
-This file is the operational knowledge base for `model-loader`. It is generated
-from a parallel scan of the repository across four areas — **core source**,
-**tests**, **configs/build**, and **scripts/docs** — and is the single source
-of truth for how the code is organized, how to build/test it, and the
-conventions any change must respect.
-
-**Work with the grain of the repo.** When a section below says "invariant",
-"contract", or "must", treat it as a hard rule: there are tests and audit
-bundles that enforce these properties (see §9). When in doubt, follow the
-existing pattern in the nearest sibling file.
+An AI assistant's operational guide for the `model-loader` codebase. Read this
+first. When a section says **"invariant"**, **"must"**, or **"contract"**, treat
+it as a hard rule — there are tests and audit bundles that enforce it.
 
 ---
 
 ## 1. Project Overview
 
-`model-loader` is a **Go TUI and headless CLI** for running and benchmarking
-local LLM inference servers from one terminal application. It manages launch
-profiles, supervises inference processes, and exposes a single
-OpenAI-compatible HTTP endpoint. When a request names another profile, the
-proxy stops the current backend, starts the requested one, waits for it to
-become healthy, and forwards the request.
+`model-loader` is a **Go TUI + headless CLI** for running and benchmarking local
+LLM inference servers from one terminal. It manages launch profiles, supervises
+inference processes, and exposes a single OpenAI-compatible HTTP endpoint. When a
+request names another profile, the proxy stops the current backend, starts the
+requested one, waits for it to become healthy, and forwards the request.
 
-- Designed for a **single operator on a local GPU workstation** (reference
-  system: two RTX 3090s). The process manager and profile model are not tied to
-  that hardware.
-- **Two execution modes**, sharing one bootstrap:
+- Built for a **single operator on a local GPU workstation**. The process
+  manager and profile model are not tied to specific hardware.
+- **Two execution modes** sharing one bootstrap:
   - **TUI** — interactive 5-tab Bubble Tea app (Profiles, Server, Models,
     Backends, Benchmark). Default when run with no subcommand.
   - **Headless CLI** — a complete Cobra command tree (`serve`, `profile`,
     `instance`, `backend`, `model`, `benchmark`, …) with JSON output.
 - Backends are registered as **executables + kinds** (`llama-server`, `vllm`,
-  `sglang`, `dflash`, `beellama-cpp`, `buun-llama-cpp`, `ik-llama-cpp`,
-  `tabby`, `unsloth`, `lmstudio`, `freetoken`). Profiles are validated, portable
-  JSON that resolve to a concrete backend binary and argument list at launch
-  time.
+  `sglang`, `dflash`, `beellama-cpp`, `buun-llama-cpp`, `ik-llama-cpp`, `tabby`,
+  `unsloth`, `lmstudio`, `freetoken`). Profiles are validated, portable JSON that
+  resolve to a concrete backend binary + argument list at launch time.
 - The proxy binds to **loopback by default and has no authentication** — do not
-  expose it to an untrusted network without an authenticated reverse proxy.
+  expose it to an untrusted network.
 
-Module path: `github.com/quantmind-br/model-loader`, Go **1.26.2**, license
-0BSD. Maintained architecture docs live in `openwiki/` (see §8).
+**Module:** `github.com/quantmind-br/model-loader` · **Go 1.26.2** · license
+0BSD. Maintained architecture docs live in `openwiki/` (see §11).
 
 ---
 
@@ -49,31 +39,29 @@ Module path: `github.com/quantmind-br/model-loader`, Go **1.26.2**, license
 
 ```
 cmd/
-  model-loader/          # main: registers cli.TUIRunner = runTUI, then cli.Execute()
-  regenerate-schemas/    # re-parse every backend --help and refresh catalog schemas
-  scripts/               # small dev helpers (e.g. print_args.go — inspect resolved exe+args)
+  model-loader/          # main: registers cli.TUIRunner, then cli.Execute()
+  regenerate-schemas/    # re-parse every backend --help, refresh catalog schemas
+  scripts/               # dev helpers (print_args.go — inspect resolved exe+args)
 internal/
-  app/                   # Bootstrap(): the single DI wiring point for TUI, CLI, serve, benchmark
-  cli/                   # Cobra command tree (must NOT import internal/ui)
-  config/                # config.toml load/save (paths, models.search_paths, ui, logging, serve)
-  domain/                # shared types, zero external deps (Profile, Instance, Backend, flags, schemas)
-  log/                   # slog wrapper; file-only logging, log.Nop()
-  sdnotify/              # systemd notify client (READY/WATCHDOG/STOPPING), no external deps
-  ui/                    # Bubble Tea root + 5 tab pages, components, theme, contracts
+  app/                   # Bootstrap(): single DI wiring point
+  cli/                   # Cobra command tree (MUST NOT import internal/ui)
+  config/                # config.toml load/save; search paths; serve defaults
+  domain/                # shared types, zero external deps
+  log/                   # slog wrapper; file-only logging; log.Nop()
+  sdnotify/              # systemd notify client; zero external deps
+  ui/                    # Bubble Tea root + 5 tabs, components, theme, contracts
   service/               # every domain service (see §3)
-backends/                # vendored backend checkouts/venvs (gitignored, each with backend-build.sh)
+backends/                # gitignored vendored backends (each with backend-build.sh)
 docs/  openwiki/  testdata/
 ```
-
-522 Go files in the project proper (519 under `internal/`, 3 under `cmd/`), 228 `*_test.go` files. The gitignored `backends/` trees are vendored checkouts with their own sources and are not counted.
 
 ### DI entry points
 
 - **`internal/app.Bootstrap(logLevel, opts…)`** is the *single* wiring point.
   Every leaf CLI command, the TUI, `serve`, and `benchmark` call it and get a
   fully assembled `*app.Services` (config, stores, process manager, monitor,
-  proxy supervisor, backend catalog, …). `app.AsStateOwner()` is the opt-in
-  for state-owning processes (see §5 process invariants).
+  proxy supervisor, backend catalog, …). `app.AsStateOwner()` is the opt-in for
+  state-owning processes (see §5 process invariants).
 - **`cli.TUIRunner`** is a package-level callback set by `main` to `runTUI`.
   This is what keeps `internal/cli` from importing `internal/ui` (avoids a
   cycle). **Do not break this.**
@@ -122,8 +110,7 @@ Use the Server tab or `model-loader instance stop` to stop one.
 
 - **`internal/domain`** — pure types with zero external dependencies:
   `Profile`, `Instance`, `Backend`, `BackendKind`, `FlagSchema`, flag/arg
-  helpers, schema builder, model path/HF-repo detection. JSON round-trip
-  caveat: ints come back as float64; `validator.checkType` handles it.
+  helpers, schema builder, model path/HF-repo detection.
 - **`internal/config`** — TOML config load/save; `search_paths` model
   discovery; serve defaults; UI keybindings; logging level.
 - **`internal/app`** — `Bootstrap()` DI graph + single-instance lock
@@ -153,7 +140,7 @@ Use the Server tab or `model-loader instance stop` to stop one.
 | `httpproxy` | OpenAI-shaped reverse proxy with on-demand backend swap |
 | `proxysupervisor` | Run the HTTP proxy as a detached OS process with persistent state |
 | `backendcatalog` | Persist backend catalog + validation schemas |
-| `backendschema` | Schema manager; `RegisterDefaults` + `RefreshSchema` (used by `regenerate-schemas`); Presentation building/reconciliation |
+| `backendschema` | Schema manager; `RegisterDefaults` + `RefreshSchema`; Presentation building/reconciliation |
 | `benchmark` | SWE-bench-Lite evaluation, quality/speed/robustness/knowledge/agentic modes |
 | `benchmarkstore` | Persist benchmark runs as one JSON file per run |
 | `downloadmgr` | HuggingFace downloads via detached worker subprocesses (`model-loader download <state-path>`) |
@@ -212,10 +199,10 @@ them being present in a fresh clone.
 ### Docs — `docs/` + root
 
 `README.md` (user guide), `ARCHITECTURE.md` (pointer into openwiki),
-`CHANGELOG.md`, `BUGS.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
-`LICENSE`, `docs/{BENCHMARK.md, config.md, backend-schema-update.md,
-sndr-backend.md, deep-swe.md, swe-bench-pro.md, troubleshooting.md,
-profile-schema.json, reports/}` and historical
+`CHANGELOG.md`, `BUGS.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `LICENSE`,
+`docs/{BENCHMARK.md, config.md, backend-schema-update.md, sndr-backend.md,
+deep-swe.md, swe-bench-pro.md, troubleshooting.md, profile-schema.json,
+reports/}` and historical
 `docs/superpowers/plans/`. The maintained topic docs are in `openwiki/` (§8).
 
 ---
@@ -279,22 +266,22 @@ goreleaser / brew formula.
 ### Process management invariants (processmgr)
 
 1. **`AsStateOwner()`** gates `log.New(... Rotate: true)` and
-   `mgr.Reconcile()`. Only the TUI and `serve` pass it. One-shot CLI commands
-   are observers and **must not** pass it.
+  `mgr.Reconcile()`. Only the TUI and `serve` pass it. One-shot CLI commands
+  are observers and **must not** pass it.
 2. **Single-instance flock** is `LOCK_EX|LOCK_NB` on
-   `<stateDir>/model-loader.lock`. TUI + `bootstrapWithLock` acquire; `serve`
-   does not (registry writes are flock-guarded so TUI and `serve` coexist).
+  `<stateDir>/model-loader.lock`. TUI + `bootstrapWithLock` acquire; `serve`
+  does not (registry writes are flock-guarded so TUI and `serve` coexist).
 3. **`hasReaper[pid]`** marks PIDs with live `cmd.Wait` reapers; liveness
-   applies the restart policy only to adopted (reaper-less) deaths.
+  applies the restart policy only to adopted (reaper-less) deaths.
 4. **Reaper starts AFTER registry upsert commits**: a fast-crash `Crashed`
-   delta can never be clobbered by a launch's running-state delta.
+  delta can never be clobbered by a launch's running-state delta.
 5. **Kill-intent guard**: `killRequested[pid]` is set under `m.mu` before
-   signaling; the restart path no-ops when a kill is already requested.
+  signaling; the restart path no-ops when a kill is already requested.
 6. Ports are **assigned automatically** by the process manager; a `port`
-   argument in a profile is ignored and stripped. Instance logging is
-   file-only, never stdout.
+  argument in a profile is ignored and stripped. Instance logging is
+  file-only, never stdout.
 7. Health checks use a configurable timeout (default 360s) so slow-booting
-   models aren't killed mid-init.
+  models aren't killed mid-init.
 
 ### Proxy invariants (httpproxy)
 
@@ -303,7 +290,7 @@ goreleaser / brew formula.
   anthropic/responses/gemini upstream). Requests parked at `swapMu` do not
   stall `/_admin/unload`.
 - `/_admin/unload`, `/_admin/load`, `/v1/messages/count_tokens` participate in
-  neither gauge (comment in `anthropic_handlers.go`).
+  neither gauge.
 - Status JSON is **snake_case**; `Status.UnmarshalJSON` falls back to
   PascalCase for old proxy binaries.
 - Errors are OpenAI-enveloped, except two Anthropic routes that use

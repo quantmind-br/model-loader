@@ -84,6 +84,12 @@ Note llama-server and BeeLlama no longer share an identical enum: llama-server a
 
 ## Recent schema-sync changes
 
+- **`04c4786` (curated backend schema sync & dual-3090 calibrations)** — updated curated flag definitions and version references across seven backends:
+  - Buun: `--lazy-mode` replaces `--tensor-read-lazy` (post-b10703 upstream spelling); bumped to build 11806 (`b9637-2169-gc9c52d718`).
+  - SGLang: added `token_oracle` to `sampling-backend` enum; bumped union version to `0.5.18/dev10058`.
+  - vLLM: added `no-enable-nccl-comm-suspend` and `ec-manager-config` (encoder cache manager configuration in JSON) flags; bumped to `dev417+g5690b02c0`.
+  - Llama / Ik: bumped Llama curated reference to `b10816` and Ik to `4876` (`t0002-1062-gfe215a8c`).
+  - Tabby / Unsloth: updated TabbyAPI checkout pin to `13a8079` (2026-09-04) and Unsloth CLI checkout to `fcaa73634` (`v0.1.806-beta-56`).
 - **`0c7db1b` (freetoken backend support)** — added `BackendKindFreeToken` with pure hand-curated schema (`freetoken_generator.go`, `freetokenhelp`); FreeToken is a Python service (no parseable `--help`) with early-bind uvicorn readiness via log scraping.
 - **`9353e9b` (lmstudio backend & help-v10686 golden)** — added `BackendKindLMStudio` with pure hand-curated schema (`lmstudio_generator.go`, `lmstudiohelp`, `lms` is an RPC client); bumped llama-server golden and embedded fallback to `v10686` (`testdata/help-v10686.{txt,golden.json}`, `embedded-v10686`).
 - **`bacdb4b` (tokenspeed backend removal)** — removed tokenspeed kind, schema generator, and validation rules; active kinds settled at 11.

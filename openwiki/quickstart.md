@@ -39,6 +39,7 @@ tags: [quickstart, overview, index]
 | Process lifecycle, registry deltas, or crash recovery | [Process Manager](process-manager.md) | `internal/service/processmgr/{manager,launch,registry,liveness,recover}.go` | `fsManager`, `mutateRegistry`, `StartTicks`, `SameProcess`, `maybeScheduleRestart` | `internal/service/processmgr/manager_test.go`, `internal/service/processmgr/lifecycle_audit_test.go` | `go test ./internal/service/processmgr` |
 | CLI commands and subcommands | [Surfaces](surfaces.md) | `internal/cli/{profile,backend,instance,model,benchmark,serve}.go` | `profileCmd`, `backendCmd`, `instanceCmd`, `modelCmd`, `TUIRunner` | `internal/cli/{profile,backend,instance,model}_test.go` | `go test ./internal/cli` |
 | Benchmark modes, evaluation, or harnesses | [Benchmark Engine](benchmark.md) | `internal/service/benchmark/{runner,handler,handlers,scorer}.go` | `Runner.Run`, `modeOrder`, `modeHandler`, `llmGrader` | `internal/service/benchmark/handler_test.go`, `internal/service/benchmark/grader_test.go` | `go test ./internal/service/benchmark` |
+| Workstation calibration & throughput probes | [Benchmark Engine](benchmark.md), [Operations](operations.md) | `internal/service/benchmark/llamabench_probe.go`, `QWEN38_27B_AUDIT_REPORT.md` | `runLlamaBench`, `CompletionTokens`, `PromptProcessingTPS` | `internal/service/benchmark/llamabench_test.go` | `go test ./internal/service/benchmark -run TestRunLlamaBench` |
 
 ## Features
 

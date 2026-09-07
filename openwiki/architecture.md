@@ -114,7 +114,7 @@ All JSON persistence uses atomic writes from `internal/service/internal/fsx` (`W
 | Benchmark engine | `internal/service/benchmark/` |
 | Web editor + benchmark viewer | `internal/service/configweb/` |
 | TUI root + pages | `internal/ui/root.go`, `internal/ui/pages/{profiles,server,models,backends,benchmark}*.go` |
-| Atomic JSON + flock + proc utilities | `internal/service/internal/{fsx,procutil,shellsplit}/` |
+| Atomic JSON + flock + proc utilities | `internal/service/internal/{fsx,procutil,ptrutil,shellsplit}/` |
 | Canonical profile JSON Schema | `docs/profile-schema.json` |
-| Operator runbooks | `docs/{config,troubleshooting,sndr-backend,swe-bench-pro,deep-swe,BENCHMARK}.md` |
+| Operator runbooks & tuning reports | `docs/{config,troubleshooting,sndr-backend,swe-bench-pro,deep-swe,BENCHMARK}.md`, `docs/reports/`, `QWEN38_27B_AUDIT_REPORT.md` |
 | Defect tracker | GitHub Issues; legacy identifier notes in `BUGS.md` |
