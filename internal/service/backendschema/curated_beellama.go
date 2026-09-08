@@ -46,12 +46,14 @@ const (
 // --backend-sampling, --cache-idle-slots,
 // --mcp-servers-config/--mcp-servers-json, --tags, --pooling, and
 // --embd-normalize. v0.4.4 gave --load-mode an "auto" default, added
-// --tensor-read-lazy, --n-cpu-ffn, --reasoning-effort, --mmproj-device, the
+// --lazy-mode, --n-cpu-ffn, --reasoning-effort, --mmproj-device, the
 // --video-* trio and the benchmarking-only --spec-synth-* pair, and narrowed
 // --spec-dm-controller to DFlash1 (DFlash2 is metadata-driven and adds no
 // flags of its own). TurboQuant/TCQ cache
 // types, DDTree tree verification, CopySpec, the fringe controller, and the fork
-// DFlash ring were removed in v0.4.0.
+// DFlash ring were removed in v0.4.0. v0.4.6 replaced --tensor-read-lazy with
+// --lazy-mode (-lzm), enabled --reasoning-preserve by default, added
+// --kv-unified-per-slot and --log-jsonl, and enabled KVarN types on draft caches.
 //
 // Draft and auxiliary contexts stay on the standard cache types: common/arg.cpp
 // builds the --spec-draft-type-k/-v value list with
@@ -108,7 +110,7 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		boolFlag("mmap", "", []string{"no-mmap"}, true, "DEPRECATED in favor of --load-mode: model memory mapping; disabling it may reduce pageouts but makes loading slower.", beeGroupMemory),
 		boolFlag("direct-io", "dio", []string{"no-direct-io"}, false, "DEPRECATED in favor of --load-mode: uses Direct I/O when available.", beeGroupMemory),
 		enumFlag("load-mode", "lm", nil, []string{"auto", "none", "mmap", "mlock", "mmap+mlock", "dio"}, "auto", "Model loading mode (replaces --mlock/--mmap/--direct-io); auto uses mmap unless a device does not support it.", beeGroupMemory),
-		enumFlag("tensor-read-lazy", "", nil, []string{"on", "auto", "off"}, "auto", "On-demand reading of certain tensors (e.g. per-layer embeddings) from disk; auto applies it only above 4 GiB and 'on' requires mmap.", beeGroupMemory),
+		enumFlag("lazy-mode", "lzm", nil, []string{"on", "auto", "off"}, "auto", "On-demand reading of certain tensors (e.g. per-layer embeddings) from disk; auto applies it only above 4 GiB and 'on' requires mmap.", beeGroupMemory),
 		boolFlag("repack", "", []string{"no-repack"}, true, "Enables/disables weight repacking.", beeGroupMemory),
 		boolFlag("op-offload", "", []string{"no-op-offload"}, true, "Offloads tensor operations from host to device.", beeGroupMemory),
 		boolFlag("no-host", "", nil, false, "Bypass the host buffer, allowing extra buffers to be used.", beeGroupMemory),
@@ -160,6 +162,7 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		// 9. RAM cache, slots, unified KV
 		intFlag("cache-ram", "cram", nil, 8192, "Max prompt-cache size in MiB; -1 = no limit, 0 = disable RAM snapshots.", beeGroupCacheRAM, ptrutil.Ptr(-1), nil),
 		boolFlag("kv-unified", "kvu", []string{"no-kv-unified"}, false, "Use a single unified KV buffer shared across server slots; the server enables it automatically when the slot count is auto (--parallel -1).", beeGroupCacheRAM),
+		intFlag("kv-unified-per-slot", "", nil, nil, "Context limit per parallel slot; when set without -c/--ctx-size, the shared KV pool is sized to N * parallel.", beeGroupCacheRAM, ptrutil.Ptr(1), nil),
 
 		// 10. Samplers
 		intFlag("seed", "s", nil, -1, "RNG seed; -1 = random.", beeGroupSamplers, nil, nil),
@@ -218,7 +221,7 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		intFlag("reasoning-loop-check-interval", "", nil, 64, "Reasoning loop guard: accepted-token interval between loop checks.", beeGroupChat, ptrutil.Ptr(1), nil),
 		intFlag("reasoning-loop-interventions", "", nil, 2, "Reasoning loop guard: maximum force-close interventions before generation is stopped.", beeGroupChat, ptrutil.Ptr(0), nil),
 		strFlag("reasoning-budget-message", "", nil, nil, "Message injected before the end-of-thinking tag when the reasoning budget is exhausted.", beeGroupChat, false),
-		boolFlag("reasoning-preserve", "", []string{"no-reasoning-preserve"}, false, "Preserve the reasoning trace in the full history, not just the last assistant message (template-dependent).", beeGroupChat),
+		boolFlag("reasoning-preserve", "", []string{"no-reasoning-preserve"}, true, "Preserve the reasoning trace in the full history, not just the last assistant message (default: enabled).", beeGroupChat),
 		boolFlag("skip-chat-parsing", "", []string{"no-skip-chat-parsing"}, false, "Force a pure content parser even with a Jinja template; model output stays in the content section.", beeGroupChat),
 		boolFlag("prefill-assistant", "", []string{"no-prefill-assistant"}, true, "Prefill the assistant response when the last message is an assistant message; disable to treat it as a full message.", beeGroupChat),
 
@@ -361,8 +364,8 @@ func CuratedBeeLlamaSchema() domain.BackendValidationSchema {
 		BackendKind:   domain.BackendKindBeeLlamaCpp,
 		BackendID:     "beellama-cpp-default",
 		Source: domain.SchemaSource{
-			GeneratedFrom: "beellama.cpp curated reference (common/arg.cpp @ cd3c41e73)",
-			SourceVersion: "curated-beellama-cpp-v0.4.4-gcd3c41e73-b11574",
+			GeneratedFrom: "beellama.cpp curated reference (common/arg.cpp @ 78af83265)",
+			SourceVersion: "curated-beellama-cpp-v0.4.6-78af83265-b11794",
 			Editable:      true,
 		},
 		Flags:        flags,
@@ -380,11 +383,9 @@ func beellamaCacheTypes() []string {
 }
 
 // beellamaDraftCacheTypes lists the KV cache types a draft or auxiliary context
-// accepts: the real ggml types only. common/arg.cpp advertises the draft cache
-// flags with get_all_kv_cache_types() (KVarN pseudo-types excluded) and
-// kv_cache_type_from_str rejects a kvarnN value with "Unsupported cache type".
+// accepts: the real ggml types plus the KVarN pseudo-types added in v0.4.6.
 func beellamaDraftCacheTypes() []string {
-	return []string{"f32", "f16", "bf16", "q8_0", "q4_0", "q4_1", "iq4_nl", "q5_0", "q5_1", "q6_0", "q6_1", "q3_0", "q3_1", "q2_0", "q2_1"}
+	return append([]string{"f32", "f16", "bf16", "q8_0", "q4_0", "q4_1", "iq4_nl", "q5_0", "q5_1", "q6_0", "q6_1", "q3_0", "q3_1", "q2_0", "q2_1"}, "kvarn2", "kvarn3", "kvarn4", "kvarn5", "kvarn6", "kvarn8")
 }
 
 // beeLlamaRules are DFlash-aware cross-field validation rules. They are chosen
@@ -404,12 +405,12 @@ func BeeLlamaPresentation() *domain.Presentation {
 		{Name: beeGroupModelLoad, Flags: []string{"hf-repo", "hf-file", "hf-token", "model-url", "docker-repo", "offline", "override-kv"}},
 		{Name: beeGroupContext, Flags: []string{"ctx-size", "n-predict", "batch-size", "ubatch-size", "keep"}},
 		{Name: beeGroupCPU, Flags: []string{"threads", "threads-batch", "poll", "prio", "numa", "cpu-mask", "cpu-range", "cpu-strict", "cpu-mask-batch", "cpu-range-batch", "cpu-strict-batch", "prio-batch", "poll-batch"}},
-		{Name: beeGroupMemory, Flags: []string{"mlock", "mmap", "direct-io", "load-mode", "tensor-read-lazy", "repack", "op-offload", "no-host", "check-tensors"}},
+		{Name: beeGroupMemory, Flags: []string{"mlock", "mmap", "direct-io", "load-mode", "lazy-mode", "repack", "op-offload", "no-host", "check-tensors"}},
 		{Name: beeGroupDevice, Flags: []string{"n-gpu-layers", "device", "list-devices", "split-mode", "tensor-split", "main-gpu", "fit", "fit-target", "fit-ctx", "override-tensor", "cpu-moe", "n-cpu-moe", "n-cpu-ffn"}},
 		{Name: beeGroupKV, Flags: []string{"kv-offload", "cache-type-k", "cache-type-v", "cache-type-k-swa", "cache-type-v-swa", "kv-tail-tokens", "kv-tail-type", "flash-attn", "defrag-thold"}},
 		{Name: beeGroupRope, Flags: []string{"rope-scaling", "rope-scale", "rope-freq-base", "rope-freq-scale", "yarn-orig-ctx", "yarn-ext-factor", "yarn-attn-factor", "yarn-beta-slow", "yarn-beta-fast"}},
 		{Name: beeGroupShift, Flags: []string{"swa-full", "context-shift", "ctx-checkpoints", "checkpoint-min-step"}},
-		{Name: beeGroupCacheRAM, Flags: []string{"cache-ram", "kv-unified"}},
+		{Name: beeGroupCacheRAM, Flags: []string{"cache-ram", "kv-unified", "kv-unified-per-slot"}},
 		{Name: beeGroupSamplers, Flags: []string{"seed", "temperature", "top-k", "top-p", "min-p", "typical-p", "top-n-sigma", "xtc-probability", "xtc-threshold", "ignore-eos", "samplers", "sampler-seq", "logit-bias", "backend-sampling"}},
 		{Name: beeGroupPenalties, Flags: []string{"repeat-last-n", "repeat-penalty", "presence-penalty", "frequency-penalty", "dry-multiplier", "dry-base", "dry-allowed-length", "dry-penalty-last-n", "dry-sequence-breaker", "dynatemp-range", "dynatemp-exp", "mirostat", "mirostat-lr", "mirostat-ent", "adaptive-target", "adaptive-decay"}},
 		{Name: beeGroupGrammar, Flags: []string{"grammar", "grammar-file", "json-schema", "json-schema-file"}},

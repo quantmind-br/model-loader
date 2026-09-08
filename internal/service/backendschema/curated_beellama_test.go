@@ -45,32 +45,17 @@ func TestCuratedBeeLlama_CacheTypesIncludeQ60(t *testing.T) {
 	}
 }
 
-// TestCuratedBeeLlama_DraftCacheTypesExcludeKVarN pins the asymmetry between the
-// target and draft cache-type enums. common/arg.cpp advertises the draft flags
-// with get_all_kv_cache_types() (no KVarN pseudo-types) and
-// kv_cache_type_from_str rejects a kvarnN value on a draft context with
-// "Unsupported cache type", so offering one in the editor produces a profile
-// that dies at launch.
-func TestCuratedBeeLlama_DraftCacheTypesExcludeKVarN(t *testing.T) {
+// TestCuratedBeeLlama_DraftCacheTypesIncludeKVarN guards that the KVarN pseudo-types
+// added to draft contexts in BeeLlama v0.4.6 are accepted on both spec-draft-type-k/v.
+func TestCuratedBeeLlama_DraftCacheTypesIncludeKVarN(t *testing.T) {
 	schema := CuratedBeeLlamaSchema().ToFlagSchema()
-	for _, flag := range []string{"spec-draft-type-k", "spec-draft-type-v"} {
+	for _, flag := range []string{"spec-draft-type-k", "spec-draft-type-v", "cache-type-k", "cache-type-v"} {
 		spec, ok := schema.Lookup(flag)
 		if !ok {
 			t.Fatalf("%s missing from curated schema", flag)
 		}
-		for _, v := range spec.EnumValues {
-			if strings.HasPrefix(v, "kvarn") {
-				t.Errorf("%s enum offers target-only cache type %q", flag, v)
-			}
-		}
-		if spec.Default != "f16" {
-			t.Errorf("%s default = %v, want f16", flag, spec.Default)
-		}
-	}
-	for _, flag := range []string{"cache-type-k", "cache-type-v"} {
-		spec, _ := schema.Lookup(flag)
 		if !containsStr(spec.EnumValues, "kvarn4") {
-			t.Errorf("%s enum lost the KVarN target types: %v", flag, spec.EnumValues)
+			t.Errorf("%s enum lost the KVarN types: %v", flag, spec.EnumValues)
 		}
 	}
 }
@@ -106,6 +91,8 @@ func TestCuratedBeeLlama_RemovedV030SurfaceAbsent(t *testing.T) {
 		"spec-ngram-size-n":   true,
 		"spec-ngram-size-m":   true,
 		"spec-ngram-min-hits": true,
+		// v0.4.6 renamed --tensor-read-lazy to --lazy-mode (-lzm).
+		"tensor-read-lazy": true,
 	}
 	removedAliases := map[string]bool{
 		"draft": true, "draft-max": true, "draft-n": true,

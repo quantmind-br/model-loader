@@ -6,7 +6,7 @@
 // not stable enough to parse, so we ship a hand-curated schema of the
 // load/tuning flags that matter on a single workstation.
 //
-// Tracks TabbyAPI checkout 13a8079 (2026-09-04); its venv pins exllamav3
+// Tracks TabbyAPI checkout 92198cc (2026-09-08); its venv pins exllamav3
 // 1.4.6+cu128.torch2.9.0 (the minimum the exllamav3 backend asserts) on torch
 // 2.9.0+cu128. exllamav2 0.3.2 is still installed in that venv but TabbyAPI no
 // longer has an ExLlamaV2 backend, so it is never loaded.
@@ -31,7 +31,7 @@ import (
 // EmbeddedSchema returns the curated tabby schema. `port` carries IsPort so the
 // validator knows the process manager owns it.
 func EmbeddedSchema() domain.FlagSchema {
-	return domain.BuildFlagSchema("embedded-tabby-v5", tabbyRows)
+	return domain.BuildFlagSchema("embedded-tabby-v6", tabbyRows)
 }
 
 // tabbyToolFormats is the closed set of keys TabbyAPI accepts for --tool-format
@@ -48,6 +48,10 @@ var tabbyRows = []domain.FlagSpecRow{
 	// Networking (manager-owned; host is forced to loopback by the wrapper).
 	{Long: "port", Type: domain.FlagTypeInt, Default: float64(5000), IsPort: true, HelpText: "Server port (assigned by the process manager)", Group: "common"},
 	{Long: "sse-ping-interval", Type: domain.FlagTypeInt, Default: float64(15), Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(3600), HelpText: "Seconds between SSE keep-alive comments on streaming responses (0 = disabled); keeps a client from dropping the connection during a long prefill", Group: "common"},
+	{Long: "allowed-origins", Type: domain.FlagTypeString, Default: "*", HelpText: "Origins allowed to call the API from a browser (CORS allowlist, default: \"*\")", Group: "common"},
+	{Long: "access-log", Type: domain.FlagTypeBool, Default: false, HelpText: "Log every HTTP request with client address, method, path and status", Group: "common"},
+	{Long: "log-live-status", Type: domain.FlagTypeBool, Default: true, HelpText: "Show a live status line below the log with cache usage and in-flight jobs", Group: "common"},
+	{Long: "log-timestamps", Type: domain.FlagTypeBool, Default: true, HelpText: "Prefix console log lines with the time of day", Group: "common"},
 
 	// Core model / context.
 	{Long: "max-seq-len", Type: domain.FlagTypeInt, Min: ptrutil.Ptr(-1), Max: ptrutil.Ptr(1048576), HelpText: "Max context length in tokens (omit = the model's own max_position_embeddings, else 8192; -1 = force-read it from config.json). Silently clamped down to cache-size when larger", Group: "common"},
@@ -105,6 +109,7 @@ var tabbyRows = []domain.FlagSpecRow{
 	{Long: "sysmem-recurrent-cache", Type: domain.FlagTypeInt, Default: float64(4096), Min: ptrutil.Ptr(0), HelpText: "Max size of the system-memory recurrent-state cache, in MB (linear/sliding-attention models only)", Group: "memory"},
 	{Long: "cuda-malloc-async", Type: domain.FlagTypeBool, Default: true, HelpText: "Use the cudaMallocAsync Torch allocator (sets PYTORCH_ALLOC_CONF). Disable if you hit intermittent OoM errors", Group: "memory"},
 	{Long: "ngram-ram", Type: domain.FlagTypeBool, Default: false, HelpText: "Load a PLE model's n-gram embedding table fully into system RAM instead of streaming it from disk during inference (e.g. Qwen3.8-Flash-Next); avoids per-token disk reads at the cost of tens of GB of system memory", Group: "memory"},
+	{Long: "sysmem-multimodal-cache", Type: domain.FlagTypeInt, Default: float64(1024), Min: ptrutil.Ptr(0), HelpText: "Size of the image embedding cache in system memory, in MB (default: 1024)", Group: "memory"},
 
 	// Sampling fallbacks.
 	{Long: "override-preset", Type: domain.FlagTypeString, Default: "", HelpText: "Basename (no .yml) of a preset in the backend's sampler_overrides/ folder, applied as fallbacks for sampling params a request omits (e.g. a repetition penalty for clients that send none); safe_defaults ships with TabbyAPI", Group: "sampling"},

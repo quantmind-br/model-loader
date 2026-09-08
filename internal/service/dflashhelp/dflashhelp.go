@@ -15,9 +15,9 @@ import (
 // the profile's Model field by processmgr.buildDFlashArgs); the draft model
 // is the --draft flag below.
 //
-// Schema tracks lucebox-hub commit b8c3a0d (2026-08-09).
+// Schema tracks lucebox-hub commit fe0744e (2026-09-08).
 func EmbeddedSchema() domain.FlagSchema {
-	return domain.BuildFlagSchema("embedded-dflash-v5", dflashRows)
+	return domain.BuildFlagSchema("embedded-dflash-v6", dflashRows)
 }
 
 var kvTypes = []string{"f16", "bf16", "q4_0", "q4_1", "q5_0", "q5_1", "q8_0", "tq3_0"}
@@ -36,8 +36,11 @@ var dflashRows = []domain.FlagSpecRow{
 	{Long: "prefill-cache-slots", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), HelpText: "Full prompt/prefill cache slot count (0 disables); distinct from --prefix-cache-slots", Group: "common"},
 	{Long: "chunk", Type: domain.FlagTypeInt, Default: float64(512), Min: ptrutil.Ptr(1), HelpText: "Chunked-prefill chunk (ubatch) size", Group: "common"},
 	{Long: "fa-window", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), Max: ptrutil.Ptr(1024 * 1024), HelpText: "Flash-attention sliding window; 0 = full attention (qwen3.6 full-attn layers need the whole context for tool calls)", Group: "common"},
-	{Long: "paged-attention", Type: domain.FlagTypeBool, Default: false, HelpText: "Experimental: 16-token paged KV blocks for autoregressive decode on a monolithic Qwen3.5/Qwen3.6 dense target (arch qwen35). Requires one local target device, a positive --max-ctx and --fa-window 0; rejected together with --draft, --ddtree or PFlash compression, and it turns off the prefix/prefill snapshot caches and the disk KV cache", Group: "common"},
+	{Long: "paged-attention", Type: domain.FlagTypeBool, Default: false, HelpText: "Use paged autoregressive decode for dense Qwen3.5 and Qwen3.6 targets with 16-token blocks, or DeepSeek4 targets with 128-token blocks. This mode is experimental", Group: "common"},
 	{Long: "no-cors", Type: domain.FlagTypeBool, Default: false, HelpText: "Disable CORS headers", Group: "common"},
+	{Long: "max-concurrency", Type: domain.FlagTypeInt, Default: float64(1), Min: ptrutil.Ptr(1), HelpText: "Maximum concurrent decode sequences (enables paged attention)", Group: "common"},
+	{Long: "admission-coalesce-ms", Type: domain.FlagTypeInt, Default: float64(20), Min: ptrutil.Ptr(0), HelpText: "Idle-to-busy batching window in ms", Group: "common"},
+	{Long: "agent-turn-cache", Type: domain.FlagTypeBool, Default: false, HelpText: "Extend prefix caching through generated tool calls for coding agents", Group: "common"},
 
 	// Speculative decode (DFlash + DDTree)
 	{Long: "ddtree", Type: domain.FlagTypeBool, Default: false, HelpText: "Enable DDTree tree-verify speculative decode (default: chain verify)", Group: "speculative-decode"},
@@ -49,6 +52,10 @@ var dflashRows = []domain.FlagSpecRow{
 	{Long: "draft-swa", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), HelpText: "Draft sliding-window attention size (0 = off; e.g. 2048 for unsloth Qwen3.6 targets)", Group: "speculative-decode"},
 	{Long: "draft-residency", Type: domain.FlagTypeEnum, EnumValues: []string{"auto", "persistent", "request-scoped"}, Default: "auto", HelpText: "Draft weights VRAM lifetime: request-scoped frees them after each request, persistent keeps them resident, auto honors the low-VRAM hint", Group: "speculative-decode"},
 	{Long: "lazy-draft", Type: domain.FlagTypeBool, Default: false, HelpText: "Legacy alias for --draft-residency=request-scoped", Group: "speculative-decode"},
+	{Long: "draft-block-size", Type: domain.FlagTypeInt, Min: ptrutil.Ptr(1), HelpText: "Dense Qwen DFlash proposal/verify width", Group: "speculative-decode"},
+	{Long: "specla", Type: domain.FlagTypeBool, Default: false, HelpText: "Enable speculative linear-attention verification", Group: "speculative-decode"},
+	{Long: "specla-top-k", Type: domain.FlagTypeInt, Default: float64(4), Min: ptrutil.Ptr(1), HelpText: "SpecLA draft-tree width", Group: "speculative-decode"},
+	{Long: "ddtree-tau", Type: domain.FlagTypeFloat, FloatMin: ptrutil.Ptr(0.0), HelpText: "Confidence margin on cumulative log-prob (default 6 with --specla)", Group: "speculative-decode"},
 
 	// KV cache
 	{Long: "cache-type-k", Short: "ctk", Type: domain.FlagTypeEnum, EnumValues: kvTypes, HelpText: "KV cache type for keys; unset = per model family default (laguna: q8_0, else q4_0; HIP builds: always q4_0)", Group: "kv-cache"},
@@ -59,7 +66,8 @@ var dflashRows = []domain.FlagSpecRow{
 	{Long: "kv-cache-interval", Type: domain.FlagTypeInt, Default: float64(10240), Min: ptrutil.Ptr(0), HelpText: "Continued checkpoint every N tokens", Group: "kv-cache"},
 	{Long: "kv-cache-cold-max", Type: domain.FlagTypeInt, Default: float64(10240), Min: ptrutil.Ptr(0), HelpText: "Cold prefix size for prompts longer than N tokens", Group: "kv-cache"},
 	{Long: "disk-prefix-cache", Type: domain.FlagTypeString, Default: "full", HelpText: "Disk prefix-cache policy: off, full, auto, auto:N (window of N requests), or a positive token count", Group: "kv-cache"},
-	{Long: "disk-prefix-cache-compress", Type: domain.FlagTypeBool, Default: false, HelpText: "Enable FlowKV aged-history compression composed with the disk prefix cache; requires --prefill-drafter (off is byte-identical to the base disk cache)", Group: "kv-cache"},
+	{Long: "disk-prefix-cache-compress", Type: domain.FlagTypeBool, Default: false, HelpText: "Clamp FlowKV disk snapshots to the stable system prefix. Requires --prefill-drafter", Group: "kv-cache"},
+	{Long: "kv-pool-tokens", Type: domain.FlagTypeInt, Min: ptrutil.Ptr(0), HelpText: "Total paged K/V pool shared by all concurrent slots, in tokens", Group: "kv-cache"},
 
 	// KVFlash (bounded KV residency)
 	{Long: "kvflash", Type: domain.FlagTypeString, Default: "", HelpText: "Bounded KV residency: keep attention KV in a fixed pool of N tokens (or 'auto'); cold 64-token chunks page to host. Works with or without PFlash; forces AR decode. Empty = off", Group: "kv-cache"},
@@ -68,7 +76,7 @@ var dflashRows = []domain.FlagSpecRow{
 
 	// Prefill compression (PFlash)
 	{Long: "prefill-compression", Type: domain.FlagTypeEnum, EnumValues: []string{"off", "auto", "always"}, Default: "off", HelpText: "When to score and compress the prompt (speculative prefill)", Group: "prefill-compression"},
-	{Long: "prefill-threshold", Type: domain.FlagTypeInt, Default: float64(32000), Min: ptrutil.Ptr(0), HelpText: "Token threshold for auto prefill compression", Group: "prefill-compression"},
+	{Long: "prefill-threshold", Type: domain.FlagTypeInt, Default: float64(32000), Min: ptrutil.Ptr(0), HelpText: "Auto threshold for a prompt or aggregate aged history (default: 32000)", Group: "prefill-compression"},
 	{Long: "prefill-keep-ratio", Type: domain.FlagTypeFloat, Default: float64(0.05), FloatMin: ptrutil.Ptr(0.0), FloatMax: ptrutil.Ptr(1.0), HelpText: "Fraction of source tokens kept (0.02 @128K, 0.10 @32K)", Group: "prefill-compression"},
 	{Long: "prefill-curve", Type: domain.FlagTypeString, Default: "", HelpText: "Piecewise keep-ratio breakpoint TOKENS:RATIO, e.g. 40000:0.2; overrides --prefill-keep-ratio. The server takes multiple space-separated breakpoints — pass extras via extra args", Group: "prefill-compression"},
 	{Long: "prefill-drafter", Type: domain.FlagTypeString, Default: "", HelpText: "Drafter GGUF for prefill compression (Qwen3-0.6B BF16); required when compression is on", Group: "prefill-compression"},
@@ -113,4 +121,5 @@ var dflashRows = []domain.FlagSpecRow{
 	{Long: "ds4-fused-decode", Type: domain.FlagTypeBool, Default: false, HelpText: "Enable DeepSeek4 single-graph GPU decode", Group: "ds4"},
 	{Long: "ds4-expert-top-k", Type: domain.FlagTypeInt, Default: float64(0), Min: ptrutil.Ptr(0), HelpText: "Keep and renormalize the top-N routed experts (0 = model default; single-device DeepSeek4 only)", Group: "ds4"},
 	{Long: "ds4-prefill", Type: domain.FlagTypeEnum, EnumValues: []string{"exact", "dense", "sparse"}, Default: "exact", HelpText: "DeepSeek4 prefill attention mode; dense/sparse are experimental and may change generated tokens", Group: "ds4"},
+	{Long: "ds4-fused-verify-f16-kv", Type: domain.FlagTypeBool, Default: false, HelpText: "Reuse F16 MLA cache in batched DeepSeek4 verification", Group: "ds4"},
 }

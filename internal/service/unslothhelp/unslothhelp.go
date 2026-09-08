@@ -23,15 +23,14 @@ import (
 // the profile's Model field (emitted as --model), so it is not a row here.
 // `port` carries IsPort so the validator knows the manager owns it.
 //
-// Schema tracks unsloth checkout fcaa73634 (git describe
-// v0.1.806-beta-56-gfcaa73634); flags read from
+// Schema tracks unsloth Studio 2026.9.3 (commit e613243); flags read from
 // unsloth_cli/commands/studio.py::run() (the `unsloth studio run` Typer
 // command), the SpeculativeType literal in unsloth_cli/_inference.py, the
 // pass-through denylist and value parsers in
 // studio/backend/core/inference/llama_server_args.py, and the bundled
-// llama-server b10715 (92cedc867) at ~/.unsloth/llama.cpp --help. That
-// revision changed neither the Typer options, the SpeculativeType literal nor
-// the pass-through denylist, so the rows below are unchanged.
+// llama-server b10840 at ~/.unsloth/llama.cpp --help. That revision changed
+// neither the Typer options, the SpeculativeType literal nor the pass-through
+// denylist, so the rows below are unchanged.
 func EmbeddedSchema() domain.FlagSchema {
 	return domain.BuildFlagSchema("embedded-unsloth-v4", unslothRows)
 }

@@ -8,7 +8,7 @@ import (
 
 func TestEmbeddedSchema(t *testing.T) {
 	fs := EmbeddedSchema()
-	if fs.Version != "embedded-tabby-v5" {
+	if fs.Version != "embedded-tabby-v6" {
 		t.Fatalf("version = %q", fs.Version)
 	}
 
@@ -19,7 +19,9 @@ func TestEmbeddedSchema(t *testing.T) {
 		"tensor-parallel": domain.FlagTypeBool,
 		"gpu-split":       domain.FlagTypeString,
 		"backend":         domain.FlagTypeEnum,
-		"draft-mode":      domain.FlagTypeEnum,
+		"draft-mode":              domain.FlagTypeEnum,
+		"sysmem-multimodal-cache": domain.FlagTypeInt,
+		"access-log":              domain.FlagTypeBool,
 	}
 	for long, typ := range want {
 		spec, ok := fs.Flags[long]
