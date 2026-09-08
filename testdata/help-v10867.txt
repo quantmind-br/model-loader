@@ -103,13 +103,13 @@
                                         - dio: use DirectIO if available
                                         
                                         (env: LLAMA_ARG_LOAD_MODE)
---tensor-read-lazy MODE                 on-demand reading of certain tensors, for example per-layer embeddings
+-lzm,  --lazy-mode MODE                 on-demand reading of certain tensors, for example per-layer embeddings
                                         (default: auto)
                                         - on: read the rows of such tensors from disk on demand instead of
                                         keeping them resident (requires mmap)
                                         - auto: on, but only for tensors larger than 4 GiB
                                         - off: always keep them resident
-                                        (env: LLAMA_ARG_TENSOR_READ_LAZY)
+                                        (env: LLAMA_ARG_LAZY_MODE)
 --numa TYPE                             attempt optimizations that help on some NUMA systems
                                         - distribute: spread execution evenly over all nodes
                                         - isolate: only spawn threads on CPUs on the node that execution
@@ -207,6 +207,9 @@
 --log-disable                           Log disable
 --log-file FNAME                        Log to file
                                         (env: LLAMA_ARG_LOG_FILE)
+--log-jsonl, --no-log-jsonl             Log as JSONL (one JSON object per line) to stdout, this also disables
+                                        colored logging (default: disabled)
+                                        (env: LLAMA_ARG_LOG_JSONL)
 --log-colors [on|off|auto]              Set colored logging ('on', 'off', or 'auto', default: 'auto')
                                         'auto' enables colors when output is to a terminal
                                         (env: LLAMA_ARG_LOG_COLORS)
@@ -367,7 +370,7 @@
                                         (env: LLAMA_ARG_SPEC_DRAFT_BACKEND_SAMPLING)
 --spec-draft-device, -devd, --device-draft <dev1,dev2,..>
                                         comma-separated list of devices to use for offloading the draft model
-                                        (none = don't offload)
+                                        (none = don't offload, default: follows --device)
                                         use --list-devices to see a list of available devices
 --spec-draft-ngl, -ngld, --gpu-layers-draft, --n-gpu-layers-draft N
                                         max. number of draft model layers to store in VRAM, either an exact
@@ -473,7 +476,7 @@
                                         enabled)
                                         (env: LLAMA_ARG_MMPROJ_OFFLOAD)
 -mmdev, --mmproj-device DEVICE          device to use for multimodal projector (none = don't offload, default:
-                                        auto)
+                                        follows --device)
                                         use --list-devices to see a list of available devices
                                         (env: MTMD_BACKEND_DEVICE)
 --image-min-tokens N                    minimum number of tokens each image can take, only used by vision
@@ -649,7 +652,7 @@
                                         (env: LLAMA_ARG_THINK_BUDGET_MESSAGE)
 --reasoning-preserve, --no-reasoning-preserve
                                         preserve reasoning trace in the full history, not just the last
-                                        assistant message (default: template default)
+                                        assistant message (default: enabled)
                                         compatible with certain templates having 'supports_preserve_reasoning'
                                         capability
                                         example:

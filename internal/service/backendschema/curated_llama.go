@@ -79,7 +79,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		boolFlag("direct-io", "dio", []string{"no-direct-io"}, false, "DEPRECATED in favor of --load-mode where that flag exists: uses Direct I/O when available.", llamaGroupMemory),
 		enumFlag("load-mode", "lm", nil, []string{"auto", "none", "mmap", "mlock", "mmap+mlock", "dio"}, "auto", "Model loading mode (replaces --mlock/--mmap/--direct-io).", llamaGroupMemory),
 		enumFlag("lazy-mode", "lzm", nil, []string{"on", "auto", "off"}, "auto", "On-demand reading of certain tensors (e.g. per-layer embeddings) from disk; requires mmap. Spelling used from build b10703 onward.", llamaGroupMemory),
-		enumFlag("tensor-read-lazy", "", nil, []string{"on", "auto", "off"}, "auto", "Legacy spelling of --lazy-mode, retained for builds up to b10702 (llama.cpp-stable b10686); renamed upstream in b10703.", llamaGroupMemory),
+		enumFlag("tensor-read-lazy", "", nil, []string{"on", "auto", "off"}, "auto", "Legacy spelling of --lazy-mode, retained for builds up to b10702 (e.g. prisma-ml b10663, nanbeige42 10151); renamed upstream in b10703.", llamaGroupMemory),
 		boolFlag("repack", "", []string{"no-repack"}, true, "Enables/disables weight repacking.", llamaGroupMemory),
 		boolFlag("op-offload", "", []string{"no-op-offload"}, true, "Offloads tensor operations from host to device.", llamaGroupMemory),
 		boolFlag("no-host", "", nil, false, "Bypasses the host buffer to allow extra buffers.", llamaGroupMemory),
@@ -172,7 +172,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		enumFlag("reasoning", "rea", nil, []string{"on", "off", "auto"}, "auto", "Reasoning/thinking mode in chat.", llamaGroupChat),
 		enumFlag("reasoning-format", "", nil, []string{"none", "deepseek", "deepseek-legacy", "auto"}, "auto", "How thought tags are parsed and returned.", llamaGroupChat),
 		strFlag("reasoning-budget-message", "", nil, nil, "Message injected before the end-of-thinking tag when the reasoning budget is exhausted.", llamaGroupChat, false),
-		boolFlag("reasoning-preserve", "", []string{"no-reasoning-preserve"}, false, "Preserve the reasoning trace in the full history, not just the last assistant message (requires a template with 'supports_preserve_reasoning'). Unset defers to the backend default, which differs across registered binaries: enabled since llama.cpp b10770 (nightly), template default on stable b10686 / prisma-ml b10663 / nanbeige42 10151 / poolside-laguna. Force it off with --no-reasoning-preserve via ExtraArgs.", llamaGroupChat),
+		boolFlag("reasoning-preserve", "", []string{"no-reasoning-preserve"}, false, "Preserve the reasoning trace in the full history, not just the last assistant message (requires a template with 'supports_preserve_reasoning'). Unset defers to the backend default, which differs across registered binaries: enabled by default since llama.cpp b10770 (stable b10867, nightly b10867), template default on older builds (prisma-ml b10663, nanbeige42 10151, poolside-laguna). Force it off with --no-reasoning-preserve via ExtraArgs.", llamaGroupChat),
 		strFlag("reasoning-effort", "", nil, "default", "Reasoning effort level given to the chat template: default, minimal, low, medium, high, xhigh, max.", llamaGroupChat, false),
 
 		strFlag("host", "", nil, "127.0.0.1", "Server listen address.", llamaGroupHTTP, false),
@@ -287,7 +287,7 @@ func CuratedLlamaSchema() domain.BackendValidationSchema {
 		BackendID:     "llama-cpp-default",
 		Source: domain.SchemaSource{
 			GeneratedFrom: "llama.cpp common/arg.cpp (LLAMA_EXAMPLE_SERVER), cross-checked against every registered llama-server binary",
-			SourceVersion: "curated-llama-server-b10816 (union: stable 10686, nightly 10816, prisma-ml 10663, nanbeige42 10151, poolside-laguna 06f8ceb)",
+			SourceVersion: "curated-llama-server-b10867 (union: stable 10867, nightly 10867, prisma-ml 10663, nanbeige42 10151, poolside-laguna 06f8ceb)",
 			Editable:      true,
 		},
 		Flags:        flags,

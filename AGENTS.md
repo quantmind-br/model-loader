@@ -182,8 +182,8 @@ them being present in a fresh clone.
 
 - `testdata/fake-llama-server.sh` — fake llama-server for processmgr tests
   (serves `/health`, echoes argv to stderr, SIGTERM-clean; Linux-only, needs
-  `python3` or `nc`). `fake-llama-help.sh`, `help-v10686.txt`,
-  `help-v10686.golden.json` support llamahelp golden tests.
+  `python3` or `nc`). `fake-llama-help.sh`, `help-v10867.txt`,
+  `help-v10867.golden.json` support llamahelp golden tests.
 - 228 `_test.go` files: 0 in `cmd/`, 146 in `internal/service/**` (incl. 3 in
   `internal/service/internal/`), 27 in `internal/cli/`, 39 in `internal/ui/**`,
   3 in `internal/app/`, 8 in `internal/domain/`, 2 in `internal/config/`,
@@ -463,7 +463,7 @@ updating source code/docs and letting OpenWiki regenerate. Local
 
 `llamahelp/parser_test.go::TestGenerateGolden` runs only with `-update`; it
 commits the parsed schema so the golden test can diff without a live
-`llama-server` binary (`help-v10686.golden.json` + `fake-llama-help.sh`).
+`llama-server` binary (`help-v10867.golden.json` + `fake-llama-help.sh`).
 
 ### Test categories
 

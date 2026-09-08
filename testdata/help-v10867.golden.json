@@ -578,7 +578,7 @@
       "Type": 3,
       "EnumValues": null,
       "Default": null,
-      "HelpText": "comma-separated list of devices to use for offloading the draft model (none = don't offload) use --list-devices to see a list of available devices",
+      "HelpText": "comma-separated list of devices to use for offloading the draft model (none = don't offload, default: follows --device) use --list-devices to see a list of available devices",
       "Group": "speculative"
     },
     "direct-io": {
@@ -1081,6 +1081,16 @@
       "HelpText": "context limit per parallel slot (default: unset, behavior unchanged). when set without -c/--ctx-size, the shared KV pool is sized to n_parallel*N",
       "Group": "example-specific"
     },
+    "lazy-mode": {
+      "Long": "lazy-mode",
+      "Short": "lzm",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": "auto",
+      "HelpText": "on-demand reading of certain tensors, for example per-layer embeddings (default: auto) - on: read the rows of such tensors from disk on demand instead of keeping them resident (requires mmap) - auto: on, but only for tensors larger than 4 GiB - off: always keep them resident",
+      "Group": "common"
+    },
     "list-devices": {
       "Long": "list-devices",
       "Short": "",
@@ -1133,6 +1143,18 @@
       "EnumValues": null,
       "Default": null,
       "HelpText": "Log to file",
+      "Group": "common"
+    },
+    "log-jsonl": {
+      "Long": "log-jsonl",
+      "Short": "",
+      "Aliases": [
+        "no-log-jsonl"
+      ],
+      "Type": 0,
+      "EnumValues": null,
+      "Default": "disabled",
+      "HelpText": "Log as JSONL (one JSON object per line) to stdout, this also disables colored logging (default: disabled)",
       "Group": "common"
     },
     "log-prefix": {
@@ -1394,8 +1416,8 @@
       "Aliases": null,
       "Type": 3,
       "EnumValues": null,
-      "Default": "auto",
-      "HelpText": "device to use for multimodal projector (none = don't offload, default: auto) use --list-devices to see a list of available devices",
+      "Default": null,
+      "HelpText": "device to use for multimodal projector (none = don't offload, default: follows --device) use --list-devices to see a list of available devices",
       "Group": "example-specific"
     },
     "mmproj-offload": {
@@ -1896,8 +1918,8 @@
       ],
       "Type": 0,
       "EnumValues": null,
-      "Default": "template default",
-      "HelpText": "preserve reasoning trace in the full history, not just the last assistant message (default: template default) compatible with certain templates having 'supports_preserve_reasoning' capability example: https://docs.z.ai/guides/capabilities/thinking-mode#preserved-thinking",
+      "Default": "enabled",
+      "HelpText": "preserve reasoning trace in the full history, not just the last assistant message (default: enabled) compatible with certain templates having 'supports_preserve_reasoning' capability example: https://docs.z.ai/guides/capabilities/thinking-mode#preserved-thinking",
       "Group": "example-specific"
     },
     "repack": {
@@ -2436,16 +2458,6 @@
       "Default": 0.8,
       "HelpText": "temperature (default: 0.80)",
       "Group": "sampling"
-    },
-    "tensor-read-lazy": {
-      "Long": "tensor-read-lazy",
-      "Short": "",
-      "Aliases": null,
-      "Type": 3,
-      "EnumValues": null,
-      "Default": "auto",
-      "HelpText": "on-demand reading of certain tensors, for example per-layer embeddings (default: auto) - on: read the rows of such tensors from disk on demand instead of keeping them resident (requires mmap) - auto: on, but only for tensors larger than 4 GiB - off: always keep them resident",
-      "Group": "common"
     },
     "tensor-split": {
       "Long": "tensor-split",
