@@ -321,9 +321,9 @@ func argString(args map[string]any, key string) string {
 
 // effectiveCtxTokens returns the profile's context window in tokens, reading
 // the first context arg present: ctx-size (llama/beellama), max-ctx (dflash),
-// max-model-len (vllm/sglang). 0 → unknown (caller falls back).
+// max-model-len (vllm), context-length (sglang). 0 → unknown (caller falls back).
 func effectiveCtxTokens(p domain.Profile) int {
-	for _, k := range []string{"ctx-size", "max-ctx", "max-model-len"} {
+	for _, k := range []string{"ctx-size", "max-ctx", "max-model-len", "context-length"} {
 		if n := parseCtxTokens(argString(p.Args, k)); n > 0 {
 			return n
 		}

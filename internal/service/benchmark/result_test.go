@@ -146,6 +146,10 @@ func TestEffectiveCtxTokens_Precedence(t *testing.T) {
 	if got := effectiveCtxTokens(domain.Profile{Args: map[string]any{"max-model-len": "8192"}}); got != 8192 {
 		t.Errorf("max-model-len fallback: got %d, want 8192", got)
 	}
+	// context-length (sglang, stored as number) when the others are absent.
+	if got := effectiveCtxTokens(domain.Profile{Args: map[string]any{"context-length": float64(131072)}}); got != 131072 {
+		t.Errorf("context-length fallback: got %d, want 131072", got)
+	}
 	// none parseable → 0 (caller falls back to a conservative default).
 	if got := effectiveCtxTokens(domain.Profile{Args: map[string]any{"foo": "bar"}}); got != 0 {
 		t.Errorf("unknown ctx: got %d, want 0", got)
