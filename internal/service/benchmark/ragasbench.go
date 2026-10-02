@@ -62,9 +62,9 @@ func (r *Runner) runRagas(ctx context.Context, base, model string, g grader, p R
 	docs := strings.Join(p.Documents, "\n")
 	reqCtx, cancel := context.WithTimeout(ctx, r.inferTimeout())
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
-		Model:       model,
-		MaxTokens:   r.cfg.MaxTokens,
-		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
+		Model:     model,
+		MaxTokens: r.cfg.MaxTokens,
+		OnDelta:   r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
 			{Role: "system", Content: "You are a careful retrieval-augmented assistant. Answer only from the provided documents."},
 			{Role: "user", Content: buildRagasPrompt(p)},
@@ -82,6 +82,7 @@ func (r *Runner) runRagas(ctx context.Context, base, model string, g grader, p R
 	res.TokensPerSecond = comp.TokensPerSecond
 	res.DecodeTPS = comp.TokensPerSecond
 	res.PromptProcessingTPS = comp.PromptProcessingTPS
+	res.ServerTimings = comp.ServerTimings
 	res.PromptTokens = comp.PromptTokens
 	res.CompletionTokens = comp.CompletionTokens
 	tr.ModelResponse = comp.Content

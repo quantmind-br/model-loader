@@ -89,9 +89,9 @@ func (r *Runner) runMMLUBench(ctx context.Context, base, model string, p MMLUPro
 	reqCtx, cancel := context.WithTimeout(ctx, r.inferTimeout())
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
-		Model:       model,
-		MaxTokens:   r.cfg.MaxTokens,
-		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
+		Model:     model,
+		MaxTokens: r.cfg.MaxTokens,
+		OnDelta:   r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
 			{Role: "system", Content: "You are answering a multiple-choice question. Respond with ONLY the letter (A, B, C, or D) of the correct answer."},
 			{Role: "user", Content: buildMMLUPrompt(p)},
@@ -108,6 +108,7 @@ func (r *Runner) runMMLUBench(ctx context.Context, base, model string, p MMLUPro
 	res.TokensPerSecond = comp.TokensPerSecond
 	res.DecodeTPS = comp.TokensPerSecond
 	res.PromptProcessingTPS = comp.PromptProcessingTPS
+	res.ServerTimings = comp.ServerTimings
 	res.PromptTokens = comp.PromptTokens
 	res.CompletionTokens = comp.CompletionTokens
 	tr.ModelResponse = comp.Content

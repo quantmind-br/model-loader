@@ -118,10 +118,12 @@ type ProfileSnapshot struct {
 
 // ProblemResult is the outcome for a single problem in a run.
 type ProblemResult struct {
-	ProblemID   string  `json:"problemId"`
-	ProblemName string  `json:"problemName"`
-	Resolved    bool    `json:"resolved"`
-	Score       float64 `json:"score"` // 0..1
+	ServerTimingSamples []*ServerTimings `json:"serverTimingSamples,omitempty"`
+	ServerTimings       *ServerTimings   `json:"serverTimings,omitempty"`
+	ProblemID           string           `json:"problemId"`
+	ProblemName         string           `json:"problemName"`
+	Resolved            bool             `json:"resolved"`
+	Score               float64          `json:"score"` // 0..1
 	// Timing metrics (TTFTms, TotalMs, *TPS) traverse the loopback reverse
 	// proxy (sub-ms overhead); runs persisted before the proxy migration are
 	// not strictly comparable.
@@ -151,39 +153,41 @@ type ProblemResult struct {
 	TPSStdDev  float64            `json:"tpsStdDev,omitempty"`  // llama-bench: tok/s spread across reps
 	TPSMin     float64            `json:"tpsMin,omitempty"`
 	TPSMax     float64            `json:"tpsMax,omitempty"`
-	FillPct    int                `json:"fillPct,omitempty"`    // llama-bench: context fill percent for this preset
+	FillPct    int                `json:"fillPct,omitempty"` // llama-bench: context fill percent for this preset
 	Sandbox    string             `json:"sandbox,omitempty"` // codegen: "bwrap" | "subprocess"
 }
 
 // Aggregate is the run-level rollup across all problems.
 type Aggregate struct {
-	Total                  int     `json:"total"`
-	Errored                int     `json:"errored,omitempty"` // problems with a request/judge error, excluded from quality rates
-	Resolved               int     `json:"resolved"`
-	SolveRate              float64 `json:"solveRate"` // 0..1
-	AvgScore               float64 `json:"avgScore"`
-	AvgTokensPerSecond     float64 `json:"avgTokensPerSecond"`
-	AvgPromptProcessingTPS float64 `json:"avgPromptProcessingTps,omitempty"` // avg prefill tok/s
-	AvgDecodeTPS           float64 `json:"avgDecodeTps,omitempty"`           // avg decode tok/s
-	MathAccuracy           float64 `json:"mathAccuracy,omitempty"`           // 0..1, exact-match rate
-	CodePassRate           float64 `json:"codePassRate,omitempty"`           // 0..1 over executed problems
-	InstFormatRate         float64 `json:"instFormatRate,omitempty"`         // 0..1 structured-format adherence
-	InstRefusalRate        float64 `json:"instRefusalRate,omitempty"`        // 0..1 disallowed-request refusal
-	InstConsistency        float64 `json:"instConsistency,omitempty"`        // 0..1 mean pairwise similarity
-	MMLUAccuracy           float64 `json:"mmluAccuracy,omitempty"`           // 0..1 multiple-choice exact-match rate
-	RagasFaithfulness      float64 `json:"ragasFaithfulness,omitempty"`      // 0..1 grounded-in-docs score
-	RagasRelevancy         float64 `json:"ragasRelevancy,omitempty"`         // 0..1 answers-the-question score
-	RagasPrecision         float64 `json:"ragasPrecision,omitempty"`         // 0..1 uses-the-right-context score
-	SummaryCoherence       float64 `json:"summaryCoherence,omitempty"`       // 0..1 multi-doc coherence + fact coverage
-	TerminalBenchAccuracy  float64 `json:"terminalBenchAccuracy,omitempty"`  // 0..1 resolved-task rate from the Terminal-Bench harness
-	SweBenchProAccuracy    float64 `json:"sweBenchProAccuracy,omitempty"`    // 0..1 resolved-instance rate from the SWE-bench Pro harness
-	DeepSWEAccuracy        float64 `json:"deepSweAccuracy,omitempty"`        // 0..1 resolved-task rate from the DeepSWE (Pier) harness
-	AvgTTFTms              float64 `json:"avgTtftMs"`
-	TotalPromptTokens      int     `json:"totalPromptTokens"`
-	TotalCompletionTokens  int     `json:"totalCompletionTokens"`
-	TotalMs                int64   `json:"totalMs"`
-	PeakVRAMMB             uint64  `json:"peakVramMb"`
-	AvgGPUUtil             float64 `json:"avgGpuUtil"`
+	GPUMetricVersion       int               `json:"gpuMetricVersion,omitempty"`
+	GPUPeakVRAMMB          map[string]uint64 `json:"gpuPeakVramMb,omitempty"`
+	Total                  int               `json:"total"`
+	Errored                int               `json:"errored,omitempty"` // problems with a request/judge error, excluded from quality rates
+	Resolved               int               `json:"resolved"`
+	SolveRate              float64           `json:"solveRate"` // 0..1
+	AvgScore               float64           `json:"avgScore"`
+	AvgTokensPerSecond     float64           `json:"avgTokensPerSecond"`
+	AvgPromptProcessingTPS float64           `json:"avgPromptProcessingTps,omitempty"` // avg prefill tok/s
+	AvgDecodeTPS           float64           `json:"avgDecodeTps,omitempty"`           // avg decode tok/s
+	MathAccuracy           float64           `json:"mathAccuracy,omitempty"`           // 0..1, exact-match rate
+	CodePassRate           float64           `json:"codePassRate,omitempty"`           // 0..1 over executed problems
+	InstFormatRate         float64           `json:"instFormatRate,omitempty"`         // 0..1 structured-format adherence
+	InstRefusalRate        float64           `json:"instRefusalRate,omitempty"`        // 0..1 disallowed-request refusal
+	InstConsistency        float64           `json:"instConsistency,omitempty"`        // 0..1 mean pairwise similarity
+	MMLUAccuracy           float64           `json:"mmluAccuracy,omitempty"`           // 0..1 multiple-choice exact-match rate
+	RagasFaithfulness      float64           `json:"ragasFaithfulness,omitempty"`      // 0..1 grounded-in-docs score
+	RagasRelevancy         float64           `json:"ragasRelevancy,omitempty"`         // 0..1 answers-the-question score
+	RagasPrecision         float64           `json:"ragasPrecision,omitempty"`         // 0..1 uses-the-right-context score
+	SummaryCoherence       float64           `json:"summaryCoherence,omitempty"`       // 0..1 multi-doc coherence + fact coverage
+	TerminalBenchAccuracy  float64           `json:"terminalBenchAccuracy,omitempty"`  // 0..1 resolved-task rate from the Terminal-Bench harness
+	SweBenchProAccuracy    float64           `json:"sweBenchProAccuracy,omitempty"`    // 0..1 resolved-instance rate from the SWE-bench Pro harness
+	DeepSWEAccuracy        float64           `json:"deepSweAccuracy,omitempty"`        // 0..1 resolved-task rate from the DeepSWE (Pier) harness
+	AvgTTFTms              float64           `json:"avgTtftMs"`
+	TotalPromptTokens      int               `json:"totalPromptTokens"`
+	TotalCompletionTokens  int               `json:"totalCompletionTokens"`
+	TotalMs                int64             `json:"totalMs"`
+	PeakVRAMMB             uint64            `json:"peakVramMb"`
+	AvgGPUUtil             float64           `json:"avgGpuUtil"`
 }
 
 // ProblemTranscript captures the raw I/O for one problem for debugging. It is
@@ -321,9 +325,10 @@ func argString(args map[string]any, key string) string {
 
 // effectiveCtxTokens returns the profile's context window in tokens, reading
 // the first context arg present: ctx-size (llama/beellama), max-ctx (dflash),
-// max-model-len (vllm), context-length (sglang). 0 → unknown (caller falls back).
+// max-model-len (vllm), context-length (sglang), max-context (strata).
+// 0 → unknown (caller falls back).
 func effectiveCtxTokens(p domain.Profile) int {
-	for _, k := range []string{"ctx-size", "max-ctx", "max-model-len", "context-length"} {
+	for _, k := range []string{"ctx-size", "max-ctx", "max-model-len", "context-length", "max-context"} {
 		if n := parseCtxTokens(argString(p.Args, k)); n > 0 {
 			return n
 		}

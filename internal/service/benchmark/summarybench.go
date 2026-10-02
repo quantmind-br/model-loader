@@ -94,9 +94,9 @@ func (r *Runner) runSummary(ctx context.Context, base, model string, g grader, p
 
 	reqCtx, cancel := context.WithTimeout(ctx, r.inferTimeout())
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
-		Model:       model,
-		MaxTokens:   r.cfg.MaxTokens,
-		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
+		Model:     model,
+		MaxTokens: r.cfg.MaxTokens,
+		OnDelta:   r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
 			{Role: "system", Content: "You are a precise summarization assistant."},
 			{Role: "user", Content: buildSummaryPrompt(p)},
@@ -114,6 +114,7 @@ func (r *Runner) runSummary(ctx context.Context, base, model string, g grader, p
 	res.TokensPerSecond = comp.TokensPerSecond
 	res.DecodeTPS = comp.TokensPerSecond
 	res.PromptProcessingTPS = comp.PromptProcessingTPS
+	res.ServerTimings = comp.ServerTimings
 	res.PromptTokens = comp.PromptTokens
 	res.CompletionTokens = comp.CompletionTokens
 	tr.ModelResponse = comp.Content

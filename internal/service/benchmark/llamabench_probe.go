@@ -191,6 +191,9 @@ func (r *Runner) runLlamaBench(ctx context.Context, base, model string, ps tpPre
 		ttftSum += float64(comp.TTFT.Milliseconds())
 		tpsSamples = append(tpsSamples, comp.TokensPerSecond)
 		ppTpsSum += comp.PromptProcessingTPS
+		if comp.ServerTimings != nil {
+			res.ServerTimingSamples = append(res.ServerTimingSamples, comp.ServerTimings)
+		}
 		totalSum += float64(comp.Total.Milliseconds())
 		ppSum += comp.PromptTokens
 		tgSum += comp.CompletionTokens

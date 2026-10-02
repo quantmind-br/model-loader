@@ -86,9 +86,9 @@ func (r *Runner) runMathBench(ctx context.Context, base, model string, p MathPro
 	reqCtx, cancel := context.WithTimeout(ctx, r.inferTimeout())
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
-		Model:       model,
-		MaxTokens:   r.cfg.MaxTokens,
-		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
+		Model:     model,
+		MaxTokens: r.cfg.MaxTokens,
+		OnDelta:   r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
 			{Role: "system", Content: "You are a careful math solver. Reason step by step, then end with 'The answer is <number>'."},
 			{Role: "user", Content: p.Question},
@@ -105,6 +105,7 @@ func (r *Runner) runMathBench(ctx context.Context, base, model string, p MathPro
 	res.TokensPerSecond = comp.TokensPerSecond
 	res.DecodeTPS = comp.TokensPerSecond
 	res.PromptProcessingTPS = comp.PromptProcessingTPS
+	res.ServerTimings = comp.ServerTimings
 	res.PromptTokens = comp.PromptTokens
 	res.CompletionTokens = comp.CompletionTokens
 	tr.ModelResponse = comp.Content

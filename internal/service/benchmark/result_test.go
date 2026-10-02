@@ -117,9 +117,9 @@ func TestParseCtxTokens(t *testing.T) {
 		{"128k", 128 * 1024},
 		{"1m", 1024 * 1024},
 		{"  256K ", 256 * 1024},
-		{"262144", 262144},     // dflash max-ctx
-		{"8192", 8192},         // vllm max-model-len string
-		{"1e+06", 1000000},     // argString scientific notation (float64 ≥1e6)
+		{"262144", 262144},        // dflash max-ctx
+		{"8192", 8192},            // vllm max-model-len string
+		{"1e+06", 1000000},        // argString scientific notation (float64 ≥1e6)
 		{"1.048576e+06", 1048576}, // 1M ctx-size rendered by %v
 		{"abc", 0},
 		{"0", 0},
@@ -149,6 +149,10 @@ func TestEffectiveCtxTokens_Precedence(t *testing.T) {
 	// context-length (sglang, stored as number) when the others are absent.
 	if got := effectiveCtxTokens(domain.Profile{Args: map[string]any{"context-length": float64(131072)}}); got != 131072 {
 		t.Errorf("context-length fallback: got %d, want 131072", got)
+	}
+	// Strata uses max-context in its managed HTTP launcher.
+	if got := effectiveCtxTokens(domain.Profile{Args: map[string]any{"max-context": float64(32768)}}); got != 32768 {
+		t.Errorf("strata context: got %d, want 32768", got)
 	}
 	// none parseable → 0 (caller falls back to a conservative default).
 	if got := effectiveCtxTokens(domain.Profile{Args: map[string]any{"foo": "bar"}}); got != 0 {

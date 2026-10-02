@@ -160,9 +160,9 @@ func (r *Runner) runLongContext(ctx context.Context, base, model string) (Proble
 	reqCtx, cancel := context.WithTimeout(ctx, reqTimeout)
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
-		Model:       model,
-		MaxTokens:   128,
-		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
+		Model:     model,
+		MaxTokens: 128,
+		OnDelta:   r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
 			{Role: "system", Content: "You are a careful code-reading assistant. Answer literally."},
 			{Role: "user", Content: user},
@@ -179,6 +179,7 @@ func (r *Runner) runLongContext(ctx context.Context, base, model string) (Proble
 	res.TokensPerSecond = comp.TokensPerSecond
 	res.DecodeTPS = comp.TokensPerSecond
 	res.PromptProcessingTPS = comp.PromptProcessingTPS
+	res.ServerTimings = comp.ServerTimings
 	res.PromptTokens = comp.PromptTokens
 	res.CompletionTokens = comp.CompletionTokens
 	tr.ModelResponse = comp.Content

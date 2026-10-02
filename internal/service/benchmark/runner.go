@@ -299,6 +299,7 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 			partial.Problems = append([]ProblemResult(nil), results...)
 			partial.Err = "in progress"
 			partial.Aggregate = aggregate(partial.Problems, gpu.peakVRAM(), gpu.avgUtil())
+			gpu.annotate(&partial.Aggregate)
 			h.Finalize(&partial.Aggregate, partial.Problems)
 			rc.Checkpoint(partial)
 		}
@@ -324,6 +325,7 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 		run.Err = err.Error()
 		run.FinishedAt = time.Now()
 		run.Aggregate = aggregate(run.Problems, gpu.peakVRAM(), gpu.avgUtil())
+		gpu.annotate(&run.Aggregate)
 		h.Finalize(&run.Aggregate, run.Problems)
 		r.logger().Warn("benchmark_run_partial", "run_id", run.ID, "mode", rc.Mode,
 			"err", err.Error(), "completed", len(run.Problems), "errored", run.Aggregate.Errored)
@@ -333,6 +335,7 @@ func (r *Runner) Run(ctx context.Context, rc RunConfig, progress chan<- Progress
 
 	run.FinishedAt = time.Now()
 	run.Aggregate = aggregate(run.Problems, gpu.peakVRAM(), gpu.avgUtil())
+	gpu.annotate(&run.Aggregate)
 	h.Finalize(&run.Aggregate, run.Problems)
 	send(internal, Progress{Total: h.Count(r), Phase: "done"})
 	r.logger().Info("benchmark_run_done", "run_id", run.ID, "mode", rc.Mode,
@@ -404,10 +407,10 @@ func (r *Runner) inferProblem(ctx context.Context, base, model string, p Problem
 	reqCtx, cancel := context.WithTimeout(ctx, r.inferTimeout())
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
-		Model:       model,
-		MaxTokens:   r.cfg.MaxTokens,
-		OnDelta:     r.streamHeartbeat(p.ID, p.Name),
-		Messages:    BuildPrompt(p),
+		Model:     model,
+		MaxTokens: r.cfg.MaxTokens,
+		OnDelta:   r.streamHeartbeat(p.ID, p.Name),
+		Messages:  BuildPrompt(p),
 	})
 	if err != nil {
 		res.Err = err.Error()
@@ -421,6 +424,7 @@ func (r *Runner) inferProblem(ctx context.Context, base, model string, p Problem
 	res.TokensPerSecond = comp.TokensPerSecond
 	res.DecodeTPS = comp.TokensPerSecond
 	res.PromptProcessingTPS = comp.PromptProcessingTPS
+	res.ServerTimings = comp.ServerTimings
 	res.PromptTokens = comp.PromptTokens
 	res.CompletionTokens = comp.CompletionTokens
 	tr.ModelResponse = comp.Content
