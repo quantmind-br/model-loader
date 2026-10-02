@@ -39,13 +39,13 @@ type SlotSnapshot struct {
 }
 
 type Slot struct {
-	ID         int    `json:"id"`
-	State      string `json:"state"`         // "idle" | "processing"
-	NCtxUsed   int    `json:"n_ctx"`         // current ctx tokens
-	NCtxMax    int    `json:"n_ctx_total"`   // ctx capacity
-	NDecoded   int    `json:"n_decoded"`     // cumulative tokens decoded
-	NPrompt    int    `json:"n_prompt"`      // cumulative prompt tokens
-	Client     string `json:"id_task"`       // best-effort client id
+	ID       int    `json:"id"`
+	State    string `json:"state"`       // "idle" | "processing"
+	NCtxUsed int    `json:"n_ctx"`       // current ctx tokens
+	NCtxMax  int    `json:"n_ctx_total"` // ctx capacity
+	NDecoded int    `json:"n_decoded"`   // cumulative tokens decoded
+	NPrompt  int    `json:"n_prompt"`    // cumulative prompt tokens
+	Client   string `json:"id_task"`     // best-effort client id
 }
 
 // HealthStatus is the decoded payload of GET /health.
@@ -54,12 +54,25 @@ type HealthStatus struct {
 	Status string
 }
 
-// GPUStats is one snapshot of GPU usage for the process pid.
+// GPUDeviceStats is physical device usage, including desktop and other processes.
+type GPUDeviceStats struct {
+	UUID        string  `json:"uuid"`
+	Index       int     `json:"index"`
+	VRAMUsedMB  uint64  `json:"vram_used_mb"`
+	VRAMTotalMB uint64  `json:"vram_total_mb"`
+	Utilization float64 `json:"utilization"`
+}
+
+// GPUStats is a simultaneous snapshot of physical GPUs, not process attribution.
+// Scalar memory fields sum devices; scalar utilization is their arithmetic mean.
 type GPUStats struct {
-	VRAMUsedMB  uint64
-	VRAMTotalMB uint64
-	Utilization float64 // 0..100
-	Source      string  // "gopsutil" | "nvidia-smi"
+	Devices       []GPUDeviceStats `json:"devices,omitempty"`
+	MetricVersion int              `json:"metric_version,omitempty"`
+	Scope         string           `json:"scope,omitempty"`
+	VRAMUsedMB    uint64
+	VRAMTotalMB   uint64
+	Utilization   float64 // 0..100
+	Source        string  // "gopsutil" | "nvidia-smi"
 }
 
 // Metrics is the rolling 60s aggregate.

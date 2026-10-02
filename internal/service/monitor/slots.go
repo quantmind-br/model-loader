@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 )
@@ -64,6 +65,17 @@ func (p *slotsPoller) fetchHealth(ctx context.Context) {
 	} else if resp.StatusCode == 200 {
 		h.OK = true
 		h.Status = "ok"
+		var body struct {
+			Status string `json:"status"`
+			Loaded *bool  `json:"loaded"`
+		}
+		if json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&body) == nil && body.Status != "" {
+			h.Status = body.Status
+			switch body.Status {
+			case "failed", "error", "loading", "restarting":
+				h.OK = false
+			}
+		}
 	} else {
 		h.OK = false
 		h.Status = resp.Status

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1635,7 +1636,7 @@ func TestSubState_Apply_GPUStats(t *testing.T) {
 		Data:   stats,
 	}
 	s.Apply(ev, false)
-	if s.gpu != stats {
+	if !reflect.DeepEqual(s.gpu, stats) {
 		t.Fatalf("expected gpu=%#v; got %#v", stats, s.gpu)
 	}
 }

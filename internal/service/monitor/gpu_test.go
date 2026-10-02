@@ -84,3 +84,15 @@ func TestGPUPoller_MalformedNvidiaSmiSilent(t *testing.T) {
 		}
 	}
 }
+
+func TestGPUCSVAllPhysicalDevices(t *testing.T) {
+	s, ok := parseGPUCSV("1, GPU-b, 23087, 24576, 90\n0, GPU-a, 875, 24576, 10\n")
+	if !ok || len(s.Devices) != 2 || s.Devices[0].UUID != "GPU-b" || s.VRAMUsedMB != 23962 || s.Utilization != 50 || s.MetricVersion != 2 {
+		t.Fatalf("multi-device snapshot: %+v, ok=%v", s, ok)
+	}
+	for _, raw := range []string{"0, GPU-a, 1, 2, NaN", "0, GPU-a, 1, 2, 0\n1, GPU-a, 1, 2, 0", "0, GPU-a, N/A, 2, 0"} {
+		if _, ok := parseGPUCSV(raw); ok {
+			t.Fatalf("accepted invalid snapshot %q", raw)
+		}
+	}
+}
