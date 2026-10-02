@@ -93,6 +93,9 @@ func TestTerminateTreeKillsSetsidChild(t *testing.T) {
 	if err := TerminateTree(leader, time.Second); err != nil {
 		t.Fatalf("TerminateTree: %v", err)
 	}
+	if Alive(childPID) || groupAlive(leader) {
+		t.Fatal("TerminateTree returned before confirming the child/group exited")
+	}
 
 	// Both leader and child must be gone (group sweep).
 	waitDead := func(pid int) bool {
@@ -110,6 +113,39 @@ func TestTerminateTreeKillsSetsidChild(t *testing.T) {
 	}
 	if !waitDead(childPID) {
 		t.Errorf("child %d still alive after TerminateTree (group not swept)", childPID)
+	}
+}
+
+func TestTerminateTreeConfirmsChildWhenLeaderExitsFirst(t *testing.T) {
+	childFile := t.TempDir() + "/child.pid"
+	cmd := exec.Command("sh", "-c", `sh -c 'trap "" TERM; echo $$ > "$CHILD_PID_FILE"; exec sleep 60' & wait`)
+	cmd.Env = append(os.Environ(), "CHILD_PID_FILE="+childFile)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	leader := cmd.Process.Pid
+	go func() { _ = cmd.Wait() }()
+	t.Cleanup(func() { _ = syscall.Kill(-leader, syscall.SIGKILL) })
+	childPID := 0
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if data, err := os.ReadFile(childFile); err == nil {
+			childPID, _ = strconv.Atoi(string(trimSpace(data)))
+			if childPID > 0 {
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if childPID == 0 {
+		t.Fatal("child did not become ready")
+	}
+	if err := TerminateTree(leader, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if Alive(childPID) || groupAlive(leader) {
+		t.Fatal("surviving child after group termination")
 	}
 }
 
