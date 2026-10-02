@@ -1,0 +1,88 @@
+{
+  "run": "iq2-baseline-32k",
+  "run_status": null,
+  "guard": null,
+  "code_tps": {
+    "median": 132.0,
+    "min": 124.0,
+    "max": 132.4
+  },
+  "peak_gpu_mib": {
+    "0": 21477.0,
+    "1": 22581.0
+  },
+  "process_peak_swap_kib": {
+    "194046:server": 125256,
+    "194113:native": 259208,
+    "218197:server": 0,
+    "218201:native": 0
+  },
+  "retrieval": [
+    {
+      "label": "fresh-0.05",
+      "prompt_n": 1166,
+      "cache_n": 0,
+      "ttft_s": 1.3247299680006108,
+      "exact": true
+    },
+    {
+      "label": "cached-0.05",
+      "prompt_n": 7,
+      "cache_n": 1159,
+      "ttft_s": 0.05748311999923317,
+      "exact": true
+    },
+    {
+      "label": "fresh-0.25",
+      "prompt_n": 7721,
+      "cache_n": 0,
+      "ttft_s": 4.338479516001826,
+      "exact": true
+    },
+    {
+      "label": "cached-0.25",
+      "prompt_n": 7,
+      "cache_n": 7714,
+      "ttft_s": 0.0725297099997988,
+      "exact": true
+    },
+    {
+      "label": "fresh-0.5",
+      "prompt_n": 15911,
+      "cache_n": 0,
+      "ttft_s": 6.5709193120055716,
+      "exact": true
+    },
+    {
+      "label": "cached-0.5",
+      "prompt_n": 7,
+      "cache_n": 15904,
+      "ttft_s": 0.08961973700206727,
+      "exact": true
+    },
+    {
+      "label": "fresh-0.9",
+      "prompt_n": 29021,
+      "cache_n": 0,
+      "ttft_s": 10.123863050997898,
+      "exact": true
+    },
+    {
+      "label": "cached-0.9",
+      "prompt_n": 7,
+      "cache_n": 29014,
+      "ttft_s": 0.11824685000465252,
+      "exact": true
+    }
+  ],
+  "checks": {
+    "exact_copy": true,
+    "json_text": true
+  },
+  "min_available_gib": 43.37378692626953,
+  "max_swap_growth_gib": 1.0522575378417969,
+  "peak_simultaneous_gpu_mib": 44057.0,
+  "peak_temperature_c": 72.0,
+  "global_pswpout_pages": 275467,
+  "engine_info": null
+}

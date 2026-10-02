@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 3,
+  "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-rerank-32k",
+  "name": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-rerank-32k",
+  "description": "IDEATION one-knob candidate (2026-10-02): identical to qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k except --expert-profile = checkpoint rerank v1 (claude-session/ranking). Calibration pending; not promoted.",
+  "model": "/home/diogo/models/huggingface/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+  "args": {
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-rerank-32k.json",
+    "host": "127.0.0.1",
+    "max-context": 32768
+  },
+  "launch": {
+    "defaultBackground": true,
+    "backendId": "strata-perf-v6-20261002",
+    "env": [
+      {
+        "key": "STRATA_DECODE_TIMING",
+        "value": "1"
+      },
+      {
+        "key": "STRATA_SPLIT_TIMING",
+        "value": "1"
+      }
+    ],
+    "restart_policy": "none",
+    "max_restarts": 0,
+    "backoff_seconds": 0
+  },
+  "meta": {
+    "createdAt": "2026-10-02T15:02:24.875158527Z",
+    "updatedAt": "2026-10-02T15:02:24.875757972Z"
+  },
+  "pinned": false
+}

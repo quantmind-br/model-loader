@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 3,
+  "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-256k",
+  "name": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-256k",
+  "description": "IDEATION candidate; calibration pending. IQ2_XS; native ctx262144 without YaRN; int8 KV; dual3090 layers24/24, mmap experts,15 workers,270W/card. 2026-10-01: warm code135.7tok/s TTFT0.320s; llama-bench5/25/50/90% cached135.6/137.5/134.8/125.5tok/s (3reps). Fresh259641tokens:87.27s TTFT,91.7tok/s,3/3records exactJSON; peak22.41/22.46GiB. MTP spec4 minp0.7, warm180/194drafts accepted; minp0.5 did not improve. Official Qwen non-thinking temp0.7/top_p0.8/top_k20/presence1.5, template de4b8e4. Tool integrity4/4, long50/90%canary+continuation passed; short success continuation repeats tool,auto10/10 positives,1/10spurious controls,inconclusive: not agent-qualified. Backend copy model-loader/backends/strata-fork.",
+  "model": "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+  "args": {
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-256k.json",
+    "host": "127.0.0.1",
+    "max-context": 262144
+  },
+  "launch": {
+    "defaultBackground": true,
+    "backendId": "strata-perf-v2-20261001",
+    "env": [
+      {
+        "key": "STRATA_DECODE_TIMING",
+        "value": "1"
+      },
+      {
+        "key": "STRATA_SPLIT_TIMING",
+        "value": "1"
+      }
+    ],
+    "restart_policy": "none",
+    "max_restarts": 0,
+    "backoff_seconds": 0
+  },
+  "pinned": false
+}

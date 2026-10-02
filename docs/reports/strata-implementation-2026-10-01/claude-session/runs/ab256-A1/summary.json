@@ -1,0 +1,107 @@
+{
+  "run": "ab256-A1",
+  "run_status": {
+    "requests_complete": false,
+    "guard_triggered": true
+  },
+  "guard": {
+    "reasons": [
+      "GPU 0 at least 85 C"
+    ],
+    "time": 1790896920.146137
+  },
+  "code_tps": {
+    "median": 123.6,
+    "min": 120.7,
+    "max": 124.4
+  },
+  "peak_gpu_mib": {
+    "0": 22940.0,
+    "1": 22995.0
+  },
+  "process_peak_swap_kib": {
+    "1311497:server": 0,
+    "1311561:native": 0
+  },
+  "retrieval": [
+    {
+      "label": "fresh-0.05",
+      "prompt_n": 12652,
+      "cache_n": 0,
+      "ttft_s": 6.015340534002462,
+      "exact": true
+    },
+    {
+      "label": "cached-0.05",
+      "prompt_n": 7,
+      "cache_n": 12645,
+      "ttft_s": 0.06765775199892232,
+      "exact": true
+    },
+    {
+      "label": "fresh-0.25",
+      "prompt_n": 65077,
+      "cache_n": 0,
+      "ttft_s": 18.788627333000477,
+      "exact": true
+    },
+    {
+      "label": "cached-0.25",
+      "prompt_n": 7,
+      "cache_n": 65070,
+      "ttft_s": 0.10988125199946808,
+      "exact": true
+    },
+    {
+      "label": "fresh-0.5",
+      "prompt_n": 130611,
+      "cache_n": 0,
+      "ttft_s": 36.843106823005655,
+      "exact": true
+    },
+    {
+      "label": "cached-0.5",
+      "prompt_n": 7,
+      "cache_n": 130604,
+      "ttft_s": 0.16105417699873215,
+      "exact": true
+    }
+  ],
+  "checks": {
+    "exact_copy": true,
+    "json_text": true
+  },
+  "min_available_gib": 41.07552719116211,
+  "max_swap_growth_gib": 0.0,
+  "peak_simultaneous_gpu_mib": 45935.0,
+  "peak_temperature_c": 85.0,
+  "global_pswpout_pages": 0,
+  "engine_info": {
+    "version": "0.1.30",
+    "pcie_eligible_layers": 0,
+    "pcie_effective_frac": "0.0000",
+    "resident_expert_mib": 0,
+    "prefill_chunk": 8192,
+    "stage_dense": 0,
+    "context": 262144,
+    "kv": "int8",
+    "kv_resident": 0,
+    "expert_slots": 23443,
+    "expert_cache_mib": 32229,
+    "expert_slots_primary": 12183,
+    "expert_cache_primary_mib": 16434,
+    "spec": 6,
+    "mtp_max": 4,
+    "lookup": 3,
+    "vram_free_mib": 1284,
+    "cvec": 0,
+    "arena_mib": 0,
+    "pool_workers": 15,
+    "pcie_frac": "0.28",
+    "spec_min_p": "0.70",
+    "conversation_cache_mib": 0,
+    "conversation_cache_slots": 4,
+    "conversation_cache_min_free_mib": 2560,
+    "engine": "0.1.30"
+  }
+}

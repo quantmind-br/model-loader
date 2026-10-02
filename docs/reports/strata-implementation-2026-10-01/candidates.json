@@ -1,0 +1,8 @@
+{
+  "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-976k": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-976k",
+  "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-256k",
+  "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-32k": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-32k",
+  "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-32k",
+  "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-32k",
+  "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-32k": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k"
+}

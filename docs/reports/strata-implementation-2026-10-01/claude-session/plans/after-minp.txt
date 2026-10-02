@@ -1,0 +1,19 @@
+# S15 prompt-path draft cost (diagnostic env only): IQ3 reference, fresh fills
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k v4-iq3-pftiming-fills --env STRATA_PREFILL_TIMING=1 --probe --fills
+# IQ3 -> IQ2 page-cache transition warm-up; excluded from the A/B, guard outcome recorded
+qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-256k v4-iq2-256k-warmup
+# IQ2 256k, fresh fills: C = canonical as installed (baseline binary/server), A = candidate-256k (v4), B = stage-dense (v4)
+# one knob per pair: C vs A = release; A vs B = --stage-dense. Order C,A,B,B,A,C,C,A,B
+qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k ab256-C1 --readonly --probe --fills
+qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-256k ab256-A1 --probe --fills
+qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-256k ab256-B1 --probe --fills
+qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-256k ab256-B2 --probe --fills
+qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-256k ab256-A2 --probe --fills
+qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k ab256-C2 --readonly --probe --fills
+qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k ab256-C3 --readonly --probe --fills
+qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-256k ab256-A3 --probe --fills
+qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-256k ab256-B3 --probe --fills
+# 976k: one change for the thermal guard failure = opt-in prompt thermal gate (pause >=80 C, resume 77 C, cap 60 s/chunk)
+qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-976k v4-iq2-976k-gate80 --env STRATA_PREFILL_TEMP_PAUSE_C=80 --probe --fills
+# prepared IQ4 dual resident-stage-dense (prefill 512)
+qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k v4-iq4-resident-stage-dense-fills --probe --fills

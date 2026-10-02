@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 3,
+  "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-training-32k",
+  "name": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-training-32k",
+  "description": "IDEATION candidate; calibration pending. Published OrcaRouter uncensored IQ3_XXS@0434906a, gate/up IQ3_XXS and down IQ4_NL; independent compat-bf16 pack converts459 small projections, not expert requantization. Strata-fork copied backend in model-loader/backends;int8KV,32768,prefill512,15workers,270W/card,reserve1536MiB. Source/embedded Qwen template identical(c3cf9e34); model-card sampling temp1/top_p.95/top_k20/min_p0/presence0/repetition1;non-thinking. Shared base Q2_0 MTP spec4/minp.5, not fine-tune-matched. EXPERIMENTAL dual24/24 mmap simple:17408GPU-resident experts(8823/8585). Initial launch stopped by2GiB swapgrowth guard(2.588GiB);retrylaunch passed but PTgeneration again exceeded guard(2.279GiB). Partial warm code median98.2tok/s/TTFT.384s;not a stability-qualified throughput. Peakobserved22907/23005MiB(22.37/22.47GiB),no VRAMcap breach. Near-full context and tool calibration incomplete. Prefer GPU1 resident sibling that completed context validation. NOT agent-qualified. Report: /home/diogo/dev/model-loader/docs/reports/strata-orca-iq3-xxs-calibration-2026-10-01.md; artifacts: /home/diogo/models/strata/orca-iq3-xxs-20261001/.",
+  "model": "/home/diogo/models/huggingface/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+  "args": {
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-training-32k.json",
+    "host": "127.0.0.1",
+    "max-context": 32768
+  },
+  "launch": {
+    "defaultBackground": true,
+    "backendId": "strata-perf-v2-20261001",
+    "env": [
+      {
+        "key": "STRATA_DECODE_TIMING",
+        "value": "1"
+      },
+      {
+        "key": "STRATA_SPLIT_TIMING",
+        "value": "1"
+      }
+    ],
+    "restart_policy": "none",
+    "max_restarts": 0,
+    "backoff_seconds": 0
+  },
+  "meta": {
+    "createdAt": "2026-10-01T20:35:40.38373932Z",
+    "updatedAt": "2026-10-01T20:35:40.383746033Z"
+  },
+  "pinned": false
+}

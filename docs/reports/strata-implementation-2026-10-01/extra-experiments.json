@@ -1,0 +1,14 @@
+[
+  {
+    "label": "training",
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-training-32k"
+  },
+  {
+    "label": "cpu-parity",
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-cpu-parity-32k"
+  },
+  {
+    "label": "nsys",
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-nsys-32k"
+  }
+]

@@ -1,0 +1,42 @@
+{
+  "run": "v5-iq2-256k-tools-C",
+  "run_status": {
+    "requests_complete": false,
+    "guard_triggered": true
+  },
+  "guard": {
+    "reasons": [
+      "global swap growth above 2 GiB"
+    ],
+    "time": 1790935147.3979247
+  },
+  "code_tps": {
+    "median": 122.6,
+    "min": 109.2,
+    "max": 124.8
+  },
+  "peak_gpu_mib": {
+    "0": 22958.0,
+    "1": 23001.0
+  },
+  "process_peak_swap_kib": {
+    "101401:server": 0,
+    "101436:native": 0
+  },
+  "retrieval": [],
+  "checks": {
+    "exact_copy": true,
+    "json_text": true,
+    "seed_zero_repeat": false,
+    "stop_unicode": false,
+    "tool_bytes": true,
+    "continuation_no_repeat": true,
+    "no_tool_control": true
+  },
+  "min_available_gib": 39.96599578857422,
+  "max_swap_growth_gib": 2.096019744873047,
+  "peak_simultaneous_gpu_mib": 45959.0,
+  "peak_temperature_c": 78.0,
+  "global_pswpout_pages": 592983,
+  "engine_info": null
+}

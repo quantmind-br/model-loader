@@ -1,0 +1,8 @@
+{
+  "checkpoint": "orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF@0434906af7b5202b676d43f108cf4f73d25691ef IQ3_XXS shards sha256 aaf57046943c6638480e8984835ce5ec29c486180ff71169d3c22c6929851b7b,a19cf9bbe87bce45f312ef11401c88b675f3784c927d02fa2272822229e6a224; pack /home/diogo/models/strata/packs/orca-iq3-xxs experts.bin 53477376000 bytes; trace: probe --training corpus (6 prompts), dual resident-stage-dense v4 20261001T223017Z-f85ddc896414",
+  "traces": {
+    "docs/reports/strata-implementation-2026-10-01/claude-session/runs/v4-iq3-training-1/iq3-training.routing": "c9eabf9aa0b2dc4e72d00766e398364f24d1d543b14309d3250ee226ae69679d"
+  },
+  "rerank": true,
+  "pairs": 24576
+}

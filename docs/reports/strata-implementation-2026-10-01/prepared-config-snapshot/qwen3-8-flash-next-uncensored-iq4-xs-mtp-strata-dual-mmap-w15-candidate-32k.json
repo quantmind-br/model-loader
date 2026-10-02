@@ -1,0 +1,51 @@
+{
+  "exe": "/home/diogo/dev/model-loader/backends/strata-fork/releases/20261001T201850Z-8ae9e4e25528/strata",
+  "args": [
+    "--pack",
+    "/home/diogo/models/strata/packs/uncensored-iq4-xs",
+    "--native",
+    "/home/diogo/models/huggingface/mradermacher/Qwen3.8-Flash-Next-Uncensored-i1-GGUF/Qwen3.8-Flash-Next-Uncensored.i1-IQ4_XS.gguf",
+    "--ple-gguf",
+    "/home/diogo/models/huggingface/mradermacher/Qwen3.8-Flash-Next-Uncensored-i1-GGUF/Qwen3.8-Flash-Next-Uncensored.i1-IQ4_XS.gguf",
+    "--expert-profile",
+    "/home/diogo/dev/model-loader/backends/strata-fork/data/expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--prefill",
+    "auto",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.7",
+    "--mtp",
+    "/home/diogo/models/strata/mtp/rt",
+    "--max-context",
+    "32768",
+    "--kv",
+    "int8",
+    "--pool-workers",
+    "15",
+    "--vram-reserve-mib",
+    "1536",
+    "--mmap-experts"
+  ],
+  "cwd": "/home/diogo/dev/model-loader/backends/strata-fork",
+  "tokenizer": "/home/diogo/models/strata/tokenizers/uncensored-iq4-xs",
+  "model_name": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-32k",
+  "log": "/home/diogo/dev/model-loader/docs/reports/strata-implementation-2026-10-01/qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-32k-engine.log",
+  "gpu": [
+    0,
+    1
+  ],
+  "layer_split": "24",
+  "sampling": {
+    "temperature": 0.7,
+    "top_p": 0.8,
+    "top_k": 20,
+    "min_p": 0,
+    "presence_penalty": 1.5,
+    "repetition_penalty": 1,
+    "seed": 42,
+    "experimental_speed_projection": false
+  }
+}

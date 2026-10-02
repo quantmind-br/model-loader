@@ -1,0 +1,59 @@
+{
+  "run": "s18-io32-b2",
+  "run_status": {
+    "requests_complete": true,
+    "guard_triggered": false
+  },
+  "guard": null,
+  "code_tps": {
+    "median": 132.5,
+    "min": 128.8,
+    "max": 132.5
+  },
+  "peak_gpu_mib": {
+    "0": 21828.0,
+    "1": 22958.0
+  },
+  "process_peak_swap_kib": {
+    "1364536:server": 0,
+    "1364547:native": 0
+  },
+  "retrieval": [],
+  "checks": {
+    "exact_copy": true,
+    "json_text": true
+  },
+  "min_available_gib": 42.53193283081055,
+  "max_swap_growth_gib": 0.0,
+  "peak_simultaneous_gpu_mib": 44786.0,
+  "peak_temperature_c": 74.0,
+  "global_pswpout_pages": 0,
+  "engine_info": {
+    "version": "0.1.30",
+    "pcie_eligible_layers": 0,
+    "pcie_effective_frac": "0.0000",
+    "resident_expert_mib": 0,
+    "prefill_chunk": 8192,
+    "stage_dense": 1,
+    "context": 262144,
+    "kv": "int8",
+    "kv_resident": 0,
+    "expert_slots": 24576,
+    "expert_cache_mib": 33812,
+    "expert_slots_primary": 12288,
+    "expert_cache_primary_mib": 16575,
+    "spec": 6,
+    "mtp_max": 4,
+    "lookup": 3,
+    "vram_free_mib": 2395,
+    "cvec": 0,
+    "arena_mib": 0,
+    "pool_workers": 15,
+    "pcie_frac": "0.28",
+    "spec_min_p": "0.70",
+    "conversation_cache_mib": 0,
+    "conversation_cache_slots": 4,
+    "conversation_cache_min_free_mib": 2560,
+    "engine": "0.1.30"
+  }
+}

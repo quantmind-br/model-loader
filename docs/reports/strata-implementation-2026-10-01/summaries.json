@@ -1,0 +1,1552 @@
+[
+  {
+    "run": "dual-ple8",
+    "run_status": null,
+    "guard": null,
+    "code_tps": {
+      "median": 107.5,
+      "min": 106.3,
+      "max": 108.0
+    },
+    "peak_gpu_mib": {
+      "0": 22933.0,
+      "1": 23031.0
+    },
+    "process_peak_swap_kib": {
+      "456319:server": 0,
+      "456384:native": 0
+    },
+    "retrieval": [],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true
+    },
+    "min_available_gib": 30.955398559570312,
+    "max_swap_growth_gib": 0.0,
+    "peak_simultaneous_gpu_mib": 45964.0,
+    "peak_temperature_c": 75.0,
+    "global_pswpout_pages": 31180,
+    "engine_info": {
+      "version": "0.1.30",
+      "pcie_eligible_layers": 48,
+      "pcie_effective_frac": "0.2826",
+      "resident_expert_mib": 12905,
+      "prefill_chunk": 512,
+      "stage_dense": 1,
+      "context": 32768,
+      "kv": "int8",
+      "kv_resident": 0,
+      "expert_slots": 18729,
+      "expert_cache_mib": 38865,
+      "expert_slots_primary": 9475,
+      "expert_cache_primary_mib": 19662,
+      "spec": 6,
+      "mtp_max": 4,
+      "lookup": 3,
+      "vram_free_mib": 1250,
+      "cvec": 0,
+      "arena_mib": 12905,
+      "pool_workers": 15,
+      "pcie_frac": "0.28",
+      "spec_min_p": "0.50",
+      "conversation_cache_mib": 0,
+      "conversation_cache_slots": 4,
+      "conversation_cache_min_free_mib": 2560,
+      "engine": "0.1.30"
+    }
+  },
+  {
+    "run": "dual-pool12",
+    "run_status": null,
+    "guard": null,
+    "code_tps": {
+      "median": 119.2,
+      "min": 108.4,
+      "max": 121.1
+    },
+    "peak_gpu_mib": {
+      "0": 22935.0,
+      "1": 23031.0
+    },
+    "process_peak_swap_kib": {
+      "440087:server": 0,
+      "440110:native": 0
+    },
+    "retrieval": [],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true
+    },
+    "min_available_gib": 24.5478515625,
+    "max_swap_growth_gib": 0.0,
+    "peak_simultaneous_gpu_mib": 45966.0,
+    "peak_temperature_c": 75.0,
+    "global_pswpout_pages": 10511,
+    "engine_info": {
+      "version": "0.1.30",
+      "pcie_eligible_layers": 48,
+      "pcie_effective_frac": "0.2824",
+      "resident_expert_mib": 12903,
+      "prefill_chunk": 512,
+      "stage_dense": 1,
+      "context": 32768,
+      "kv": "int8",
+      "kv_resident": 0,
+      "expert_slots": 18730,
+      "expert_cache_mib": 38867,
+      "expert_slots_primary": 9476,
+      "expert_cache_primary_mib": 19664,
+      "spec": 6,
+      "mtp_max": 4,
+      "lookup": 3,
+      "vram_free_mib": 1249,
+      "cvec": 0,
+      "arena_mib": 12903,
+      "pool_workers": 12,
+      "pcie_frac": "0.28",
+      "spec_min_p": "0.50",
+      "conversation_cache_mib": 0,
+      "conversation_cache_slots": 4,
+      "conversation_cache_min_free_mib": 2560,
+      "engine": "0.1.30"
+    }
+  },
+  {
+    "run": "dual-pool8",
+    "run_status": null,
+    "guard": null,
+    "code_tps": {
+      "median": 120.1,
+      "min": 107.6,
+      "max": 122.7
+    },
+    "peak_gpu_mib": {
+      "0": 22935.0,
+      "1": 23031.0
+    },
+    "process_peak_swap_kib": {
+      "433240:server": 0,
+      "433349:native": 0
+    },
+    "retrieval": [],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true
+    },
+    "min_available_gib": 32.442176818847656,
+    "max_swap_growth_gib": 0.7328529357910156,
+    "peak_simultaneous_gpu_mib": 45966.0,
+    "peak_temperature_c": 75.0,
+    "global_pswpout_pages": 202155,
+    "engine_info": {
+      "version": "0.1.30",
+      "pcie_eligible_layers": 48,
+      "pcie_effective_frac": "0.2824",
+      "resident_expert_mib": 12903,
+      "prefill_chunk": 512,
+      "stage_dense": 1,
+      "context": 32768,
+      "kv": "int8",
+      "kv_resident": 0,
+      "expert_slots": 18730,
+      "expert_cache_mib": 38867,
+      "expert_slots_primary": 9476,
+      "expert_cache_primary_mib": 19664,
+      "spec": 6,
+      "mtp_max": 4,
+      "lookup": 3,
+      "vram_free_mib": 1248,
+      "cvec": 0,
+      "arena_mib": 12903,
+      "pool_workers": 8,
+      "pcie_frac": "0.28",
+      "spec_min_p": "0.50",
+      "conversation_cache_mib": 0,
+      "conversation_cache_slots": 4,
+      "conversation_cache_min_free_mib": 2560,
+      "engine": "0.1.30"
+    }
+  },
+  {
+    "run": "dual-prefill1024",
+    "run_status": null,
+    "guard": null,
+    "code_tps": {
+      "median": 118.2,
+      "min": 109.5,
+      "max": 120.2
+    },
+    "peak_gpu_mib": {
+      "0": 22981.0,
+      "1": 23079.0
+    },
+    "process_peak_swap_kib": {
+      "377979:server": 0,
+      "378282:native": 0
+    },
+    "retrieval": [
+      {
+        "label": "fresh-0.05",
+        "prompt_n": 1177,
+        "cache_n": 0,
+        "ttft_s": 1.6513931859954027,
+        "exact": true
+      },
+      {
+        "label": "cached-0.05",
+        "prompt_n": 7,
+        "cache_n": 1170,
+        "ttft_s": 0.07245577000139747,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.25",
+        "prompt_n": 7732,
+        "cache_n": 0,
+        "ttft_s": 5.280616647003626,
+        "exact": true
+      },
+      {
+        "label": "cached-0.25",
+        "prompt_n": 7,
+        "cache_n": 7725,
+        "ttft_s": 0.0658258570038015,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.5",
+        "prompt_n": 15921,
+        "cache_n": 0,
+        "ttft_s": 10.065913313999772,
+        "exact": true
+      },
+      {
+        "label": "cached-0.5",
+        "prompt_n": 7,
+        "cache_n": 15914,
+        "ttft_s": 0.07663850799872307,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.9",
+        "prompt_n": 29031,
+        "cache_n": 0,
+        "ttft_s": 17.834187542997824,
+        "exact": true
+      },
+      {
+        "label": "cached-0.9",
+        "prompt_n": 7,
+        "cache_n": 29024,
+        "ttft_s": 0.08270921399525832,
+        "exact": true
+      }
+    ],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true
+    },
+    "min_available_gib": 23.490947723388672,
+    "max_swap_growth_gib": 0.0,
+    "peak_simultaneous_gpu_mib": 46060.0,
+    "peak_temperature_c": 80.0,
+    "global_pswpout_pages": 5079,
+    "engine_info": {
+      "version": "0.1.30",
+      "pcie_eligible_layers": 48,
+      "pcie_effective_frac": "0.2833",
+      "resident_expert_mib": 13694,
+      "prefill_chunk": 1024,
+      "stage_dense": 1,
+      "context": 32768,
+      "kv": "int8",
+      "kv_resident": 0,
+      "expert_slots": 18729,
+      "expert_cache_mib": 38865,
+      "expert_slots_primary": 9475,
+      "expert_cache_primary_mib": 19662,
+      "spec": 6,
+      "mtp_max": 4,
+      "lookup": 3,
+      "vram_free_mib": 1248,
+      "cvec": 0,
+      "arena_mib": 13694,
+      "pool_workers": 15,
+      "pcie_frac": "0.28",
+      "spec_min_p": "0.50",
+      "conversation_cache_mib": 0,
+      "conversation_cache_slots": 4,
+      "conversation_cache_min_free_mib": 2560,
+      "engine": "0.1.30"
+    }
+  },
+  {
+    "run": "dual-prefill2048",
+    "run_status": null,
+    "guard": null,
+    "code_tps": {
+      "median": 120.1,
+      "min": 107.0,
+      "max": 121.4
+    },
+    "peak_gpu_mib": {
+      "0": 22989.0,
+      "1": 23081.0
+    },
+    "process_peak_swap_kib": {
+      "409012:server": 164276,
+      "409034:native": 195668
+    },
+    "retrieval": [
+      {
+        "label": "fresh-0.05",
+        "prompt_n": 1177,
+        "cache_n": 0,
+        "ttft_s": 1.4799467780030682,
+        "exact": true
+      },
+      {
+        "label": "cached-0.05",
+        "prompt_n": 7,
+        "cache_n": 1170,
+        "ttft_s": 0.0620563789998414,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.25",
+        "prompt_n": 7732,
+        "cache_n": 0,
+        "ttft_s": 3.6285621959978016,
+        "exact": true
+      },
+      {
+        "label": "cached-0.25",
+        "prompt_n": 7,
+        "cache_n": 7725,
+        "ttft_s": 0.16521225299948128,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.5",
+        "prompt_n": 15921,
+        "cache_n": 0,
+        "ttft_s": 6.672337984004116,
+        "exact": true
+      },
+      {
+        "label": "cached-0.5",
+        "prompt_n": 7,
+        "cache_n": 15914,
+        "ttft_s": 0.07745276099740295,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.9",
+        "prompt_n": 29031,
+        "cache_n": 0,
+        "ttft_s": 11.124131495998881,
+        "exact": true
+      },
+      {
+        "label": "cached-0.9",
+        "prompt_n": 7,
+        "cache_n": 29024,
+        "ttft_s": 0.0969667799945455,
+        "exact": true
+      }
+    ],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true
+    },
+    "min_available_gib": 23.361305236816406,
+    "max_swap_growth_gib": 1.5136299133300781,
+    "peak_simultaneous_gpu_mib": 46070.0,
+    "peak_temperature_c": 78.0,
+    "global_pswpout_pages": 407319,
+    "engine_info": {
+      "version": "0.1.30",
+      "pcie_eligible_layers": 48,
+      "pcie_effective_frac": "0.2824",
+      "resident_expert_mib": 14545,
+      "prefill_chunk": 2048,
+      "stage_dense": 1,
+      "context": 32768,
+      "kv": "int8",
+      "kv_resident": 0,
+      "expert_slots": 18729,
+      "expert_cache_mib": 38865,
+      "expert_slots_primary": 9475,
+      "expert_cache_primary_mib": 19662,
+      "spec": 6,
+      "mtp_max": 4,
+      "lookup": 3,
+      "vram_free_mib": 1246,
+      "cvec": 0,
+      "arena_mib": 14545,
+      "pool_workers": 15,
+      "pcie_frac": "0.28",
+      "spec_min_p": "0.50",
+      "conversation_cache_mib": 0,
+      "conversation_cache_slots": 4,
+      "conversation_cache_min_free_mib": 2560,
+      "engine": "0.1.30"
+    }
+  },
+  {
+    "run": "dual-prefill512",
+    "run_status": null,
+    "guard": null,
+    "code_tps": {
+      "median": 108.3,
+      "min": 107.7,
+      "max": 108.5
+    },
+    "peak_gpu_mib": {
+      "0": 22987.0,
+      "1": 23083.0
+    },
+    "process_peak_swap_kib": {
+      "357561:server": 0,
+      "357605:native": 0
+    },
+    "retrieval": [
+      {
+        "label": "fresh-0.05",
+        "prompt_n": 1177,
+        "cache_n": 0,
+        "ttft_s": 1.2317962420056574,
+        "exact": true
+      },
+      {
+        "label": "cached-0.05",
+        "prompt_n": 7,
+        "cache_n": 1170,
+        "ttft_s": 0.06109962500340771,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.25",
+        "prompt_n": 7732,
+        "cache_n": 0,
+        "ttft_s": 5.38671401800093,
+        "exact": true
+      },
+      {
+        "label": "cached-0.25",
+        "prompt_n": 7,
+        "cache_n": 7725,
+        "ttft_s": 0.07155422899813857,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.5",
+        "prompt_n": 15921,
+        "cache_n": 0,
+        "ttft_s": 10.520366489996377,
+        "exact": true
+      },
+      {
+        "label": "cached-0.5",
+        "prompt_n": 7,
+        "cache_n": 15914,
+        "ttft_s": 0.08248007699876325,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.9",
+        "prompt_n": 29031,
+        "cache_n": 0,
+        "ttft_s": 18.551267560003907,
+        "exact": true
+      },
+      {
+        "label": "cached-0.9",
+        "prompt_n": 7,
+        "cache_n": 29024,
+        "ttft_s": 0.08113757700630231,
+        "exact": true
+      }
+    ],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true,
+      "seed_zero_repeat": true,
+      "stop_unicode": true,
+      "tool_bytes": true,
+      "continuation_no_repeat": false,
+      "no_tool_control": true
+    },
+    "min_available_gib": 27.41321563720703,
+    "max_swap_growth_gib": 0.0,
+    "peak_simultaneous_gpu_mib": 46070.0,
+    "peak_temperature_c": 82.0,
+    "global_pswpout_pages": 14756,
+    "engine_info": {
+      "version": "0.1.30",
+      "pcie_eligible_layers": 48,
+      "pcie_effective_frac": "0.2824",
+      "resident_expert_mib": 12903,
+      "prefill_chunk": 512,
+      "stage_dense": 1,
+      "context": 32768,
+      "kv": "int8",
+      "kv_resident": 0,
+      "expert_slots": 18730,
+      "expert_cache_mib": 38867,
+      "expert_slots_primary": 9476,
+      "expert_cache_primary_mib": 19664,
+      "spec": 6,
+      "mtp_max": 4,
+      "lookup": 3,
+      "vram_free_mib": 1248,
+      "cvec": 0,
+      "arena_mib": 12903,
+      "pool_workers": 15,
+      "pcie_frac": "0.28",
+      "spec_min_p": "0.50",
+      "conversation_cache_mib": 0,
+      "conversation_cache_slots": 4,
+      "conversation_cache_min_free_mib": 2560,
+      "engine": "0.1.30"
+    }
+  },
+  {
+    "run": "gpu1-prefill1024",
+    "run_status": null,
+    "guard": {
+      "reasons": [
+        "global swap growth above 2 GiB"
+      ],
+      "time": 1790887212.370304
+    },
+    "code_tps": null,
+    "peak_gpu_mib": {
+      "0": 897.0,
+      "1": 22403.0
+    },
+    "process_peak_swap_kib": {
+      "352633:server": 168568,
+      "352675:native": 183560
+    },
+    "retrieval": [],
+    "checks": {},
+    "min_available_gib": 15.88116455078125,
+    "max_swap_growth_gib": 3.9177513122558594,
+    "peak_simultaneous_gpu_mib": 23300.0,
+    "peak_temperature_c": 64.0,
+    "global_pswpout_pages": 1033576
+  },
+  {
+    "run": "gpu1-prefill512",
+    "run_status": null,
+    "guard": null,
+    "code_tps": {
+      "median": 86.5,
+      "min": 66.0,
+      "max": 88.6
+    },
+    "peak_gpu_mib": {
+      "0": 897.0,
+      "1": 23085.0
+    },
+    "process_peak_swap_kib": {
+      "320262:server": 0,
+      "320283:native": 0
+    },
+    "retrieval": [
+      {
+        "label": "fresh-0.05",
+        "prompt_n": 1177,
+        "cache_n": 0,
+        "ttft_s": 3.8884492260040133,
+        "exact": true
+      },
+      {
+        "label": "cached-0.05",
+        "prompt_n": 7,
+        "cache_n": 1170,
+        "ttft_s": 0.08389602600072976,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.25",
+        "prompt_n": 7732,
+        "cache_n": 0,
+        "ttft_s": 19.03209437499754,
+        "exact": true
+      },
+      {
+        "label": "cached-0.25",
+        "prompt_n": 7,
+        "cache_n": 7725,
+        "ttft_s": 0.1014504679988022,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.5",
+        "prompt_n": 15921,
+        "cache_n": 0,
+        "ttft_s": 37.89267298699997,
+        "exact": true
+      },
+      {
+        "label": "cached-0.5",
+        "prompt_n": 7,
+        "cache_n": 15914,
+        "ttft_s": 0.08684235699911369,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.9",
+        "prompt_n": 29031,
+        "cache_n": 0,
+        "ttft_s": 67.54025517700211,
+        "exact": true
+      },
+      {
+        "label": "cached-0.9",
+        "prompt_n": 7,
+        "cache_n": 29024,
+        "ttft_s": 0.10345521099952748,
+        "exact": true
+      }
+    ],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true
+    },
+    "min_available_gib": 3.6653976440429688,
+    "max_swap_growth_gib": 0.9284706115722656,
+    "peak_simultaneous_gpu_mib": 23982.0,
+    "peak_temperature_c": 75.0,
+    "global_pswpout_pages": 239572,
+    "engine_info": {
+      "version": "0.1.30",
+      "pcie_eligible_layers": 48,
+      "pcie_effective_frac": "0.2824",
+      "resident_expert_mib": 33939,
+      "prefill_chunk": 512,
+      "stage_dense": 0,
+      "context": 32768,
+      "kv": "int8",
+      "kv_resident": 0,
+      "expert_slots": 8407,
+      "expert_cache_mib": 17446,
+      "expert_slots_primary": 8407,
+      "expert_cache_primary_mib": 17446,
+      "spec": 6,
+      "mtp_max": 4,
+      "lookup": 3,
+      "vram_free_mib": 1208,
+      "cvec": 0,
+      "arena_mib": 33939,
+      "pool_workers": 15,
+      "pcie_frac": "0.28",
+      "spec_min_p": "0.50",
+      "conversation_cache_mib": 0,
+      "conversation_cache_slots": 4,
+      "conversation_cache_min_free_mib": 2560,
+      "engine": "0.1.30"
+    }
+  },
+  {
+    "run": "iq2-baseline-32k",
+    "run_status": null,
+    "guard": null,
+    "code_tps": {
+      "median": 132.0,
+      "min": 124.0,
+      "max": 132.4
+    },
+    "peak_gpu_mib": {
+      "0": 21477.0,
+      "1": 22581.0
+    },
+    "process_peak_swap_kib": {
+      "194046:server": 125256,
+      "194113:native": 259208,
+      "218197:server": 0,
+      "218201:native": 0
+    },
+    "retrieval": [
+      {
+        "label": "fresh-0.05",
+        "prompt_n": 1166,
+        "cache_n": 0,
+        "ttft_s": 1.3247299680006108,
+        "exact": true
+      },
+      {
+        "label": "cached-0.05",
+        "prompt_n": 7,
+        "cache_n": 1159,
+        "ttft_s": 0.05748311999923317,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.25",
+        "prompt_n": 7721,
+        "cache_n": 0,
+        "ttft_s": 4.338479516001826,
+        "exact": true
+      },
+      {
+        "label": "cached-0.25",
+        "prompt_n": 7,
+        "cache_n": 7714,
+        "ttft_s": 0.0725297099997988,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.5",
+        "prompt_n": 15911,
+        "cache_n": 0,
+        "ttft_s": 6.5709193120055716,
+        "exact": true
+      },
+      {
+        "label": "cached-0.5",
+        "prompt_n": 7,
+        "cache_n": 15904,
+        "ttft_s": 0.08961973700206727,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.9",
+        "prompt_n": 29021,
+        "cache_n": 0,
+        "ttft_s": 10.123863050997898,
+        "exact": true
+      },
+      {
+        "label": "cached-0.9",
+        "prompt_n": 7,
+        "cache_n": 29014,
+        "ttft_s": 0.11824685000465252,
+        "exact": true
+      }
+    ],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true
+    },
+    "min_available_gib": 43.37378692626953,
+    "max_swap_growth_gib": 1.0522575378417969,
+    "peak_simultaneous_gpu_mib": 44057.0,
+    "peak_temperature_c": 72.0,
+    "global_pswpout_pages": 275467,
+    "engine_info": null
+  },
+  {
+    "run": "iq2-candidate-32k",
+    "run_status": null,
+    "guard": null,
+    "code_tps": {
+      "median": 98.9,
+      "min": 96.3,
+      "max": 99.2
+    },
+    "peak_gpu_mib": {
+      "0": 21456.0,
+      "1": 22555.0
+    },
+    "process_peak_swap_kib": {
+      "194046:server": 148260,
+      "194113:native": 350468
+    },
+    "retrieval": [],
+    "checks": {
+      "exact_copy": false,
+      "json_text": true
+    },
+    "min_available_gib": 40.050628662109375,
+    "max_swap_growth_gib": 1.4013442993164062,
+    "peak_simultaneous_gpu_mib": 44011.0,
+    "peak_temperature_c": 65.0,
+    "global_pswpout_pages": 336705,
+    "engine_info": {
+      "version": "0.1.30",
+      "context": 32768,
+      "kv": "int8",
+      "kv_resident": 0,
+      "expert_slots": 24576,
+      "expert_cache_mib": 33812,
+      "expert_slots_primary": 12288,
+      "expert_cache_primary_mib": 16575,
+      "spec": 6,
+      "mtp_max": 4,
+      "lookup": 3,
+      "vram_free_mib": 2756,
+      "cvec": 0,
+      "arena_mib": 0,
+      "pool_workers": 15,
+      "pcie_frac": "0.28",
+      "spec_min_p": "0.70",
+      "conversation_cache_mib": 0,
+      "conversation_cache_slots": 4,
+      "conversation_cache_min_free_mib": 2560,
+      "engine": "0.1.30"
+    }
+  },
+  {
+    "run": "iq2-candidate-32k-v2",
+    "run_status": null,
+    "guard": null,
+    "code_tps": {
+      "median": 131.9,
+      "min": 128.9,
+      "max": 132.2
+    },
+    "peak_gpu_mib": {
+      "0": 21484.0,
+      "1": 22583.0
+    },
+    "process_peak_swap_kib": {
+      "194046:server": 127012,
+      "194113:native": 278452,
+      "208811:native": 0
+    },
+    "retrieval": [
+      {
+        "label": "fresh-0.05",
+        "prompt_n": 1166,
+        "cache_n": 0,
+        "ttft_s": 1.0599261559982551,
+        "exact": true
+      },
+      {
+        "label": "cached-0.05",
+        "prompt_n": 7,
+        "cache_n": 1159,
+        "ttft_s": 0.05594760399981169,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.25",
+        "prompt_n": 7721,
+        "cache_n": 0,
+        "ttft_s": 4.3273057300029905,
+        "exact": true
+      },
+      {
+        "label": "cached-0.25",
+        "prompt_n": 7,
+        "cache_n": 7714,
+        "ttft_s": 0.06157428200094728,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.5",
+        "prompt_n": 15911,
+        "cache_n": 0,
+        "ttft_s": 6.500505538002471,
+        "exact": true
+      },
+      {
+        "label": "cached-0.5",
+        "prompt_n": 7,
+        "cache_n": 15904,
+        "ttft_s": 0.0668546199958655,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.9",
+        "prompt_n": 29021,
+        "cache_n": 0,
+        "ttft_s": 9.859482161002234,
+        "exact": true
+      },
+      {
+        "label": "cached-0.9",
+        "prompt_n": 7,
+        "cache_n": 29014,
+        "ttft_s": 0.07635965199733619,
+        "exact": true
+      }
+    ],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true
+    },
+    "min_available_gib": 42.4458122253418,
+    "max_swap_growth_gib": 0.0,
+    "peak_simultaneous_gpu_mib": 44067.0,
+    "peak_temperature_c": 71.0,
+    "global_pswpout_pages": 0,
+    "engine_info": {
+      "version": "0.1.30",
+      "context": 32768,
+      "kv": "int8",
+      "kv_resident": 0,
+      "expert_slots": 24576,
+      "expert_cache_mib": 33812,
+      "expert_slots_primary": 12288,
+      "expert_cache_primary_mib": 16575,
+      "spec": 6,
+      "mtp_max": 4,
+      "lookup": 3,
+      "vram_free_mib": 2756,
+      "cvec": 0,
+      "arena_mib": 0,
+      "pool_workers": 15,
+      "pcie_frac": "0.28",
+      "spec_min_p": "0.70",
+      "conversation_cache_mib": 0,
+      "conversation_cache_slots": 4,
+      "conversation_cache_min_free_mib": 2560,
+      "engine": "0.1.30"
+    }
+  },
+  {
+    "run": "iq2-final-256k",
+    "run_status": null,
+    "guard": null,
+    "code_tps": {
+      "median": 126.3,
+      "min": 110.1,
+      "max": 126.6
+    },
+    "peak_gpu_mib": {
+      "0": 22984.0,
+      "1": 23087.0
+    },
+    "process_peak_swap_kib": {
+      "236400:server": 0,
+      "236422:native": 0,
+      "248341:server": 0,
+      "248343:native": 0,
+      "250897:native": 0
+    },
+    "retrieval": [
+      {
+        "label": "fresh-0.05",
+        "prompt_n": 12641,
+        "cache_n": 0,
+        "ttft_s": 6.083785488997819,
+        "exact": true
+      },
+      {
+        "label": "cached-0.05",
+        "prompt_n": 7,
+        "cache_n": 12634,
+        "ttft_s": 0.12151263600389939,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.25",
+        "prompt_n": 65066,
+        "cache_n": 0,
+        "ttft_s": 18.563849296995613,
+        "exact": true
+      },
+      {
+        "label": "cached-0.25",
+        "prompt_n": 7,
+        "cache_n": 65059,
+        "ttft_s": 0.10777136100659845,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.5",
+        "prompt_n": 81449,
+        "cache_n": 49152,
+        "ttft_s": 25.14072134199523,
+        "exact": true
+      },
+      {
+        "label": "cached-0.5",
+        "prompt_n": 7,
+        "cache_n": 130594,
+        "ttft_s": 0.15632019800250418,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.9",
+        "prompt_n": 120778,
+        "cache_n": 114688,
+        "ttft_s": 42.97583892200055,
+        "exact": true
+      },
+      {
+        "label": "cached-0.9",
+        "prompt_n": 7,
+        "cache_n": 235459,
+        "ttft_s": 0.23138050900161033,
+        "exact": true
+      }
+    ],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true
+    },
+    "min_available_gib": 33.805458068847656,
+    "max_swap_growth_gib": 0.0,
+    "peak_simultaneous_gpu_mib": 46071.0,
+    "peak_temperature_c": 82.0,
+    "global_pswpout_pages": 0,
+    "engine_info": {
+      "version": "0.1.30",
+      "pcie_eligible_layers": 0,
+      "pcie_effective_frac": "0.0000",
+      "resident_expert_mib": 0,
+      "prefill_chunk": 8192,
+      "stage_dense": 0,
+      "context": 262144,
+      "kv": "int8",
+      "kv_resident": 0,
+      "expert_slots": 23445,
+      "expert_cache_mib": 32231,
+      "expert_slots_primary": 12185,
+      "expert_cache_primary_mib": 16436,
+      "spec": 6,
+      "mtp_max": 4,
+      "lookup": 3,
+      "vram_free_mib": 1282,
+      "cvec": 0,
+      "arena_mib": 0,
+      "pool_workers": 15,
+      "pcie_frac": "0.28",
+      "spec_min_p": "0.70",
+      "conversation_cache_mib": 0,
+      "conversation_cache_slots": 4,
+      "conversation_cache_min_free_mib": 2560,
+      "engine": "0.1.30"
+    }
+  },
+  {
+    "run": "iq2-final-256k-fresh",
+    "run_status": null,
+    "guard": {
+      "reasons": [
+        "global swap growth above 2 GiB"
+      ],
+      "time": 1790886902.1189575
+    },
+    "code_tps": {
+      "median": 126.6,
+      "min": 123.2,
+      "max": 127.0
+    },
+    "peak_gpu_mib": {
+      "0": 22939.0,
+      "1": 22995.0
+    },
+    "process_peak_swap_kib": {
+      "299086:server": 102472,
+      "299090:native": 1476904
+    },
+    "retrieval": [
+      {
+        "label": "fresh-0.05",
+        "prompt_n": 12652,
+        "cache_n": 0,
+        "ttft_s": 6.1730291369967745,
+        "exact": true
+      },
+      {
+        "label": "cached-0.05",
+        "prompt_n": 7,
+        "cache_n": 12645,
+        "ttft_s": 0.06713245799619472,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.25",
+        "prompt_n": 65077,
+        "cache_n": 0,
+        "ttft_s": 18.685485797999718,
+        "exact": true
+      },
+      {
+        "label": "cached-0.25",
+        "prompt_n": 7,
+        "cache_n": 65070,
+        "ttft_s": 0.11214633299823618,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.5",
+        "prompt_n": null,
+        "cache_n": null,
+        "ttft_s": null,
+        "exact": false
+      }
+    ],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true
+    },
+    "min_available_gib": 36.93305969238281,
+    "max_swap_growth_gib": 2.080108642578125,
+    "peak_simultaneous_gpu_mib": 45934.0,
+    "peak_temperature_c": 80.0,
+    "global_pswpout_pages": 488285,
+    "engine_info": null
+  },
+  {
+    "run": "iq2-final-32k",
+    "run_status": null,
+    "guard": null,
+    "code_tps": {
+      "median": 131.4,
+      "min": 125.5,
+      "max": 131.5
+    },
+    "peak_gpu_mib": {
+      "0": 21481.0,
+      "1": 22583.0
+    },
+    "process_peak_swap_kib": {
+      "291150:server": 0,
+      "291192:native": 0
+    },
+    "retrieval": [
+      {
+        "label": "fresh-0.05",
+        "prompt_n": 1177,
+        "cache_n": 0,
+        "ttft_s": 1.0724221120035509,
+        "exact": true
+      },
+      {
+        "label": "cached-0.05",
+        "prompt_n": 7,
+        "cache_n": 1170,
+        "ttft_s": 0.05613999700290151,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.25",
+        "prompt_n": 7732,
+        "cache_n": 0,
+        "ttft_s": 4.383217338996474,
+        "exact": true
+      },
+      {
+        "label": "cached-0.25",
+        "prompt_n": 7,
+        "cache_n": 7725,
+        "ttft_s": 0.06199605399888242,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.5",
+        "prompt_n": 15921,
+        "cache_n": 0,
+        "ttft_s": 6.516919756002608,
+        "exact": true
+      },
+      {
+        "label": "cached-0.5",
+        "prompt_n": 7,
+        "cache_n": 15914,
+        "ttft_s": 0.06817809199856129,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.9",
+        "prompt_n": 29031,
+        "cache_n": 0,
+        "ttft_s": 9.953532931001973,
+        "exact": true
+      },
+      {
+        "label": "cached-0.9",
+        "prompt_n": 7,
+        "cache_n": 29024,
+        "ttft_s": 0.0776437660024385,
+        "exact": true
+      }
+    ],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true,
+      "seed_zero_repeat": true,
+      "stop_unicode": true,
+      "tool_bytes": true,
+      "continuation_no_repeat": true,
+      "no_tool_control": true
+    },
+    "min_available_gib": 42.24930953979492,
+    "max_swap_growth_gib": 0.0,
+    "peak_simultaneous_gpu_mib": 44064.0,
+    "peak_temperature_c": 78.0,
+    "global_pswpout_pages": 0,
+    "engine_info": {
+      "version": "0.1.30",
+      "pcie_eligible_layers": 0,
+      "pcie_effective_frac": "0.0000",
+      "resident_expert_mib": 0,
+      "prefill_chunk": 8192,
+      "stage_dense": 0,
+      "context": 32768,
+      "kv": "int8",
+      "kv_resident": 0,
+      "expert_slots": 24576,
+      "expert_cache_mib": 33812,
+      "expert_slots_primary": 12288,
+      "expert_cache_primary_mib": 16575,
+      "spec": 6,
+      "mtp_max": 4,
+      "lookup": 3,
+      "vram_free_mib": 2756,
+      "cvec": 0,
+      "arena_mib": 0,
+      "pool_workers": 15,
+      "pcie_frac": "0.28",
+      "spec_min_p": "0.70",
+      "conversation_cache_mib": 0,
+      "conversation_cache_slots": 4,
+      "conversation_cache_min_free_mib": 2560,
+      "engine": "0.1.30"
+    }
+  },
+  {
+    "run": "iq2-final-976k",
+    "run_status": null,
+    "guard": {
+      "reasons": [
+        "GPU 0 at least 85 C"
+      ],
+      "time": 1790886687.918984
+    },
+    "code_tps": {
+      "median": 127.0,
+      "min": 117.0,
+      "max": 127.8
+    },
+    "peak_gpu_mib": {
+      "0": 22951.0,
+      "1": 23011.0
+    },
+    "process_peak_swap_kib": {
+      "248341:server": 0,
+      "248343:native": 0,
+      "272703:server": 0,
+      "272705:native": 0
+    },
+    "retrieval": [
+      {
+        "label": "fresh-0.05",
+        "prompt_n": 49552,
+        "cache_n": 0,
+        "ttft_s": 16.737558348002494,
+        "exact": true
+      },
+      {
+        "label": "cached-0.05",
+        "prompt_n": 7,
+        "cache_n": 49545,
+        "ttft_s": 0.0969033049987047,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.25",
+        "prompt_n": 249547,
+        "cache_n": 0,
+        "ttft_s": 81.00145523799438,
+        "exact": true
+      },
+      {
+        "label": "cached-0.25",
+        "prompt_n": 7,
+        "cache_n": 249540,
+        "ttft_s": 0.2451286790019367,
+        "exact": true
+      }
+    ],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true
+    },
+    "min_available_gib": 42.31416320800781,
+    "max_swap_growth_gib": 0.0,
+    "peak_simultaneous_gpu_mib": 45962.0,
+    "peak_temperature_c": 85.0,
+    "global_pswpout_pages": 0,
+    "engine_info": {
+      "version": "0.1.30",
+      "pcie_eligible_layers": 0,
+      "pcie_effective_frac": "0.0000",
+      "resident_expert_mib": 0,
+      "prefill_chunk": 8192,
+      "stage_dense": 0,
+      "context": 1000000,
+      "kv": "int8",
+      "kv_resident": 0,
+      "expert_slots": 15327,
+      "expert_cache_mib": 21024,
+      "expert_slots_primary": 8344,
+      "expert_cache_primary_mib": 11248,
+      "spec": 6,
+      "mtp_max": 4,
+      "lookup": 3,
+      "vram_free_mib": 1278,
+      "cvec": 0,
+      "arena_mib": 0,
+      "pool_workers": 15,
+      "pcie_frac": "0.28",
+      "spec_min_p": "0.70",
+      "conversation_cache_mib": 0,
+      "conversation_cache_slots": 4,
+      "conversation_cache_min_free_mib": 2560,
+      "engine": "0.1.30"
+    }
+  },
+  {
+    "run": "iq2-stage-dense",
+    "run_status": null,
+    "guard": null,
+    "code_tps": {
+      "median": 131.6,
+      "min": 123.8,
+      "max": 131.9
+    },
+    "peak_gpu_mib": {
+      "0": 19995.0,
+      "1": 21099.0
+    },
+    "process_peak_swap_kib": {
+      "230413:server": 0,
+      "230415:native": 0
+    },
+    "retrieval": [
+      {
+        "label": "fresh-0.05",
+        "prompt_n": 1166,
+        "cache_n": 0,
+        "ttft_s": 1.2273456850016373,
+        "exact": true
+      },
+      {
+        "label": "cached-0.05",
+        "prompt_n": 7,
+        "cache_n": 1159,
+        "ttft_s": 0.05683752999902936,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.25",
+        "prompt_n": 7721,
+        "cache_n": 0,
+        "ttft_s": 4.330697099001554,
+        "exact": true
+      },
+      {
+        "label": "cached-0.25",
+        "prompt_n": 7,
+        "cache_n": 7714,
+        "ttft_s": 0.06210247799754143,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.5",
+        "prompt_n": 15911,
+        "cache_n": 0,
+        "ttft_s": 6.462935392999498,
+        "exact": true
+      },
+      {
+        "label": "cached-0.5",
+        "prompt_n": 7,
+        "cache_n": 15904,
+        "ttft_s": 0.06718953100062208,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.9",
+        "prompt_n": 29021,
+        "cache_n": 0,
+        "ttft_s": 9.919792202999815,
+        "exact": true
+      },
+      {
+        "label": "cached-0.9",
+        "prompt_n": 7,
+        "cache_n": 29014,
+        "ttft_s": 0.07677753699681489,
+        "exact": true
+      }
+    ],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true
+    },
+    "min_available_gib": 44.11277770996094,
+    "max_swap_growth_gib": 0.0,
+    "peak_simultaneous_gpu_mib": 41094.0,
+    "peak_temperature_c": 73.0,
+    "global_pswpout_pages": 0,
+    "engine_info": {
+      "version": "0.1.30",
+      "context": 32768,
+      "kv": "int8",
+      "kv_resident": 0,
+      "expert_slots": 24576,
+      "expert_cache_mib": 33812,
+      "expert_slots_primary": 12288,
+      "expert_cache_primary_mib": 16575,
+      "spec": 6,
+      "mtp_max": 4,
+      "lookup": 3,
+      "vram_free_mib": 4239,
+      "cvec": 0,
+      "arena_mib": 0,
+      "pool_workers": 15,
+      "pcie_frac": "0.28",
+      "spec_min_p": "0.70",
+      "conversation_cache_mib": 0,
+      "conversation_cache_slots": 4,
+      "conversation_cache_min_free_mib": 2560,
+      "engine": "0.1.30"
+    }
+  },
+  {
+    "run": "iq3-dual-resident",
+    "run_status": null,
+    "guard": {
+      "reasons": [
+        "global swap growth above 2 GiB"
+      ],
+      "time": 1790885760.2569
+    },
+    "code_tps": null,
+    "peak_gpu_mib": {
+      "0": 22585.0,
+      "1": 22491.0
+    },
+    "process_peak_swap_kib": {
+      "218197:server": 0,
+      "218201:native": 0,
+      "224201:server": 145756,
+      "224208:native": 166828
+    },
+    "retrieval": [],
+    "checks": {},
+    "min_available_gib": 46.468685150146484,
+    "max_swap_growth_gib": 2.0546798706054688,
+    "peak_simultaneous_gpu_mib": 45075.0,
+    "peak_temperature_c": 65.0,
+    "global_pswpout_pages": 545630
+  },
+  {
+    "run": "iq3-resident-stage-dense",
+    "run_status": null,
+    "guard": null,
+    "code_tps": {
+      "median": 108.2,
+      "min": 107.4,
+      "max": 108.6
+    },
+    "peak_gpu_mib": {
+      "0": 23111.0,
+      "1": 23087.0
+    },
+    "process_peak_swap_kib": {
+      "230413:server": 0,
+      "230415:native": 0,
+      "236400:server": 0,
+      "236422:native": 0,
+      "236481:native": 0,
+      "236493:native": 0,
+      "236703:native": 0,
+      "236748:native": 0,
+      "238402:native": 0,
+      "238457:native": 0,
+      "238649:native": 0,
+      "238757:native": 0,
+      "239157:native": 0
+    },
+    "retrieval": [
+      {
+        "label": "fresh-0.05",
+        "prompt_n": 1166,
+        "cache_n": 0,
+        "ttft_s": 1.3500239880013396,
+        "exact": true
+      },
+      {
+        "label": "cached-0.05",
+        "prompt_n": 7,
+        "cache_n": 1159,
+        "ttft_s": 0.07862914099678164,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.25",
+        "prompt_n": 7721,
+        "cache_n": 0,
+        "ttft_s": 5.422684534998552,
+        "exact": true
+      },
+      {
+        "label": "cached-0.25",
+        "prompt_n": 7,
+        "cache_n": 7714,
+        "ttft_s": 0.11183388600329636,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.5",
+        "prompt_n": 15911,
+        "cache_n": 0,
+        "ttft_s": 10.596444176997466,
+        "exact": true
+      },
+      {
+        "label": "cached-0.5",
+        "prompt_n": 7,
+        "cache_n": 15904,
+        "ttft_s": 0.07556115899933502,
+        "exact": true
+      },
+      {
+        "label": "fresh-0.9",
+        "prompt_n": 29021,
+        "cache_n": 0,
+        "ttft_s": 18.83454710499791,
+        "exact": true
+      },
+      {
+        "label": "cached-0.9",
+        "prompt_n": 7,
+        "cache_n": 29014,
+        "ttft_s": 0.08325661900016712,
+        "exact": true
+      }
+    ],
+    "checks": {
+      "exact_copy": true,
+      "json_text": true
+    },
+    "min_available_gib": 32.66394805908203,
+    "max_swap_growth_gib": 0.2904930114746094,
+    "peak_simultaneous_gpu_mib": 46072.0,
+    "peak_temperature_c": 79.0,
+    "global_pswpout_pages": 75331,
+    "engine_info": {
+      "version": "0.1.30",
+      "context": 32768,
+      "kv": "int8",
+      "kv_resident": 0,
+      "expert_slots": 18729,
+      "expert_cache_mib": 38865,
+      "expert_slots_primary": 9475,
+      "expert_cache_primary_mib": 19662,
+      "spec": 6,
+      "mtp_max": 4,
+      "lookup": 3,
+      "vram_free_mib": 1251,
+      "cvec": 0,
+      "arena_mib": 12905,
+      "pool_workers": 15,
+      "pcie_frac": "0.28",
+      "spec_min_p": "0.50",
+      "conversation_cache_mib": 0,
+      "conversation_cache_slots": 4,
+      "conversation_cache_min_free_mib": 2560,
+      "engine": "0.1.30"
+    }
+  }
+]

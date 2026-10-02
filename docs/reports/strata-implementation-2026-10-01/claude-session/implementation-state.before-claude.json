@@ -1,0 +1,38 @@
+{
+  "current_sources": {
+    "backends/strata-fork/serve/controls.py": "e09b7f4d23f8451fce61c2ac51f03b04e3cd10650c43a439dfc824de7a6a3740",
+    "backends/strata-fork/serve/server.py": "ac6ee855c8c11207be89b61a435f336aeac45563253f06110aa29570de889f87",
+    "backends/strata-fork/serve/frontend.py": "60a7d0fee7f3d916f17d0fb58c597b54e430f6ed86640527f3e5ae559916424b",
+    "backends/strata-fork/serve/telemetry.py": "b71d4df137e27a49141fc9e776ee642c46d895d8ccf791d19675c61346f14d42",
+    "backends/strata-fork/serve/test_controls.py": "d9ce0bb689589345a940dd7e59937bd4eef1a1b6486dbc3015f7969261cc831e",
+    "backends/strata-fork/tools/iq_pack.py": "332c1fc69cf7c15e662e442947864ccbd19cde3400fde1e19ac109636e53290a",
+    "backends/strata-fork/tools/build_release.py": "84a74bea4819caf0ecd371f338a5b1038777c274f1ed79664cbf18654d4ef7d6",
+    "backends/strata-fork/tools/make_profile.py": "e753364e61eb696533187fb7d1600a09d35152528a63f4660fa12daf13e695d8",
+    "backends/strata-fork/tools/strata_tokenizer.py": "1c45b230b660c4af1d98f2418bf4890c3daed78ac60469d7970c4019c090b724",
+    "backends/strata-fork/src/program/generate.cpp": "91440e64da193db5bd399e1541412e91dad80d060379920637806f44602d02f8",
+    "backends/strata-fork/src/core/expert_source.cpp": "1bc1142f84fe3171205ecc538659f6417c4948c3a6969558a43a53576eb073be",
+    "backends/strata-fork/src/core/native_dense.cpp": "5b56d92a2161897cda900347d5c6129b56a8f05812e3c7d669f01336f60e1fe8",
+    "backends/strata-fork/src/core/session.cpp": "2f6d280d3953e78d66cbbc284c27d19d53948309d4438307374ad5ca6b6a1070",
+    "backends/strata-fork/src/prefill/prefill.cpp": "55ec2f442992faaacdff1b067aff89b33f6890226c614f27022cc8c453ea4a32",
+    "backends/strata-fork/include/strata/platform/helper_affinity.hpp": "77600194f0c3f57b21b60c8fe6209b8204d8295ce2a3b628c251bfc07ce3e7c0",
+    "backends/strata-fork/include/strata/core/request_number.hpp": "add19f1e0cdfb58e92a1f6832fb44097db5fe30ded4d23bd39e8c032a6dbd4c3",
+    "backends/strata-fork/include/strata/core/stage_weights.hpp": "4e50b29f2d982a88f2a15c06941c0b56523e3537447fc5f5c6abcd583829bc1b",
+    "backends/strata-fork/tests/core/file_expert_source_test.cpp": "fcb9320aca239b1c3173f5dc81ee576e5d47b53fec12717903d7972e23600139",
+    "backends/strata-fork/CMakeLists.txt": "b2c4301ee9b11f7b837d02ff524a5ebde7be92ead96b70f085357f53f662e786",
+    "backends/strata-fork/backend-build.sh": "d1522107e968baf40fe39d3697366a189cf67bf8c9ff86d78f4284c70391da75"
+  },
+  "measured_release": {
+    "release": "/home/diogo/dev/model-loader/backends/strata-fork/releases/20261001T201850Z-8ae9e4e25528",
+    "backend": "strata-perf-v2-20261001"
+  },
+  "measured_native_sha256": "156297b9563a76e4a695c165c3977c4941e604bf5a5a00dee0277e83262996be",
+  "source_drift_from_measured_release": [
+    "backends/strata-fork/serve/controls.py",
+    "backends/strata-fork/serve/test_controls.py",
+    "backends/strata-fork/tools/iq_pack.py",
+    "backends/strata-fork/tools/build_release.py",
+    "backends/strata-fork/tools/make_profile.py",
+    "backends/strata-fork/tests/core/file_expert_source_test.cpp",
+    "backends/strata-fork/CMakeLists.txt"
+  ]
+}

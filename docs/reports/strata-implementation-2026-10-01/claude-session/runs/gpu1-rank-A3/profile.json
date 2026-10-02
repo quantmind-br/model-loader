@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 3,
+  "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k",
+  "name": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k",
+  "description": "IDEATION candidate; calibration pending. Published OrcaRouter uncensored IQ3_XXS@0434906a, gate/up IQ3_XXS and down IQ4_NL; independent compat-bf16 pack converts459 small projections, not expert requantization. Strata-fork copied backend in model-loader/backends;int8KV,32768,prefill512,15workers,270W/card,reserve1536MiB. Source/embedded Qwen template identical(c3cf9e34); model-card sampling temp1/top_p.95/top_k20/min_p0/presence0/repetition1;non-thinking. Shared base Q2_0 MTP spec4/minp.5, not fine-tune-matched. GPU1 only, --resident-experts:8407GPU cache +33.14GiB page-locked/mapped complement, no fileblob reads in measured requests. Warm code median81.3tok/s,TTFT.534s,MTP795/937(84.8%);PT50.1tok/s,clean stop. Fresh29831input:TTFT107.959s,decode46.6tok/s,3/3exactrecords;fencedJSON fails strict JSON-only. PeakGPU0/1 875/23087MiB(.85/22.55GiB),benchmarkminRAM8.61GiB,swapgrowth0. Fill5/25/50/90 mean72.1/69.9/88.5/84.5tok/s,cachedTTFT82/91/98/121ms. CuratedHumanEval10/10,small sample. Tool integrity4/4 inclSSE,auto25/30correct,3malformed,2missing;1/30spurious controls;short continuation reissues tool. Backend ignores tool_choice/parallel_tool_calls;NOT agent-qualified. Long-tool 50%/16144input:missing call;90%/29251input:exactcommand and clean continuation passed. Report: /home/diogo/dev/model-loader/docs/reports/strata-orca-iq3-xxs-calibration-2026-10-01.md; artifacts: /home/diogo/models/strata/orca-iq3-xxs-20261001/.",
+  "model": "/home/diogo/models/huggingface/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+  "args": {
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k.json",
+    "host": "127.0.0.1",
+    "max-context": 32768
+  },
+  "launch": {
+    "defaultBackground": true,
+    "backendId": "strata-perf-v6-20261002",
+    "env": [
+      {
+        "key": "STRATA_DECODE_TIMING",
+        "value": "1"
+      },
+      {
+        "key": "STRATA_SPLIT_TIMING",
+        "value": "1"
+      }
+    ],
+    "restart_policy": "none",
+    "max_restarts": 0,
+    "backoff_seconds": 0
+  },
+  "meta": {
+    "createdAt": "2026-10-01T20:09:30.933525935Z",
+    "updatedAt": "2026-10-02T15:09:10.159154871Z",
+    "lastUsedAt": "2026-10-02T15:09:10.15897337Z"
+  },
+  "pinned": false
+}

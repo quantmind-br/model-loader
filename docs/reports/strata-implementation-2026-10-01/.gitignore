@@ -1,0 +1,18 @@
+# Raw per-request evidence stays local (large); reports, indices, summaries and tooling are tracked.
+resources.jsonl
+results.json
+*.nsys-rep
+*.sqlite
+*.routing
+engine.log
+*-engine.log
+instance.log
+model-loader.installed-before
+claude-continuation.jsonl
+*.out
+# Pre-change snapshot: only the Strata profiles/schema and the catalog matter for rollback.
+baseline/profiles/*
+!baseline/profiles/*strata*
+baseline/backends/schemas/*
+!baseline/backends/schemas/strata*
+*.lock

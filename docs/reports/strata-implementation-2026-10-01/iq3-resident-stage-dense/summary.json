@@ -1,0 +1,119 @@
+{
+  "run": "iq3-resident-stage-dense",
+  "run_status": null,
+  "guard": null,
+  "code_tps": {
+    "median": 108.2,
+    "min": 107.4,
+    "max": 108.6
+  },
+  "peak_gpu_mib": {
+    "0": 23111.0,
+    "1": 23087.0
+  },
+  "process_peak_swap_kib": {
+    "230413:server": 0,
+    "230415:native": 0,
+    "236400:server": 0,
+    "236422:native": 0,
+    "236481:native": 0,
+    "236493:native": 0,
+    "236703:native": 0,
+    "236748:native": 0,
+    "238402:native": 0,
+    "238457:native": 0,
+    "238649:native": 0,
+    "238757:native": 0,
+    "239157:native": 0
+  },
+  "retrieval": [
+    {
+      "label": "fresh-0.05",
+      "prompt_n": 1166,
+      "cache_n": 0,
+      "ttft_s": 1.3500239880013396,
+      "exact": true
+    },
+    {
+      "label": "cached-0.05",
+      "prompt_n": 7,
+      "cache_n": 1159,
+      "ttft_s": 0.07862914099678164,
+      "exact": true
+    },
+    {
+      "label": "fresh-0.25",
+      "prompt_n": 7721,
+      "cache_n": 0,
+      "ttft_s": 5.422684534998552,
+      "exact": true
+    },
+    {
+      "label": "cached-0.25",
+      "prompt_n": 7,
+      "cache_n": 7714,
+      "ttft_s": 0.11183388600329636,
+      "exact": true
+    },
+    {
+      "label": "fresh-0.5",
+      "prompt_n": 15911,
+      "cache_n": 0,
+      "ttft_s": 10.596444176997466,
+      "exact": true
+    },
+    {
+      "label": "cached-0.5",
+      "prompt_n": 7,
+      "cache_n": 15904,
+      "ttft_s": 0.07556115899933502,
+      "exact": true
+    },
+    {
+      "label": "fresh-0.9",
+      "prompt_n": 29021,
+      "cache_n": 0,
+      "ttft_s": 18.83454710499791,
+      "exact": true
+    },
+    {
+      "label": "cached-0.9",
+      "prompt_n": 7,
+      "cache_n": 29014,
+      "ttft_s": 0.08325661900016712,
+      "exact": true
+    }
+  ],
+  "checks": {
+    "exact_copy": true,
+    "json_text": true
+  },
+  "min_available_gib": 32.66394805908203,
+  "max_swap_growth_gib": 0.2904930114746094,
+  "peak_simultaneous_gpu_mib": 46072.0,
+  "peak_temperature_c": 79.0,
+  "global_pswpout_pages": 75331,
+  "engine_info": {
+    "version": "0.1.30",
+    "context": 32768,
+    "kv": "int8",
+    "kv_resident": 0,
+    "expert_slots": 18729,
+    "expert_cache_mib": 38865,
+    "expert_slots_primary": 9475,
+    "expert_cache_primary_mib": 19662,
+    "spec": 6,
+    "mtp_max": 4,
+    "lookup": 3,
+    "vram_free_mib": 1251,
+    "cvec": 0,
+    "arena_mib": 12905,
+    "pool_workers": 15,
+    "pcie_frac": "0.28",
+    "spec_min_p": "0.50",
+    "conversation_cache_mib": 0,
+    "conversation_cache_slots": 4,
+    "conversation_cache_min_free_mib": 2560,
+    "engine": "0.1.30"
+  }
+}

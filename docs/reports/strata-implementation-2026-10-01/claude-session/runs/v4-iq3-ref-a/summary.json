@@ -1,0 +1,29 @@
+{
+  "run": "v4-iq3-ref-a",
+  "run_status": {
+    "requests_complete": false,
+    "guard_triggered": true
+  },
+  "guard": {
+    "reasons": [
+      "global swap growth above 2 GiB"
+    ],
+    "time": 1790894202.307471
+  },
+  "code_tps": null,
+  "peak_gpu_mib": {
+    "0": 22586.0,
+    "1": 22491.0
+  },
+  "process_peak_swap_kib": {
+    "1068543:server": 153596,
+    "1068609:native": 174796
+  },
+  "retrieval": [],
+  "checks": {},
+  "min_available_gib": 44.04142379760742,
+  "max_swap_growth_gib": 2.9225997924804688,
+  "peak_simultaneous_gpu_mib": 45076.0,
+  "peak_temperature_c": 64.0,
+  "global_pswpout_pages": 756654
+}

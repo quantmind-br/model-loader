@@ -1,0 +1,28 @@
+{
+  "run": "iq3-dual-resident",
+  "run_status": null,
+  "guard": {
+    "reasons": [
+      "global swap growth above 2 GiB"
+    ],
+    "time": 1790885760.2569
+  },
+  "code_tps": null,
+  "peak_gpu_mib": {
+    "0": 22585.0,
+    "1": 22491.0
+  },
+  "process_peak_swap_kib": {
+    "218197:server": 0,
+    "218201:native": 0,
+    "224201:server": 145756,
+    "224208:native": 166828
+  },
+  "retrieval": [],
+  "checks": {},
+  "min_available_gib": 46.468685150146484,
+  "max_swap_growth_gib": 2.0546798706054688,
+  "peak_simultaneous_gpu_mib": 45075.0,
+  "peak_temperature_c": 65.0,
+  "global_pswpout_pages": 545630
+}

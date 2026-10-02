@@ -1,0 +1,29 @@
+{
+  "run": "v5-iq2-sd256-tools-B",
+  "run_status": {
+    "requests_complete": false,
+    "guard_triggered": true
+  },
+  "guard": {
+    "reasons": [
+      "global swap growth above 2 GiB"
+    ],
+    "time": 1790934888.6127684
+  },
+  "code_tps": null,
+  "peak_gpu_mib": {
+    "0": 21242.0,
+    "1": 22449.0
+  },
+  "process_peak_swap_kib": {
+    "98342:server": 145888,
+    "98351:native": 350104
+  },
+  "retrieval": [],
+  "checks": {},
+  "min_available_gib": 42.97169876098633,
+  "max_swap_growth_gib": 2.4170570373535156,
+  "peak_simultaneous_gpu_mib": 43691.0,
+  "peak_temperature_c": 56.0,
+  "global_pswpout_pages": 598943
+}

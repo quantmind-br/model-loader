@@ -1,0 +1,12 @@
+{
+  "running": true,
+  "addr": "127.0.0.1:4321",
+  "loaded_profile_id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-rerank-32k",
+  "loaded_pid": 1504140,
+  "loaded_port": 39393,
+  "loaded_log_path": "/home/diogo/.local/state/model-loader/logs/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-rerank-32k-39393.log",
+  "last_swap_at": "2026-10-02T12:13:14.133849723-03:00",
+  "last_swap_dur": 61539580595,
+  "last_error_at": "0001-01-01T00:00:00Z",
+  "inflight_requests": 0
+}

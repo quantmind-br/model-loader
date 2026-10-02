@@ -1,0 +1,6 @@
+# IQ3 dual resident-stage-dense, release v4, exploratory single starts bracketed by the reference
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k v4-iq3-ref-a
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-ple32-32k v4-iq3-ple32
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-spec2-32k v4-iq3-spec2
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-spec6-32k v4-iq3-spec6
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k v4-iq3-ref-b

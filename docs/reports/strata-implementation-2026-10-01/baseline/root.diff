@@ -1,0 +1,317 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 7a1c908..c448367 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -412,6 +412,15 @@ Test-only third-party: `charmbracelet/x/exp/teatest` (2 files).
+ (verified via `git ls-files`). `docs/superpowers/` and `TUI_AUDIT.md` are
+ ignored design/audit artifacts.
+ 
++### GPU power cap (reference hardware)
++
++The dual RTX 3090 workstation now runs with a reduced power cap (270 W per
++card since 2026-09-27; set with `nvidia-smi -pl`). All existing reference
++measurements in this repository (tuning reports, audit reports, profile
++descriptions, saved benchmark baselines) were taken at **290 W per card**.
++Account for the cap difference before comparing new throughput/TTFT numbers
++against those baselines; `scripts/powercap-sweep.py` measures the effect.
++
+ ### Defect tracking
+ 
+ Track new defects in GitHub Issues (bug-report template). Existing regression
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index f89193a..0d16cc4 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -23,6 +23,17 @@ All notable user-facing changes are documented here. This project follows
+ 
+ ### Changed
+ 
++- Local `syv-qwen38` backend re-synced to upstream HyperQwen `da8a8e9` (new
++  `spec-attn-smem-fit` patch applied, `verify.sh --install` clean), and the
++  eleven linked dual-RTX-3090 profiles re-tuned at 270 W/card: custom
++  all-reduce is now on with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:False`
++  (+4-15% decode across Qwen3.8-27B, MiMo, Ornith and Nex). The earlier
++  "custom all-reduce crashes on SM86" failure was the expandable-segments
++  allocator, which cannot export the CUDA-graph buffer over IPC; the backend
++  wrapper now defaults the allocator off at TP>1 like the upstream launcher.
++  The dead `VLLM_V2_CUDAGRAPH_MEM_MIB` was removed, MiMo gained probabilistic
++  draft sampling with `QMAX 8`, and Nex gained a float16 GDN state. Report:
++  `docs/reports/hyperqwen-parity-dual-rtx3090-2026-09-27.md`.
+ - Local dual-RTX-3090 Syv Qwen3.8-27B provisioning audited against upstream
+   `0e951951`: vLLM 0.28.0 with verified patches and optional KVarN support.
+   Six workstation profiles use BF16 KV, split-KV verification and seven-token
+diff --git a/QWEN38_27B_AUDIT_REPORT.md b/QWEN38_27B_AUDIT_REPORT.md
+index ff94fc3..c515f98 100644
+--- a/QWEN38_27B_AUDIT_REPORT.md
++++ b/QWEN38_27B_AUDIT_REPORT.md
+@@ -50,6 +50,12 @@ máquina tem **duas placas e um operador**. Por isso várias receitas upstream f
+ Confirmado no log de boot: `Using FLASH_ATTN`, `DFlash2 lookup-augmented drafting on (k=7 …)`,
+ `draft_logits=True`, `Using ['PYNCCL'] all-reduce backends`, `GPU KV cache size: 286,013 tokens`.
+ 
++> **SUPERSEDED 2026-09-27** (backend em vLLM 0.29.0 / HyperQwen `da8a8e9`): NCCL e
++> `VLLM_V2_CUDAGRAPH_MEM_MIB` não são mais o estado aplicado. Custom all-reduce com
++> `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:False` está ativo (`Using ['CUSTOM', 'PYNCCL']`), e a
++> variável de reserva de grafos não tem leitor no 0.29. Ver
++> `docs/reports/hyperqwen-parity-dual-rtx3090-2026-09-27.md`.
++
+ ---
+ 
+ ## 3. Backend, patches e paths
+@@ -125,7 +131,10 @@ grafos PIECEWISE e desliga o kernel split-KV (que é FLASH_ATTN/bf16-only).
+   (`"enabled": True,_00`). Rejeitado por correção, não por velocidade.
+ - **`VLLM_DFLASH2_CHAIN=1`:** `TimeoutError: RPC call to sample_tokens timed out` → `EngineDeadError`
+   na bateria de matemática em TP=2. Rejeitado.
+-- **Custom all-reduce:** falha na inicialização de grafos; NCCL mantido.
++- **Custom all-reduce:** falha na inicialização de grafos; NCCL mantido. **SUPERSEDED 2026-09-27:** a
++  falha vinha de `expandable_segments:True` (segmento VMM sem handle CUDA IPC para o buffer de grafo,
++  gotcha 3 upstream), não do custom all-reduce; com `expandable_segments:False` ele sobe e ganha
++  +5–8% de decode (relatório de 2026-09-27).
+ - **`VLLM_PREFILL_ATTN=int8`:** o kernel upstream exige 24 heads Q / 4 KV; em TP=2 são 12/2, o
+   predicado é falso. **Definir a variável não ativa nada** — não anunciar como ativo.
+ 
+diff --git a/README.md b/README.md
+index 32fc78f..7c1943b 100644
+--- a/README.md
++++ b/README.md
+@@ -46,6 +46,7 @@ tied to that exact hardware.
+ | `tabby` | TabbyAPI |
+ | `lmstudio` | LM Studio (`lms` CLI + daemon) |
+ | `freetoken` | FreeToken (FlashML edge-native MoE offload engine) |
++| `strata` | [Strata fork](https://github.com/quantmind-br/Strata), via its managed HTTP server ([setup](docs/strata-backend.md)) |
+ 
+ Backends are catalog entries, not bundled dependencies. Register the executable
+ you want to run and associate it with one of these kinds.
+diff --git a/internal/domain/backend.go b/internal/domain/backend.go
+index 26893bd..90ab074 100644
+--- a/internal/domain/backend.go
++++ b/internal/domain/backend.go
+@@ -17,6 +17,7 @@ const (
+ 	BackendKindTabby        BackendKind = "tabby"
+ 	BackendKindLMStudio     BackendKind = "lmstudio"
+ 	BackendKindFreeToken    BackendKind = "freetoken"
++	BackendKindStrata       BackendKind = "strata"
+ )
+ 
+ // BackendMeta holds timestamps and bookkeeping for a backend entry.
+diff --git a/internal/service/backendcatalog/resolver.go b/internal/service/backendcatalog/resolver.go
+index 9153ff7..9543766 100644
+--- a/internal/service/backendcatalog/resolver.go
++++ b/internal/service/backendcatalog/resolver.go
+@@ -132,12 +132,12 @@ func findBackend(backends []domain.Backend, id string) (domain.Backend, bool) {
+ }
+ 
+ // resolveExecutable resolves a backend's executable.
+-// For Python-based backends (SGLang and VLLM), it applies python↔python3
++// For Python-based backends (SGLang, VLLM and Strata), it applies python↔python3
+ // fallback logic so compound commands like "python -m sglang.launch_server"
+ // are preserved when falling back to python3.
+ func resolveExecutable(backend domain.Backend) (string, error) {
+ 	switch backend.Kind {
+-	case domain.BackendKindSGLang, domain.BackendKindVLLM:
++	case domain.BackendKindSGLang, domain.BackendKindVLLM, domain.BackendKindStrata:
+ 		return llamabin.ResolveCommandWithPythonFallback(backend.Executable)
+ 	default:
+ 		return llamabin.Resolve(backend.Executable)
+diff --git a/internal/service/backendschema/presentation_coverage_test.go b/internal/service/backendschema/presentation_coverage_test.go
+index c681216..1aaf2f5 100644
+--- a/internal/service/backendschema/presentation_coverage_test.go
++++ b/internal/service/backendschema/presentation_coverage_test.go
+@@ -7,6 +7,7 @@ import (
+ 	"github.com/quantmind-br/model-loader/internal/service/dflashhelp"
+ 	"github.com/quantmind-br/model-loader/internal/service/freetokenhelp"
+ 	"github.com/quantmind-br/model-loader/internal/service/lmstudiohelp"
++	"github.com/quantmind-br/model-loader/internal/service/stratahelp"
+ 	"github.com/quantmind-br/model-loader/internal/service/tabbyhelp"
+ 	"github.com/quantmind-br/model-loader/internal/service/unslothhelp"
+ )
+@@ -55,6 +56,7 @@ func TestEssentialSeed_ReferencesOnlyExistingFlags(t *testing.T) {
+ 		{domain.BackendKindTabby, tabbyhelp.EmbeddedSchema()},
+ 		{domain.BackendKindLMStudio, lmstudiohelp.EmbeddedSchema()},
+ 		{domain.BackendKindFreeToken, freetokenhelp.EmbeddedSchema()},
++		{domain.BackendKindStrata, stratahelp.EmbeddedSchema()},
+ 	} {
+ 		t.Run(string(tt.kind), func(t *testing.T) {
+ 			for _, long := range essentialSeed[tt.kind] {
+diff --git a/internal/service/backendschema/register.go b/internal/service/backendschema/register.go
+index c754374..38dd263 100644
+--- a/internal/service/backendschema/register.go
++++ b/internal/service/backendschema/register.go
+@@ -20,4 +20,5 @@ func RegisterDefaults(m *Manager, schemaStore backendcatalog.SchemaStore) {
+ 	m.Register(domain.BackendKindTabby, NewTabbyGenerator(schemaStore))
+ 	m.Register(domain.BackendKindLMStudio, NewLMStudioGenerator(schemaStore))
+ 	m.Register(domain.BackendKindFreeToken, NewFreeTokenGenerator(schemaStore))
++	m.Register(domain.BackendKindStrata, NewStrataGenerator(schemaStore))
+ }
+diff --git a/internal/service/backendschema/register_test.go b/internal/service/backendschema/register_test.go
+index fa3d2ba..aa140ae 100644
+--- a/internal/service/backendschema/register_test.go
++++ b/internal/service/backendschema/register_test.go
+@@ -24,6 +24,7 @@ func TestRegisterDefaults_RegistersAllGeneratorKinds(t *testing.T) {
+ 		domain.BackendKindTabby,
+ 		domain.BackendKindLMStudio,
+ 		domain.BackendKindFreeToken,
++		domain.BackendKindStrata,
+ 	}
+ 	gens := m.Generators()
+ 	if len(gens) != len(want) {
+diff --git a/internal/service/benchmark/result.go b/internal/service/benchmark/result.go
+index 41c9989..3b4875b 100644
+--- a/internal/service/benchmark/result.go
++++ b/internal/service/benchmark/result.go
+@@ -151,7 +151,7 @@ type ProblemResult struct {
+ 	TPSStdDev  float64            `json:"tpsStdDev,omitempty"`  // llama-bench: tok/s spread across reps
+ 	TPSMin     float64            `json:"tpsMin,omitempty"`
+ 	TPSMax     float64            `json:"tpsMax,omitempty"`
+-	FillPct    int                `json:"fillPct,omitempty"`    // llama-bench: context fill percent for this preset
++	FillPct    int                `json:"fillPct,omitempty"` // llama-bench: context fill percent for this preset
+ 	Sandbox    string             `json:"sandbox,omitempty"` // codegen: "bwrap" | "subprocess"
+ }
+ 
+@@ -321,9 +321,10 @@ func argString(args map[string]any, key string) string {
+ 
+ // effectiveCtxTokens returns the profile's context window in tokens, reading
+ // the first context arg present: ctx-size (llama/beellama), max-ctx (dflash),
+-// max-model-len (vllm), context-length (sglang). 0 → unknown (caller falls back).
++// max-model-len (vllm), context-length (sglang), max-context (strata).
++// 0 → unknown (caller falls back).
+ func effectiveCtxTokens(p domain.Profile) int {
+-	for _, k := range []string{"ctx-size", "max-ctx", "max-model-len", "context-length"} {
++	for _, k := range []string{"ctx-size", "max-ctx", "max-model-len", "context-length", "max-context"} {
+ 		if n := parseCtxTokens(argString(p.Args, k)); n > 0 {
+ 			return n
+ 		}
+diff --git a/internal/service/benchmark/result_test.go b/internal/service/benchmark/result_test.go
+index 1fece13..191012a 100644
+--- a/internal/service/benchmark/result_test.go
++++ b/internal/service/benchmark/result_test.go
+@@ -117,9 +117,9 @@ func TestParseCtxTokens(t *testing.T) {
+ 		{"128k", 128 * 1024},
+ 		{"1m", 1024 * 1024},
+ 		{"  256K ", 256 * 1024},
+-		{"262144", 262144},     // dflash max-ctx
+-		{"8192", 8192},         // vllm max-model-len string
+-		{"1e+06", 1000000},     // argString scientific notation (float64 ≥1e6)
++		{"262144", 262144},        // dflash max-ctx
++		{"8192", 8192},            // vllm max-model-len string
++		{"1e+06", 1000000},        // argString scientific notation (float64 ≥1e6)
+ 		{"1.048576e+06", 1048576}, // 1M ctx-size rendered by %v
+ 		{"abc", 0},
+ 		{"0", 0},
+@@ -150,6 +150,10 @@ func TestEffectiveCtxTokens_Precedence(t *testing.T) {
+ 	if got := effectiveCtxTokens(domain.Profile{Args: map[string]any{"context-length": float64(131072)}}); got != 131072 {
+ 		t.Errorf("context-length fallback: got %d, want 131072", got)
+ 	}
++	// Strata uses max-context in its managed HTTP launcher.
++	if got := effectiveCtxTokens(domain.Profile{Args: map[string]any{"max-context": float64(32768)}}); got != 32768 {
++		t.Errorf("strata context: got %d, want 32768", got)
++	}
+ 	// none parseable → 0 (caller falls back to a conservative default).
+ 	if got := effectiveCtxTokens(domain.Profile{Args: map[string]any{"foo": "bar"}}); got != 0 {
+ 		t.Errorf("unknown ctx: got %d, want 0", got)
+diff --git a/internal/service/configweb/backend_handlers.go b/internal/service/configweb/backend_handlers.go
+index 242185d..eb9960a 100644
+--- a/internal/service/configweb/backend_handlers.go
++++ b/internal/service/configweb/backend_handlers.go
+@@ -30,6 +30,7 @@ func (s *Session) handleBackendIndex(w http.ResponseWriter, r *http.Request) {
+ 			domain.BackendKindUnsloth,
+ 			domain.BackendKindTabby,
+ 			domain.BackendKindFreeToken,
++			domain.BackendKindStrata,
+ 		},
+ 		IsNew:        s.deps.InitialBackendDraft.IsNew,
+ 		ReadOnlyKind: !s.deps.InitialBackendDraft.IsNew,
+diff --git a/internal/service/httpproxy/models_openrouter.go b/internal/service/httpproxy/models_openrouter.go
+index bf20045..74ba52e 100644
+--- a/internal/service/httpproxy/models_openrouter.go
++++ b/internal/service/httpproxy/models_openrouter.go
+@@ -108,6 +108,7 @@ var contextLengthFlags = []string{
+ 	"max-seq-len",    // tabby / exllama
+ 	"context-length", // sglang
+ 	"max-ctx",        // dflash (lucebox native server) — context window / KV size
++	"max-context",    // Strata managed HTTP server
+ 	"n-ctx",          // alternate spelling
+ }
+ 
+diff --git a/internal/service/httpproxy/models_openrouter_test.go b/internal/service/httpproxy/models_openrouter_test.go
+index cfd9bde..d85760d 100644
+--- a/internal/service/httpproxy/models_openrouter_test.go
++++ b/internal/service/httpproxy/models_openrouter_test.go
+@@ -29,6 +29,7 @@ func TestDeriveContextLength(t *testing.T) {
+ 		{"tabby max-seq-len", map[string]any{"max-seq-len": float64(65536)}, intp(65536)},
+ 		{"sglang context-length", map[string]any{"context-length": float64(131072)}, intp(131072)},
+ 		{"dflash max-ctx", map[string]any{"max-ctx": float64(262144)}, intp(262144)},
++		{"strata max-context", map[string]any{"max-context": float64(32768)}, intp(32768)},
+ 		{"int value", map[string]any{"ctx-size": 4096}, intp(4096)},
+ 		{"string numeric value", map[string]any{"max-model-len": "16384"}, intp(16384)},
+ 		{"absent context flag", map[string]any{"n-gpu-layers": float64(999)}, nil},
+diff --git a/internal/service/processmgr/args.go b/internal/service/processmgr/args.go
+index 070f573..86f85bf 100644
+--- a/internal/service/processmgr/args.go
++++ b/internal/service/processmgr/args.go
+@@ -48,6 +48,10 @@ func BuildArgsForBackend(p domain.Profile, kind domain.BackendKind, executable s
+ 		return buildLMStudioArgs(p), nil
+ 	case domain.BackendKindFreeToken:
+ 		return buildFreeTokenArgs(p), nil
++	case domain.BackendKindStrata:
++		// The HTTP server owns the native stdin engine. --model verifies the
++		// profile's GGUF against the prepared JSON; it does not replace the pack.
++		return append([]string{"--engine", "strata"}, buildArgs(p, argBuildOpts{skipKeys: []string{"model", "engine"}, modelFlag: "--model"})...), nil
+ 	default:
+ 		return nil, fmt.Errorf("unsupported backend kind for arg building: %s", kind)
+ 	}
+diff --git a/internal/service/processmgr/args_test.go b/internal/service/processmgr/args_test.go
+index b31fd66..99db7e2 100644
+--- a/internal/service/processmgr/args_test.go
++++ b/internal/service/processmgr/args_test.go
+@@ -7,6 +7,27 @@ import (
+ 	"github.com/quantmind-br/model-loader/internal/domain"
+ )
+ 
++func TestBuildArgs_StrataManagedServer(t *testing.T) {
++	p := domain.Profile{
++		Model: "/models/native.gguf",
++		Args: map[string]any{
++			"config": "/configs/model.json", "max-context": float64(32768),
++			"gpu": "0,1", "host": "127.0.0.1", "port": 12345,
++			"fit-max-tokens": true, "model": "ignored.gguf", "engine": "mock",
++		},
++	}
++	got, err := BuildArgsForBackend(p, domain.BackendKindStrata, "python /fork/serve/server.py")
++	if err != nil {
++		t.Fatal(err)
++	}
++	want := []string{"--engine", "strata", "--model", p.Model,
++		"--config", "/configs/model.json", "--fit-max-tokens", "--gpu", "0,1",
++		"--host", "127.0.0.1", "--max-context", "32768", "--port", "12345"}
++	if !reflect.DeepEqual(got, want) {
++		t.Fatalf("got %v, want %v", got, want)
++	}
++}
++
+ func TestBuildArgs_ModelFirstAndSortedFlags(t *testing.T) {
+ 	p := domain.Profile{
+ 		Model: "/m.gguf",
+diff --git a/internal/service/processmgr/launch.go b/internal/service/processmgr/launch.go
+index 1b20cb1..14785ff 100644
+--- a/internal/service/processmgr/launch.go
++++ b/internal/service/processmgr/launch.go
+@@ -324,6 +324,7 @@ var pythonBackends = map[domain.BackendKind]bool{
+ 	domain.BackendKindUnsloth:   true,
+ 	domain.BackendKindTabby:     true,
+ 	domain.BackendKindFreeToken: true,
++	domain.BackendKindStrata:    true,
+ }
+ 
+ // buildLaunchEnv overlays the profile env (applyProfileEnv) and, for
+diff --git a/internal/service/processmgr/manager_test.go b/internal/service/processmgr/manager_test.go
+index 257282d..4a6ad66 100644
+--- a/internal/service/processmgr/manager_test.go
++++ b/internal/service/processmgr/manager_test.go
+@@ -226,6 +226,7 @@ func TestBuildLaunchEnv(t *testing.T) {
+ 			domain.BackendKindSGLang,
+ 			domain.BackendKindUnsloth,
+ 			domain.BackendKindFreeToken,
++			domain.BackendKindStrata,
+ 		} {
+ 			got := buildLaunchEnv(kind, nil)
+ 			if !envContains(got, "PYTHONUNBUFFERED=1") {

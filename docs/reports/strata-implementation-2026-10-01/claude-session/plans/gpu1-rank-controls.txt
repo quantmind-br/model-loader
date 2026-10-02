@@ -1,0 +1,3 @@
+# functional controls before applying the rerank to the canonical GPU1 profile: A = base, B = rerank
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k gpu1-rank-A-controls --probe --controls
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-rerank-32k gpu1-rank-B-controls --probe --controls

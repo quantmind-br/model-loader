@@ -1,0 +1,7 @@
+# S15 one-knob A/B: A = --spec-min-p 0.5 (reference), B = 0.7; separate starts, A,B,B,A,A,B
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k v4-minp-A1
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-minp07-32k v4-minp-B1
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-minp07-32k v4-minp-B2
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k v4-minp-A2
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k v4-minp-A3
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-minp07-32k v4-minp-B3

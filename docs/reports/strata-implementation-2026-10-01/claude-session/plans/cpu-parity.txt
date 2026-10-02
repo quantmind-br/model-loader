@@ -1,0 +1,4 @@
+# STRATA_IQ_MT_MIN=1 (config env), IQ3 dual resident-stage-dense, v4; two starts to test drafting-independent output
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-cpu-parity-32k v4-iq3-cpu-parity-1 --probe --controls
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-cpu-parity-32k v4-iq3-cpu-parity-2
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k v4-iq3-ref-c

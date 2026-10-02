@@ -1,0 +1,89 @@
+{
+  "run": "ab256v2-C3",
+  "run_status": {
+    "requests_complete": true,
+    "guard_triggered": false
+  },
+  "guard": null,
+  "code_tps": {
+    "median": 123.7,
+    "min": 119.6,
+    "max": 124.3
+  },
+  "peak_gpu_mib": {
+    "0": 22940.0,
+    "1": 22997.0
+  },
+  "process_peak_swap_kib": {
+    "1525707:server": 0,
+    "1525846:native": 0
+  },
+  "retrieval": [
+    {
+      "label": "fresh-0.05",
+      "prompt_n": 12652,
+      "cache_n": 0,
+      "ttft_s": 6.08997045999422,
+      "exact": true
+    },
+    {
+      "label": "cached-0.05",
+      "prompt_n": 7,
+      "cache_n": 12645,
+      "ttft_s": 0.08743823900294956,
+      "exact": true
+    },
+    {
+      "label": "fresh-0.25",
+      "prompt_n": 65077,
+      "cache_n": 0,
+      "ttft_s": 20.136314167997625,
+      "exact": true
+    },
+    {
+      "label": "cached-0.25",
+      "prompt_n": 7,
+      "cache_n": 65070,
+      "ttft_s": 0.20431685900257435,
+      "exact": true
+    },
+    {
+      "label": "fresh-0.5",
+      "prompt_n": 130611,
+      "cache_n": 0,
+      "ttft_s": 39.619174863997614,
+      "exact": true
+    },
+    {
+      "label": "cached-0.5",
+      "prompt_n": 7,
+      "cache_n": 130604,
+      "ttft_s": 0.3507930749983643,
+      "exact": true
+    },
+    {
+      "label": "fresh-0.9",
+      "prompt_n": 235476,
+      "cache_n": 0,
+      "ttft_s": 77.9599291439954,
+      "exact": true
+    },
+    {
+      "label": "cached-0.9",
+      "prompt_n": 7,
+      "cache_n": 235469,
+      "ttft_s": 0.5778578739991644,
+      "exact": true
+    }
+  ],
+  "checks": {
+    "exact_copy": true,
+    "json_text": true
+  },
+  "min_available_gib": 39.740440368652344,
+  "max_swap_growth_gib": 0.0,
+  "peak_simultaneous_gpu_mib": 45937.0,
+  "peak_temperature_c": 82.0,
+  "global_pswpout_pages": 4307,
+  "engine_info": null
+}

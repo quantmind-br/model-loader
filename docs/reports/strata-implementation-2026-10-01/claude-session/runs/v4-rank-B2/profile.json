@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 3,
+  "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-rerank-32k",
+  "name": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-rerank-32k",
+  "description": "IDEATION ranking candidate (claude-session 2026-10-01): identical to qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k except --expert-profile = checkpoint-specific rerank v1 trained on the probe --training corpus; holdout = standard probe prompts. Calibration pending; not promoted.",
+  "model": "/home/diogo/models/huggingface/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+  "args": {
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-rerank-32k.json",
+    "host": "127.0.0.1",
+    "max-context": 32768
+  },
+  "launch": {
+    "defaultBackground": true,
+    "backendId": "strata-perf-v4-20261001",
+    "env": [
+      {
+        "key": "STRATA_DECODE_TIMING",
+        "value": "1"
+      },
+      {
+        "key": "STRATA_SPLIT_TIMING",
+        "value": "1"
+      }
+    ],
+    "restart_policy": "none",
+    "max_restarts": 0,
+    "backoff_seconds": 0
+  },
+  "meta": {
+    "createdAt": "2026-10-01T22:50:34.240419185Z",
+    "updatedAt": "2026-10-01T22:52:55.336046784Z",
+    "lastUsedAt": "2026-10-01T22:52:55.335965401Z"
+  },
+  "pinned": false
+}

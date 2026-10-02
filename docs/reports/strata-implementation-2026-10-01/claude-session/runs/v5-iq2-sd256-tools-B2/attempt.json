@@ -1,0 +1,16 @@
+{
+  "profile": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-256k",
+  "release": "20261002T095307Z-13018fd9fe4e",
+  "backend": "strata-perf-v5-20261002",
+  "exe": "/home/diogo/dev/model-loader/backends/strata-fork/releases/20261002T095307Z-13018fd9fe4e/strata",
+  "probe_flags": [
+    "--controls",
+    "--linger",
+    "480"
+  ],
+  "set_arg": [],
+  "env": [],
+  "started": 1790935162.975866,
+  "returncode": 0,
+  "finished": 1790935732.5926607
+}

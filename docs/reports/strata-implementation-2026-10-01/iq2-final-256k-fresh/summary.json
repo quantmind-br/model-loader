@@ -1,0 +1,70 @@
+{
+  "run": "iq2-final-256k-fresh",
+  "run_status": null,
+  "guard": {
+    "reasons": [
+      "global swap growth above 2 GiB"
+    ],
+    "time": 1790886902.1189575
+  },
+  "code_tps": {
+    "median": 126.6,
+    "min": 123.2,
+    "max": 127.0
+  },
+  "peak_gpu_mib": {
+    "0": 22939.0,
+    "1": 22995.0
+  },
+  "process_peak_swap_kib": {
+    "299086:server": 102472,
+    "299090:native": 1476904
+  },
+  "retrieval": [
+    {
+      "label": "fresh-0.05",
+      "prompt_n": 12652,
+      "cache_n": 0,
+      "ttft_s": 6.1730291369967745,
+      "exact": true
+    },
+    {
+      "label": "cached-0.05",
+      "prompt_n": 7,
+      "cache_n": 12645,
+      "ttft_s": 0.06713245799619472,
+      "exact": true
+    },
+    {
+      "label": "fresh-0.25",
+      "prompt_n": 65077,
+      "cache_n": 0,
+      "ttft_s": 18.685485797999718,
+      "exact": true
+    },
+    {
+      "label": "cached-0.25",
+      "prompt_n": 7,
+      "cache_n": 65070,
+      "ttft_s": 0.11214633299823618,
+      "exact": true
+    },
+    {
+      "label": "fresh-0.5",
+      "prompt_n": null,
+      "cache_n": null,
+      "ttft_s": null,
+      "exact": false
+    }
+  ],
+  "checks": {
+    "exact_copy": true,
+    "json_text": true
+  },
+  "min_available_gib": 36.93305969238281,
+  "max_swap_growth_gib": 2.080108642578125,
+  "peak_simultaneous_gpu_mib": 45934.0,
+  "peak_temperature_c": 80.0,
+  "global_pswpout_pages": 488285,
+  "engine_info": null
+}

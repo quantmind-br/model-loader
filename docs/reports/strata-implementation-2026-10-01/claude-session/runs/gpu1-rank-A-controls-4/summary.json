@@ -1,0 +1,29 @@
+{
+  "run": "gpu1-rank-A-controls-4",
+  "run_status": {
+    "requests_complete": false,
+    "guard_triggered": true
+  },
+  "guard": {
+    "reasons": [
+      "global swap growth above 2 GiB"
+    ],
+    "time": 1790955907.497028
+  },
+  "code_tps": null,
+  "peak_gpu_mib": {
+    "0": 1139.0,
+    "1": 22470.0
+  },
+  "process_peak_swap_kib": {
+    "1674705:server": 167216,
+    "1674779:native": 249164
+  },
+  "retrieval": [],
+  "checks": {},
+  "min_available_gib": 14.015377044677734,
+  "max_swap_growth_gib": 2.954986572265625,
+  "peak_simultaneous_gpu_mib": 23609.0,
+  "peak_temperature_c": 52.0,
+  "global_pswpout_pages": 886852
+}

@@ -1,0 +1,380 @@
+{
+  "schemaVersion": 1,
+  "defaultBackendId": "llama.cpp-stable",
+  "backends": [
+    {
+      "id": "llama.cpp-stable",
+      "name": "llama.cpp stable",
+      "kind": "llama-server",
+      "executable": "/home/diogo/dev/model-loader/backends/llama.cpp-stable/build/bin/llama-server",
+      "schemaRef": "schemas/llama.cpp-stable.json",
+      "meta": {
+        "createdAt": "2026-06-30T00:00:00Z",
+        "updatedAt": "2026-06-30T00:00:00Z"
+      }
+    },
+    {
+      "id": "llama.cpp-nightly",
+      "name": "llama.cpp nightly",
+      "kind": "llama-server",
+      "executable": "/home/diogo/dev/model-loader/backends/llama.cpp-nightly/build/bin/llama-server",
+      "schemaRef": "schemas/llama.cpp-nightly.json",
+      "meta": {
+        "createdAt": "2026-06-30T00:00:00Z",
+        "updatedAt": "2026-06-30T00:00:00Z"
+      }
+    },
+    {
+      "id": "llama.cpp-prisma-ml",
+      "name": "llama.cpp prisma-ml",
+      "kind": "llama-server",
+      "executable": "/home/diogo/dev/model-loader/backends/llama.cpp-prisma-ml/build/bin/llama-server",
+      "schemaRef": "schemas/llama.cpp-prisma-ml.json",
+      "meta": {
+        "createdAt": "2026-07-18T05:16:17.824064487Z",
+        "updatedAt": "2026-07-18T05:16:17.824064487Z"
+      }
+    },
+    {
+      "id": "beellama-rtx3090",
+      "name": "BeeLlama RTX3090",
+      "kind": "beellama-cpp",
+      "executable": "/home/diogo/dev/model-loader/backends/beellama.cpp/bin/llama-server",
+      "schemaRef": "schemas/beellama-rtx3090.json",
+      "meta": {
+        "createdAt": "2026-06-02T09:32:49.484534059Z",
+        "updatedAt": "2026-06-02T09:32:49.484534059Z"
+      }
+    },
+    {
+      "id": "lucebox-dflash",
+      "name": "Lucebox DFlash",
+      "kind": "dflash",
+      "executable": "/home/diogo/dev/model-loader/backends/lucebox-hub/server/build-rtx3090/dflash_server",
+      "schemaRef": "schemas/lucebox-dflash.json",
+      "meta": {
+        "createdAt": "2026-06-12T13:55:02.412374038Z",
+        "updatedAt": "2026-06-30T10:32:56.258Z"
+      }
+    },
+    {
+      "id": "unsloth-rtx3090",
+      "name": "Unsloth RTX3090",
+      "kind": "unsloth",
+      "executable": "/home/diogo/dev/model-loader/backends/unsloth/unsloth-serve.sh",
+      "schemaRef": "schemas/unsloth-rtx3090.json",
+      "meta": {
+        "createdAt": "2026-06-17T22:55:09.370400498Z",
+        "updatedAt": "2026-06-17T22:55:09.370400498Z"
+      }
+    },
+    {
+      "id": "sglang-unlimited",
+      "name": "sglang-unlimited",
+      "kind": "sglang",
+      "executable": "/home/diogo/dev/model-loader/backends/sglang-unlimited/sglang-serve.sh",
+      "schemaRef": "schemas/sglang-unlimited.json",
+      "meta": {
+        "createdAt": "2026-06-24T23:23:28.179575083Z",
+        "updatedAt": "2026-06-24T23:23:28.179575083Z"
+      }
+    },
+    {
+      "id": "sglang-dflash",
+      "name": "SGLang DFlash",
+      "kind": "sglang",
+      "executable": "/home/diogo/dev/model-loader/backends/sglang-dflash/sglang-serve.sh",
+      "schemaRef": "schemas/sglang-dflash.json",
+      "meta": {
+        "createdAt": "2026-06-29T10:37:17.929062002Z",
+        "updatedAt": "2026-06-29T10:37:17.929062002Z"
+      }
+    },
+    {
+      "id": "tabby",
+      "name": "tabby",
+      "kind": "tabby",
+      "executable": "/home/diogo/dev/model-loader/backends/tabby/tabby-serve.sh",
+      "schemaRef": "schemas/tabby.json",
+      "meta": {
+        "createdAt": "2026-06-29T12:25:11.053666943Z",
+        "updatedAt": "2026-06-29T12:25:11.053666943Z"
+      }
+    },
+    {
+      "id": "vllm-stable",
+      "name": "vllm stable",
+      "kind": "vllm",
+      "executable": "/home/diogo/dev/model-loader/backends/vllm-stable/vllm-serve.sh",
+      "schemaRef": "schemas/vllm-stable.json",
+      "meta": {
+        "createdAt": "2026-06-30T14:17:49.141291259Z",
+        "updatedAt": "2026-06-30T14:17:49.141291259Z"
+      }
+    },
+    {
+      "id": "vllm-nightly",
+      "name": "vllm nightly",
+      "kind": "vllm",
+      "executable": "/home/diogo/dev/model-loader/backends/vllm-nightly/vllm-serve.sh",
+      "schemaRef": "schemas/vllm-nightly.json",
+      "meta": {
+        "createdAt": "2026-06-30T14:26:22.940590265Z",
+        "updatedAt": "2026-06-30T14:26:22.940590265Z"
+      }
+    },
+    {
+      "id": "sglang-stable",
+      "name": "sglang stable",
+      "kind": "sglang",
+      "executable": "/home/diogo/dev/model-loader/backends/sglang-stable/sglang-serve.sh",
+      "schemaRef": "schemas/sglang-stable.json",
+      "meta": {
+        "createdAt": "2026-06-30T14:33:07.424690399Z",
+        "updatedAt": "2026-06-30T14:33:07.424690399Z"
+      }
+    },
+    {
+      "id": "sglang-nightly",
+      "name": "sglang nightly",
+      "kind": "sglang",
+      "executable": "/home/diogo/dev/model-loader/backends/sglang-nightly/sglang-serve.sh",
+      "schemaRef": "schemas/sglang-nightly.json",
+      "meta": {
+        "createdAt": "2026-06-30T14:40:12.950120342Z",
+        "updatedAt": "2026-06-30T14:40:12.950120342Z"
+      }
+    },
+    {
+      "id": "buun-rtx3090",
+      "name": "buun rtx3090",
+      "kind": "buun-llama-cpp",
+      "executable": "/home/diogo/dev/model-loader/backends/buun-llama-cpp/build/bin/llama-server",
+      "schemaRef": "schemas/buun-rtx3090.json",
+      "meta": {
+        "createdAt": "2026-06-30T15:50:28.181728752Z",
+        "updatedAt": "2026-06-30T15:50:28.181728752Z"
+      }
+    },
+    {
+      "id": "sndr-vllm",
+      "name": "sndr-vllm",
+      "kind": "vllm",
+      "executable": "/home/diogo/dev/model-loader/backends/sndr-vllm/sndr-serve.sh",
+      "schemaRef": "schemas/sndr-vllm.json",
+      "meta": {
+        "createdAt": "2026-07-03T02:38:15.837451053Z",
+        "updatedAt": "2026-07-03T02:38:15.837451053Z"
+      }
+    },
+    {
+      "id": "vllm-dflash",
+      "name": "vllm dflash",
+      "kind": "vllm",
+      "executable": "/home/diogo/dev/model-loader/backends/vllm-dflash/vllm-serve.sh",
+      "schemaRef": "schemas/vllm-dflash.json",
+      "meta": {
+        "createdAt": "2026-07-09T04:04:48.601721011Z",
+        "updatedAt": "2026-07-09T04:04:48.601721011Z"
+      }
+    },
+    {
+      "id": "vllm-dspark",
+      "name": "vllm dspark",
+      "kind": "vllm",
+      "executable": "/home/diogo/dev/model-loader/backends/vllm-dspark/vllm-serve.sh",
+      "schemaRef": "schemas/vllm-dspark.json",
+      "meta": {
+        "createdAt": "2026-07-09T05:43:12.104313344Z",
+        "updatedAt": "2026-07-09T05:43:12.104313344Z"
+      }
+    },
+    {
+      "id": "ik-llama-cpp",
+      "name": "ik-llama-cpp",
+      "kind": "ik-llama-cpp",
+      "executable": "/home/diogo/dev/model-loader/backends/ik_llama.cpp/build/bin/llama-server",
+      "schemaRef": "schemas/ik-llama-cpp.json",
+      "meta": {
+        "createdAt": "2026-07-09T16:29:32.551513426Z",
+        "updatedAt": "2026-07-09T16:29:32.551513426Z"
+      }
+    },
+    {
+      "id": "poolside-llama-cpp-laguna",
+      "name": "Poolside llama.cpp Laguna",
+      "kind": "llama-server",
+      "executable": "/home/diogo/dev/model-loader/backends/poolside-llama.cpp-laguna/build/bin/llama-server",
+      "schemaRef": "schemas/poolside-llama-cpp-laguna.json",
+      "meta": {
+        "createdAt": "2026-07-24T12:35:07.194855609Z",
+        "updatedAt": "2026-07-24T12:35:07.194855609Z"
+      }
+    },
+    {
+      "id": "llama-cpp-nanbeige42",
+      "name": "llama.cpp-nanbeige42",
+      "kind": "llama-server",
+      "executable": "/home/diogo/dev/model-loader/backends/llama.cpp-nanbeige42/build/bin/llama-server",
+      "schemaRef": "schemas/llama-cpp-nanbeige42.json",
+      "meta": {
+        "createdAt": "2026-07-28T23:46:11.911499609Z",
+        "updatedAt": "2026-07-28T23:46:11.911499609Z"
+      }
+    },
+    {
+      "id": "lmstudio",
+      "name": "lmstudio",
+      "kind": "lmstudio",
+      "executable": "/home/diogo/dev/model-loader/backends/lms/lmstudio-serve.sh",
+      "schemaRef": "schemas/lmstudio.json",
+      "meta": {
+        "createdAt": "2026-08-25T21:53:15.539112778Z",
+        "updatedAt": "2026-08-25T21:53:15.539112778Z"
+      }
+    },
+    {
+      "id": "syv-qwen38",
+      "name": "Syv.ai Qwen38 DFlash2 vLLM",
+      "kind": "vllm",
+      "executable": "/home/diogo/dev/model-loader/backends/syv-qwen38/syv-serve.sh",
+      "schemaRef": "schemas/syv-qwen38.json",
+      "meta": {
+        "createdAt": "2026-08-25T23:24:00Z",
+        "updatedAt": "2026-08-25T23:24:00Z"
+      }
+    },
+    {
+      "id": "freetoken",
+      "name": "freetoken",
+      "kind": "freetoken",
+      "executable": "/home/diogo/dev/model-loader/backends/freetoken/freetoken-serve.sh",
+      "schemaRef": "schemas/freetoken.json",
+      "meta": {
+        "createdAt": "2026-09-04T16:54:43.859518095Z",
+        "updatedAt": "2026-09-04T16:54:43.859518095Z"
+      }
+    },
+    {
+      "id": "llama-cpp-qwen4exp-mtp",
+      "name": "llama.cpp-qwen4exp-mtp",
+      "kind": "llama-server",
+      "executable": "/home/diogo/dev/model-loader/backends/llama.cpp-qwen4exp-mtp/build/bin/llama-server",
+      "schemaRef": "schemas/llama-cpp-qwen4exp-mtp.json",
+      "meta": {
+        "createdAt": "2026-09-04T20:37:33.603543126Z",
+        "updatedAt": "2026-09-04T20:37:33.603543126Z"
+      }
+    },
+    {
+      "id": "llama-cpp-qwen4exp-tuning",
+      "name": "llama-cpp-qwen4exp-tuning",
+      "kind": "llama-server",
+      "executable": "/home/diogo/dev/model-loader/backends/llama.cpp-qwen4exp-tuning/build/bin/llama-server",
+      "schemaRef": "schemas/llama-cpp-qwen4exp-tuning.json",
+      "meta": {
+        "createdAt": "2026-09-05T01:32:39.665461358Z",
+        "updatedAt": "2026-09-05T01:32:39.665461358Z"
+      }
+    },
+    {
+      "id": "llama-cpp-qwen4exp-direct",
+      "name": "llama-cpp-qwen4exp-direct",
+      "kind": "llama-server",
+      "executable": "/home/diogo/dev/model-loader/backends/llama.cpp-qwen4exp-direct/build/bin/llama-server",
+      "schemaRef": "schemas/llama-cpp-qwen4exp-direct.json",
+      "meta": {
+        "createdAt": "2026-09-05T01:51:56.534900416Z",
+        "updatedAt": "2026-09-05T01:51:56.534900416Z"
+      }
+    },
+    {
+      "id": "llama-cpp-qwen4exp-qsa",
+      "name": "llama-cpp-qwen4exp-qsa",
+      "kind": "llama-server",
+      "executable": "/home/diogo/dev/model-loader/backends/llama.cpp-qwen4exp-qsa/build/bin/llama-server",
+      "schemaRef": "schemas/llama-cpp-qwen4exp-qsa.json",
+      "meta": {
+        "createdAt": "2026-09-05T02:40:57.688899074Z",
+        "updatedAt": "2026-09-05T02:40:57.688899074Z"
+      }
+    },
+    {
+      "id": "llama-cpp-qwen4exp-cache",
+      "name": "llama-cpp-qwen4exp-cache",
+      "kind": "llama-server",
+      "executable": "/home/diogo/dev/model-loader/backends/llama.cpp-qwen4exp-cache/build/bin/llama-server",
+      "schemaRef": "schemas/llama-cpp-qwen4exp-cache.json",
+      "meta": {
+        "createdAt": "2026-09-05T04:54:53.876330081Z",
+        "updatedAt": "2026-09-05T04:54:53.876330081Z"
+      }
+    },
+    {
+      "id": "llama-cpp-qwen4exp-pinned",
+      "name": "llama-cpp-qwen4exp-pinned",
+      "kind": "llama-server",
+      "executable": "/home/diogo/dev/model-loader/backends/llama.cpp-qwen4exp-pinned/build/bin/llama-server",
+      "schemaRef": "schemas/llama-cpp-qwen4exp-pinned.json",
+      "meta": {
+        "createdAt": "2026-09-05T07:52:02.630023829Z",
+        "updatedAt": "2026-09-05T07:52:02.630023829Z"
+      }
+    },
+    {
+      "id": "ik-llama-cpp-tuning",
+      "name": "ik-llama-cpp-tuning",
+      "kind": "ik-llama-cpp",
+      "executable": "/home/diogo/dev/model-loader/backends/ik_llama.cpp-tuning/build/bin/llama-server",
+      "schemaRef": "schemas/ik-llama-cpp-tuning.json",
+      "meta": {
+        "createdAt": "2026-09-05T10:02:09.667706017Z",
+        "updatedAt": "2026-09-05T10:02:09.667706017Z"
+      }
+    },
+    {
+      "id": "llama-cpp-xing4",
+      "name": "llama.cpp-xing4",
+      "kind": "llama-server",
+      "executable": "/home/diogo/dev/model-loader/backends/llama.cpp-xing4/build/bin/llama-server",
+      "schemaRef": "schemas/llama-cpp-xing4.json",
+      "meta": {
+        "createdAt": "2026-09-25T06:15:09.227127196Z",
+        "updatedAt": "2026-09-25T06:15:09.227127196Z"
+      }
+    },
+    {
+      "id": "strata-fork",
+      "name": "strata-fork",
+      "kind": "strata",
+      "executable": "/usr/bin/python /home/diogo/dev/model-loader/backends/strata-fork/releases/baseline-20261001/serve/server.py",
+      "schemaRef": "schemas/strata-fork.json",
+      "meta": {
+        "createdAt": "2026-10-01T08:56:26.279015107Z",
+        "updatedAt": "2026-10-01T08:56:26.279015107Z"
+      }
+    },
+    {
+      "id": "strata-perf-20261001",
+      "name": "strata-perf-20261001",
+      "kind": "strata",
+      "executable": "/usr/bin/python /home/diogo/dev/model-loader/backends/strata-fork/releases/20261001T200821Z-f9806e467359/serve/server.py",
+      "schemaRef": "schemas/strata-perf-20261001.json",
+      "meta": {
+        "createdAt": "2026-10-01T20:09:09.348253335Z",
+        "updatedAt": "2026-10-01T20:09:09.348253335Z"
+      }
+    },
+    {
+      "id": "strata-perf-v2-20261001",
+      "name": "strata-perf-v2-20261001",
+      "kind": "strata",
+      "executable": "/usr/bin/python /home/diogo/dev/model-loader/backends/strata-fork/releases/20261001T201850Z-8ae9e4e25528/serve/server.py",
+      "schemaRef": "schemas/strata-perf-v2-20261001.json",
+      "meta": {
+        "createdAt": "2026-10-01T20:20:26.857962102Z",
+        "updatedAt": "2026-10-01T20:20:26.857962102Z"
+      }
+    }
+  ]
+}

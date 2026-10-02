@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 3,
+  "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-32k",
+  "name": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-32k",
+  "description": "IDEATION candidate; calibration pending. IQ2_XS; MTP spec-min-p 0.7; measured coding 135.5 tok/s, TTFT 0.326 s, peak GPU 21.15/22.04 GiB. Tool integrity 4/4 but repeated call after success and 1/10 spurious no-tool controls; not agent-qualified. Strata fork 97cb786 sm86; 32k, int8 KV, MTP Q2_0 spec4, 15 workers, 270 W/card. Official Qwen template de4b8e4d; non-thinking sampling temp .7/top_p .8/top_k 20/min_p 0/presence 1.5/repetition 1. Measured 2026-09-30; needle 9/9 up to 28577 tokens. Config promoted unchanged from benchmark except durable asset/log paths.",
+  "model": "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+  "args": {
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-32k.json",
+    "host": "127.0.0.1",
+    "max-context": 32768
+  },
+  "launch": {
+    "defaultBackground": true,
+    "backendId": "strata-perf-20261001",
+    "restart_policy": "none",
+    "max_restarts": 0,
+    "backoff_seconds": 0
+  },
+  "meta": {
+    "createdAt": "2026-10-01T20:09:30.753586293Z",
+    "updatedAt": "2026-10-01T20:11:12.100193884Z",
+    "lastUsedAt": "2026-10-01T20:11:12.100117761Z"
+  },
+  "pinned": false
+}

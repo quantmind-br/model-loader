@@ -1,0 +1,161 @@
+{
+  "run": "s18-io8-c2",
+  "attempt": {
+    "profile": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-256k",
+    "release": "20261002T100952Z-2eed88f1f51d",
+    "backend": "strata-perf-v6-20261002",
+    "exe": "/home/diogo/dev/model-loader/backends/strata-fork/releases/20261002T100952Z-2eed88f1f51d/strata",
+    "probe_flags": [
+      "--linger",
+      "150"
+    ],
+    "set_arg": [],
+    "env": [
+      "STRATA_PREFILL_TIMING=1",
+      "STRATA_IO_THREADS=8"
+    ],
+    "started": 1790952059.4102254,
+    "returncode": 0,
+    "finished": 1790952234.6635869
+  },
+  "run_status": {
+    "requests_complete": true,
+    "guard_triggered": false
+  },
+  "guard": null,
+  "windows_matched": false,
+  "requests": [
+    {
+      "label": "warmup",
+      "prompt_n": 30,
+      "cache_n": 0,
+      "predicted_n": 192,
+      "tps": 114.1,
+      "ttft_s": 0.21780394999950659,
+      "prompt_ms": 195.9,
+      "draft_n": 138,
+      "accepted": 122,
+      "finish": "length",
+      "accept": 0.884
+    },
+    {
+      "label": "code-0",
+      "prompt_n": 32,
+      "cache_n": 0,
+      "predicted_n": 384,
+      "tps": 126.8,
+      "ttft_s": 0.20760262399926432,
+      "prompt_ms": 192.1,
+      "draft_n": 287,
+      "accepted": 255,
+      "finish": "length",
+      "accept": 0.889
+    },
+    {
+      "label": "code-1",
+      "prompt_n": 7,
+      "cache_n": 25,
+      "predicted_n": 384,
+      "tps": 132.6,
+      "ttft_s": 0.05464609099908557,
+      "prompt_ms": 39.6,
+      "draft_n": 285,
+      "accepted": 255,
+      "finish": "length",
+      "accept": 0.895
+    },
+    {
+      "label": "code-2",
+      "prompt_n": 7,
+      "cache_n": 25,
+      "predicted_n": 384,
+      "tps": 132.5,
+      "ttft_s": 0.05460002400104713,
+      "prompt_ms": 39.6,
+      "draft_n": 285,
+      "accepted": 255,
+      "finish": "length",
+      "accept": 0.895
+    },
+    {
+      "label": "portuguese",
+      "prompt_n": 30,
+      "cache_n": 0,
+      "predicted_n": 384,
+      "tps": 94.1,
+      "ttft_s": 0.19116000900066865,
+      "prompt_ms": 176.4,
+      "draft_n": 270,
+      "accepted": 178,
+      "finish": "length",
+      "accept": 0.659
+    },
+    {
+      "label": "exact-copy",
+      "prompt_n": 35,
+      "cache_n": 0,
+      "predicted_n": 12,
+      "tps": 135.6,
+      "ttft_s": 0.22141546600141737,
+      "prompt_ms": 206.3,
+      "draft_n": 9,
+      "accepted": 9,
+      "finish": "stop",
+      "accept": 1.0
+    },
+    {
+      "label": "json-text",
+      "prompt_n": 30,
+      "cache_n": 0,
+      "predicted_n": 10,
+      "tps": 110.3,
+      "ttft_s": 0.1920251030005602,
+      "prompt_ms": 176.8,
+      "draft_n": 9,
+      "accepted": 9,
+      "finish": "stop",
+      "accept": 1.0
+    }
+  ],
+  "code_tps": 132.5,
+  "code_accept": 0.895,
+  "peak_gpu_mib": {
+    "0": 21828.0,
+    "1": 22958.0
+  },
+  "max_swap_growth_gib": 0.0,
+  "min_available_gib": 42.6,
+  "peak_temperature_c": {
+    "0": 74.0,
+    "1": 69.0
+  },
+  "max_guard_strikes": 0,
+  "engine_info": {
+    "version": "0.1.30",
+    "pcie_eligible_layers": 0,
+    "pcie_effective_frac": "0.0000",
+    "resident_expert_mib": 0,
+    "prefill_chunk": 8192,
+    "stage_dense": 1,
+    "context": 262144,
+    "kv": "int8",
+    "kv_resident": 0,
+    "expert_slots": 24576,
+    "expert_cache_mib": 33812,
+    "expert_slots_primary": 12288,
+    "expert_cache_primary_mib": 16575,
+    "spec": 6,
+    "mtp_max": 4,
+    "lookup": 3,
+    "vram_free_mib": 2395,
+    "cvec": 0,
+    "arena_mib": 0,
+    "pool_workers": 15,
+    "pcie_frac": "0.28",
+    "spec_min_p": "0.70",
+    "conversation_cache_mib": 0,
+    "conversation_cache_slots": 4,
+    "conversation_cache_min_free_mib": 2560,
+    "engine": "0.1.30"
+  }
+}

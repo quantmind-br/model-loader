@@ -1,0 +1,151 @@
+{
+  "environment_block": "No NVIDIA devices, TCP sockets forbidden, live profiles outside writable roots.",
+  "jobs": [
+    {
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-ple8-32k",
+      "label": "dual-ple8",
+      "fills": false,
+      "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+      "knob": "STRATA_IO_THREADS",
+      "value": "8",
+      "reason": "hardware access unavailable; keep existing evidence, use new output directory"
+    },
+    {
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-ple32-32k",
+      "label": "dual-ple32",
+      "fills": false,
+      "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+      "knob": "STRATA_IO_THREADS",
+      "value": "32",
+      "reason": "hardware access unavailable; keep existing evidence, use new output directory"
+    },
+    {
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-spec2-32k",
+      "label": "dual-spec2",
+      "fills": false,
+      "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+      "knob": "--spec",
+      "value": "2",
+      "reason": "hardware access unavailable; keep existing evidence, use new output directory"
+    },
+    {
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-spec6-32k",
+      "label": "dual-spec6",
+      "fills": false,
+      "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+      "knob": "--spec",
+      "value": "6",
+      "reason": "hardware access unavailable; keep existing evidence, use new output directory"
+    },
+    {
+      "id": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+      "label": "iq4-resident-stage-dense",
+      "fills": true,
+      "source": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-32k",
+      "knob": "append",
+      "value": [
+        "--resident-experts",
+        "--stage-dense",
+        "--prefill",
+        "512"
+      ],
+      "reason": "hardware access unavailable; keep existing evidence, use new output directory"
+    },
+    {
+      "label": "training",
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-training-32k",
+      "reason": "experiment prepared but not executed"
+    },
+    {
+      "label": "cpu-parity",
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-cpu-parity-32k",
+      "reason": "experiment prepared but not executed"
+    },
+    {
+      "label": "nsys",
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-nsys-32k",
+      "reason": "experiment prepared but not executed"
+    }
+  ],
+  "additional_gates": [
+    "dual resident synthetic GPU fixture",
+    "IQ2 stage-dense 256k with fresh prefixes",
+    "976k near-full thermal guard",
+    "three alternating warm starts per candidate/control",
+    "checkpoint-specific ranking training and holdout",
+    "profiling before CUDA fusion / P2P / MTP batched last stage",
+    "full Go/Python integration in socket-enabled environment",
+    "promotion and task-candidate cleanup only after applicable gates"
+  ],
+  "claude_session_20261001": {
+    "report": "CLAUDE_COMPLETION.md",
+    "evidence": "claude-session/runs/<label>/",
+    "environment": "GPUs, NVML, TCP proxy and ~/.config writable in this session; installed proxy binary predates the Go changes (not reinstalled).",
+    "release_validated": "releases/20261001T223017Z-f85ddc896414 (strata-perf-v4-20261001); current fork tree has no drift from it",
+    "job_results": {
+      "dual-ple8": "reconciled: 7/7 complete requests, 0 guard strikes; only the matrix runner DONE line was missing; no repeat needed",
+      "dual-ple32": "done v4-iq3-ple32: no effect (29.07 vs 28.2-29.3 ms/window); PLE16 kept",
+      "dual-spec2": "rejected v4-iq3-spec2: -15 % code",
+      "dual-spec6": "rejected v4-iq3-spec6: 9.2 vs 8.5 ms/token",
+      "iq4-resident-stage-dense": "rejected v4-iq4-resident-stage-dense-fills: swap guard during load (+2.525 GiB; allocstall/compact_stall)",
+      "training": "done v4-iq3-training-1 + ranking/orca-iq3-xxs-rerank-v1.bin; holdout A/B 3+3 starts validated on the candidate",
+      "cpu-parity": "done (2 starts): no measurable cost, output still start-dependent; no default change",
+      "nsys": "done v4-iq3-nsys-1: decode quantize ~1.7 %, handoff negligible, Nsight P2P rows are pinned-host exchanges"
+    },
+    "additional_gate_results": {
+      "dual resident synthetic GPU fixture": "PASS on both GPUs (v3 and v4 ctest)",
+      "IQ2 stage-dense 256k with fresh prefixes": "PASS (single start + 3 starts in the v2-protocol A/B, 0 guard trips)",
+      "976k near-full thermal guard": "thermal gate kept GPU0 <=82 C (attempts v4-iq2-976k-gate80 and -r3; 249547 fresh tokens in 103.4 s, exact retrieval); both valid attempts stopped by the GLOBAL swap guard (+2.10 / +2.75 GiB) under external memory pressure from another agent session (bun/vitest/tsserver); near-full NOT approved; r2 interrupted by operator tooling before any fill (no measurement)",
+      "three alternating warm starts per candidate/control": "done: ranking A/B, spec-min-p A/B, IQ2 256k C/A/B (3 each)",
+      "checkpoint-specific ranking training and holdout": "done (S13)",
+      "profiling before CUDA fusion / P2P / MTP batched last stage": "done; fusion (decode) and P2P rejected; MTP batched bounded at 2.6-5.2 % TTFT",
+      "full Go/Python integration in socket-enabled environment": "PASS (go test/vet/build; Python 94+84+1)",
+      "promotion and task-candidate cleanup only after applicable gates": "no promotion: IQ2 256k candidate blocked by tools gate (S03 400s vs harness/clients); cleanup of rejected candidates listed in CLAUDE_COMPLETION.md"
+    },
+    "still_pending": [
+      "S03 policy decision for parallel_tool_calls=false / forced tool_choice, then tools gate and promotion of IQ2 256k v4+stage-dense",
+      "976k near-full with thermal gate on a quiet machine",
+      "IQ3/IQ4 dual resident load-time direct reclaim attribution and engine-side mitigation A/B",
+      "Go deploy (make install + proxy restart) for live S05/S07",
+      "S18 long non-repetitive prompt PLE 8/16/32",
+      "optional: MTP batched last stage, prefill dequant/MMQ fusion (oracle required)",
+      "external fixtures ple_parity and platform_memory_test"
+    ]
+  },
+  "claude_session_20261002": {
+    "resolved": "S03 x tools: server v6 honors forced tool_choice (forced call opening, thinking off) and parallel_tool_calls=false (first complete call); pre-registered tools gate passed",
+    "promoted": {
+      "profile": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k",
+      "backend": "strata-perf-v6-20261002",
+      "release": "20261002T100952Z-2eed88f1f51d",
+      "change": "exe -> v6 strata, + --stage-dense",
+      "backup": "claude-session/promotion/iq2-256k-20261002T072035",
+      "confirmation": "claude-session/runs/promoted-iq2-256k-confirm"
+    },
+    "still_pending": [
+      "IQ3/IQ4 dual resident load-time direct reclaim mitigation (also hits the IQ3 GPU1-resident placement at load)",
+      "optional: MTP batched last stage, prefill dequant/MMQ fusion",
+      "external fixtures ple_parity and platform_memory_test"
+    ],
+    "long_context_baseline": {
+      "decision": "operator replaced the 976k profile with 500k (2026-10-02)",
+      "profile": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-500k",
+      "config": "512000 tokens, YaRN factor 2/262144, release v6 + --stage-dense, STRATA_PREFILL_TEMP_PAUSE_C=80",
+      "validation": "claude-session/runs/baseline-500k-validate-3: fresh 25147/127552/255546/460341 tokens exact (9.2/34.8/81.8/243.4 s), GPU0 <=83 C, peak 22970/23018 MiB; harness integrity 4/4, auto 30/30 correct, 4/30 spurious (not agent-qualified)",
+      "removed": "976k canonical and candidate profiles (backup claude-session/promotion/iq2-976k-to-500k-20261002T104813)"
+    },
+    "deploy": {
+      "done": "2026-10-02 11:14: model-loader binary installed atomically, proxy restarted, smoke deploy-smoke-256k passed",
+      "rollback": "claude-session/promotion/model-loader-bin-*/model-loader.installed-before"
+    },
+    "s18": "done: diverse 58k prompts, STRATA_IO_THREADS 8/16/32 x2 starts: TTFT 19.44/19.10/19.43 s, PLE host wait 2.51/1.87/1.49 s overlapped with GPU; default 16 kept (CLAUDE_COMPLETION.md 14)",
+    "gpu1_rerank": {
+      "status": "measured, not promoted",
+      "candidate": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-rerank-32k (one knob: --expert-profile = claude-session/ranking/orca-iq3-xxs-rerank-v1.bin, release v6)",
+      "performance": "A,B,B,A,A,B (A1 replaced by A4 after a load-time swap guard): first request hit 69.7->89.7 %, CPU experts/layer-window 7.44->2.65, ms/window 53.1->36.3, 57.4->63.7 tok/s; code-0 68.2->74.2 tok/s; code-1/code-2/PT converge (tie); all checks pass (claude-session/gpu1-rank-compare.json, gpu1-rank-requests.txt)",
+      "controls": "integrity 4/4 in all 8 complete starts; auto correct A 8/9/7 vs B 9/8/8/9/9, spurious A 1/0/0 vs B 0 x5; harness continuation reissued the tool in 0/3 A vs 3/5 B starts (one-sided Fisher p~0.18) (claude-session/gpu1-rank-controls-summary.json)",
+      "decision": "canonical GPU1 profile unchanged: the gain is limited to the first one or two requests after load and the pre-registered tools gate treats a repeat where the base stops as a regression; not resolved with more starts because the benefit is small",
+      "load_guard": "base arm tripped the global swap guard at load in 4/10 starts (33.14 GiB page-locked complement, identical in both arms), rerank arm 0/8; not attributed to the rank permutation"
+    }
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "8": {
+    "runs": [
+      [
+        "s18-io8-c1",
+        true,
+        false,
+        3
+      ],
+      [
+        "s18-io8-c2",
+        true,
+        false,
+        3
+      ]
+    ],
+    "ttft_median_s": 19.44,
+    "ttft_range_s": [
+      18.73,
+      19.71
+    ],
+    "ple_wait_ms_median": 2514.0,
+    "setup_ms_median": 1185.0,
+    "wall_minus_gpu_ms_median": 2350.0,
+    "samples": 6
+  },
+  "16": {
+    "runs": [
+      [
+        "s18-io16-a1",
+        true,
+        false,
+        3
+      ],
+      [
+        "s18-io16-a2",
+        true,
+        false,
+        3
+      ]
+    ],
+    "ttft_median_s": 19.1,
+    "ttft_range_s": [
+      18.45,
+      19.53
+    ],
+    "ple_wait_ms_median": 1874.5,
+    "setup_ms_median": 868.0,
+    "wall_minus_gpu_ms_median": 2350.0,
+    "samples": 6
+  },
+  "32": {
+    "runs": [
+      [
+        "s18-io32-b1",
+        true,
+        false,
+        3
+      ],
+      [
+        "s18-io32-b2",
+        true,
+        false,
+        3
+      ]
+    ],
+    "ttft_median_s": 19.43,
+    "ttft_range_s": [
+      18.53,
+      21.42
+    ],
+    "ple_wait_ms_median": 1493.5,
+    "setup_ms_median": 698.5,
+    "wall_minus_gpu_ms_median": 2502.5,
+    "samples": 6
+  }
+}
