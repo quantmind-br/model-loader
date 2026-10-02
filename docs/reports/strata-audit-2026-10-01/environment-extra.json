@@ -1,0 +1,52 @@
+{
+  "p2p_read": {
+    "cmd": [
+      "nvidia-smi",
+      "topo",
+      "-p2p",
+      "r"
+    ],
+    "returncode": 0,
+    "output": " \t\u001b[4mGPU0\tGPU1\t\u001b[0m\n GPU0\tX\tOK\t\n GPU1\tOK\tX\t\n\nLegend:\n\n  X    = Self\n  OK   = Status Ok\n  CNS  = Chipset not supported\n  GNS  = GPU not supported\n  TNS  = Topology not supported\n  NS   = Not supported\n  DR   = Disabled by regkey\n  U    = Unknown\n"
+  },
+  "p2p_write": {
+    "cmd": [
+      "nvidia-smi",
+      "topo",
+      "-p2p",
+      "w"
+    ],
+    "returncode": 0,
+    "output": " \t\u001b[4mGPU0\tGPU1\t\u001b[0m\n GPU0\tX\tOK\t\n GPU1\tOK\tX\t\n\nLegend:\n\n  X    = Self\n  OK   = Status Ok\n  CNS  = Chipset not supported\n  GNS  = GPU not supported\n  TNS  = Topology not supported\n  NS   = Not supported\n  DR   = Disabled by regkey\n  U    = Unknown\n"
+  },
+  "swappiness": {
+    "cmd": [
+      "sysctl",
+      "vm.swappiness"
+    ],
+    "returncode": 0,
+    "output": "vm.swappiness = 180\n"
+  },
+  "device_storage": {
+    "cmd": [
+      "lsblk",
+      "-o",
+      "NAME,MODEL,SIZE,ROTA,MOUNTPOINTS"
+    ],
+    "returncode": 0,
+    "output": "NAME        MODEL                    SIZE ROTA MOUNTPOINTS\nsda         ST2000DM001-1ER164       1.8T    1 /home/diogo/storage\nsdb         APPLE HDD ST1000LM024  931.5G    1 /home/diogo/backup\nsdc         SanDisk 3.2Gen1         28.7G    1 \n\u251c\u2500sdc1                               5.8G    1 \n\u2514\u2500sdc2                                23M    1 \nzram0                                 16G    0 [SWAP]\nnvme2n1     KINGSTON SKC3000S1024G 953.9G    0 \n\u251c\u2500nvme2n1p1                            1G    0 /boot\n\u2514\u2500nvme2n1p2                        952.9G    0 /var/log\n                                               /var/cache/pacman/pkg\n                                               /home\n                                               /\nnvme1n1     XPG GAMMIX S11 Pro     476.9G    0 \n\u2514\u2500nvme1n1p1                        476.9G    0 /home/diogo/dev\nnvme0n1     PCH-RVR-1TB            931.5G    0 \n\u2514\u2500nvme0n1p1                        931.5G    0 /home/diogo/models\n"
+  },
+  "binary_arch": {
+    "cmd": [
+      "cuobjdump",
+      "--list-elf",
+      "/home/diogo/dev/model-loader/backends/strata-fork/build-fork-sm86/strata"
+    ],
+    "returncode": 0,
+    "output": "ELF file    1: strata.1.sm_86.cubin\nELF file    2: strata.2.sm_86.cubin\nELF file    3: strata.3.sm_86.cubin\nELF file    4: strata.4.sm_86.cubin\nELF file    5: strata.5.sm_86.cubin\nELF file    6: strata.6.sm_86.cubin\nELF file    7: strata.7.sm_86.cubin\nELF file    8: strata.8.sm_86.cubin\nELF file    9: strata.9.sm_86.cubin\nELF file   10: strata.10.sm_86.cubin\nELF file   11: strata.11.sm_86.cubin\nELF file   12: strata.12.sm_86.cubin\nELF file   13: strata.13.sm_86.cubin\nELF file   14: strata.14.sm_86.cubin\nELF file   15: strata.15.sm_86.cubin\nELF file   16: strata.16.sm_86.cubin\nELF file   17: strata.17.sm_86.cubin\nELF file   18: strata.18.sm_86.cubin\nELF file   19: strata.19.sm_86.cubin\nELF file   20: strata.20.sm_86.cubin\nELF file   21: strata.21.sm_86.cubin\nELF file   22: strata.22.sm_86.cubin\nELF file   23: strata.23.sm_86.cubin\nELF file   24: strata.24.sm_86.cubin\nELF file   25: strata.25.sm_86.cubin\nELF file   26: strata.26.sm_86.cubin\nELF file   27: strata.27.sm_86.cubin\nELF file   28: strata.28.sm_86.cubin\nELF file   29: strata.29.sm_86.cubin\nELF file   30: strata.30.sm_86.cubin\nELF file   31: strata.31.sm_86.cubin\nELF file   32: strata.32.sm_86.cubin\nELF file   33: strata.33.sm_86.cubin\nELF file   34: strata.34.sm_86.cubin\nELF file   35: strata.35.sm_86.cubin\nELF file   36: strata.36.sm_86.cubin\nELF file   37: strata.37.sm_86.cubin\nELF file   38: strata.38.sm_86.cubin\nELF file   39: strata.39.sm_86.cubin\nELF file   40: strata.40.sm_86.cubin\nELF file   41: strata.41.sm_86.cubin\nELF file   42: strata.42.sm_86.cubin\nELF file   43: strata.43.sm_86.cubin\nELF file   44: strata.44.sm_86.cubin\nELF file   45: strata.45.sm_86.cubin\nELF file   46: strata.46.sm_86.cubin\nELF file   47: strata.47.sm_86.cubin\nELF file   48: strata.48.sm_86.cubin\nELF file   49: strata.49.sm_86.cubin\nELF file   50: strata.50.sm_86.cubin\nELF file   51: strata.51.sm_86.cubin\nELF file   52: strata.52.sm_86.cubin\nELF file   53: strata.53.sm_86.cubin\nELF file   54: strata.54.sm_86.cubin\n"
+  },
+  "zram": {
+    "/sys/block/zram0/mm_stat": "6076092416 1489731390 1726713856        0 3249557504   224542   800955    48599   407131\n",
+    "/sys/block/zram0/comp_algorithm": "lzo-rle lzo lz4 lz4hc [zstd] deflate 842 \n"
+  }
+}

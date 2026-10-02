@@ -1,0 +1,232 @@
+[
+  {
+    "path": "/home/diogo/dev/model-loader/docs/reports/strata-iq2-xs-context-2026-10-01.md",
+    "bytes": 5537,
+    "sha256": "dc4cf6a54a745706b1caf512d2a2593e56b11c31f5fe0e3064a3bacc13e9bcd5"
+  },
+  {
+    "path": "/home/diogo/dev/model-loader/docs/reports/strata-iq2-xs-256k-calibration-2026-10-01.md",
+    "bytes": 3383,
+    "sha256": "c92621a48cfb9249dc3b6c3b608b2d41ab58cd8c8742f42941454a513fbf486d"
+  },
+  {
+    "path": "/home/diogo/dev/model-loader/docs/reports/strata-orca-iq3-xxs-calibration-2026-10-01.md",
+    "bytes": 11264,
+    "sha256": "084642cde359de426f315eacb4cf4f38e191899e44cdb588c2cb23fdb36a740c"
+  },
+  {
+    "path": "/home/diogo/dev/model-loader/docs/reports/strata-iq4-xs-uncensored-2026-10-01.md",
+    "bytes": 7867,
+    "sha256": "43170a0a10de58b1bcc4635121a58a31b960d203fd34ae11d3945002858029f7"
+  },
+  {
+    "path": "/home/diogo/dev/model-loader/backends/strata-fork/bench/results/2026-09-30-dual-rtx3090/comparison.json",
+    "bytes": 8476,
+    "sha256": "7909d71c67198500553e592039a97cebfd7cb7a326691df322797b45b28c1a8e"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/task-proxy.json",
+    "bytes": 250,
+    "sha256": "75802542bf89d3d1b5d75a09e6e59afb925e1663c25af2500864b8c1537146b6"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/prepare-result.json",
+    "bytes": 1591,
+    "sha256": "2d7c0482c56da8d7353ffb04244d204a91d1527588d0eca294334eb859bd2fe7"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/benchmark-resident-32k.json",
+    "bytes": 3469,
+    "sha256": "e64967bdfdfab133c248931953a9fadefa26401373a600c006df160c590d22bb"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/launch.json",
+    "bytes": 494,
+    "sha256": "9c3f9e5eb26aec9d12f593b881f00319545775e75b0b46b0aa3b4434a5a8d908"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/long-tools.json",
+    "bytes": 412309,
+    "sha256": "96a847901a68a6648a13c71d94ecc9057c835cefc84f26cb41b8656b4d7d40e8"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/header-plan.json",
+    "bytes": 373,
+    "sha256": "6c86309285102ceca6831819145f8cf08d68782239690b573bf5725afc784fc9"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/tools-resident.json",
+    "bytes": 4380,
+    "sha256": "3a9c41c79efe74d3cf0ab4f76b0b6a9c7257c64ac897cf4b00a7cfc284369127"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/runtime-shutdown.json",
+    "bytes": 487,
+    "sha256": "3de0572f7b83eb0af72394d9a16e1eb156faefb8183ee1ed21bd1fb12962bc40"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/runtime-before.json",
+    "bytes": 99,
+    "sha256": "f13bd6602390ecbc9fc8f8bb9d0a96b1fe1f6234ff554aac8475cf6ddbc54ce9"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/model-research.json",
+    "bytes": 659,
+    "sha256": "27596b1c6089f1e5989f30fd2bbff1a54eee207a4bdbfa4e9d61a78ce570dfb5"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/repository.json",
+    "bytes": 28884,
+    "sha256": "76e4a5c68ad6c0eddf72c08c6034ec60665ccab8c2fa4e9c8d4fc856ee485742"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/benchmark-resident-32k-telemetry.json",
+    "bytes": 153200,
+    "sha256": "b6567fb53aaf408a9d0e4b8216b25e4762c81f404ec2214272c292d8af8fc777"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/launch-resident.json",
+    "bytes": 502,
+    "sha256": "c16da6731fb09c7872e47fe916744bd8502c0bc37c90f7e80660468d59a2d5f3"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/tools-resident-telemetry.json",
+    "bytes": 98232,
+    "sha256": "bbeea1c95f16157e0c602c941ab1995e069706ada33628d52bb6009eac90286f"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/launch-resident-telemetry.json",
+    "bytes": 36708,
+    "sha256": "61860002a566472257a4aa6994b7d62f0ebf3938b22dbcb3e039321d5ba98126"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/geometry.json",
+    "bytes": 319,
+    "sha256": "fd88fb904fa32cf5d28bf327eeafe8de410baeac2c62d7bceac1bb77654b5ac6"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/source-repository.json",
+    "bytes": 30658,
+    "sha256": "79974a2e2bfe350efd4e25abdaadc02905483d355567511b5a6096290ff14301"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/pack-verification.json",
+    "bytes": 23522,
+    "sha256": "78401e558a773a9407984501b377bf533ed27afb4b5da8c0b10fe4bb32b550b8"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/initial-status.json",
+    "bytes": 502,
+    "sha256": "c16da6731fb09c7872e47fe916744bd8502c0bc37c90f7e80660468d59a2d5f3"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/final-metrics.json",
+    "bytes": 1941,
+    "sha256": "b06ed1392b96bfaa0423ab85303b36e330170956483cbdbb01755dc4a4b9dd36"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/shard-integrity.json",
+    "bytes": 535,
+    "sha256": "c080060d960249371dcba575071c10ea6367b056ed4af7512bb5ab6add19ad6c"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/prepare-telemetry.json",
+    "bytes": 39689,
+    "sha256": "9ffe48c4d953dabf84f29ec3917366e3667dcb00e7aca8287f1c5ee781392e96"
+  },
+  {
+    "path": "/home/diogo/models/strata/orca-iq3-xxs-20261001/launch-telemetry.json",
+    "bytes": 7282,
+    "sha256": "513c9bc8a7c4ced684f029397a344327ce82afa1e579df557b1fc592f1c12206"
+  },
+  {
+    "path": "/home/diogo/models/strata/calibration-256k-20261001/benchmark.json",
+    "bytes": 1974,
+    "sha256": "3550e334e38af87f27ba7ef99813cddc38330b2d49fc3a2973079fce61a64e84"
+  },
+  {
+    "path": "/home/diogo/models/strata/calibration-256k-20261001/launch.json",
+    "bytes": 471,
+    "sha256": "d1d5eae60570cbb57ad6ba5606698fba1b9d5f6cd8a1bb661c40adfdcbf983d6"
+  },
+  {
+    "path": "/home/diogo/models/strata/calibration-256k-20261001/long-tools.json",
+    "bytes": 5794,
+    "sha256": "87e7a8e8bb649f48b44c6a307ca22ec35a47b3fdabf09fe31bec36a40d8ac286"
+  },
+  {
+    "path": "/home/diogo/models/strata/calibration-256k-20261001/benchmark-transcript.json",
+    "bytes": 3776,
+    "sha256": "77cd82cb93720a16628d2bbd6b7e68a5b34d2c62e53268e018517770e8f643a4"
+  },
+  {
+    "path": "/home/diogo/models/strata/calibration-256k-20261001/launch-copy.json",
+    "bytes": 470,
+    "sha256": "68a8fd8d6b9ff05d31c6e2120a20fc9906c7c8a76c20fca9cb6c8b9fbc80cace"
+  },
+  {
+    "path": "/home/diogo/models/strata/calibration-256k-20261001/tools.json",
+    "bytes": 3628,
+    "sha256": "24039de138776314cbd5fe2a02574c82fc253373ba4d9c22e086f1c63c5232b1"
+  },
+  {
+    "path": "/home/diogo/models/strata/calibration-256k-20261001/engine-config-initial.json",
+    "bytes": 1422,
+    "sha256": "56e09609da4b430303da5a0ab38879079aa7ddc7a330e7a3bc37d116ade42c12"
+  },
+  {
+    "path": "/home/diogo/models/strata/calibration-256k-20261001/benchmark-copy.json",
+    "bytes": 3412,
+    "sha256": "09b40413f47d03509c8f8c99f0ba138e7334957fccf2309c373f69df572ad9c4"
+  },
+  {
+    "path": "/home/diogo/models/strata/context-20261001/context-budget-check.json",
+    "bytes": 210,
+    "sha256": "5cc9f9d739fc9eda9566c61aaf7821237c473b16aa771b686a5a37db6ccd2575"
+  },
+  {
+    "path": "/home/diogo/models/strata/context-20261001/launch.json",
+    "bytes": 470,
+    "sha256": "afa7d0d704d08de4a53e67d7d733c579917953cd7eee4980eb647fa9e89a2f2d"
+  },
+  {
+    "path": "/home/diogo/models/strata/context-20261001/provenance.json",
+    "bytes": 1544,
+    "sha256": "7fc763cef321f4379a2f650e87ef155184456837d5a90a4ad9ee32f8f7309c9c"
+  },
+  {
+    "path": "/home/diogo/models/strata/context-20261001/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-976k.shared-settings.json",
+    "bytes": 29,
+    "sha256": "53d75cdff7beb25bc76555dc7a2f21cc4698c6ab6e23c34b76f1d5414e9298c3"
+  },
+  {
+    "path": "/home/diogo/models/strata/context-20261001/model-loader-benchmark.json",
+    "bytes": 1636,
+    "sha256": "916f843ce522bdd92afb6f207d33632d61b91e95035f93140ec9c78bf9e13055"
+  },
+  {
+    "path": "/home/diogo/models/strata/context-20261001/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-976k.json",
+    "bytes": 1523,
+    "sha256": "f18384de08a60f60077810465b474ec4c17b4f603b42a9059557e8dea4d7e4ec"
+  },
+  {
+    "path": "/home/diogo/models/strata/context-20261001/skill-evaluation.json",
+    "bytes": 14010,
+    "sha256": "74204fc8f93b8c4f05eeb934483c7c68bb0cc564053341f680ad67b64a8147b1"
+  },
+  {
+    "path": "/home/diogo/models/strata/context-20261001/profile.json",
+    "bytes": 1830,
+    "sha256": "0d42378749da5e28b1b8e30264417e20b5b5a988e512ea1561e4b6da6f639e52"
+  },
+  {
+    "path": "/home/diogo/models/strata/context-20261001/tool-probe.json",
+    "bytes": 3580,
+    "sha256": "85a0be4e0ff4f077dfa4909425225f71c26c19b2810a3b8e09f527704ddb09f1"
+  },
+  {
+    "path": "/home/diogo/models/strata/context-20261001/skill-transaction.json",
+    "bytes": 1148,
+    "sha256": "a2783c2c5855ed62aae083cc6cfce3168c94420effc2c9ce9cb0fdc49d51e4f0"
+  }
+]

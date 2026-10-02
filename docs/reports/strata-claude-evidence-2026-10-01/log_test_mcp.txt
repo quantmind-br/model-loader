@@ -1,0 +1,68 @@
+[strata] MCP server 'missing' did not start: could not start 'strata-no-such-program': [Errno 2] No such file or directory: 'strata-no-such-program'. Its tools are left out; the chat works without them.
+[strata] MCP server 'paged': 6 tools (echo, fail, sleep, big, die, add)
+[strata] MCP server 'fake': 6 tools (echo, fail, sleep, big, die, add)
+[strata] MCP server 'broken' did not start: the server stopped (exit code 2): cannot start: missing configuration. Its tools are left out; the chat works without them.
+...[strata] MCP server 'solo': 6 tools (echo, fail, sleep, big, die, add)
+[strata] MCP server 'solo' had stopped; starting it again
+[strata] MCP server 'solo': 6 tools (echo, fail, sleep, big, die, add)
+........[strata] MCP server 'down' did not start: could not reach http://127.0.0.1:9/mcp: <urlopen error [Errno 111] Connection refused>. Its tools are left out; the chat works without them.
+[strata] MCP server 'web': 6 tools (echo, fail, sleep, big, die, add)
+../home/diogo/dev/model-loader/backends/strata-fork/serve/telemetry.py:135: ResourceWarning: unclosed file <_io.TextIOWrapper name='/proc/stat' mode='r' encoding='UTF-8'>
+  f = [int(x) for x in open("/proc/stat").readline().split()[1:]]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/diogo/dev/model-loader/backends/strata-fork/serve/telemetry.py:118: ResourceWarning: unclosed file <_io.TextIOWrapper name='/proc/cpuinfo' mode='r' encoding='utf-8'>
+  return line.split(":", 1)[1].strip()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+[strata] done: 13 tokens in 0 s (221650.2 tok/s) (stop, cancel=False)
+.[strata] MCP server 'fake': 6 tools (echo, fail, sleep, big, die, add)
+[strata] MCP server 'broken' did not start: the server stopped (exit code 2): cannot start: missing configuration. Its tools are left out; the chat works without them.
+/usr/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <HTTPError 401: 'Unauthorized'>
+  _warnings.warn(self.warn_message, ResourceWarning)
+.[strata] MCP server 'fake': 6 tools (echo, fail, sleep, big, die, add)
+[strata] MCP server 'broken' did not start: the server stopped (exit code 2): cannot start: missing configuration. Its tools are left out; the chat works without them.
+[strata] done: 120 tokens in 0 s (143599.6 tok/s) (stop, cancel=False)
+[strata] tool fake__echo: ok, 5 characters in 0.0 s
+[strata] done: 120 tokens in 0 s (168841.5 tok/s) (stop, cancel=False)
+[strata] tool fake__echo: ok, 5 characters in 0.0 s
+[strata] done: 120 tokens in 0 s (166495.7 tok/s) (stop, cancel=False)
+.[strata] MCP server 'fake': 6 tools (echo, fail, sleep, big, die, add)
+[strata] MCP server 'broken' did not start: the server stopped: cannot start: missing configuration. Its tools are left out; the chat works without them.
+[strata] done: 141 tokens in 0 s (153809.3 tok/s) (stop, cancel=False)
+[strata] tool fake__add: ok, 1 characters in 0.0 s
+[strata] done: 13 tokens in 0 s (406910.1 tok/s) (stop, cancel=False)
+.[strata] MCP server 'fake': 6 tools (echo, fail, sleep, big, die, add)
+[strata] MCP server 'broken' did not start: the server stopped (exit code 2): cannot start: missing configuration. Its tools are left out; the chat works without them.
+[strata] done: 13 tokens in 0 s (212992.0 tok/s) (stop, cancel=False)
+/usr/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <HTTPError 415: 'Unsupported Media Type'>
+  _warnings.warn(self.warn_message, ResourceWarning)
+.[strata] MCP server 'fake': 6 tools (echo, fail, sleep, big, die, add)
+[strata] MCP server 'broken' did not start: the server stopped (exit code 2): cannot start: missing configuration. Its tools are left out; the chat works without them.
+[strata] done: 109 tokens in 0 s (149796.6 tok/s) (stop, cancel=False)
+.[strata] MCP server 'fake': 6 tools (echo, fail, sleep, big, die, add)
+[strata] MCP server 'broken' did not start: the server stopped (exit code 2): cannot start: missing configuration. Its tools are left out; the chat works without them.
+[strata] done: 116 tokens in 0 s (146813.3 tok/s) (stop, cancel=False)
+[strata] done: 16 tokens in 0 s (171196.1 tok/s) (stop, cancel=False)
+[strata] done: 16 tokens in 0 s (175677.7 tok/s) (stop, cancel=False)
+.[strata] MCP server 'fake': 6 tools (echo, fail, sleep, big, die, add)
+[strata] MCP server 'broken' did not start: the server stopped (exit code 2): cannot start: missing configuration. Its tools are left out; the chat works without them.
+[strata] done: 120 tokens in 0 s (150964.8 tok/s) (stop, cancel=False)
+.[strata] MCP server 'fake': 6 tools (echo, fail, sleep, big, die, add)
+[strata] MCP server 'broken' did not start: the server stopped (exit code 2): cannot start: missing configuration. Its tools are left out; the chat works without them.
+[strata] done: 134 tokens in 0 s (147516.2 tok/s) (stop, cancel=False)
+[strata] tool fake__echo: ok, 19 characters in 0.0 s
+[strata] done: 31 tokens in 0 s (197005.2 tok/s) (stop, cancel=False)
+.[strata] MCP server 'fake': 6 tools (echo, fail, sleep, big, die, add)
+[strata] MCP server 'broken' did not start: the server stopped: cannot start: missing configuration. Its tools are left out; the chat works without them.
+[strata] done: 84 tokens in 0 s (163414.4 tok/s) (stop, cancel=False)
+[strata] tool fake__fail: error, 27 characters in 0.0 s
+[strata] done: 21 tokens in 0 s (227011.3 tok/s) (stop, cancel=False)
+.[strata] MCP server 'fake': 6 tools (echo, fail, sleep, big, die, add)
+[strata] MCP server 'broken' did not start: the server stopped: cannot start: missing configuration. Its tools are left out; the chat works without them.
+[strata] done: 115 tokens in 0 s (134357.9 tok/s) (stop, cancel=False)
+[strata] tool fake__big: ok, 3,000 characters in 0.0 s (truncated for the model)
+[strata] done: 16 tokens in 0 s (244922.9 tok/s) (stop, cancel=False)
+.
+----------------------------------------------------------------------
+Ran 24 tests in 12.771s
+
+OK

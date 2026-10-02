@@ -1,0 +1,9 @@
+perfil | residentes | emprestados | não residentes no prompt | GiB (≈) | crescimento de swap registrado
+IQ2 32k auto | 24576 | 6078 (8.17 GiB) | 6078 | 8.17 | +0,000 (29825 tok frescos, run baseline IQ4)
+IQ2 256k auto | 23461 | 6068 (8.15 GiB) | 7183 | 9.65 | +1,072 (259641 tok frescos)
+IQ2 976k auto | 15506 | 6088 (8.18 GiB) | 15158 | 20.37 | +0,234 (989136 tok); +0,000 (249673)
+IQ3 dual 512 | 17408 | 372 (0.75 GiB) | 7540 | 15.28 | +2,588 na carga; +2,279 em geração PT
+IQ4 dual auto | 13940 | 2998 (7.43 GiB) | 13634 | 33.81 | +2,278 (~29825 tok, guard)
+IQ4 dual 2048 | 13940 | 990 (2.45 GiB) | 11626 | 28.83 | +2,272 (~29825 tok, guard)
+IQ3 complemento+empréstimo: 15.28024673461914
+IQ4 auto complemento+empréstimo: 33.80622863769531

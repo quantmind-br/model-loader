@@ -1,0 +1,291 @@
+{
+  "files": [
+    {
+      "source": "/tmp/strata-claude-independent-20261001/affinity_inherit.cpp",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/affinity_inherit.cpp",
+      "bytes": 3770,
+      "sha256": "165c130cff43f76c9a9132dc981e8dc841f6af3115aed442851ad913b727b083"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/affinity_inherit.log",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/affinity_inherit.log",
+      "bytes": 251,
+      "sha256": "43ecb32f0ba2c2b3cb2608201bfa121a9ca227e673b28977a48662624a5c84cf"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/affinity_inherit2.cpp",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/affinity_inherit2.cpp",
+      "bytes": 1994,
+      "sha256": "92a31767e88695767dae951e87d11903b4b6375bd7b43b6a09c461324ca13894"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/affinity_inherit2.log",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/affinity_inherit2.log",
+      "bytes": 128,
+      "sha256": "d3ba7ea31ea5c851d83708a81a188ea7b17034ee607d828065014b8d6b601245"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/coldread.cpp",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/coldread.cpp",
+      "bytes": 2610,
+      "sha256": "d1c410dabfe3e147a223c5d62a0d8cdaa2e9a7bd9afae5c26f83d3c2974b8342"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/coldread.log",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/coldread.log",
+      "bytes": 202,
+      "sha256": "d687d714d7c9868554370195cf98d7f3e13130038891b244e276df5f4b8440de"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/dense_per_stage.py",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/dense_per_stage.py",
+      "bytes": 3205,
+      "sha256": "c197587c14df2aae248221ecc9b9266522669533affe4b676b06cd8372c672f4"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/gguf_header.py",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/gguf_header.py",
+      "bytes": 3056,
+      "sha256": "f7d275e16e9c9a837404f6103d9687ba60068bdd2a30c50082ea5386c37ce635"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/help.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/help.txt",
+      "bytes": 22114,
+      "sha256": "f12192d0e60545166396125ff47163f89bcfe4ed0a976771e7fb9bbf7e1ca486"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/launcher_latency.cpp",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/launcher_latency.cpp",
+      "bytes": 2602,
+      "sha256": "70285c06b5d4556d4caa75fd95fe679697244cf44780908f3bc47818ec816924"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/launcher_latency.log",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/launcher_latency.log",
+      "bytes": 540,
+      "sha256": "b431ad8de9510450898240360c59dbf37d75d02ed5391b14bf817663c7a38422"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_cxx_arena_policy_test.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_cxx_arena_policy_test.txt",
+      "bytes": 22,
+      "sha256": "8d8fe497c4b8ade57b09e160b8ffcce8d07474da5534cc11a389c7d11e0597c5"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_cxx_file_expert_source_test.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_cxx_file_expert_source_test.txt",
+      "bytes": 30,
+      "sha256": "c153495dfb310446ac76551805963a2e8ebd245e84ea74c223027d2efdaef4ab"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_cxx_pinned_shared_test.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_cxx_pinned_shared_test.txt",
+      "bytes": 23,
+      "sha256": "756465a2fc337037787f2283f31a34786e70386d4ed116722cc5abcd52f3bca9"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_cxx_prefill_resources_test.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_cxx_prefill_resources_test.txt",
+      "bytes": 27,
+      "sha256": "f66ff5148bfaabf2e47bef33cf84650fb338c686fd42695bf69aa02acaed9ff0"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_cxx_prefill_startup_test.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_cxx_prefill_startup_test.txt",
+      "bytes": 25,
+      "sha256": "2cf3dea10afff8da03b9ee1cd1b420843f4c92ae55ce01879df4e6c2441f54ad"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_test_calibrate.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_test_calibrate.txt",
+      "bytes": 655,
+      "sha256": "eea1fbcaeab21766aed0b6d8aa7746fb2b59b353c2b6dc841cef38d855f13076"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_test_conversation_cache_disabled.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_test_conversation_cache_disabled.txt",
+      "bytes": 880,
+      "sha256": "8785ee304d40cbee63616c7b4151867ca27c1d2f2d9044dfa91771b07bb487c9"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_test_conversation_cache_disabled_root.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_test_conversation_cache_disabled_root.txt",
+      "bytes": 104,
+      "sha256": "66fb186812f578f1267d329e4ba0b2f82b72da00837e37dbc11e1d52375dcf72"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_test_conversation_cache_parity.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_test_conversation_cache_parity.txt",
+      "bytes": 111,
+      "sha256": "5cd53a53d04023de114b2eeda7623449bed3d63b39f9d54d792ddacfe315b8e9"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_test_detok.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_test_detok.txt",
+      "bytes": 113,
+      "sha256": "d0caa4efe89a5a247dac941b91efe526e51839a53d0dc36e07e05f2c8c41632b"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_test_iq_pack.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_test_iq_pack.txt",
+      "bytes": 107,
+      "sha256": "3a1c4cd02a1576f2aafd89a805ce14566da40f26587c010179bb2611fcfbc795"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_test_managed_config.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_test_managed_config.txt",
+      "bytes": 103,
+      "sha256": "888a0c0ed615e57d32cf72be501b0c355f33b8613c81dfdaa99db33d7959487e"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_test_mcp.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_test_mcp.txt",
+      "bytes": 5983,
+      "sha256": "62e98bf75f8d6559af377ef8db71732a5820aa59a1aa9a28a610060ccbd6c56c"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_test_server.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_test_server.txt",
+      "bytes": 8076,
+      "sha256": "2b976e2dd38fc290799ef194574672bba664f4ffb52d1129f0ce77f0d3403ea9"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_test_setup_rope.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_test_setup_rope.txt",
+      "bytes": 118,
+      "sha256": "4a2914237f8d9213a692bb4171f3e9bbfd8061ef8dc44b9a9a6a93eb165488f4"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/log_test_shards.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/log_test_shards.txt",
+      "bytes": 667,
+      "sha256": "d232a6d206baf123138aac629a9c8ba9318a0886d4f3950c4ee457fc785fb7d4"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/mincore.c",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/mincore.c",
+      "bytes": 899,
+      "sha256": "d98dec73ec9f76a3e058fa1b4226565e1289c85648c510f51b7138430833b945"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/mincore.log",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/mincore.log",
+      "bytes": 677,
+      "sha256": "9bd971a6e94372858fb5a809e77a0b5286566ee79062c44d179e78d4150dcdce"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/mincore.py",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/mincore.py",
+      "bytes": 1048,
+      "sha256": "6820a9d87250f4b0d3e7df4969f660a86b6a6ac3fd5078b904af0566a027914a"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/pcie_probe.cu",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/pcie_probe.cu",
+      "bytes": 3566,
+      "sha256": "03e3f12f3ffacb8f184cf498eaf7a0869840118b3dfe3dbedcfcc2fd8670bfc5"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/pcie_probe.log",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/pcie_probe.log",
+      "bytes": 811,
+      "sha256": "4764ba08ab2790c74744ec4a14e68c18818cae060c35218a624085455103aa98"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/ple_randread.cpp",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/ple_randread.cpp",
+      "bytes": 2111,
+      "sha256": "4dca422ab26521e2234223594dc4b46bffab7336af889fdf195cbad265f7d78b"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/ple_randread.log",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/ple_randread.log",
+      "bytes": 264,
+      "sha256": "51da1d4ea254c33cf7be142ba230fd864169a59192b654aba8ee0c0b3a22be65"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/ple_same.log",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/ple_same.log",
+      "bytes": 292,
+      "sha256": "111ea3cea169198dcf50997902e1a1022dbeac0efd3ce93dd60fa8693d31cfe5"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/ple_same.py",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/ple_same.py",
+      "bytes": 1248,
+      "sha256": "280f787fa804954db2dfbc5410dc0dc04a0479cb0f51f6ed48df16693f47bfe8"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/repro_nonstream_disconnect.log",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/repro_nonstream_disconnect.log",
+      "bytes": 945,
+      "sha256": "36edd6009afa57bf0509be33eb1887213f8b5a53138ceb64a69c31f45696107c"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/repro_nonstream_disconnect.py",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/repro_nonstream_disconnect.py",
+      "bytes": 2951,
+      "sha256": "2e51adb4a6a061c6fea92bc0d66132d40b2b1151fcfc0935addfea8ef5d9d874"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/repro_sampling_stop.log",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/repro_sampling_stop.log",
+      "bytes": 624,
+      "sha256": "cf595a2a091d607f67b47869e9522103d1ed45b2fec44649e1c78e91f0bf1d37"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/repro_sampling_stop.py",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/repro_sampling_stop.py",
+      "bytes": 2509,
+      "sha256": "bca5a83620523ee988a9588a850a7329757c4c68f03d9abc339847ba433db6a9"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/residency_estimate.log",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/residency_estimate.log",
+      "bytes": 1195,
+      "sha256": "aa12700a68287c28599a6635a8c450206a8950775b14f38c1c304f149f5628a2"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/residency_estimate.py",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/residency_estimate.py",
+      "bytes": 2159,
+      "sha256": "9dc3e62ec9c9d15b789c4ef62ca084b971ff1597783b2a16499366ee6dbef8f6"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/stderr.log",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/task.md",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/task.md",
+      "bytes": 3302,
+      "sha256": "a3ee3d18cf7a48b93116e8749125d7b714191d81e67d3dcd67dae45256b4831d"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/tok_bench.log",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/tok_bench.log",
+      "bytes": 285,
+      "sha256": "98f38ddd5a215349a064e83697dc0941b1f6733055da42d35431a0ca98465432"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/tok_bench.py",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/tok_bench.py",
+      "bytes": 1040,
+      "sha256": "6a155996130e7102c1306ff8a3c2bc1c921423ee7f327efb419e20b1800b70a2"
+    },
+    {
+      "source": "/tmp/strata-claude-independent-20261001/version.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/version.txt",
+      "bytes": 22,
+      "sha256": "3a5495706ad266f8675071284ae47afcf75aec014b4d93ad164de16cf4d01c42"
+    }
+  ],
+  "go_validation": {
+    "source": "selected tool results from stream.jsonl",
+    "sha256": "02c1088ee00bf4b3ad8199d1229528e3384e9170c4b66b283ed79309acaa4fb2"
+  },
+  "report_sha256": "e9914f2d692db6f7c0dd029d7a8e2b3c987e0535f673623de2fa9722526c367e"
+}

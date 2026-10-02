@@ -1,0 +1,11 @@
+/home/diogo/dev/model-loader/backends/strata-fork/tools/strata_pack.py:351: ResourceWarning: unclosed file <_io.BufferedReader name='/tmp/tmpr3i5ooru/m-00001-of-00002.gguf'>
+  head, flen = open_shard(gguf)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./home/diogo/dev/model-loader/backends/strata-fork/tools/strata_pack.py:351: ResourceWarning: unclosed file <_io.BufferedReader name='/tmp/tmpux2qe49z/m-00001-of-00002.gguf'>
+  head, flen = open_shard(gguf)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+......
+----------------------------------------------------------------------
+Ran 7 tests in 0.002s
+
+OK

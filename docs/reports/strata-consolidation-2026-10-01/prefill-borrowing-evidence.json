@@ -1,0 +1,134 @@
+[
+  {
+    "path": "/home/diogo/.local/state/model-loader/logs/strata/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k-engine.log",
+    "sha256": "cc999a7072e1ece59ad2f3daf33ae12810bb3b7a3b05b12f7e4d1def6f42925c",
+    "lines": [
+      {
+        "line": 27,
+        "text": "strata serve: the prompt path borrows 3102 CUDA0 cache slots (4.08 GiB)"
+      },
+      {
+        "line": 28,
+        "text": "strata serve:   CUDA1 prompt path borrows 2966 of its 11260 slots (4.09 GiB)"
+      },
+      {
+        "line": 190,
+        "text": "strata serve: the prompt path borrows 3102 CUDA0 cache slots (4.08 GiB)"
+      },
+      {
+        "line": 191,
+        "text": "strata serve:   CUDA1 prompt path borrows 2966 of its 11260 slots (4.09 GiB)"
+      }
+    ]
+  },
+  {
+    "path": "/home/diogo/.local/state/model-loader/logs/strata/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-976k-engine.log",
+    "sha256": "130186bc0fffbe4495c1f8881f7ebbe8fca7ca02e2daebb4acea11cfb1755128",
+    "lines": [
+      {
+        "line": 29,
+        "text": "strata serve: the prompt path borrows 3104 CUDA0 cache slots (4.08 GiB)"
+      },
+      {
+        "line": 30,
+        "text": "strata serve:   CUDA1 prompt path borrows 2984 of its 6983 slots (4.09 GiB)"
+      }
+    ]
+  },
+  {
+    "path": "/home/diogo/.local/state/model-loader/logs/strata/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k-engine.log",
+    "sha256": "1d8755adff2e4ee5b5320f1a781c38331dd3aec6ba868a2690b2ed6175e0c488",
+    "lines": [
+      {
+        "line": 26,
+        "text": "strata serve: the prompt path borrows 186 CUDA0 cache slots (0.38 GiB)"
+      },
+      {
+        "line": 27,
+        "text": "strata serve:   CUDA1 prompt path borrows 186 of its 8585 slots (0.38 GiB)"
+      },
+      {
+        "line": 58,
+        "text": "strata serve: the prompt path borrows 186 CUDA0 cache slots (0.38 GiB)"
+      },
+      {
+        "line": 59,
+        "text": "strata serve:   CUDA1 prompt path borrows 186 of its 8585 slots (0.38 GiB)"
+      }
+    ]
+  },
+  {
+    "path": "/home/diogo/.local/state/model-loader/logs/strata/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-32k-engine.log",
+    "sha256": "92a5dabf700316b80fdd252bfc4145eee7b8e15dd4adcdcff1f96e54e614dd87",
+    "lines": [
+      {
+        "line": 29,
+        "text": "FileExpertSource: 186 of the prompt path's 186 lendable slots keep their experts in RAM too"
+      },
+      {
+        "line": 31,
+        "text": "strata serve: the prompt path borrows 186 CUDA0 cache slots (0.38 GiB)"
+      }
+    ]
+  },
+  {
+    "path": "/home/diogo/.local/state/model-loader/logs/strata/qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k-engine.log",
+    "sha256": "97ba75b41304cbaa72a9012c42e97c92addbbc479659a219b529f359116fba96",
+    "lines": [
+      {
+        "line": 32,
+        "text": "strata serve: the prompt path borrows 1499 CUDA0 cache slots (3.72 GiB)"
+      },
+      {
+        "line": 33,
+        "text": "strata serve:   CUDA1 prompt path borrows 1499 of its 6857 slots (3.72 GiB)"
+      },
+      {
+        "line": 91,
+        "text": "strata serve: the prompt path borrows 495 CUDA0 cache slots (1.23 GiB)"
+      },
+      {
+        "line": 92,
+        "text": "strata serve:   CUDA1 prompt path borrows 495 of its 6857 slots (1.23 GiB)"
+      },
+      {
+        "line": 149,
+        "text": "strata serve: the prompt path borrows 495 CUDA0 cache slots (1.23 GiB)"
+      },
+      {
+        "line": 150,
+        "text": "strata serve:   CUDA1 prompt path borrows 495 of its 6857 slots (1.23 GiB)"
+      },
+      {
+        "line": 256,
+        "text": "strata serve: the prompt path borrows 1499 CUDA0 cache slots (3.72 GiB)"
+      },
+      {
+        "line": 257,
+        "text": "strata serve:   CUDA1 prompt path borrows 1499 of its 6857 slots (3.72 GiB)"
+      }
+    ]
+  },
+  {
+    "path": "/home/diogo/.local/state/model-loader/logs/strata/qwen3.8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-32k-engine.log",
+    "sha256": "252e732be4a5d9fb703de692fe2f5e1f060b096edb07d652324672d520bc7f63",
+    "lines": [
+      {
+        "line": 27,
+        "text": "strata serve: the prompt path borrows 3103 CUDA0 cache slots (4.08 GiB)"
+      },
+      {
+        "line": 28,
+        "text": "strata serve:   CUDA1 prompt path borrows 2975 of its 12288 slots (4.08 GiB)"
+      },
+      {
+        "line": 74,
+        "text": "strata serve: the prompt path borrows 3103 CUDA0 cache slots (4.08 GiB)"
+      },
+      {
+        "line": 75,
+        "text": "strata serve:   CUDA1 prompt path borrows 2975 of its 12288 slots (4.08 GiB)"
+      }
+    ]
+  }
+]

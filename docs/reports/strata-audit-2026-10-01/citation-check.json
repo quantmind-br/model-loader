@@ -1,0 +1,299 @@
+{
+  "citations": [
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 1272,
+      "text": "    if (o.resident_cpu_experts &&"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 3417,
+      "text": "    // ---- the resident RAM mode (--resident-experts / --resident-cpu-experts): the experts the GPU cache does not"
+    },
+    {
+      "path": "backends/strata-fork/src/core/expert_source.cpp",
+      "line": 500,
+      "text": "bool FileExpertSource::pin_cache_complement("
+    },
+    {
+      "path": "backends/strata-fork/src/core/expert_source.cpp",
+      "line": 422,
+      "text": "    void* view = mmap(nullptr, (size_t) want, PROT_READ, MAP_SHARED, fd, 0);"
+    },
+    {
+      "path": "backends/strata-fork/src/core/expert_source.cpp",
+      "line": 681,
+      "text": "                madvise((void*) (base_ + (size_t) advice_start), (size_t) (advice_end - advice_start), MADV_DONTNEED) != 0) {"
+    },
+    {
+      "path": "backends/strata-fork/src/prefill/prefill.cpp",
+      "line": 1134,
+      "text": "        if (stream_all) {"
+    },
+    {
+      "path": "backends/strata-fork/serve/frontend.py",
+      "line": 141,
+      "text": "def openai_to_messages(req: dict) -> tuple[list[dict], list[dict] | None, dict]:"
+    },
+    {
+      "path": "backends/strata-fork/serve/frontend.py",
+      "line": 300,
+      "text": "def parse_tool_call(body: str, schema: dict | None = None) -> ToolCall:"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 1008,
+      "text": "    def run(self, ids, thinking, tools, max_new, sampling, cancel) -> Iterator[tuple[str, object]]:"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 1651,
+      "text": "        def _openai(self, req):"
+    },
+    {
+      "path": "backends/strata-fork/tools/iq_pack.py",
+      "line": 291,
+      "text": "        rc = index_standalone(src, out, model, a.compat_bf16)"
+    },
+    {
+      "path": "backends/strata-fork/tools/iq_pack.py",
+      "line": 331,
+      "text": "    tmp.replace(out / \"native_experts.txt\")"
+    },
+    {
+      "path": "backends/strata-fork/tools/iq_pack.py",
+      "line": 337,
+      "text": "    if path.exists() and path.stat().st_size == offset:"
+    },
+    {
+      "path": "backends/strata-fork/backend-build.sh",
+      "line": 4,
+      "text": "cmake -S \"$backend_root\" -B \"$backend_root/build-local-sm86\" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=86"
+    },
+    {
+      "path": "backends/strata-fork/CMakeLists.txt",
+      "line": 35,
+      "text": "option(STRATA_ENABLE_CUDA \"Build the CUDA targets (Phase 2+)\" OFF)"
+    },
+    {
+      "path": "backends/strata-fork/CMakeLists.txt",
+      "line": 176,
+      "text": "if(STRATA_ENABLE_CUDA OR STRATA_ENABLE_HIP)"
+    },
+    {
+      "path": "backends/strata-fork/CMakeLists.txt",
+      "line": 380,
+      "text": "  add_executable(strata src/program/generate.cpp)"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 397,
+      "text": "                    line = self.lines.get()"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 1022,
+      "text": "        with self.fifo:"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 1070,
+      "text": "                    gen.close()                         # STOP+drain to THIS request's DONE while still holding the"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 289,
+      "text": "    def sampling_keys(sampling: dict) -> str:"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 323,
+      "text": "        seed = sampling.get(\"seed\")"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 4614,
+      "text": "            // per-request sampling for the verify window's head (greedy when temperature is absent)"
+    },
+    {
+      "path": "internal/service/monitor/gpu.go",
+      "line": 71,
+      "text": "\tr := csv.NewReader(strings.NewReader(strings.TrimSpace(string(stdout))))"
+    },
+    {
+      "path": "internal/service/benchmark/gpu_sampler.go",
+      "line": 73,
+      "text": "\t\t\t\tg.peak = stats.VRAMUsedMB"
+    },
+    {
+      "path": "backends/strata-fork/serve/telemetry.py",
+      "line": 171,
+      "text": "class Telemetry:"
+    },
+    {
+      "path": "backends/strata-fork/src/prefill/prefill.cpp",
+      "line": 70,
+      "text": "// plan v0.3 P6: staging holds the largest blob of the pack (a native pack's blobs differ per layer)"
+    },
+    {
+      "path": "backends/strata-fork/src/prefill/prefill.cpp",
+      "line": 81,
+      "text": "inline int64_t stream_all_min() {"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 3387,
+      "text": "    // The prompt path's chunk and the slots it borrows for its buffers: the requested chunk halved until it fits,"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 3431,
+      "text": "        if (src.pin_cache_complement(xcache, err, o.resident_pin, {}, lend_from, o.resident_headroom)) {"
+    },
+    {
+      "path": "backends/strata-fork/tools/make_profile.py",
+      "line": 82,
+      "text": "    if not a.no_base:"
+    },
+    {
+      "path": "backends/strata-fork/src/core/expert_cache.cpp",
+      "line": 13,
+      "text": "                         std::vector<std::pair<int32_t, int32_t>>& ranked, int64_t& slots, std::string& err) {"
+    },
+    {
+      "path": "backends/strata-fork/src/kernels/cpu/pool.cpp",
+      "line": 59,
+      "text": "    // load/store bandwidth, so a worker on each would put two workers on one core, as the Windows branch above"
+    },
+    {
+      "path": "backends/strata-fork/src/kernels/cpu/pool.cpp",
+      "line": 176,
+      "text": "ExpertPool::ExpertPool(int n_workers, bool pin, bool host_works) : host_works_(host_works) {"
+    },
+    {
+      "path": "backends/strata-fork/src/kernels/cpu/native_expert.cpp",
+      "line": 85,
+      "text": "    static const bool avx512 = cpu_avx512_ok() && std::getenv(\"STRATA_NO_IQ512\") == nullptr;"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 1983,
+      "text": "            std::fprintf(stderr, \"strata generate: layer split: CUDA%d PCIe probe %.1f GB/s -> pcie_frac %.2f\\n\", st.dev,"
+    },
+    {
+      "path": "backends/strata-fork/src/core/verify.cpp",
+      "line": 688,
+      "text": "                native_expert_grouped(L, gp, gs, gn, p_dst, p_tok, cap, cap,"
+    },
+    {
+      "path": "backends/strata-fork/src/kernels/cuda/iq_kernels.cu",
+      "line": 711,
+      "text": "void native_expert_grouped(const NativeExpertLayout& L, const unsigned long long* grp_ptr, const int32_t* grp_start,"
+    },
+    {
+      "path": "backends/strata-fork/src/kernels/cuda/iq_kernels.cu",
+      "line": 736,
+      "text": "    swiglu_entries_kernel<<<(unsigned) ((nh + 255) / 256), 256, 0, s>>>(gate, up, h, nh);"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 4793,
+      "text": "                if (from_sfx) { ++sfx_windows; sfx_drafts += T - 1; sfx_ok += a; }"
+    },
+    {
+      "path": "backends/strata-fork/src/spec/draft_policy.cpp",
+      "line": 55,
+      "text": "DraftPolicy::Pick DraftPolicy::choose(int t_mtp, int lookup_k, int match) const {"
+    },
+    {
+      "path": "backends/strata-fork/src/kernels/cpu/native_expert.cpp",
+      "line": 92,
+      "text": "    if (nt >= mt_min && iq512_supported(f.gu_type)) {"
+    },
+    {
+      "path": "backends/strata-fork/include/strata/core/verify.hpp",
+      "line": 73,
+      "text": "    void set_sampling(const strata::kernels::SamplerParams& sp) {"
+    },
+    {
+      "path": "backends/strata-fork/tools/strata_tokenizer.py",
+      "line": 140,
+      "text": "    def _bpe(self, word: str) -> list[str]:"
+    },
+    {
+      "path": "backends/strata-fork/tools/strata_tokenizer.py",
+      "line": 158,
+      "text": "    def _encode_plain(self, text: str) -> list[int]:"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 919,
+      "text": "    def prepare(self, messages, tools, kwargs, max_new=None):"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 1194,
+      "text": "        std::fprintf(stderr, \"strata serve: conversation parking does not yet support --layer-split; disable parking with --conversation-cache-mib 0\\n\");"
+    },
+    {
+      "path": "backends/strata-fork/include/strata/core/conversation_cache.hpp",
+      "line": 23,
+      "text": "struct ConversationCheckpoint {"
+    },
+    {
+      "path": "backends/strata-fork/src/core/conversation_memory.cpp",
+      "line": 36,
+      "text": "std::optional<uint64_t> conversation_available_memory() {"
+    },
+    {
+      "path": "backends/strata-fork/src/platform/direct_file.cpp",
+      "line": 263,
+      "text": "// perf-review F-2: a pool of threads, each doing blocking O_DIRECT preads, so reads run in parallel (the thread"
+    },
+    {
+      "path": "backends/strata-fork/src/platform/direct_file.cpp",
+      "line": 313,
+      "text": "    const int n = io_threads(16);"
+    },
+    {
+      "path": "backends/strata-fork/src/ngram/ple_reader.cpp",
+      "line": 34,
+      "text": "struct RowCache {"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 3637,
+      "text": "        // Layer split: `ver` runs layers [0, K1) and hands its residual to the next stage's verifier, and so on; the"
+    },
+    {
+      "path": "backends/strata-fork/src/core/verify.cpp",
+      "line": 1053,
+      "text": "    cudaStreamSynchronize(copy_);   // no host function of this window may raise flag B in the next one"
+    }
+  ],
+  "links": [
+    "docs/reports/strata-audit-2026-10-01/",
+    "docs/reports/strata-audit-2026-10-01/environment.json",
+    "docs/reports/strata-audit-2026-10-01/environment-extra.json",
+    "docs/reports/strata-audit-2026-10-01/profiles.json",
+    "docs/reports/strata-audit-2026-10-01/source-manifest.json",
+    "docs/reports/strata-audit-2026-10-01/build-reproduction.json",
+    "docs/reports/strata-audit-2026-10-01/probe_contracts.py",
+    "docs/reports/strata-audit-2026-10-01/contract-probes.json",
+    "docs/reports/strata-audit-2026-10-01/ranking-probe.json",
+    "docs/reports/strata-audit-2026-10-01/probe_tokenizer.py",
+    "docs/reports/strata-audit-2026-10-01/tokenizer-probe.json",
+    "docs/reports/strata-audit-2026-10-01/pack-footprints.json",
+    "docs/reports/strata-audit-2026-10-01/python-tests-with-deps.log",
+    "docs/reports/strata-audit-2026-10-01/detokenizer-tests.log",
+    "docs/reports/strata-audit-2026-10-01/cpp-tests.json",
+    "docs/reports/strata-audit-2026-10-01/go-tests-all.log",
+    "docs/reports/strata-iq2-xs-256k-calibration-2026-10-01.md",
+    "docs/reports/strata-iq2-xs-context-2026-10-01.md",
+    "docs/reports/strata-orca-iq3-xxs-calibration-2026-10-01.md",
+    "docs/reports/strata-iq4-xs-uncensored-2026-10-01.md",
+    "docs/reports/strata-audit-2026-10-01/historical-evidence-index.json"
+  ],
+  "invalid": [],
+  "source_drift": []
+}

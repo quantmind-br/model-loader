@@ -1,0 +1,101 @@
+{
+  "requested_model": "claude-opus-5-5",
+  "requested_effort": "xhigh",
+  "invocation": [
+    "claude",
+    "--print",
+    "--model",
+    "claude-opus-5-5",
+    "--effort",
+    "xhigh",
+    "--allow-dangerously-skip-permissions",
+    "--permission-mode",
+    "acceptEdits",
+    "--allowedTools",
+    "Read,Glob,Grep,Bash,Write,Edit",
+    "--tools",
+    "Read,Glob,Grep,Bash,Write,Edit",
+    "--safe-mode",
+    "--no-session-persistence",
+    "--output-format",
+    "stream-json",
+    "--verbose"
+  ],
+  "prompt_path": "/tmp/strata-claude-independent-20261001/task.md",
+  "output_path": "/home/diogo/dev/model-loader/docs/reports/strata-independent-claude-opus-5-5-2026-10-01.md",
+  "independence": "No access requested to parent report/evidence/previous narrative reports; own source/hardware/synthetic analysis. Parent report finalized before reading delegated findings.",
+  "parent_report_sha256_before_delegated_findings": "a86e20165d21db1bab6472b6e1e8cf000ec7e9a34269a55f3018c11b9a3ce72d",
+  "status": "completed",
+  "observed_runtime": {
+    "model": "claude-opus-5-5",
+    "session_id": "c5321d54-f89c-44e4-811c-58c96cc90aeb",
+    "permissionMode": "acceptEdits",
+    "claude_code_version": "2.1.284"
+  },
+  "completed_verification_at": "2026-10-01T17:10:28.771440+00:00",
+  "exit_code": 0,
+  "report_sha256": "e9914f2d692db6f7c0dd029d7a8e2b3c987e0535f673623de2fa9722526c367e",
+  "report_lines": 361,
+  "terminal_result": {
+    "subtype": "success",
+    "terminal_reason": "completed",
+    "is_error": false,
+    "duration_ms": 1939806,
+    "num_turns": 163,
+    "session_id": "c5321d54-f89c-44e4-811c-58c96cc90aeb",
+    "permission_denials": []
+  },
+  "canonical_model": "claude-opus-5-5",
+  "tool_call_count": 162,
+  "independence_verification": {
+    "parent_report_unchanged": true,
+    "recorded_tool_inputs_reviewed": true,
+    "forbidden_report_reads_found": false,
+    "report_directory_accesses": "filename listing and metadata; writing/editing own report only"
+  },
+  "preservation": {
+    "source_files_checked": 280,
+    "source_drift": [],
+    "profiles": [
+      {
+        "profile": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k",
+        "profile_unchanged": true,
+        "config_unchanged": true,
+        "binary_unchanged": true
+      },
+      {
+        "profile": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-32k",
+        "profile_unchanged": true,
+        "config_unchanged": true,
+        "binary_unchanged": true
+      },
+      {
+        "profile": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-976k",
+        "profile_unchanged": true,
+        "config_unchanged": true,
+        "binary_unchanged": true
+      },
+      {
+        "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k",
+        "profile_unchanged": true,
+        "config_unchanged": true,
+        "binary_unchanged": true
+      },
+      {
+        "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-32k",
+        "profile_unchanged": true,
+        "config_unchanged": true,
+        "binary_unchanged": true
+      },
+      {
+        "profile": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k",
+        "profile_unchanged": true,
+        "config_unchanged": true,
+        "binary_unchanged": true
+      }
+    ]
+  },
+  "evidence_archive": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01",
+  "verification_notes": "/home/diogo/dev/model-loader/docs/reports/strata-claude-evidence-2026-10-01/README.md",
+  "raw_transcript_sha256": "bb771dc139645b7678eabbb2b3b5c0b3d56952ef345c7c1739f5afc696406b16"
+}

@@ -1,0 +1,33 @@
+{
+  "iq2-xs": {
+    "experts_bytes": 35454976000,
+    "dense_bytes": 1538035200,
+    "blob_sizes": [
+      1177600,
+      1305600,
+      1510400
+    ],
+    "layers": 48
+  },
+  "orca-iq3-xxs": {
+    "experts_bytes": 53477376000,
+    "dense_bytes": 1485606400,
+    "blob_sizes": [
+      2176000
+    ],
+    "layers": 48
+  },
+  "uncensored-iq4-xs": {
+    "experts_bytes": 65431142400,
+    "dense_bytes": 1485606400,
+    "blob_sizes": [
+      2662400
+    ],
+    "layers": 48
+  },
+  "iq3_derived_complement": {
+    "bytes": 15597568000,
+    "GiB": 14.5263671875,
+    "excludes": "prefill lending/staging, KV, MTP, dense, OS, other processes"
+  }
+}
