@@ -29,6 +29,7 @@ func TestDeriveContextLength(t *testing.T) {
 		{"tabby max-seq-len", map[string]any{"max-seq-len": float64(65536)}, intp(65536)},
 		{"sglang context-length", map[string]any{"context-length": float64(131072)}, intp(131072)},
 		{"dflash max-ctx", map[string]any{"max-ctx": float64(262144)}, intp(262144)},
+		{"strata max-context", map[string]any{"max-context": float64(32768)}, intp(32768)},
 		{"int value", map[string]any{"ctx-size": 4096}, intp(4096)},
 		{"string numeric value", map[string]any{"max-model-len": "16384"}, intp(16384)},
 		{"absent context flag", map[string]any{"n-gpu-layers": float64(999)}, nil},

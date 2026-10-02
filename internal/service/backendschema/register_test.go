@@ -24,6 +24,7 @@ func TestRegisterDefaults_RegistersAllGeneratorKinds(t *testing.T) {
 		domain.BackendKindTabby,
 		domain.BackendKindLMStudio,
 		domain.BackendKindFreeToken,
+		domain.BackendKindStrata,
 	}
 	gens := m.Generators()
 	if len(gens) != len(want) {

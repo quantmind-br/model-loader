@@ -132,12 +132,12 @@ func findBackend(backends []domain.Backend, id string) (domain.Backend, bool) {
 }
 
 // resolveExecutable resolves a backend's executable.
-// For Python-based backends (SGLang and VLLM), it applies python↔python3
+// For Python-based backends (SGLang, VLLM and Strata), it applies python↔python3
 // fallback logic so compound commands like "python -m sglang.launch_server"
 // are preserved when falling back to python3.
 func resolveExecutable(backend domain.Backend) (string, error) {
 	switch backend.Kind {
-	case domain.BackendKindSGLang, domain.BackendKindVLLM:
+	case domain.BackendKindSGLang, domain.BackendKindVLLM, domain.BackendKindStrata:
 		return llamabin.ResolveCommandWithPythonFallback(backend.Executable)
 	default:
 		return llamabin.Resolve(backend.Executable)

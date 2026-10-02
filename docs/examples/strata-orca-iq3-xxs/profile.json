@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 3,
+  "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k",
+  "name": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k",
+  "description": "OrcaRouter published uncensored IQ3_XXS, prepared with compat-bf16; no expert requantization. Strata-fork, dual RTX3090 24/24, mmap experts,15workers,int8 KV,32768 context,prefill512,reserve1536MiB,270W/card. Own packed dense weights and exported tokenizer. Shared original Q2_0 MTP spec4/minp.5, not fine-tune-matched. Model-card sampling temp1/top_p.95/top_k20/min_p0; non-thinking selected. No local model execution, performance, context or tool qualification yet; calibration pending — run full-tuning to promote",
+  "model": "/home/diogo/models/huggingface/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+  "args": {
+    "config": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k.json",
+    "host": "127.0.0.1",
+    "max-context": 32768
+  },
+  "launch": {
+    "backendId": "strata-fork",
+    "defaultBackground": true,
+    "restart_policy": "none"
+  }
+}

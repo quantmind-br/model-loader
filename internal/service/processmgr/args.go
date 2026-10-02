@@ -48,6 +48,10 @@ func BuildArgsForBackend(p domain.Profile, kind domain.BackendKind, executable s
 		return buildLMStudioArgs(p), nil
 	case domain.BackendKindFreeToken:
 		return buildFreeTokenArgs(p), nil
+	case domain.BackendKindStrata:
+		// The HTTP server owns the native stdin engine. --model verifies the
+		// profile's GGUF against the prepared JSON; it does not replace the pack.
+		return append([]string{"--engine", "strata"}, buildArgs(p, argBuildOpts{skipKeys: []string{"model", "engine"}, modelFlag: "--model"})...), nil
 	default:
 		return nil, fmt.Errorf("unsupported backend kind for arg building: %s", kind)
 	}

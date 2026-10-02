@@ -7,6 +7,7 @@ import (
 	"github.com/quantmind-br/model-loader/internal/service/dflashhelp"
 	"github.com/quantmind-br/model-loader/internal/service/freetokenhelp"
 	"github.com/quantmind-br/model-loader/internal/service/lmstudiohelp"
+	"github.com/quantmind-br/model-loader/internal/service/stratahelp"
 	"github.com/quantmind-br/model-loader/internal/service/tabbyhelp"
 	"github.com/quantmind-br/model-loader/internal/service/unslothhelp"
 )
@@ -55,6 +56,7 @@ func TestEssentialSeed_ReferencesOnlyExistingFlags(t *testing.T) {
 		{domain.BackendKindTabby, tabbyhelp.EmbeddedSchema()},
 		{domain.BackendKindLMStudio, lmstudiohelp.EmbeddedSchema()},
 		{domain.BackendKindFreeToken, freetokenhelp.EmbeddedSchema()},
+		{domain.BackendKindStrata, stratahelp.EmbeddedSchema()},
 	} {
 		t.Run(string(tt.kind), func(t *testing.T) {
 			for _, long := range essentialSeed[tt.kind] {
