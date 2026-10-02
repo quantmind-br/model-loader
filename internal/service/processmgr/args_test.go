@@ -7,6 +7,27 @@ import (
 	"github.com/quantmind-br/model-loader/internal/domain"
 )
 
+func TestBuildArgs_StrataManagedServer(t *testing.T) {
+	p := domain.Profile{
+		Model: "/models/native.gguf",
+		Args: map[string]any{
+			"config": "/configs/model.json", "max-context": float64(32768),
+			"gpu": "0,1", "host": "127.0.0.1", "port": 12345,
+			"fit-max-tokens": true, "model": "ignored.gguf", "engine": "mock",
+		},
+	}
+	got, err := BuildArgsForBackend(p, domain.BackendKindStrata, "python /fork/serve/server.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"--engine", "strata", "--model", p.Model,
+		"--config", "/configs/model.json", "--fit-max-tokens", "--gpu", "0,1",
+		"--host", "127.0.0.1", "--max-context", "32768", "--port", "12345"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
 func TestBuildArgs_ModelFirstAndSortedFlags(t *testing.T) {
 	p := domain.Profile{
 		Model: "/m.gguf",

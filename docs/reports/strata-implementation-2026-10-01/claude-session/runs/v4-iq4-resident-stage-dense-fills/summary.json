@@ -1,0 +1,29 @@
+{
+  "run": "v4-iq4-resident-stage-dense-fills",
+  "run_status": {
+    "requests_complete": false,
+    "guard_triggered": true
+  },
+  "guard": {
+    "reasons": [
+      "global swap growth above 2 GiB"
+    ],
+    "time": 1790900600.4744062
+  },
+  "code_tps": null,
+  "peak_gpu_mib": {
+    "0": 22584.0,
+    "1": 3531.0
+  },
+  "process_peak_swap_kib": {
+    "1622607:server": 140260,
+    "1622613:native": 166040
+  },
+  "retrieval": [],
+  "checks": {},
+  "min_available_gib": 44.573448181152344,
+  "max_swap_growth_gib": 2.5252151489257812,
+  "peak_simultaneous_gpu_mib": 26115.0,
+  "peak_temperature_c": 69.0,
+  "global_pswpout_pages": 658215
+}

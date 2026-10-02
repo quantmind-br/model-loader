@@ -145,9 +145,9 @@ func (r *Runner) runCodeGenBench(ctx context.Context, base, model string, p Code
 	reqCtx, cancel := context.WithTimeout(ctx, r.inferTimeout())
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, base, "", ChatRequest{
-		Model:       model,
-		MaxTokens:   r.cfg.MaxTokens,
-		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
+		Model:     model,
+		MaxTokens: r.cfg.MaxTokens,
+		OnDelta:   r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
 			{Role: "system", Content: "You are an expert Python programmer. Implement the requested function. Return ONLY the complete function definition in a single ```python code block."},
 			{Role: "user", Content: p.Prompt},
@@ -164,6 +164,7 @@ func (r *Runner) runCodeGenBench(ctx context.Context, base, model string, p Code
 	res.TokensPerSecond = comp.TokensPerSecond
 	res.DecodeTPS = comp.TokensPerSecond
 	res.PromptProcessingTPS = comp.PromptProcessingTPS
+	res.ServerTimings = comp.ServerTimings
 	res.PromptTokens = comp.PromptTokens
 	res.CompletionTokens = comp.CompletionTokens
 	tr.ModelResponse = comp.Content

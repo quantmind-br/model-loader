@@ -1,0 +1,121 @@
+diff --git a/serve/server.py b/serve/server.py
+index 60a675b..1b8dbd0 100644
+--- a/serve/server.py
++++ b/serve/server.py
+@@ -538,6 +538,36 @@ def gpu_list(cfg: dict) -> list[int]:
+     return [int(str(x).strip()) for x in items if str(x).strip() != ""]
+ 
+ 
++def managed_config(cfg: dict, model: str | None, max_context: int | None) -> dict:
++    """Validate a launcher's model against the prepared pack and apply its context.
++
++    Never substitute the native model: pack, PLE weights and tokenizer must match
++    it. Return a copy so CLI overrides do not rewrite the setup/shared settings.
++    """
++    args = list(cfg.get("args", []))
++    if model is not None:
++        native = [i for i, value in enumerate(args) if value == "--native"]
++        if len(native) != 1 or native[0] + 1 >= len(args):
++            raise ValueError("--model requires exactly one --native model in the config")
++        path = Path(args[native[0] + 1])
++        if not path.is_absolute():
++            path = Path(cfg.get("cwd") or Path.cwd()) / path
++        if path.resolve() != Path(model).resolve():
++            raise ValueError("--model does not match the config's --native model; select its matching prepared config")
++    if max_context is not None:
++        if max_context < 1:
++            raise ValueError("--max-context must be positive")
++        # Native options use separate tokens. Remove all prior occurrences so
++        # the engine and HTTP budget cannot disagree about which value wins.
++        indices = [i for i, value in enumerate(args) if value == "--max-context"]
++        for i in reversed(indices):
++            if i + 1 >= len(args) or args[i + 1].startswith("--"):
++                raise ValueError("--max-context in the config is missing its value")
++            del args[i:i + 2]
++        args += ["--max-context", str(max_context)]
++    return {**cfg, "args": args}
++
++
+ def engine_args(cfg: dict) -> list[str]:
+     """The engine's arguments: the config's, and with several GPUs the layer split across them ("layer_split" in the
+     config: "auto" by default, or the first layer of each later GPU's share, e.g. "18" or "16,32")."""
+@@ -1850,6 +1880,8 @@ def main() -> int:
+     ap.add_argument("--engine", choices=["mock", "strata"], default="mock")
+     ap.add_argument("--config", help="strata engine config (JSON: exe, args, cwd, tokenizer, model_name), "
+                                      "written by setup.py")
++    ap.add_argument("--model", help="verify this native GGUF matches --native in the prepared config (managed launchers)")
++    ap.add_argument("--max-context", type=int, help="override the engine context in tokens; omit to use the config")
+     ap.add_argument("--host", default=None,
+                     help="the address to listen on: 127.0.0.1 = this PC only (the default), 0.0.0.0 = also other devices "
+                          "on your network (set an API key); also \"host\" in the config")
+@@ -1881,6 +1913,13 @@ def main() -> int:
+                                           "server's model; also \"before_load\" in the config, a string or a list)")
+     a = ap.parse_args()
+     cfg = json.loads(Path(a.config).read_text(encoding="utf-8-sig")) if a.config else {}   # Notepad adds a BOM
++    if a.model is not None or a.max_context is not None:
++        if a.engine != "strata" or not a.config:
++            ap.error("--model and --max-context require --engine strata and --config")
++        try:
++            cfg = managed_config(cfg, a.model, a.max_context)
++        except ValueError as exc:
++            ap.error(str(exc))
+     if a.gpu is not None:
+         cfg["gpu"] = int(a.gpu) if a.gpu.strip().isdigit() else a.gpu
+     a.host = a.host or cfg.get("host") or "127.0.0.1"   # issue #26: the run scripts pass no --host, the config can
+diff --git a/tools/iq_pack.py b/tools/iq_pack.py
+index f0ff890..bc20615 100644
+--- a/tools/iq_pack.py
++++ b/tools/iq_pack.py
+@@ -63,8 +63,11 @@ def needs_bf16(name: str, type_name: str) -> bool:
+         return True
+     if not name.startswith("blk."):
+         return False
+-    # The existing native PLE key supports Q2_0 only. Other key encodings use the BF16 path.
+-    return name.endswith(BF16_PROJECTIONS) or (name == "blk.1.ple_key.weight" and type_name != "Q2_0")
++    # NativeDense and ple_block serve these key formats directly. Converting them
++    # to BF16 makes --native reject the packed reference as an incompatible matrix.
++    native_ple_key = {"Q2_0", "IQ3_XXS", "IQ4_XS"}
++    return name.endswith(BF16_PROJECTIONS) or (
++        name == "blk.1.ple_key.weight" and type_name not in native_ple_key)
+ 
+ 
+ def bf16_bytes(raw: np.ndarray, type_name: str) -> bytes:
+diff --git a/tools/test_iq_pack.py b/tools/test_iq_pack.py
+index c7a5e87..90f1689 100644
+--- a/tools/test_iq_pack.py
++++ b/tools/test_iq_pack.py
+@@ -29,6 +29,34 @@ def write_gguf(path, tensors):
+ 
+ 
+ class CompatibilityTests(unittest.TestCase):
++    def test_native_ple_key_preserves_quantized_payload(self):
++        for kind, block_bytes in [(Q.IQ3_XXS, 98), (Q.IQ4_XS, 136)]:
++            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
++                root = Path(tmp)
++                source = root / "key.gguf"
++                # Valid quantized block storage, with normal fp16 scales. This
++                # is input payload, not a re-quantization or BF16 conversion.
++                raw = np.arange(2 * block_bytes, dtype=np.uint8).reshape(2, block_bytes)
++                raw[:, :2] = np.frombuffer(np.float16(0.01).tobytes(), dtype=np.uint8)
++                writer = GGUFWriter(source, "qwen4exp")
++                writer.add_tensor("blk.1.ple_key.weight", raw, raw_dtype=kind)
++                writer.write_header_to_file()
++                writer.write_kv_data_to_file()
++                writer.write_tensors_to_file()
++                writer.close()
++                original = source.read_bytes()
++                model = iq_pack.Model(source)
++                with contextlib.redirect_stdout(io.StringIO()):
++                    self.assertEqual(iq_pack.index_standalone(source, root, model, True), 0)
++                _, rows = iq_pack.read_index(root / "index.txt")
++                row = rows["blk.1.ple_key.weight"]
++                self.assertEqual(row[2], "0")  # served from native GGUF
++                self.assertEqual(row[7:9], ["256", "2"])
++                self.assertEqual((root / "dense.bin").stat().st_size, 0)
++                self.assertEqual(json.loads((root / "compat-bf16.json").read_text())["tensors"], [])
++                self.assertEqual(model.bytes("blk.1.ple_key.weight").tobytes(), raw.tobytes())
++                self.assertEqual(source.read_bytes(), original)
++
+     def test_bf16_halfway_rounds_to_even(self):
+         values = np.array([0x3F808000, 0x3F818000, 0xBF808000, 0xBF818000], dtype=np.uint32)
+         got = np.frombuffer(iq_pack.bf16_bytes(values.view(np.uint8), "F32"), dtype=np.uint16)

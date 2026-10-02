@@ -150,22 +150,62 @@ func TerminateTree(pid int, grace time.Duration) error {
 	// in uninterruptible sleep (GPU/CUDA teardown) stays Alive — and holds VRAM
 	// — for a while after the signal. Returning early lets Kill purge the
 	// registry and the swap launch into contended VRAM → OOM (P4/DF11).
-	if Alive(pid) {
-		if err := killTarget(syscall.SIGKILL); err != nil {
-			return err
+	aliveTarget := func() bool {
+		if group {
+			return groupAlive(pid)
 		}
-		deadline := time.Now().Add(killConfirmGrace)
-		for Alive(pid) {
-			if !time.Now().Before(deadline) {
-				return ErrStillAlive
-			}
-			if group {
-				_ = syscall.Kill(target, syscall.SIGKILL) // keep sweeping stragglers
-			}
-			time.Sleep(50 * time.Millisecond)
-		}
-	} else if group {
-		_ = syscall.Kill(target, syscall.SIGKILL) // best-effort straggler sweep; ESRCH expected
+		return Alive(pid)
 	}
+	if err := killTarget(syscall.SIGKILL); err != nil {
+		return err
+	}
+	deadline := time.Now().Add(killConfirmGrace)
+	for aliveTarget() {
+		if !time.Now().Before(deadline) {
+			return ErrStillAlive
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
 	return nil
+}
+
+// groupAlive excludes zombies: they retain a PID but have released GPU resources.
+// A signalable group with unreadable proc state is conservatively still alive.
+func groupAlive(pgid int) bool {
+	if err := syscall.Kill(-pgid, 0); errors.Is(err, syscall.ESRCH) {
+		return false
+	}
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return true
+	}
+	for _, entry := range entries {
+		if _, err := strconv.Atoi(entry.Name()); err != nil {
+			continue
+		}
+		data, err := os.ReadFile("/proc/" + entry.Name() + "/stat")
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return true
+		}
+		end := strings.LastIndexByte(string(data), ')')
+		if end < 0 {
+			return true
+		}
+		fields := strings.Fields(string(data)[end+1:])
+		if len(fields) < 3 {
+			return true
+		}
+		group, err := strconv.Atoi(fields[2])
+		if err != nil {
+			return true
+		}
+		if group == pgid && fields[0] != "Z" && fields[0] != "X" {
+			return true
+		}
+	}
+	return false
 }

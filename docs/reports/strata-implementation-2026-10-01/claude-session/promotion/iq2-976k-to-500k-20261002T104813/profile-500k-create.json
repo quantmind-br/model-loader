@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 3,
+  "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-500k",
+  "name": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-500k",
+  "description": "IQ2_XS long-context baseline (replaces the 976k profile, 2026-10-02): 512000 tokens (500k label), YaRN factor 2/original 262144 per the official Qwen3.8-Flash-Next card (factor 2.0 for ~524288-token use); same pack/placement as the promoted 256k profile: Strata release v6 20261002T100952Z-2eed88f1f51d, dual RTX3090 270W/card, layers 24/24, mmap experts + --stage-dense, KV int8, 15 workers, MTP spec4/minp0.7, prompt thermal gate STRATA_PREFILL_TEMP_PAUSE_C=80. Calibration pending.",
+  "model": "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+  "args": {
+    "config": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-500k.json",
+    "host": "127.0.0.1",
+    "max-context": 512000
+  },
+  "launch": {
+    "defaultBackground": true,
+    "backendId": "strata-perf-v6-20261002",
+    "restart_policy": "none",
+    "max_restarts": 0,
+    "backoff_seconds": 0
+  }
+}

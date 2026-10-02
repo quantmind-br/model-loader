@@ -1,0 +1,14 @@
+{
+  "profile": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k",
+  "readonly": true,
+  "backend": "strata-fork",
+  "exe": "/home/diogo/dev/model-loader/backends/strata-fork/build-fork-sm86/strata",
+  "engine_log": "/home/diogo/.local/state/model-loader/logs/strata/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k-engine.log",
+  "engine_log_offset": 57544,
+  "probe_flags": [
+    "--controls"
+  ],
+  "started": 1790900680.5823934,
+  "returncode": 0,
+  "finished": 1790900789.6798756
+}

@@ -1,0 +1,118 @@
+{
+ "A": {
+  "starts": 3,
+  "complete": 3,
+  "guards": [],
+  "code_tps": [
+   87.7,
+   87.5,
+   87.8
+  ],
+  "code_ms_per_window": [
+   39.08,
+   39.06,
+   39.2
+  ],
+  "code_accept": [
+   0.854,
+   0.854,
+   0.854
+  ],
+  "portuguese_tps": [
+   50.4,
+   49.7,
+   50.6
+  ],
+  "fresh_ttft_s": {},
+  "fresh_prompt_n": {},
+  "retrieval_exact": true,
+  "max_swap_growth_gib": [
+   0.619,
+   0.181,
+   0.723
+  ],
+  "peak_gpu0_mib": [
+   1139.0,
+   1139.0,
+   1151.0
+  ],
+  "peak_gpu1_mib": [
+   23030.0,
+   23030.0,
+   23030.0
+  ],
+  "peak_temp_gpu0": [
+   50.0,
+   49.0,
+   51.0
+  ],
+  "min_available_gib": [
+   12.12,
+   12.09,
+   12.65
+  ],
+  "expert_slots": [
+   8407,
+   8407,
+   8407
+  ]
+ },
+ "B": {
+  "starts": 3,
+  "complete": 3,
+  "guards": [],
+  "code_tps": [
+   86.4,
+   86.1,
+   88.9
+  ],
+  "code_ms_per_window": [
+   38.99,
+   38.81,
+   39.12
+  ],
+  "code_accept": [
+   0.839,
+   0.839,
+   0.85
+  ],
+  "portuguese_tps": [
+   51.3,
+   50.1,
+   51.5
+  ],
+  "fresh_ttft_s": {},
+  "fresh_prompt_n": {},
+  "retrieval_exact": true,
+  "max_swap_growth_gib": [
+   0.676,
+   0.16,
+   2.213
+  ],
+  "peak_gpu0_mib": [
+   1150.0,
+   1139.0,
+   1151.0
+  ],
+  "peak_gpu1_mib": [
+   23030.0,
+   23030.0,
+   23030.0
+  ],
+  "peak_temp_gpu0": [
+   48.0,
+   47.0,
+   51.0
+  ],
+  "min_available_gib": [
+   12.4,
+   12.09,
+   12.44
+  ],
+  "expert_slots": [
+   8407,
+   8407,
+   8407
+  ]
+ }
+}

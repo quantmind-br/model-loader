@@ -1,0 +1,16 @@
+{
+  "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-training-32k",
+  "release": "20261001T223017Z-f85ddc896414",
+  "backend": "strata-perf-v4-20261001",
+  "exe": "/home/diogo/dev/model-loader/backends/strata-fork/releases/20261001T223017Z-f85ddc896414/strata",
+  "probe_flags": [
+    "--training"
+  ],
+  "set_arg": [
+    "--dump-routing=/home/diogo/dev/model-loader/docs/reports/strata-implementation-2026-10-01/claude-session/runs/v4-iq3-training-1/iq3-training.routing"
+  ],
+  "env": [],
+  "started": 1790894905.7235427,
+  "returncode": 0,
+  "finished": 1790894995.7509887
+}

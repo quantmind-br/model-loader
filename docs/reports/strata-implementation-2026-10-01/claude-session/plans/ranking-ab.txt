@@ -1,0 +1,7 @@
+# S13 holdout A/B: A = shared base expert-profile.bin, B = checkpoint rerank v1; one knob; A,B,B,A,A,B
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k v4-rank-A1
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-rerank-32k v4-rank-B1
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-rerank-32k v4-rank-B2
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k v4-rank-A2
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k v4-rank-A3
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-rerank-32k v4-rank-B3

@@ -1,0 +1,15 @@
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-ple8-32k	PLE8: exploratory complete, no effect
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-ple32-32k	PLE32: no effect (v4-iq3-ple32)
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-pool8-32k	pool 8: gain explained by trajectory; rejected
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-pool12-32k	pool 12: gain explained by trajectory; rejected
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-spec2-32k	spec2: rejected (-15 % code)
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-spec6-32k	spec6: rejected (per-token slower)
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-prefill1024-32k	prefill 1024: exploratory, no default change (S12)
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-prefill2048-32k	prefill 2048: exploratory, swap +1.5 GiB, no default change (S12)
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-cpu-parity-32k	STRATA_IQ_MT_MIN=1: no cost, no determinism; no change
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-nsys-32k	Nsight capture done (v4-iq3-nsys-1)
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-minp07-32k	spec-min-p 0.7: code tie, PT +4-5 %; not promoted (recreate for PT calibration)
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-prefill1024-32k	GPU1 prefill 1024: swap guard at load; not repeated without justified change
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-prefill2048-32k	GPU1 prefill 2048: dependent arm, never run; dropped with 1024
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-32k	IQ3 dual resident without stage-dense: swap guard at load; not repeated
+qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k	IQ4 dual resident-stage-dense: swap guard at load (v4-iq4-resident-stage-dense-fills)

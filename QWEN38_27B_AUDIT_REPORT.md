@@ -50,6 +50,12 @@ máquina tem **duas placas e um operador**. Por isso várias receitas upstream f
 Confirmado no log de boot: `Using FLASH_ATTN`, `DFlash2 lookup-augmented drafting on (k=7 …)`,
 `draft_logits=True`, `Using ['PYNCCL'] all-reduce backends`, `GPU KV cache size: 286,013 tokens`.
 
+> **SUPERSEDED 2026-09-27** (backend em vLLM 0.29.0 / HyperQwen `da8a8e9`): NCCL e
+> `VLLM_V2_CUDAGRAPH_MEM_MIB` não são mais o estado aplicado. Custom all-reduce com
+> `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:False` está ativo (`Using ['CUSTOM', 'PYNCCL']`), e a
+> variável de reserva de grafos não tem leitor no 0.29. Ver
+> `docs/reports/hyperqwen-parity-dual-rtx3090-2026-09-27.md`.
+
 ---
 
 ## 3. Backend, patches e paths
@@ -125,7 +131,10 @@ grafos PIECEWISE e desliga o kernel split-KV (que é FLASH_ATTN/bf16-only).
   (`"enabled": True,_00`). Rejeitado por correção, não por velocidade.
 - **`VLLM_DFLASH2_CHAIN=1`:** `TimeoutError: RPC call to sample_tokens timed out` → `EngineDeadError`
   na bateria de matemática em TP=2. Rejeitado.
-- **Custom all-reduce:** falha na inicialização de grafos; NCCL mantido.
+- **Custom all-reduce:** falha na inicialização de grafos; NCCL mantido. **SUPERSEDED 2026-09-27:** a
+  falha vinha de `expandable_segments:True` (segmento VMM sem handle CUDA IPC para o buffer de grafo,
+  gotcha 3 upstream), não do custom all-reduce; com `expandable_segments:False` ele sobe e ganha
+  +5–8% de decode (relatório de 2026-09-27).
 - **`VLLM_PREFILL_ATTN=int8`:** o kernel upstream exige 24 heads Q / 4 KV; em TP=2 são 12/2, o
   predicado é falso. **Definir a variável não ativa nada** — não anunciar como ativo.
 

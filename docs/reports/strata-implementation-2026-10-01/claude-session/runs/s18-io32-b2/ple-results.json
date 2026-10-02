@@ -1,0 +1,188 @@
+[
+  {
+    "index": 0,
+    "chars": 200000,
+    "ttft_s": 19.22059627100134,
+    "timings": {
+      "cache_n": 0,
+      "prompt_n": 59520,
+      "prompt_ms": 19106.3,
+      "prompt_per_token_ms": 0.321,
+      "prompt_per_second": 3115.2,
+      "predicted_n": 2,
+      "predicted_ms": 44.0,
+      "predicted_per_token_ms": 22.0,
+      "predicted_per_second": 45.5,
+      "draft_n": 3,
+      "draft_n_accepted": 3,
+      "effective_settings": {
+        "seed": 42,
+        "temperature": 0,
+        "top_k": 20,
+        "top_p": 0.8,
+        "min_p": 0.0,
+        "reasoning_effort": "none"
+      },
+      "engine_info": {
+        "version": "0.1.30",
+        "pcie_eligible_layers": 0,
+        "pcie_effective_frac": "0.0000",
+        "resident_expert_mib": 0,
+        "prefill_chunk": 8192,
+        "stage_dense": 1,
+        "context": 262144,
+        "kv": "int8",
+        "kv_resident": 0,
+        "expert_slots": 24576,
+        "expert_cache_mib": 33812,
+        "expert_slots_primary": 12288,
+        "expert_cache_primary_mib": 16575,
+        "spec": 6,
+        "mtp_max": 4,
+        "lookup": 3,
+        "vram_free_mib": 2395,
+        "cvec": 0,
+        "arena_mib": 0,
+        "pool_workers": 15,
+        "pcie_frac": "0.28",
+        "spec_min_p": "0.70",
+        "conversation_cache_mib": 0,
+        "conversation_cache_slots": 4,
+        "conversation_cache_min_free_mib": 2560,
+        "engine": "0.1.30"
+      }
+    },
+    "usage": {
+      "prompt_tokens": 59520,
+      "completion_tokens": 2,
+      "total_tokens": 59522,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "index": 1,
+    "chars": 200000,
+    "ttft_s": 19.823113319000186,
+    "timings": {
+      "cache_n": 0,
+      "prompt_n": 59293,
+      "prompt_ms": 19747.8,
+      "prompt_per_token_ms": 0.333,
+      "prompt_per_second": 3002.5,
+      "predicted_n": 2,
+      "predicted_ms": 40.6,
+      "predicted_per_token_ms": 20.3,
+      "predicted_per_second": 49.3,
+      "draft_n": 2,
+      "draft_n_accepted": 2,
+      "effective_settings": {
+        "seed": 42,
+        "temperature": 0,
+        "top_k": 20,
+        "top_p": 0.8,
+        "min_p": 0.0,
+        "reasoning_effort": "none"
+      },
+      "engine_info": {
+        "version": "0.1.30",
+        "pcie_eligible_layers": 0,
+        "pcie_effective_frac": "0.0000",
+        "resident_expert_mib": 0,
+        "prefill_chunk": 8192,
+        "stage_dense": 1,
+        "context": 262144,
+        "kv": "int8",
+        "kv_resident": 0,
+        "expert_slots": 24576,
+        "expert_cache_mib": 33812,
+        "expert_slots_primary": 12288,
+        "expert_cache_primary_mib": 16575,
+        "spec": 6,
+        "mtp_max": 4,
+        "lookup": 3,
+        "vram_free_mib": 2395,
+        "cvec": 0,
+        "arena_mib": 0,
+        "pool_workers": 15,
+        "pcie_frac": "0.28",
+        "spec_min_p": "0.70",
+        "conversation_cache_mib": 0,
+        "conversation_cache_slots": 4,
+        "conversation_cache_min_free_mib": 2560,
+        "engine": "0.1.30"
+      }
+    },
+    "usage": {
+      "prompt_tokens": 59293,
+      "completion_tokens": 2,
+      "total_tokens": 59295,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "index": 2,
+    "chars": 200000,
+    "ttft_s": 18.55078299699926,
+    "timings": {
+      "cache_n": 0,
+      "prompt_n": 57758,
+      "prompt_ms": 18485.5,
+      "prompt_per_token_ms": 0.32,
+      "prompt_per_second": 3124.5,
+      "predicted_n": 2,
+      "predicted_ms": 42.9,
+      "predicted_per_token_ms": 21.45,
+      "predicted_per_second": 46.6,
+      "draft_n": 3,
+      "draft_n_accepted": 3,
+      "effective_settings": {
+        "seed": 42,
+        "temperature": 0,
+        "top_k": 20,
+        "top_p": 0.8,
+        "min_p": 0.0,
+        "reasoning_effort": "none"
+      },
+      "engine_info": {
+        "version": "0.1.30",
+        "pcie_eligible_layers": 0,
+        "pcie_effective_frac": "0.0000",
+        "resident_expert_mib": 0,
+        "prefill_chunk": 8192,
+        "stage_dense": 1,
+        "context": 262144,
+        "kv": "int8",
+        "kv_resident": 0,
+        "expert_slots": 24576,
+        "expert_cache_mib": 33812,
+        "expert_slots_primary": 12288,
+        "expert_cache_primary_mib": 16575,
+        "spec": 6,
+        "mtp_max": 4,
+        "lookup": 3,
+        "vram_free_mib": 2395,
+        "cvec": 0,
+        "arena_mib": 0,
+        "pool_workers": 15,
+        "pcie_frac": "0.28",
+        "spec_min_p": "0.70",
+        "conversation_cache_mib": 0,
+        "conversation_cache_slots": 4,
+        "conversation_cache_min_free_mib": 2560,
+        "engine": "0.1.30"
+      }
+    },
+    "usage": {
+      "prompt_tokens": 57758,
+      "completion_tokens": 2,
+      "total_tokens": 57760,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  }
+]

@@ -30,6 +30,7 @@ func (s *Session) handleBackendIndex(w http.ResponseWriter, r *http.Request) {
 			domain.BackendKindUnsloth,
 			domain.BackendKindTabby,
 			domain.BackendKindFreeToken,
+			domain.BackendKindStrata,
 		},
 		IsNew:        s.deps.InitialBackendDraft.IsNew,
 		ReadOnlyKind: !s.deps.InitialBackendDraft.IsNew,

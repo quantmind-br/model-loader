@@ -1,0 +1,79 @@
+[
+  {
+    "source": "/home/diogo/models/strata/calibration-256k-20261001/results/baseline/raw.jsonl",
+    "sha256": "5c191cfa50997fe2924ed0d5cfae6df36b6fb970a6949a4593bb2f6b39ff5a13",
+    "label": "context-131072",
+    "prompt_tokens": 130826,
+    "swap_first_gib": 2.9256973266601562,
+    "swap_peak_gib": 3.0050582885742188,
+    "swap_growth_gib": 0.0793609619140625,
+    "ram_min_gib": 40.977298736572266,
+    "samples": 77
+  },
+  {
+    "source": "/home/diogo/models/strata/calibration-256k-20261001/results/baseline/raw.jsonl",
+    "sha256": "5c191cfa50997fe2924ed0d5cfae6df36b6fb970a6949a4593bb2f6b39ff5a13",
+    "label": "context-260000",
+    "prompt_tokens": 259641,
+    "swap_first_gib": 3.0050430297851562,
+    "swap_peak_gib": 4.077350616455078,
+    "swap_growth_gib": 1.0723075866699219,
+    "ram_min_gib": 40.67323684692383,
+    "samples": 167
+  },
+  {
+    "source": "/home/diogo/models/strata/context-20261001/results/iq2-xs-1m-v1/raw.jsonl",
+    "sha256": "69e8645ef0a64b6accaf38584ac8fbf116f28e4cd5e5b26f8caa07b265a65d4f",
+    "label": "context-250000",
+    "prompt_tokens": 249673,
+    "swap_first_gib": 0.972991943359375,
+    "swap_peak_gib": 0.972991943359375,
+    "swap_growth_gib": 0.0,
+    "ram_min_gib": 43.1274528503418,
+    "samples": 214
+  },
+  {
+    "source": "/home/diogo/models/strata/context-20261001/results/iq2-xs-1m-v1/raw.jsonl",
+    "sha256": "69e8645ef0a64b6accaf38584ac8fbf116f28e4cd5e5b26f8caa07b265a65d4f",
+    "label": "context-990000",
+    "prompt_tokens": 989136,
+    "swap_first_gib": 0.9686698913574219,
+    "swap_peak_gib": 1.2030601501464844,
+    "swap_growth_gib": 0.2343902587890625,
+    "ram_min_gib": 40.05990219116211,
+    "samples": 1412
+  },
+  {
+    "source": "/home/diogo/models/strata/iq4-tests-20261001/results/iq2-baseline-32k/raw.jsonl",
+    "sha256": "d8a443d6e2e80194f0df248ce3e2c5e11f0d5fda567cb5e67c06e18021e95771",
+    "label": "context-30000",
+    "prompt_tokens": 29825,
+    "swap_first_gib": 4.95245361328125,
+    "swap_peak_gib": 4.95245361328125,
+    "swap_growth_gib": 0.0,
+    "ram_min_gib": 43.633331298828125,
+    "samples": 24
+  },
+  {
+    "source": "/home/diogo/models/strata/iq4-tests-20261001/results/iq4-32k/raw.jsonl",
+    "sha256": "2fdc03d23301d4f6138f00bdc3fd2b1a19fec3669b03721a07715df174489d5f",
+    "label": "context-30000",
+    "prompt_tokens": null,
+    "swap_first_gib": 6.037605285644531,
+    "swap_peak_gib": 8.31573486328125,
+    "swap_growth_gib": 2.2781295776367188,
+    "ram_min_gib": 42.27387619018555,
+    "samples": 170
+  },
+  {
+    "source": "/home/diogo/models/strata/iq4-tests-20261001/results/iq4-32k-pf2048/raw.jsonl",
+    "sha256": "f4e716154a188c76a289cfdbf9f670359568ef5344e0bdf0ef687ea42fa1208b",
+    "label": "context-30000",
+    "prompt_tokens": null,
+    "swap_first_gib": 8.52621841430664,
+    "swap_peak_gib": 10.797840118408203,
+    "swap_growth_gib": 2.2716217041015625,
+    "ram_min_gib": 44.90878677368164,
+    "samples": 113
+  }
+]

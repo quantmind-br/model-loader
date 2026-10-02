@@ -1,0 +1,53 @@
+{
+  "exe": "/home/diogo/dev/model-loader/backends/strata-fork/releases/20261001T201850Z-8ae9e4e25528/strata",
+  "args": [
+    "--pack",
+    "/home/diogo/models/strata/packs/orca-iq3-xxs",
+    "--native",
+    "/home/diogo/models/huggingface/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--ple-gguf",
+    "/home/diogo/models/huggingface/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+    "--expert-profile",
+    "/home/diogo/dev/model-loader/backends/strata-fork/data/expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--prefill",
+    "512",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.5",
+    "--mtp",
+    "/home/diogo/models/strata/mtp/rt",
+    "--max-context",
+    "32768",
+    "--kv",
+    "int8",
+    "--pool-workers",
+    "15",
+    "--vram-reserve-mib",
+    "1536",
+    "--mmap-experts",
+    "--resident-experts",
+    "--stage-dense"
+  ],
+  "cwd": "/home/diogo/dev/model-loader/backends/strata-fork",
+  "tokenizer": "/home/diogo/models/strata/packs/orca-iq3-xxs/tokenizer",
+  "model_name": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+  "log": "/home/diogo/dev/model-loader/docs/reports/strata-implementation-2026-10-01/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k-engine.log",
+  "gpu": [
+    0,
+    1
+  ],
+  "layer_split": "24",
+  "sampling": {
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0,
+    "presence_penalty": 0,
+    "repetition_penalty": 1,
+    "seed": 42,
+    "experimental_speed_projection": false
+  }
+}

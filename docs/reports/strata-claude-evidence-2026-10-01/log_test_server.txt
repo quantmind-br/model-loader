@@ -1,0 +1,114 @@
+/home/diogo/dev/model-loader/backends/strata-fork/serve/telemetry.py:135: ResourceWarning: unclosed file <_io.TextIOWrapper name='/proc/stat' mode='r' encoding='UTF-8'>
+  f = [int(x) for x in open("/proc/stat").readline().split()[1:]]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/home/diogo/dev/model-loader/backends/strata-fork/serve/telemetry.py:118: ResourceWarning: unclosed file <_io.TextIOWrapper name='/proc/cpuinfo' mode='r' encoding='utf-8'>
+  return line.split(":", 1)[1].strip()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+[strata] done: 12 tokens in 0 s (185725.6 tok/s) (stop, cancel=False)
+..[strata] done: 12 tokens in 0 s (306900.3 tok/s) (stop, cancel=False)
+.[strata] done: 12 tokens in 0 s (340078.7 tok/s) (stop, cancel=False)
+[strata] done: 12 tokens in 0 s (364722.1 tok/s) (stop, cancel=False)
+[strata] done: 12 tokens in 0 s (356962.0 tok/s) (stop, cancel=False)
+.[strata] the engine reported an error: verify: layer 31 never rang (an illegal memory access was encountered)
+[strata] done: 0 tokens in 0 s (0.0 tok/s) (error, cancel=False)
+[strata] the engine reported an error: verify: layer 31 never rang (an illegal memory access was encountered)
+[strata] done: 0 tokens in 0 s (0.0 tok/s) (error, cancel=False)
+.[strata] the engine stopped unexpectedly (exit code -9).  The next request starts the engine again.
+[strata] done: 5 tokens in 0 s (140748.5 tok/s) (error, cancel=False)
+[strata] the engine had stopped (exit code None); starting it again (a minute or two) ...
+[strata] the engine is running again
+[strata] done: 50 tokens in 0 s (268521.4 tok/s) (length, cancel=False)
+.[strata] done: 50 tokens in 0 s (207433.4 tok/s) (length, cancel=False)
+.[strata] done: 1 tokens in 0 s (123361.9 tok/s) (length, cancel=False)
+.[strata] done: 2011 tokens in 0 s (16760.4 tok/s) (stop, cancel=False)
+[strata] done: 2011 tokens in 0 s (16888.3 tok/s) (stop, cancel=False)
+...[strata] the engine stopped unexpectedly (exit code -9).  The next request starts the engine again.
+[strata] done: 3 tokens in 0 s (40459.5 tok/s) (error, cancel=False)
+..[strata] done: 30 tokens in 1 s (51.5 tok/s) (length, cancel=False)
+..[strata] done: 50 tokens in 0 s (220520.7 tok/s) (length, cancel=False)
+[strata] done: 50 tokens in 0 s (235106.7 tok/s) (length, cancel=False)
+[strata] done: 50 tokens in 0 s (231985.8 tok/s) (length, cancel=False)
+[strata] done: 50 tokens in 0 s (215313.3 tok/s) (length, cancel=False)
+[strata] done: 1500 tokens in 0 s (22138.0 tok/s) (length, cancel=False)
+[strata] done: 1500 tokens in 0 s (22289.3 tok/s) (length, cancel=False)
+..[strata] done: 2011 tokens in 0 s (16567.4 tok/s) (stop, cancel=False)
+[strata] done: 2011 tokens in 0 s (16542.5 tok/s) (stop, cancel=False)
+[strata] done: 2011 tokens in 0 s (16697.5 tok/s) (stop, cancel=False)
+[strata] done: 2011 tokens in 0 s (16636.7 tok/s) (stop, cancel=False)
+[strata] done: 2011 tokens in 0 s (16789.2 tok/s) (stop, cancel=False)
+[strata] done: 2011 tokens in 0 s (16423.8 tok/s) (stop, cancel=False)
+[strata] done: 2011 tokens in 0 s (16924.2 tok/s) (stop, cancel=False)
+[strata] done: 2011 tokens in 0 s (16886.3 tok/s) (stop, cancel=False)
+[strata] done: 2011 tokens in 0 s (16898.0 tok/s) (stop, cancel=False)
+[strata] done: 2011 tokens in 0 s (16930.1 tok/s) (stop, cancel=False)
+.[strata] done: 1 tokens in 0 s (167772.2 tok/s) (length, cancel=False)
+[strata] done: 1 tokens in 0 s (85598.0 tok/s) (length, cancel=False)
+[strata] done: 5 tokens in 0 s (275941.1 tok/s) (length, cancel=False)
+[strata] done: 1 tokens in 0 s (131072.0 tok/s) (length, cancel=False)
+[strata] done: 5 tokens in 0 s (374491.4 tok/s) (length, cancel=False)
+.[strata] done: 10 tokens in 0 s (106997.6 tok/s) (length, cancel=False), expert cache 90.0% hit
+[strata] done: 10 tokens in 0 s (252668.9 tok/s) (length, cancel=False), expert cache 90.0% hit
+[strata] done: 1 tokens in 0 s (59074.7 tok/s) (cancel, cancel=True), expert cache 90.0% hit
+[strata] done: 10 tokens in 0 s (270600.3 tok/s) (length, cancel=False), expert cache 90.0% hit
+[strata] done: 1 tokens in 0 s (52428.8 tok/s) (disconnect, cancel=False), expert cache 90.0% hit
+[strata] done: 10 tokens in 0 s (281496.9 tok/s) (length, cancel=False), expert cache 90.0% hit
+[strata] test failure.  The next request starts the engine again.
+[strata] done: 1 tokens in 0 s (36472.2 tok/s) (error, cancel=False)
+[strata] done: 10 tokens in 0 s (223101.3 tok/s) (length, cancel=False), expert cache 90.0% hit
+.[strata] done: 2 tokens in 0 s (178481.0 tok/s) (length, cancel=False)
+....[strata] other apps now use the Chat settings: temperature=0.3
+[strata] other apps use their own settings again
+[strata] done: 16 tokens in 0 s (270600.3 tok/s) (stop, cancel=False)
+.[strata] other apps now use the Chat settings: temperature=1.0
+.[strata] other apps now use the Chat settings: temperature=0.3, top_p=0.9, top_k=10, seed=7, max_tokens=77, reasoning_effort=low, experimental_speed_projection=False
+[strata] done: 16 tokens in 0 s (370767.2 tok/s) (stop, cancel=False)
+[strata] done: 5 tokens in 0 s (265462.3 tok/s) (length, cancel=False)
+.[strata] other apps now use the Chat settings: temperature=1.0
+.[strata] model unloaded; the next request loads it again
+[strata] before loading: /usr/bin/python3 -c open('/tmp/tmp934fe62g/ran', 'w').close()
+[strata] loading the model again (it was unloaded) ...
+[strata] the engine is running again
+[strata] done: 13 tokens in 0 s (378652.4 tok/s) (stop, cancel=False)
+.[strata] the model unloads after 1 s without requests
+[strata] model unloaded after 1 s idle; the next request loads it again
+[strata] loading the model again (it was unloaded) ...
+[strata] the engine is running again
+[strata] done: 13 tokens in 0 s (386708.9 tok/s) (stop, cancel=False)
+.[strata] model unloaded; the next request loads it again
+[strata] loading the model again (it was unloaded) ...
+[strata] the engine is running again
+.[strata] model unloaded; the next request loads it again
+[strata] model unloaded after 1 s idle; the next request loads it again
+[strata] loading the model again (it was unloaded) ...
+[strata] the engine is running again
+[strata] done: 13 tokens in 0 s (324559.2 tok/s) (stop, cancel=False)
+.[strata] model unloaded; the next request loads it again
+[strata] loading the model again (it was unloaded) ...
+[strata] the engine is running again
+[strata] done: 13 tokens in 0 s (291582.6 tok/s) (stop, cancel=False)
+...[strata] model unloaded; the next request loads it again
+[strata] loading the model again (it was unloaded) ...
+[strata] the engine is running again
+[strata] done: 13 tokens in 0 s (281061.6 tok/s) (stop, cancel=False)
+.[strata] model unloaded; the next request loads it again
+[strata] starting the vision encoder again ...
+[strata] loading the model again (it was unloaded) ...
+[strata] the engine is running again
+[strata] done: 13 tokens in 0 s (251271.7 tok/s) (stop, cancel=False)
+....[strata] done: 13 tokens in 0 s (247845.2 tok/s) (stop, cancel=False), expert cache 90.0% hit
+.[strata] done: 5 tokens in 0 s (291271.1 tok/s) (length, cancel=False)
+.[strata] done: 13 tokens in 0 s (227191.5 tok/s) (stop, cancel=False), expert cache 90.0% hit
+.[strata] done: 13 tokens in 0 s (183589.1 tok/s) (stop, cancel=False), expert cache 90.0% hit
+.[strata] done: 13 tokens in 0 s (278193.6 tok/s) (stop, cancel=False), expert cache 90.0% hit
+../usr/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <HTTPError 503: 'Service Unavailable'>
+  _warnings.warn(self.warn_message, ResourceWarning)
+./usr/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <HTTPError 401: 'Unauthorized'>
+  _warnings.warn(self.warn_message, ResourceWarning)
+.[strata] done: 5 tokens in 0 s (291271.1 tok/s) (length, cancel=False)
+../usr/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <HTTPError 404: 'Not Found'>
+  _warnings.warn(self.warn_message, ResourceWarning)
+...
+----------------------------------------------------------------------
+Ran 53 tests in 30.335s
+
+OK

@@ -1,0 +1,21 @@
+== iq2-baseline-32k
+  code-0             prompt=54      swap first 4.975 max 4.975 growth 0.000 | ram min 43.45 | err=[]
+  code-1             prompt=54      swap first 4.975 max 4.975 growth 0.000 | ram min 43.66 | err=[]
+  code-2             prompt=54      swap first 4.975 max 4.975 growth 0.000 | ram min 43.78 | err=[]
+  code-3             prompt=54      swap first 4.973 max 4.973 growth 0.000 | ram min 43.79 | err=[]
+  portuguese         prompt=69      swap first 4.953 max 4.953 growth 0.000 | ram min 43.87 | err=[]
+  context-30000      prompt=29825   swap first 4.952 max 4.952 growth 0.000 | ram min 43.63 | err=[]
+== iq4-32k
+  code-0             prompt=54      swap first 5.797 max 5.797 growth 0.000 | ram min 44.86 | err=[]
+  code-1             prompt=54      swap first 5.791 max 5.800 growth 0.009 | ram min 42.12 | err=[]
+  code-2             prompt=54      swap first 5.799 max 5.799 growth 0.000 | ram min 43.05 | err=[]
+  code-3             prompt=54      swap first 5.798 max 5.798 growth 0.000 | ram min 43.94 | err=[]
+  portuguese         prompt=69      swap first 5.798 max 6.032 growth 0.234 | ram min 44.97 | err=[]
+  context-30000      prompt=None    swap first 6.038 max 8.316 growth 2.278 | ram min 42.27 | err=['memory guard: {"at": 1790854508.7618358, "gpu": [[0.0, 229
+== iq4-32k-pf2048
+  code-0             prompt=54      swap first 8.908 max 8.908 growth 0.000 | ram min 43.54 | err=[]
+  code-1             prompt=54      swap first 8.864 max 9.004 growth 0.140 | ram min 45.55 | err=[]
+  code-2             prompt=54      swap first 9.003 max 9.003 growth 0.000 | ram min 45.94 | err=[]
+  code-3             prompt=54      swap first 8.865 max 8.865 growth 0.000 | ram min 45.61 | err=[]
+  portuguese         prompt=69      swap first 8.720 max 8.720 growth 0.000 | ram min 45.69 | err=[]
+  context-30000      prompt=None    swap first 8.526 max 10.798 growth 2.272 | ram min 44.91 | err=['memory guard: {"at": 1790855048.576305, "gpu": [[0.0, 2296

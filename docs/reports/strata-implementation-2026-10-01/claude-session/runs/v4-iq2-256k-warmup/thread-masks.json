@@ -1,0 +1,569 @@
+{
+  "time": 1790896520.8559537,
+  "after": "code-0",
+  "servers": [
+    1290644
+  ],
+  "processes": {
+    "1290644": {
+      "exe": "/usr/bin/python3.14",
+      "tasks": [
+        {
+          "tid": 1290644,
+          "comm": "python",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 12,
+          "utime": 26,
+          "stime": 4,
+          "voluntary": 177,
+          "nonvoluntary": 62
+        },
+        {
+          "tid": 1293106,
+          "comm": "Thread-2 (_pump",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 18,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 222,
+          "nonvoluntary": 0
+        },
+        {
+          "tid": 1293107,
+          "comm": "cuda0000240000a",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 22,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 2,
+          "nonvoluntary": 0
+        },
+        {
+          "tid": 1293108,
+          "comm": "Thread-3 (_loop",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 12,
+          "utime": 0,
+          "stime": 2,
+          "voluntary": 29,
+          "nonvoluntary": 2
+        },
+        {
+          "tid": 1293109,
+          "comm": "Thread-4 (serve",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 14,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 25,
+          "nonvoluntary": 3
+        },
+        {
+          "tid": 1293639,
+          "comm": "Thread-8 (proce",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 20,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 9,
+          "nonvoluntary": 0
+        }
+      ]
+    },
+    "1290648": {
+      "exe": "/home/diogo/dev/model-loader/backends/strata-fork/releases/20261001T223017Z-f85ddc896414/strata",
+      "tasks": [
+        {
+          "tid": 1290648,
+          "comm": "strata",
+          "cpus_allowed_list": "0",
+          "last_cpu": 0,
+          "utime": 904,
+          "stime": 339,
+          "voluntary": 310074,
+          "nonvoluntary": 1102
+        },
+        {
+          "tid": 1290649,
+          "comm": "cuda00001400006",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 4,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 3,
+          "nonvoluntary": 0
+        },
+        {
+          "tid": 1290657,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 6,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 77,
+          "nonvoluntary": 0
+        },
+        {
+          "tid": 1290658,
+          "comm": "cuda-EvtHandlr",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 20,
+          "utime": 1,
+          "stime": 1,
+          "voluntary": 4918,
+          "nonvoluntary": 74
+        },
+        {
+          "tid": 1290659,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 10,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 380,
+          "nonvoluntary": 3
+        },
+        {
+          "tid": 1290780,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 17,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 762,
+          "nonvoluntary": 7
+        },
+        {
+          "tid": 1290781,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 3,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 768,
+          "nonvoluntary": 5
+        },
+        {
+          "tid": 1290782,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 23,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 756,
+          "nonvoluntary": 8
+        },
+        {
+          "tid": 1290783,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 5,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 765,
+          "nonvoluntary": 12
+        },
+        {
+          "tid": 1290784,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 16,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 763,
+          "nonvoluntary": 10
+        },
+        {
+          "tid": 1290785,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 1,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 757,
+          "nonvoluntary": 9
+        },
+        {
+          "tid": 1290786,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 7,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 771,
+          "nonvoluntary": 8
+        },
+        {
+          "tid": 1290787,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 0,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 746,
+          "nonvoluntary": 3
+        },
+        {
+          "tid": 1290788,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 21,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 759,
+          "nonvoluntary": 8
+        },
+        {
+          "tid": 1290789,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 4,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 757,
+          "nonvoluntary": 2
+        },
+        {
+          "tid": 1290790,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 6,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 745,
+          "nonvoluntary": 9
+        },
+        {
+          "tid": 1290791,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 20,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 767,
+          "nonvoluntary": 3
+        },
+        {
+          "tid": 1290792,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 18,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 773,
+          "nonvoluntary": 15
+        },
+        {
+          "tid": 1290793,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 19,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 755,
+          "nonvoluntary": 12
+        },
+        {
+          "tid": 1290794,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 5,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 748,
+          "nonvoluntary": 6
+        },
+        {
+          "tid": 1290795,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 22,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 768,
+          "nonvoluntary": 10
+        },
+        {
+          "tid": 1290796,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 17,
+          "utime": 0,
+          "stime": 1,
+          "voluntary": 7210,
+          "nonvoluntary": 41
+        },
+        {
+          "tid": 1290798,
+          "comm": "strata",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 2,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 75,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1290799,
+          "comm": "cuda-EvtHandlr",
+          "cpus_allowed_list": "0-31",
+          "last_cpu": 14,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 378,
+          "nonvoluntary": 3
+        },
+        {
+          "tid": 1290844,
+          "comm": "strata",
+          "cpus_allowed_list": "1",
+          "last_cpu": 1,
+          "utime": 2,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 0
+        },
+        {
+          "tid": 1290845,
+          "comm": "strata",
+          "cpus_allowed_list": "2",
+          "last_cpu": 2,
+          "utime": 1,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1290846,
+          "comm": "strata",
+          "cpus_allowed_list": "3",
+          "last_cpu": 3,
+          "utime": 1,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1290847,
+          "comm": "strata",
+          "cpus_allowed_list": "4",
+          "last_cpu": 4,
+          "utime": 2,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1290848,
+          "comm": "strata",
+          "cpus_allowed_list": "5",
+          "last_cpu": 5,
+          "utime": 1,
+          "stime": 0,
+          "voluntary": 2,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1290849,
+          "comm": "strata",
+          "cpus_allowed_list": "6",
+          "last_cpu": 6,
+          "utime": 1,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 6
+        },
+        {
+          "tid": 1290850,
+          "comm": "strata",
+          "cpus_allowed_list": "7",
+          "last_cpu": 7,
+          "utime": 1,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1290851,
+          "comm": "strata",
+          "cpus_allowed_list": "8",
+          "last_cpu": 8,
+          "utime": 1,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 5
+        },
+        {
+          "tid": 1290852,
+          "comm": "strata",
+          "cpus_allowed_list": "9",
+          "last_cpu": 9,
+          "utime": 1,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1290853,
+          "comm": "strata",
+          "cpus_allowed_list": "10",
+          "last_cpu": 10,
+          "utime": 1,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1290854,
+          "comm": "strata",
+          "cpus_allowed_list": "11",
+          "last_cpu": 11,
+          "utime": 1,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1290855,
+          "comm": "strata",
+          "cpus_allowed_list": "12",
+          "last_cpu": 12,
+          "utime": 1,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1290856,
+          "comm": "strata",
+          "cpus_allowed_list": "13",
+          "last_cpu": 13,
+          "utime": 1,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1290857,
+          "comm": "strata",
+          "cpus_allowed_list": "14",
+          "last_cpu": 14,
+          "utime": 1,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1290858,
+          "comm": "strata",
+          "cpus_allowed_list": "15",
+          "last_cpu": 15,
+          "utime": 2,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1293046,
+          "comm": "strata",
+          "cpus_allowed_list": "1-15,17-31",
+          "last_cpu": 18,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 2,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1293047,
+          "comm": "strata",
+          "cpus_allowed_list": "1-15,17-31",
+          "last_cpu": 20,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 4,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1293048,
+          "comm": "strata",
+          "cpus_allowed_list": "1-15,17-31",
+          "last_cpu": 21,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 2,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1293049,
+          "comm": "strata",
+          "cpus_allowed_list": "1-15,17-31",
+          "last_cpu": 22,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 2,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1293100,
+          "comm": "strata",
+          "cpus_allowed_list": "1-15,17-31",
+          "last_cpu": 22,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1293101,
+          "comm": "strata",
+          "cpus_allowed_list": "1-15,17-31",
+          "last_cpu": 23,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 1,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1293102,
+          "comm": "strata",
+          "cpus_allowed_list": "1-15,17-31",
+          "last_cpu": 26,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 3,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1293103,
+          "comm": "strata",
+          "cpus_allowed_list": "1-15,17-31",
+          "last_cpu": 25,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 2,
+          "nonvoluntary": 1
+        },
+        {
+          "tid": 1293104,
+          "comm": "strata",
+          "cpus_allowed_list": "0",
+          "last_cpu": 0,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 103,
+          "nonvoluntary": 0
+        },
+        {
+          "tid": 1293105,
+          "comm": "strata",
+          "cpus_allowed_list": "0",
+          "last_cpu": 0,
+          "utime": 0,
+          "stime": 0,
+          "voluntary": 6,
+          "nonvoluntary": 0
+        }
+      ]
+    }
+  }
+}

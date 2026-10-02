@@ -21,15 +21,15 @@ type ChatMessage struct {
 // ChatRequest is the OpenAI-compatible chat completion request body. Always
 // streamed with include_usage so the final chunk carries token counts.
 type ChatRequest struct {
-	Model       string        `json:"model"`
-	Messages    []ChatMessage `json:"messages"`
+	Model    string        `json:"model"`
+	Messages []ChatMessage `json:"messages"`
 	// Temperature is the sampling temperature. Nil omits the field from the
 	// request so the model-under-test inherits the sampling the profile
 	// launched with (llama-server applies its CLI --temperature/--top-p/… to
 	// any omitted field). Non-nil sends an explicit value — used only for the
 	// judge/grader endpoints, which stay deterministic.
-	Temperature *float64      `json:"temperature,omitempty"`
-	MaxTokens   int           `json:"max_tokens"`
+	Temperature *float64 `json:"temperature,omitempty"`
+	MaxTokens   int      `json:"max_tokens"`
 	// IgnoreEOS asks the backend to keep generating until MaxTokens is reached,
 	// suppressing the end-of-sequence stop. llama.cpp, vLLM and SGLang all honor
 	// "ignore_eos"; the throughput probe sets it so every sample generates a
@@ -45,6 +45,7 @@ type ChatRequest struct {
 // CompletionResult holds the model output plus the per-request metrics the
 // benchmark records (token cost, generation speed, latency).
 type CompletionResult struct {
+	ServerTimings       *ServerTimings
 	Content             string
 	Reasoning           string // accumulated reasoning_content deltas (thinking models), kept out of Content
 	PromptTokens        int
@@ -90,10 +91,10 @@ func completeOnce(ctx context.Context, doer httpDoer, base, apiKey string, req C
 		doer = http.DefaultClient
 	}
 	payload := map[string]any{
-		"model":       req.Model,
-		"messages":    req.Messages,
-		"max_tokens":  req.MaxTokens,
-		"stream":      true,
+		"model":      req.Model,
+		"messages":   req.Messages,
+		"max_tokens": req.MaxTokens,
+		"stream":     true,
 		"stream_options": map[string]any{
 			"include_usage": true,
 		},
@@ -271,15 +272,23 @@ func buildResult(st streamState, start time.Time) CompletionResult {
 		TokensPerSecond:     tps,
 		PromptProcessingTPS: ppTps,
 		TimingsFromServer:   fromServer,
+		ServerTimings:       st.timings,
 	}
 }
 
-// chunkTimings is llama-server's per-request timings block, appended to the
-// final stream chunk. Other OpenAI-compatible servers simply omit it.
-type chunkTimings struct {
-	PromptPerSecond    float64 `json:"prompt_per_second"`
-	PredictedPerSecond float64 `json:"predicted_per_second"`
+// ServerTimings preserves optional backend measurements from the final chunk.
+// Raw metadata values retain exact integer seeds and backend-specific fields.
+type ServerTimings struct {
+	CacheN             *int                       `json:"cache_n,omitempty"`
+	DraftN             *int                       `json:"draft_n,omitempty"`
+	DraftNAccepted     *int                       `json:"draft_n_accepted,omitempty"`
+	EffectiveSettings  map[string]json.RawMessage `json:"effective_settings,omitempty"`
+	EngineInfo         map[string]json.RawMessage `json:"engine_info,omitempty"`
+	PromptPerSecond    float64                    `json:"prompt_per_second"`
+	PredictedPerSecond float64                    `json:"predicted_per_second"`
 }
+
+type chunkTimings = ServerTimings
 
 type streamChunk struct {
 	Choices []struct {

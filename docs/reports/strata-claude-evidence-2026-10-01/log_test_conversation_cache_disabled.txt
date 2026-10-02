@@ -1,0 +1,15 @@
+.F....
+======================================================================
+FAIL: test_dry_run_does_not_load_or_create_output (test_conversation_cache_disabled.DisabledCacheGateTest.test_dry_run_does_not_load_or_create_output)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/diogo/dev/model-loader/backends/strata-fork/tools/test_conversation_cache_disabled.py", line 99, in test_dry_run_does_not_load_or_create_output
+    self.assertEqual(p.returncode, 0, p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0 : /usr/bin/python3: can't open file '/tmp/strata-claude-independent-20261001/tools/conversation_cache_disabled.py': [Errno 2] No such file or directory
+
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.128s
+
+FAILED (failures=1)

@@ -1,0 +1,97 @@
+[
+  {
+    "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-32k",
+    "label": "iq2-final-32k",
+    "flags": [
+      "--fills",
+      "--controls"
+    ],
+    "returncode": 0
+  },
+  {
+    "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-256k",
+    "label": "iq2-final-256k-fresh",
+    "flags": [
+      "--fills"
+    ],
+    "returncode": 1
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k",
+    "label": "gpu1-prefill512",
+    "flags": [
+      "--fills"
+    ],
+    "returncode": 0
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-prefill1024-32k",
+    "label": "gpu1-prefill1024",
+    "fills": true,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k",
+    "knob": "--prefill",
+    "value": "1024",
+    "flags": [
+      "--fills"
+    ],
+    "returncode": 1
+  },
+  {
+    "label": "gpu1-prefill2048",
+    "skipped": "dependency failed gpu1-prefill1024"
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "label": "dual-prefill512",
+    "flags": [
+      "--fills",
+      "--controls",
+      "--tuning"
+    ],
+    "returncode": 0
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-prefill1024-32k",
+    "label": "dual-prefill1024",
+    "fills": true,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "knob": "--prefill",
+    "value": "1024",
+    "flags": [
+      "--fills"
+    ],
+    "returncode": 0
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-prefill2048-32k",
+    "label": "dual-prefill2048",
+    "fills": true,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "knob": "--prefill",
+    "value": "2048",
+    "flags": [
+      "--fills"
+    ],
+    "returncode": 0
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-pool8-32k",
+    "label": "dual-pool8",
+    "fills": false,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "knob": "--pool-workers",
+    "value": "8",
+    "flags": [],
+    "returncode": 0
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-pool12-32k",
+    "label": "dual-pool12",
+    "fills": false,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "knob": "--pool-workers",
+    "value": "12",
+    "flags": [],
+    "returncode": 0
+  }
+]

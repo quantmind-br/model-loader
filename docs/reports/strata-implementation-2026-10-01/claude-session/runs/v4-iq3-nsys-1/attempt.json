@@ -1,0 +1,17 @@
+{
+  "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-nsys-32k",
+  "release": "20261001T223017Z-f85ddc896414",
+  "backend": "strata-perf-v4-20261001",
+  "exe": "/home/diogo/dev/model-loader/docs/reports/strata-implementation-2026-10-01/claude-session/tools/nsys-native-v4.sh",
+  "probe_flags": [
+    "--linger",
+    "150"
+  ],
+  "set_arg": [],
+  "env": [
+    "STRATA_NSYS_OUT=/home/diogo/dev/model-loader/docs/reports/strata-implementation-2026-10-01/claude-session/runs/v4-iq3-nsys-1/iq3-nsys"
+  ],
+  "started": 1790895581.2642672,
+  "returncode": 0,
+  "finished": 1790895816.0755765
+}

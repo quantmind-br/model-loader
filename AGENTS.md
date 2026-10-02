@@ -412,6 +412,15 @@ Test-only third-party: `charmbracelet/x/exp/teatest` (2 files).
 (verified via `git ls-files`). `docs/superpowers/` and `TUI_AUDIT.md` are
 ignored design/audit artifacts.
 
+### GPU power cap (reference hardware)
+
+The dual RTX 3090 workstation now runs with a reduced power cap (270 W per
+card since 2026-09-27; set with `nvidia-smi -pl`). All existing reference
+measurements in this repository (tuning reports, audit reports, profile
+descriptions, saved benchmark baselines) were taken at **290 W per card**.
+Account for the cap difference before comparing new throughput/TTFT numbers
+against those baselines; `scripts/powercap-sweep.py` measures the effect.
+
 ### Defect tracking
 
 Track new defects in GitHub Issues (bug-report template). Existing regression

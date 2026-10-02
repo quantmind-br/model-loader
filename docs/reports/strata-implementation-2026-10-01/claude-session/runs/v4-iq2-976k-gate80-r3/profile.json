@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 3,
+  "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-976k",
+  "name": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-976k",
+  "description": "IDEATION candidate; calibration pending. IQ2_XS max-context profile, validated 2026-10-01: 1000000 tokens (976k label), YaRN factor4/original262144; Strata 0.1.30 fork97cb786 sm86 plus managed HTTP support; dual RTX3090 270W/card, layers24/24, mmap experts, KV int8, 15 workers, auto expert cache15506/24576 and prefill8192, MTP Q2_0 spec4/minp0.7. Near-full989136 input tokens: retrieval3/3, TTFT744.86s, decode57.0tok/s, peakGPU22.58/22.48GiB; no OOM/Xid. Native Model Loader benchmark 5% fill47572 tokens: cached decode131.6+/-1.8tok/s (3 reps), cached TTFT142ms. Warm short code126.5tok/s, TTFT.334s. MTP acceptance179/193 warm code,53/71 near-full. Official Qwen template de4b8e4d; non-thinking temp.7/top_p.8/k20/min_p0/presence1.5/repetition1. Tool integrity4/4 and one clean continuation, auto10/10 positives but1/10 spurious controls; prior32k repeat-after-success issue remains a caveat. Not agent-qualified; long-context quality beyond this retrieval smoke is unmeasured. Baseline32k preserved.",
+  "model": "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+  "args": {
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-976k.json",
+    "host": "127.0.0.1",
+    "max-context": 1000000
+  },
+  "launch": {
+    "defaultBackground": true,
+    "backendId": "strata-perf-v4-20261001",
+    "env": [
+      {
+        "key": "STRATA_DECODE_TIMING",
+        "value": "1"
+      },
+      {
+        "key": "STRATA_SPLIT_TIMING",
+        "value": "1"
+      }
+    ],
+    "restart_policy": "none",
+    "max_restarts": 0,
+    "backoff_seconds": 0
+  },
+  "meta": {
+    "createdAt": "2026-10-01T20:09:30.63069762Z",
+    "updatedAt": "2026-10-02T00:27:47.113895202Z",
+    "lastUsedAt": "2026-10-02T00:27:47.11381935Z"
+  },
+  "pinned": true
+}

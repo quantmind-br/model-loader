@@ -1,0 +1,46 @@
+ab256-A1 {'median': 123.6, 'min': 120.7, 'max': 124.4} {'0': 22940.0, '1': 22995.0} 0.0 GUARD {'exact_copy': True, 'json_text': True}
+ab256-A2 {'median': 123.5, 'min': 116.1, 'max': 125.6} {'0': 22940.0, '1': 22995.0} 0.0 GUARD {'exact_copy': True, 'json_text': True}
+ab256-B1 {'median': 127.6, 'min': 123.4, 'max': 127.8} {'0': 21596.0, '1': 22957.0} 0.0 GUARD {'exact_copy': True, 'json_text': True}
+ab256-B2 {'median': 125.6, 'min': 110.3, 'max': 126.2} {'0': 21609.0, '1': 22957.0} 1.104 GUARD {'exact_copy': True, 'json_text': True}
+ab256-C1 {'median': 124.2, 'min': 119.7, 'max': 124.8} {'0': 22940.0, '1': 22997.0} 0.0  {'exact_copy': True, 'json_text': True}
+ab256v2-A1 {'median': 122.8, 'min': 106.0, 'max': 123.6} {'0': 22942.0, '1': 22997.0} 0.09  {'exact_copy': True, 'json_text': True}
+ab256v2-A2 {'median': 122.2, 'min': 122.1, 'max': 124.8} {'0': 22942.0, '1': 22997.0} 0.065  {'exact_copy': True, 'json_text': True}
+ab256v2-A3 {'median': 123.9, 'min': 121.8, 'max': 125.7} {'0': 22940.0, '1': 22997.0} 0.0  {'exact_copy': True, 'json_text': True}
+ab256v2-B-controls {'median': 128.4, 'min': 120.9, 'max': 128.6} {'0': 21610.0, '1': 22965.0} 0.0  {'exact_copy': True, 'json_text': True, 'seed_zero_repeat': True, 'stop_unicode': True, 'tool_bytes': True, 'continuation_no_repeat': True, 'no_tool_control': True}
+ab256v2-B1 {'median': 128.3, 'min': 123.5, 'max': 128.4} {'0': 21596.0, '1': 22957.0} 0.201  {'exact_copy': True, 'json_text': True}
+ab256v2-B2 {'median': 127.7, 'min': 123.6, 'max': 127.8} {'0': 21596.0, '1': 22957.0} 0.0  {'exact_copy': True, 'json_text': True}
+ab256v2-B3 {'median': 127.7, 'min': 123.6, 'max': 127.9} {'0': 21596.0, '1': 22957.0} 0.0  {'exact_copy': True, 'json_text': True}
+ab256v2-C-controls {'median': 124.0, 'min': 121.4, 'max': 124.6} {'0': 22956.0, '1': 23001.0} 0.0  {'exact_copy': True, 'json_text': True, 'seed_zero_repeat': False, 'stop_unicode': False, 'tool_bytes': True, 'continuation_no_repeat': True, 'no_tool_control': True}
+ab256v2-C1 {'median': 124.4, 'min': 118.3, 'max': 127.8} {'0': 22940.0, '1': 22997.0} 0.0  {'exact_copy': True, 'json_text': True}
+ab256v2-C2 {'median': 123.5, 'min': 118.2, 'max': 124.2} {'0': 22940.0, '1': 22997.0} 0.0  {'exact_copy': True, 'json_text': True}
+ab256v2-C3 {'median': 123.7, 'min': 119.6, 'max': 124.3} {'0': 22940.0, '1': 22997.0} 0.0  {'exact_copy': True, 'json_text': True}
+v3-iq3-ref-controls-1 {'median': 116.6, 'min': 104.1, 'max': 118.7} {'0': 22987.0, '1': 23083.0} 0.327  {'exact_copy': True, 'json_text': True, 'seed_zero_repeat': False, 'stop_unicode': True, 'tool_bytes': True, 'continuation_no_repeat': False, 'no_tool_control': True}
+v4-iq2-256k-warmup {'median': 127.5, 'min': 123.6, 'max': 127.6} {'0': 21556.0, '1': 22913.0} 0.0  {'exact_copy': True, 'json_text': True}
+v4-iq2-976k-gate80 {'median': 119.8, 'min': 112.8, 'max': 124.7} {'0': 22952.0, '1': 23011.0} 2.102 GUARD {'exact_copy': True, 'json_text': True}
+v4-iq2-976k-gate80-r2 {'median': 123.8, 'min': 115.6, 'max': 123.9} {'0': 22904.0, '1': 22963.0} 0.587  {}
+v4-iq2-976k-gate80-r3 {'median': 120.6, 'min': 114.5, 'max': 124.1} {'0': 22952.0, '1': 23011.0} 0.0  {'exact_copy': True, 'json_text': True}
+v4-iq2-stage-dense-256k-fills-1 {'median': 128.5, 'min': 124.6, 'max': 128.9} {'0': 21614.0, '1': 22957.0} 0.004  {'exact_copy': True, 'json_text': True}
+v4-iq3-cpu-parity-1 {'median': 118.3, 'min': 107.8, 'max': 124.3} {'0': 22986.0, '1': 23083.0} 0.013  {'exact_copy': True, 'json_text': True, 'seed_zero_repeat': False, 'stop_unicode': True, 'tool_bytes': True, 'continuation_no_repeat': False, 'no_tool_control': True}
+v4-iq3-cpu-parity-2 {'median': 117.7, 'min': 109.7, 'max': 118.1} {'0': 22934.0, '1': 23031.0} 0.155  {'exact_copy': True, 'json_text': True}
+v4-iq3-nsys-1 {'median': 92.1, 'min': 90.6, 'max': 100.5} {'0': 22948.0, '1': 23045.0} 0.262  {'exact_copy': True, 'json_text': True}
+v4-iq3-pftiming-fills {'median': 105.5, 'min': 105.0, 'max': 106.3} {'0': 22984.0, '1': 23079.0} 0.01  {'exact_copy': True, 'json_text': True}
+v4-iq3-ple32 {'median': 106.4, 'min': 102.6, 'max': 107.4} {'0': 22934.0, '1': 23031.0} 1.962  {'exact_copy': True, 'json_text': True}
+v4-iq3-ref-a None {'0': 22586.0, '1': 22491.0} 2.923 GUARD {}
+v4-iq3-ref-b {'median': 116.4, 'min': 107.2, 'max': 118.1} {'0': 22934.0, '1': 23031.0} 0.0  {'exact_copy': True, 'json_text': True}
+v4-iq3-ref-c {'median': 118.5, 'min': 105.7, 'max': 120.7} {'0': 22934.0, '1': 23031.0} 1.035  {'exact_copy': True, 'json_text': True}
+v4-iq3-spec2 {'median': 98.7, 'min': 93.5, 'max': 101.2} {'0': 22900.0, '1': 22993.0} 0.012  {'exact_copy': True, 'json_text': True}
+v4-iq3-spec6 {'median': 110.1, 'min': 93.1, 'max': 110.9} {'0': 22966.0, '1': 23065.0} 0.0  {'exact_copy': True, 'json_text': True}
+v4-iq3-training-1 None {'0': 22910.0, '1': 23029.0} 0.256  {}
+v4-iq4-resident-stage-dense-fills None {'0': 22584.0, '1': 3531.0} 2.525 GUARD {}
+v4-minp-A1 {'median': 108.8, 'min': 104.6, 'max': 115.6} {'0': 22934.0, '1': 23031.0} 0.491  {'exact_copy': True, 'json_text': True}
+v4-minp-A2 {'median': 106.3, 'min': 106.1, 'max': 118.5} {'0': 22934.0, '1': 23031.0} 0.023  {'exact_copy': True, 'json_text': True}
+v4-minp-A3 {'median': 117.0, 'min': 104.4, 'max': 119.1} {'0': 22934.0, '1': 23031.0} 0.37  {'exact_copy': True, 'json_text': True}
+v4-minp-B1 {'median': 107.5, 'min': 94.1, 'max': 118.9} {'0': 22959.0, '1': 23031.0} 0.387  {'exact_copy': True, 'json_text': True}
+v4-minp-B2 {'median': 119.7, 'min': 108.3, 'max': 124.2} {'0': 22934.0, '1': 23031.0} 0.416  {'exact_copy': True, 'json_text': True}
+v4-minp-B3 {'median': 104.4, 'min': 104.1, 'max': 116.6} {'0': 22934.0, '1': 23031.0} 0.037  {'exact_copy': True, 'json_text': True}
+v4-rank-A1 {'median': 108.1, 'min': 107.8, 'max': 109.0} {'0': 22934.0, '1': 23031.0} 0.127  {'exact_copy': True, 'json_text': True}
+v4-rank-A2 {'median': 107.9, 'min': 107.7, 'max': 108.4} {'0': 22934.0, '1': 23031.0} 0.109  {'exact_copy': True, 'json_text': True}
+v4-rank-A3 {'median': 108.1, 'min': 107.7, 'max': 108.5} {'0': 22934.0, '1': 23031.0} 0.009  {'exact_copy': True, 'json_text': True}
+v4-rank-B1 {'median': 122.6, 'min': 113.5, 'max': 124.8} {'0': 22934.0, '1': 23031.0} 0.0  {'exact_copy': True, 'json_text': True}
+v4-rank-B2 {'median': 110.3, 'min': 108.3, 'max': 110.5} {'0': 22934.0, '1': 23031.0} 1.782  {'exact_copy': True, 'json_text': True}
+v4-rank-B3 {'median': 121.2, 'min': 116.1, 'max': 126.0} {'0': 22934.0, '1': 23031.0} 0.031  {'exact_copy': True, 'json_text': True}

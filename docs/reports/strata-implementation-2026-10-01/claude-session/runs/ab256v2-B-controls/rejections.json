@@ -1,0 +1,79 @@
+[
+  {
+    "control": {
+      "tool_choice": "required",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "execute",
+            "description": "Execute the exact supplied shell command.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "status": 400,
+    "body": "{\"error\": {\"type\": \"invalid_request_error\", \"message\": \"tool_choice: only automatic tool selection is supported when tools are offered\", \"param\": \"tool_choice\"}}"
+  },
+  {
+    "control": {
+      "parallel_tool_calls": false,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "execute",
+            "description": "Execute the exact supplied shell command.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "status": 400,
+    "body": "{\"error\": {\"type\": \"invalid_request_error\", \"message\": \"parallel_tool_calls: single-call constrained decoding is unavailable\", \"param\": \"parallel_tool_calls\"}}"
+  },
+  {
+    "control": {
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "status": 400,
+    "body": "{\"error\": {\"type\": \"invalid_request_error\", \"message\": \"response_format: only text is supported; constrained JSON decoding is unavailable\", \"param\": \"response_format\"}}"
+  },
+  {
+    "control": {
+      "seed": true
+    },
+    "status": 400,
+    "body": "{\"error\": {\"type\": \"invalid_request_error\", \"message\": \"seed: expected a finite number\", \"param\": \"seed\"}}"
+  },
+  {
+    "control": {
+      "top_k": 0
+    },
+    "status": 400,
+    "body": "{\"error\": {\"type\": \"invalid_request_error\", \"message\": \"top_k: value outside supported range 1..64\", \"param\": \"top_k\"}}"
+  }
+]

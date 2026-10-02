@@ -1,0 +1,14 @@
+{
+  "cmd": [
+    "python",
+    "/home/diogo/dev/model-loader/backends/strata-fork/tools/make_profile.py",
+    "/tmp/strata-ranking-audit-zjlow1hp/trace.bin",
+    "--out",
+    "/tmp/strata-ranking-audit-zjlow1hp/rank.bin"
+  ],
+  "returncode": 0,
+  "output": "wrote /tmp/strata-ranking-audit-zjlow1hp/rank.bin: 24576 ranked pairs (24576 from the base, 0 from the traces, 0 filled in)\n",
+  "identical_to_base": true,
+  "base_sha256": "8f59b4aa8873209dff11c11e37bcda9529a1335b724a1afeea37bf6388975baf",
+  "output_sha256": "8f59b4aa8873209dff11c11e37bcda9529a1335b724a1afeea37bf6388975baf"
+}

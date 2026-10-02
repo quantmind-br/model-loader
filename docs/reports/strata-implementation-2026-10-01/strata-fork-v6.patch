@@ -1,0 +1,2575 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 1adde37..7a78cc8 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -56,12 +56,18 @@ option(STRATA_WERROR "Treat compiler warnings as errors" OFF)
+ 
+ if(STRATA_BUILD_STARTUP_TESTS)
+   enable_testing()
++  add_executable(request_number_test src/core/request_number_test.cpp)
++  target_include_directories(request_number_test PRIVATE include)
++  add_test(NAME request_number_test COMMAND request_number_test)
+   add_executable(arena_policy_test src/platform/arena_policy_test.cpp)
+   target_include_directories(arena_policy_test PRIVATE include)
+   add_test(NAME arena_policy_test COMMAND arena_policy_test)
+   add_executable(prefill_startup_test src/prefill/startup_test.cpp)
+   target_include_directories(prefill_startup_test PRIVATE include)
+   add_test(NAME prefill_startup_test COMMAND prefill_startup_test)
++  add_executable(thermal_gate_test src/platform/thermal_gate_test.cpp)
++  target_include_directories(thermal_gate_test PRIVATE include)
++  add_test(NAME thermal_gate_test COMMAND thermal_gate_test)
+ endif()
+ 
+ if(STRATA_BUILD_CONVERSATION_TESTS)
+@@ -331,6 +337,8 @@ if(STRATA_ENABLE_CUDA OR STRATA_ENABLE_HIP)
+     target_link_libraries(file_expert_source_test PRIVATE strata_engine)
+     add_test(NAME file_expert_source_test COMMAND file_expert_source_test)
+     set_tests_properties(file_expert_source_test PROPERTIES TIMEOUT 60)
++    add_test(NAME file_expert_source_dual_resident COMMAND file_expert_source_test --dual-resident)
++    set_tests_properties(file_expert_source_dual_resident PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60 LABELS gpu_fixture)
+   endif()
+   if(STRATA_BUILD_CONVERSATION_TESTS)
+     add_executable(conversation_snapshot_test src/core/conversation_snapshot_test.cpp)
+@@ -543,6 +551,8 @@ if(STRATA_ENABLE_CUDA OR STRATA_ENABLE_HIP)
+     --in "${STRATA_PLE_FIXTURE_DIR}/ple_in.bin" --out "${STRATA_PLE_FIXTURE_DIR}/ple_out.bin"
+     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+ 
++  set_tests_properties(ple_parity PROPERTIES LABELS "external_fixture")
++
+   # Plan v0.3 P7: INT8 KV storage vs a host reference and vs the FP16 path (GPU, synthetic, no model).
+   add_executable(kv_q8_parity src/kernels/kv_q8_parity.cpp)
+   target_include_directories(kv_q8_parity PRIVATE ${_strata_gpu_include_directories})
+@@ -582,6 +592,7 @@ if(STRATA_ENABLE_CUDA OR STRATA_ENABLE_HIP)
+   add_executable(platform_memory_test src/platform/memory_test.cpp)
+   target_link_libraries(platform_memory_test PRIVATE strata_core ${_strata_gpu_runtime_target})
+   add_test(NAME platform_memory_test COMMAND platform_memory_test)
++  set_tests_properties(platform_memory_test PROPERTIES LABELS "external_fixture")
+ 
+   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+     add_executable(pinned_shared_test src/core/pinned_shared_test.cpp)
+diff --git a/include/strata/core/expert_source.hpp b/include/strata/core/expert_source.hpp
+index 372412d..480c834 100644
+--- a/include/strata/core/expert_source.hpp
++++ b/include/strata/core/expert_source.hpp
+@@ -345,7 +345,7 @@ public:
+     bool pin_cache_complement(
+         const ExpertCache& cache, std::string& err, bool pin = true,
+         const std::vector<std::pair<int32_t, int32_t>>& additional_gpu_pairs = {}, int64_t lend_from_slot = -1,
+-        uint64_t headroom_bytes = 8ull << 30);
++        uint64_t headroom_bytes = 8ull << 30, bool require_lent = false);
+     void close();
+ 
+     bool mapped() const { return base_ != nullptr; }
+@@ -368,6 +368,7 @@ public:
+     /// Host room for `n` evicted blobs (page-locked when possible).  Idempotent for the same or a smaller `n`.
+     bool reserve_exchanges(int64_t n, std::string& err);
+     int64_t exchange_capacity() const { return xstage_cap_; }
++    int64_t staged_exchanges() const { return (int64_t) staged_.size(); }
+     uint8_t* exchange_buffer(int64_t q) const;
+     /// Requires `has_resident(layer, in)`, `!has_resident(layer, out)` and `exchange_buffer(q)` holding out's blob.
+     bool stage_exchange(int64_t layer, int64_t in, int64_t out, int64_t q);
+diff --git a/include/strata/core/native_dense.hpp b/include/strata/core/native_dense.hpp
+index 1d41216..da7af51 100644
+--- a/include/strata/core/native_dense.hpp
++++ b/include/strata/core/native_dense.hpp
+@@ -20,7 +20,7 @@ public:
+     NativeDense(const NativeDense&) = delete;
+     NativeDense& operator=(const NativeDense&) = delete;
+     bool load(const std::vector<std::string>& shards, WeightTable& table, std::string& err,
+-              bool include_ple_key = false);
++              bool include_ple_key = false, int64_t layer_begin = 0, int64_t layer_end = -1);
+     /// Plan v0.3 P1: the canonical tensor names `load` would serve natively from these shards (eligible name,
+     /// supported type, 2-D), read from the GGUF headers only - so the canonical arena can skip them.
+     static bool served_names(const std::vector<std::string>& shards, bool include_ple_key,
+diff --git a/serve/frontend.py b/serve/frontend.py
+index 23144e4..3104c93 100644
+--- a/serve/frontend.py
++++ b/serve/frontend.py
+@@ -327,6 +327,14 @@ def parse_tool_call(body: str, schema: dict | None = None) -> ToolCall:
+                 args[pname] = json.loads(value)
+             except ValueError:
+                 args[pname] = value
++    for pname, value in args.items():
++        declared = (props.get(pname) or {}).get("type")
++        if isinstance(declared, str):
++            valid = {"string": isinstance(value, str), "integer": type(value) is int,
++                     "number": type(value) in (int, float), "boolean": type(value) is bool,
++                     "object": isinstance(value, dict), "array": isinstance(value, list), "null": value is None}
++            if declared in valid and not valid[declared]:
++                raise ValueError(f"tool {name}: parameter {pname} does not match declared type {declared}")
+     return ToolCall(name=name, arguments=args)
+ 
+ 
+diff --git a/serve/server.py b/serve/server.py
+index 60a675b..dc4b67f 100644
+--- a/serve/server.py
++++ b/serve/server.py
+@@ -30,6 +30,9 @@ import ctypes
+ import json
+ import os
+ import queue
++import select
++import socket
++from contextlib import contextmanager
+ import signal
+ import subprocess
+ import sys
+@@ -48,6 +51,8 @@ sys.path.insert(0, str(ROOT / "tools"))
+ sys.path.insert(0, str(ROOT))   # run as a script (run-<model>.bat) as well as a module
+ from serve.frontend import (ChatTemplate, Event, OutputParser, anthropic_to_messages,  # noqa: E402
+                             images_of, openai_to_messages)
++from serve.controls import (RequestError, StopFilter, stop_sequences, tool_policy, validate_request,  # noqa: E402
++                            validate_sampling)
+ from serve.mcp import McpCancelled, hub_from_config  # noqa: E402
+ from serve.winjob import contain  # noqa: E402
+ 
+@@ -164,6 +169,7 @@ class StrataEngine:
+ 
+     def __init__(self, exe: str, args: list[str], cwd: str | None = None, log: str | None = None,
+                  env: dict | None = None):
++        self.starting = True
+         self.spawn = (exe, list(args), cwd, log, env)   # to start it again after it died (issue #27)
+         paths = {k: v for k, v in zip(args, args[1:]) if k in ("--native", "--pack")}
+         self.model_path = paths.get("--native") or paths.get("--pack", "pack/full")
+@@ -206,13 +212,18 @@ class StrataEngine:
+             self.info["version"] = str(self.info["engine"])
+         # the engine's stdout on a thread, so a request can wait with a timeout (heartbeats, cancel checks)
+         self.lines: queue.Queue = queue.Queue()
+-        threading.Thread(target=self._pump, daemon=True).start()
++        self.pump = threading.Thread(target=self._pump, args=(self.proc, self.lines), daemon=True)
++        self.pump.start()
++        self.starting = False
+ 
+-    def _pump(self):
+-        for line in self.proc.stdout:
+-            self.lines.put(line)
+-        self.ended = True                               # its output closed: it is gone, even before the OS says so
+-        self.lines.put(None)
++    def _pump(self, proc, lines):
++        try:
++            for line in proc.stdout:
++                lines.put(line)
++        finally:
++            if proc is self.proc:
++                self.ended = True
++            lines.put(None)
+ 
+     def death_note(self) -> str:
+         """Why the engine most likely ended, from the end of its log: its own watchdog (issue #29), else RAM."""
+@@ -238,7 +249,7 @@ class StrataEngine:
+                 "smaller model (Q2_0 / IQ2_XS).")
+ 
+     def alive(self) -> bool:
+-        return not getattr(self, "ended", False) and self.proc.poll() is None
++        return not getattr(self, "starting", False) and not getattr(self, "ended", False) and self.proc.poll() is None
+ 
+     def exit_code(self):
+         try:
+@@ -267,10 +278,7 @@ class StrataEngine:
+ 
+     def restart(self):
+         """Start the engine again (the same command) after it died; the new process has its own line queue."""
+-        try:
+-            self.proc.kill()
+-        except OSError:
+-            pass
++        self._terminate()
+         info = dict(self.info)
+         self.ended = False
+         self.__init__(*self.spawn)
+@@ -287,6 +295,7 @@ class StrataEngine:
+ 
+     @staticmethod
+     def sampling_keys(sampling: dict) -> str:
++        validate_sampling(sampling)
+         keys = ""
+         t = sampling.get("temperature")
+         if isinstance(t, (int, float)) and float(t) > 0.0:
+@@ -321,7 +330,7 @@ class StrataEngine:
+             else:
+                 keys += " penalty_last_n=64"
+         seed = sampling.get("seed")
+-        if isinstance(seed, int) and seed > 0:
++        if type(seed) is int and seed >= 0:
+             keys += f" seed={seed}"
+         # setup's calibration (tools/calibrate.py): engine settings for this request only, measured without a restart
+         tune = sampling.get("strata_tune")
+@@ -357,7 +366,7 @@ class StrataEngine:
+         try:
+             while True:
+                 try:
+-                    line = self.lines.get(timeout=10)
++                    line = self.lines.get(timeout=0.25)
+                 except queue.Empty:
+                     if cancel.is_set():
+                         return
+@@ -393,21 +402,48 @@ class StrataEngine:
+                         self.proc.stdin.flush()
+                     except OSError:
+                         pass
+-                while True:
+-                    line = self.lines.get()
++                deadline = time.monotonic() + 10.0
++                while time.monotonic() < deadline:
++                    try:
++                        line = self.lines.get(timeout=min(0.25, max(0.001, deadline - time.monotonic())))
++                    except queue.Empty:
++                        continue
+                     if line is None or line.startswith("ERR"):
+                         break
+                     if line.startswith("DONE"):
+                         self._parse_done(line)
+                         break
++                else:
++                    self._terminate()
++
++    def _terminate(self):
++        """Reap the old child before another request may acquire its resources."""
++        if self.proc.poll() is None:
++            self.proc.terminate()
++            try:
++                self.proc.wait(timeout=5)
++            except subprocess.TimeoutExpired:
++                self.proc.kill()
++                self.proc.wait(timeout=5)
++        else:
++            self.proc.wait()
++        if hasattr(self, "pump"):
++            self.pump.join(timeout=2)
++        for pipe in (self.proc.stdin, self.proc.stdout):
++            if pipe:
++                pipe.close()
++        if hasattr(self.log, "close"):
++            self.log.close()
++        self.ended = True
++
+ 
+     def close(self):
+         try:
+             self.proc.stdin.write("QUIT\n")
+             self.proc.stdin.flush()
+             self.proc.wait(timeout=10)
+-        except Exception:
+-            self.proc.kill()
++        finally:
++            self._terminate()
+ 
+ 
+ class Vision:
+@@ -538,6 +574,36 @@ def gpu_list(cfg: dict) -> list[int]:
+     return [int(str(x).strip()) for x in items if str(x).strip() != ""]
+ 
+ 
++def managed_config(cfg: dict, model: str | None, max_context: int | None) -> dict:
++    """Validate a launcher's model against the prepared pack and apply its context.
++
++    Never substitute the native model: pack, PLE weights and tokenizer must match
++    it. Return a copy so CLI overrides do not rewrite the setup/shared settings.
++    """
++    args = list(cfg.get("args", []))
++    if model is not None:
++        native = [i for i, value in enumerate(args) if value == "--native"]
++        if len(native) != 1 or native[0] + 1 >= len(args):
++            raise ValueError("--model requires exactly one --native model in the config")
++        path = Path(args[native[0] + 1])
++        if not path.is_absolute():
++            path = Path(cfg.get("cwd") or Path.cwd()) / path
++        if path.resolve() != Path(model).resolve():
++            raise ValueError("--model does not match the config's --native model; select its matching prepared config")
++    if max_context is not None:
++        if max_context < 1:
++            raise ValueError("--max-context must be positive")
++        # Native options use separate tokens. Remove all prior occurrences so
++        # the engine and HTTP budget cannot disagree about which value wins.
++        indices = [i for i, value in enumerate(args) if value == "--max-context"]
++        for i in reversed(indices):
++            if i + 1 >= len(args) or args[i + 1].startswith("--"):
++                raise ValueError("--max-context in the config is missing its value")
++            del args[i:i + 2]
++        args += ["--max-context", str(max_context)]
++    return {**cfg, "args": args}
++
++
+ def engine_args(cfg: dict) -> list[str]:
+     """The engine's arguments: the config's, and with several GPUs the layer split across them ("layer_split" in the
+     config: "auto" by default, or the first layer of each later GPU's share, e.g. "18" or "16,32")."""
+@@ -886,10 +952,10 @@ class Service:
+                 "ram": {"used_gib": scaled(hw.get("ram_used"), 2 ** 30, 1),
+                         "total_gib": scaled(hw.get("ram_total"), 2 ** 30, 1)} if hw.get("ram_total") else None}}
+ 
+-    def prepare(self, messages, tools, kwargs, max_new=None):
++    def prepare(self, messages, tools, kwargs, max_new=None, prefix=""):
+         """-> (ids, thinking, max_new). An unset or non-positive max_new (some clients send -1) means "unlimited":
+-        the rest of the context."""
+-        prompt = self.template.render(messages, tools=tools, **kwargs)
++        the rest of the context.  `prefix`: the start of the answer a forced tool choice writes (controls.tool_policy)."""
++        prompt = self.template.render(messages, tools=tools, **kwargs) + prefix
+         ids = self.tok.encode(prompt, parse_special=True)
+         self.embeddings.path = None
+         images = images_of(messages)
+@@ -975,13 +1041,35 @@ class Service:
+                   f"{el:.0f} s", flush=True)
+         return now
+ 
+-    def run(self, ids, thinking, tools, max_new, sampling, cancel) -> Iterator[tuple[str, object]]:
+-        """Yields ("event", Event) as text arrives, then ("done", {"finish": .., "completion_tokens": ..})."""
++    @contextmanager
++    def _request_lock(self, cancel):
++        acquired = False
++        try:
++            while not cancel.is_set():
++                if self.fifo.acquire(timeout=0.1):
++                    acquired = True
++                    break
++            yield acquired
++        finally:
++            if acquired:
++                self.fifo.release()
++
++    def run(self, ids, thinking, tools, max_new, sampling, cancel, prefix="", max_calls=None) -> Iterator[tuple[str, object]]:
++        """Yields ("event", Event) as text arrives, then ("done", {"finish": .., "completion_tokens": ..}).
++        `prefix`: the forced start of the answer, already at the end of `ids` - parsed as if generated, and the
++        answer must then complete a call to an offered tool (else ValueError, never plain text).  `max_calls`:
++        generation stops after that many complete calls, and nothing written after them is returned."""
+         defaults = {**self.sampling_defaults, **self.shared}   # the config's, then the Chat settings shared with apps
+         if defaults:                   # the request's own fields win (explicit 0 stays greedy)
+             req_values = {k: v for k, v in (sampling or {}).items() if v is not None}
+             sampling = {**defaults, **req_values}
+-        parser = OutputParser(thinking=thinking, tools=tools, stream_tools=True)
++        validate_sampling(sampling or {})
++        stopper = StopFilter(stop_sequences(sampling or {}))
++        parser = OutputParser(thinking=thinking, tools=tools, stream_tools=False)
++        if prefix:
++            parser.feed(prefix)                         # a call's opening: no event until the call completes
++        offered = {t.get("name") for t in tools or []}
++        calls, limited, refused = 0, False, None
+         detok, n, finish = Detokenizer(self.tok), 0, "length"
+         timings, before = None, None                    # this request's timings; the engine's `last` before it
+         raw_ids = []                                    # every generated id (STRATA_DEBUG: dump raw model text)
+@@ -989,7 +1077,14 @@ class Service:
+         with self.status_lock:
+             self.status["queued"] += 1
+         # #266: status and metrics belong to the same critical section as engine generation.
+-        with self.fifo:
++        with self._request_lock(cancel) as acquired:
++            if not acquired:
++                with self.status_lock:
++                    self.status["queued"] -= 1
++                if emb:
++                    Path(emb).unlink(missing_ok=True)
++                yield "done", {"finish": "cancel", "completion_tokens": 0, "timings": None}
++                return
+             # Capture after waiting: an earlier request may have replaced engine.last while we queued.
+             engine_last0 = getattr(self.engine, "last", None)
+             try:
+@@ -1018,11 +1113,25 @@ class Service:
+                             raw_ids.append(t)
+                             break
+                         raw_ids.append(t)
+-                        evs = parser.feed(detok.push(t))
++                        evs = parser.feed(stopper.feed(detok.push(t)))
+                         self._note(n, evs)
+                         last_print = self._progress(last_print)
+                         for ev in evs:
++                            if ev.kind == "tool_call" and prefix and ev.call.name not in offered:
++                                refused = f"the forced tool call named {ev.call.name!r}, which the request does not offer"
++                                break
++                            if ev.kind == "tool_call":
++                                calls += 1
+                             yield "event", ev
++                            if max_calls and calls >= max_calls:
++                                limited = True          # the rest of the answer is dropped, not returned
++                                break
++                        if refused:
++                            finish = "error"
++                            break
++                        if limited or stopper.matched is not None:
++                            finish = "stop"
++                            break
+                     if cancel.is_set():
+                         finish = "cancel"
+                 except EngineDied as e:
+@@ -1074,6 +1183,9 @@ class Service:
+                         fresh = getattr(self.engine, "last", None)
+                         if fresh is not None and fresh is not before:      # the engine's clock for THIS request
+                             timings = request_timings(len(ids), n, last)
++                            if timings:
++                                timings["effective_settings"] = {k: sampling[k] for k in ("seed", "temperature", "top_k", "top_p", "min_p", "reasoning_effort", "strata_tune") if k in (sampling or {})}
++                                timings["engine_info"] = dict(getattr(self.engine, "info", {}) or {})
+                             self.last_timings = dict(timings, at=int(time.time())) if timings else None
+                         self.last_request_at = time.time()
+                         now = time.time()
+@@ -1088,8 +1200,16 @@ class Service:
+                     self.status["busy"] = False
+                     self.status.pop("tail", None)            # #212: the answer's end is not kept once it is done
+                     self.status.pop("tool", None)
+-        for ev in parser.finish():
+-            yield "event", ev
++        if refused:
++            raise ValueError(refused)
++        if not cancel.is_set() and not limited:
++            tail = parser.feed(stopper.finish()) + parser.finish()
++            if prefix and not calls and not any(ev.kind == "tool_call" for ev in tail):
++                raise ValueError(f"the forced tool call did not complete ({finish}); no answer is returned")
++            for ev in tail:
++                if ev.kind == "tool_call" and prefix and ev.call.name not in offered:
++                    raise ValueError(f"the forced tool call named {ev.call.name!r}, which the request does not offer")
++                yield "event", ev
+         yield "done", {"finish": finish, "completion_tokens": n, "reused": (timings or {}).get("cache_n", 0),
+                        "timings": timings}
+ 
+@@ -1155,6 +1275,7 @@ def run_with_mcp(svc: Service, hub, messages, tools, kw, ids, thinking, max_new,
+                     if ev.kind == "tool_start":          # the model has started writing a call: say so at once
+                         yield "mcp", {"event": "start", "id": ev.call.id, "name": ev.call.name}
+                     elif ev.kind == "tool_call":
++                        yield "mcp", {"event": "start", "id": ev.call.id, "name": ev.call.name}
+                         calls.append(ev.call)
+                     continue                             # its argument pieces are not streamed to the client
+                 if ev.kind == "tool_call":
+@@ -1218,7 +1339,7 @@ def run_with_mcp(svc: Service, hub, messages, tools, kw, ids, thinking, max_new,
+ 
+ 
+ # ------------------------------------------------------------------------------------------------ OpenAI
+-def openai_chunks(svc: Service, req: dict, ids, thinking, tools, max_new, cancel, run=None):
++def openai_chunks(svc: Service, req: dict, ids, thinking, tools, max_new, cancel, run=None, policy=("", None)):
+     """`run`: the events to send instead of Service.run's (run_with_mcp); its ("mcp", {...}) items become chunks with
+     an empty delta and a `strata_mcp` field, which only the web app reads."""
+     cid, created = "chatcmpl-" + uuid.uuid4().hex[:24], int(time.time())
+@@ -1230,7 +1351,7 @@ def openai_chunks(svc: Service, req: dict, ids, thinking, tools, max_new, cancel
+     yield chunk({"role": "assistant", "content": ""})
+     calls = 0
+     streamed = {}                                  # tool call id -> index, for calls sent piece by piece
+-    for kind, x in run if run is not None else svc.run(ids, thinking, tools, max_new, req, cancel):
++    for kind, x in run if run is not None else svc.run(ids, thinking, tools, max_new, req, cancel, *policy):
+         if kind == "ping":
+             yield None
+         elif kind == "mcp":
+@@ -1305,7 +1426,7 @@ def openai_collect(chunks) -> dict:
+ 
+ 
+ # ------------------------------------------------------------------------------------------------ Anthropic
+-def anthropic_events(svc: Service, req: dict, ids, thinking, tools, max_new, cancel):
++def anthropic_events(svc: Service, req: dict, ids, thinking, tools, max_new, cancel, policy=("", None)):
+     mid = "msg_" + uuid.uuid4().hex[:24]
+     yield "message_start", {"type": "message_start", "message": {
+         "id": mid, "type": "message", "role": "assistant", "model": svc.model, "content": [],
+@@ -1316,7 +1437,7 @@ def anthropic_events(svc: Service, req: dict, ids, thinking, tools, max_new, can
+         return ("content_block_stop", {"type": "content_block_stop", "index": index})
+ 
+     streamed = set()
+-    for kind, x in svc.run(ids, thinking, tools, max_new, req, cancel):
++    for kind, x in svc.run(ids, thinking, tools, max_new, req, cancel, *policy):
+         if kind == "ping":
+             yield None
+             continue
+@@ -1481,7 +1602,9 @@ def make_handler(svc: Service):
+                 self.end_headers()
+                 self.wfile.write(body)
+             elif path == "/health":
+-                self._json(200, {"status": "ok", "max_context": svc.engine.max_context, "model": svc.model,
++                loaded = svc.loaded()
++                state = "restarting" if getattr(svc.engine, "starting", False) else "ready" if loaded else "unloaded" if getattr(svc.engine, "unloaded", False) else "failed"
++                self._json(503 if state in ("failed", "restarting") else 200, {"status": state, "max_context": svc.engine.max_context, "model": svc.model,
+                                  "images": svc.vision is not None, "api_key": bool(svc.api_key),
+                                  "loaded": svc.loaded()})
+             elif path == "/status":
+@@ -1546,7 +1669,8 @@ def make_handler(svc: Service):
+             try:
+                 req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+                 if path in ("/v1/chat/completions", "/v1/messages"):
+-                    svc.load()                               # unloaded: load first (or 503 while the GPU is busy)
++                    validate_request(req, "openai" if path.endswith("completions") else "anthropic")
++                    validate_sampling({**svc.sampling_defaults, **svc.shared, **{k: v for k, v in req.items() if v is not None}})
+                 if path == "/v1/chat/completions":
+                     self._openai(req)
+                 elif path == "/v1/messages":
+@@ -1554,7 +1678,7 @@ def make_handler(svc: Service):
+                 else:
+                     self._json(404, {"error": {"message": "not found"}})
+             except ValueError as e:
+-                self._json(400, {"error": {"type": "invalid_request_error", "message": str(e)}})
++                self._json(400, {"error": {"type": "invalid_request_error", "message": str(e), "param": getattr(e, "param", None)}})
+             except GpuBusy as e:
+                 self._json(503, {"error": {"type": "server_error", "message": str(e)}})
+             except EngineDied as e:                          # before the answer started (not streamed)
+@@ -1606,7 +1730,7 @@ def make_handler(svc: Service):
+                 req = json.loads(body or b"{}")
+                 shared = svc.set_shared(req.get("defaults") if isinstance(req, dict) else None)
+             except ValueError as e:
+-                self._json(400, {"error": {"type": "invalid_request_error", "message": str(e)}})
++                self._json(400, {"error": {"type": "invalid_request_error", "message": str(e), "param": getattr(e, "param", None)}})
+                 return
+             print("[strata] other apps now use the Chat settings: " + ", ".join(f"{k}={v}" for k, v in shared.items())
+                   if shared else "[strata] other apps use their own settings again", flush=True)
+@@ -1618,6 +1742,29 @@ def make_handler(svc: Service):
+             self.send_header("Cache-Control", "no-cache")
+             self.end_headers()
+ 
++        def _collect(self, events, collector, cancel):
++            finished = threading.Event()
++            def watch():
++                while not finished.wait(0.1):
++                    try:
++                        readable, _, _ = select.select([self.connection], [], [], 0)
++                        if readable and not self.connection.recv(1, socket.MSG_PEEK):
++                            cancel.set()
++                            return
++                    except OSError:
++                        cancel.set()
++                        return
++            watcher = threading.Thread(target=watch, daemon=True)
++            watcher.start()
++            try:
++                result = collector(events)
++                if not cancel.is_set():
++                    self._json(200, result)
++            finally:
++                finished.set()
++                watcher.join(timeout=1)
++                events.close()
++
+         def _openai(self, req):
+             req = svc.with_shared(req, "openai")
+             messages, tools, kw = openai_to_messages(req)
+@@ -1631,14 +1778,17 @@ def make_handler(svc: Service):
+                 extra = svc.mcp.template_tools(exclude=own)       # the request's own tools win a name clash
+                 use_mcp = bool(extra)
+                 tools = (tools or []) + extra or None
+-            ids, thinking, max_new = svc.prepare(messages, tools, kw, max_new)
++            policy = tool_policy(req, "openai")
++            ids, thinking, max_new = svc.prepare(messages, tools, kw, max_new, policy[0])
++            if policy[0] and thinking:
++                raise RequestError("tool_choice", "forcing a tool call needs thinking off (reasoning_effort none)")
+             _debug_req("openai", req, messages, tools, max_new, thinking, len(ids))
+             cancel = threading.Event()
+             run = run_with_mcp(svc, svc.mcp, messages, tools, kw, ids, thinking, max_new, max_req, req, cancel,
+                                {t["name"] for t in extra}) if use_mcp else None
+-            chunks = openai_chunks(svc, req, ids, thinking, tools, max_new, cancel, run=run)
++            chunks = openai_chunks(svc, req, ids, thinking, tools, max_new, cancel, run=run, policy=policy)
+             if not req.get("stream"):
+-                return self._json(200, openai_collect(chunks))
++                return self._collect(chunks, openai_collect, cancel)
+             self._sse()
+             try:
+                 for c in chunks:
+@@ -1662,12 +1812,15 @@ def make_handler(svc: Service):
+             req = svc.with_shared(req, "anthropic")
+             messages, tools, kw = anthropic_to_messages(req)
+             max_new = int(req.get("max_tokens") or 0)                  # 0/-1: the rest of the context
+-            ids, thinking, max_new = svc.prepare(messages, tools, kw, max_new)
++            policy = tool_policy(req, "anthropic")
++            ids, thinking, max_new = svc.prepare(messages, tools, kw, max_new, policy[0])
++            if policy[0] and thinking:
++                raise RequestError("tool_choice", "forcing a tool call needs thinking off (thinking disabled)")
+             _debug_req("anthropic", req, messages, tools, max_new, thinking, len(ids))
+             cancel = threading.Event()
+-            events = anthropic_events(svc, req, ids, thinking, tools, max_new, cancel)
++            events = anthropic_events(svc, req, ids, thinking, tools, max_new, cancel, policy)
+             if not req.get("stream"):
+-                return self._json(200, anthropic_collect(events))
++                return self._collect(events, anthropic_collect, cancel)
+             self._sse()
+             try:
+                 for item in events:
+@@ -1702,23 +1855,20 @@ class Server(ThreadingHTTPServer):
+ 
+ 
+ def warn_tight_ram(arena_mib) -> None:
+-    """The model's experts live in RAM (INFO arena_mib, engine 0.1.10+).  With less than ~6 GB left beside them for the
+-    system, the engine and this server, Linux ends the engine mid-answer when memory runs out (issue #27) and Windows
+-    pages to disk; say so at start instead of after a lost answer."""
+-    if not isinstance(arena_mib, int) or arena_mib <= 0:
+-        return
++    """Check live working-set headroom, including mmap/resident complements."""
+     try:
+-        import psutil
+-        total = psutil.virtual_memory().total
+-    except Exception:  # noqa: BLE001 - psutil is optional here
++        if os.name != "nt":
++            fields = {line.split(':', 1)[0]: int(line.split()[1]) for line in
++                      Path('/proc/meminfo').read_text().splitlines() if ':' in line}
++            available = fields['MemAvailable'] / 1024**2
++        else:
++            import psutil
++            available = psutil.virtual_memory().available / 2**30
++    except (OSError, ValueError, KeyError, ImportError):
+         return
+-    left = total / 2**30 - arena_mib / 1024
+-    if left < 6:
+-        print(f"[strata] WARNING: RAM is tight - the model's experts take {arena_mib / 1024:.1f} GB of this PC's "
+-              f"{total / 2**30:.0f} GB, leaving {left:.1f} GB for everything else. "
+-              + ("Linux may stop the engine in the middle of an answer. " if os.name != "nt" else
+-                 "Windows will slow down (paging to disk). ")
+-              + "Close other programs, or run START-HERE --setup and pick a smaller size (Q2_0 / IQ2_XS).", flush=True)
++    if available < 6:
++        print(f"[strata] WARNING: working-set headroom is {available:.1f} GiB; "
++              f"arena_mib={arena_mib} excludes mmap file cache and resident complements.", flush=True)
+ 
+ 
+ def lan_addresses() -> list[str]:
+@@ -1760,7 +1910,7 @@ def clean_shared_defaults(d) -> dict:
+     for key, value in d.items():
+         if value is None or value == "":
+             continue
+-        number = isinstance(value, (int, float)) and not isinstance(value, bool)
++        number = isinstance(value, (int, float)) and not isinstance(value, bool) and __import__("math").isfinite(value)
+         if key == "reasoning_effort":
+             if value not in ("none", "low", "medium", "high"):
+                 raise ValueError("reasoning_effort: none, low, medium or high")
+@@ -1775,7 +1925,7 @@ def clean_shared_defaults(d) -> dict:
+                 raise ValueError("top_k: an integer 1..64")
+             value = int(value)
+         elif key in ("seed", "max_tokens"):
+-            if not number or value != int(value) or value <= 0:
++            if not number or not isinstance(value, int) or value < (0 if key == "seed" else 1):
+                 raise ValueError(f"{key}: a positive integer")
+             value = int(value)
+         elif key == "experimental_speed_projection":
+@@ -1798,7 +1948,7 @@ def sampling_defaults_from_config(cfg: dict) -> dict:
+     for key, value in (cfg.get("sampling") or {}).items():
+         if value is None:
+             continue
+-        number = isinstance(value, (int, float)) and not isinstance(value, bool)
++        number = isinstance(value, (int, float)) and not isinstance(value, bool) and __import__("math").isfinite(value)
+         if key == "temperature":
+             if not number or value < 0:
+                 raise SystemExit(f"[strata] config sampling.temperature={value!r}: expected a number >= 0 (0 = greedy)")
+@@ -1832,7 +1982,7 @@ def sampling_defaults_from_config(cfg: dict) -> dict:
+                 raise SystemExit(f"[strata] config sampling.penalty_last_n={value!r}: expected a non-negative integer")
+             out[key] = int(value)
+         elif key == "seed":
+-            if not number or value != int(value) or value <= 0:
++            if not number or not isinstance(value, int) or not 0 <= value <= 2**64-1:
+                 raise SystemExit(f"[strata] config sampling.seed={value!r}: expected a positive integer")
+             out[key] = int(value)
+         elif key == "experimental_speed_projection":
+@@ -1850,6 +2000,8 @@ def main() -> int:
+     ap.add_argument("--engine", choices=["mock", "strata"], default="mock")
+     ap.add_argument("--config", help="strata engine config (JSON: exe, args, cwd, tokenizer, model_name), "
+                                      "written by setup.py")
++    ap.add_argument("--model", help="verify this native GGUF matches --native in the prepared config (managed launchers)")
++    ap.add_argument("--max-context", type=int, help="override the engine context in tokens; omit to use the config")
+     ap.add_argument("--host", default=None,
+                     help="the address to listen on: 127.0.0.1 = this PC only (the default), 0.0.0.0 = also other devices "
+                          "on your network (set an API key); also \"host\" in the config")
+@@ -1881,6 +2033,13 @@ def main() -> int:
+                                           "server's model; also \"before_load\" in the config, a string or a list)")
+     a = ap.parse_args()
+     cfg = json.loads(Path(a.config).read_text(encoding="utf-8-sig")) if a.config else {}   # Notepad adds a BOM
++    if a.model is not None or a.max_context is not None:
++        if a.engine != "strata" or not a.config:
++            ap.error("--model and --max-context require --engine strata and --config")
++        try:
++            cfg = managed_config(cfg, a.model, a.max_context)
++        except ValueError as exc:
++            ap.error(str(exc))
+     if a.gpu is not None:
+         cfg["gpu"] = int(a.gpu) if a.gpu.strip().isdigit() else a.gpu
+     a.host = a.host or cfg.get("host") or "127.0.0.1"   # issue #26: the run scripts pass no --host, the config can
+diff --git a/serve/telemetry.py b/serve/telemetry.py
+index 6cfd0e3..b6f8479 100644
+--- a/serve/telemetry.py
++++ b/serve/telemetry.py
+@@ -11,6 +11,7 @@ from __future__ import annotations
+ 
+ import collections
+ import ctypes
++from pathlib import Path
+ import os
+ import platform
+ import sys
+@@ -113,7 +114,7 @@ def _cpu_name():
+         except OSError:
+             pass
+     elif os.path.exists("/proc/cpuinfo"):
+-        for line in open("/proc/cpuinfo", encoding="utf-8", errors="replace"):
++        for line in Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="replace").splitlines():
+             if line.startswith("model name"):
+                 return line.split(":", 1)[1].strip()
+     return platform.processor() or None
+@@ -132,7 +133,7 @@ class _CpuRamFallback:
+                 return idle.value, kern.value + user.value           # kernel time includes idle
+             return None
+         try:
+-            f = [int(x) for x in open("/proc/stat").readline().split()[1:]]
++            f = [int(x) for x in Path("/proc/stat").read_text().splitlines()[0].split()[1:]]
+             return f[3] + f[4], sum(f)
+         except (OSError, ValueError):
+             return None
+diff --git a/serve/test_server.py b/serve/test_server.py
+index 33b09d9..ef37b25 100644
+--- a/serve/test_server.py
++++ b/serve/test_server.py
+@@ -333,17 +333,17 @@ class SamplingKeys(unittest.TestCase):
+     def test_top_k(self):
+         self.assertIn("top_k=10", self.keys(temperature=0.7, top_k=10))
+         self.assertIn("top_k=64", self.keys(temperature=0.7, top_k=64))
+-        self.assertIn("top_k=64", self.keys(temperature=0.7, top_k=0))
+-        self.assertIn("top_k=64", self.keys(temperature=0.7, top_k=100))
+-        for bad in (-1, True, 2.5, "20"):
+-            self.assertFalse([k for k in self.keys(temperature=0.7, top_k=bad) if k.startswith("top_k=")], bad)
++        for bad in (0, 100, -1, True, 2.5, "20"):
++            with self.assertRaises(ValueError):
++                self.keys(temperature=0.7, top_k=bad)
+ 
+     def test_tune_keys(self):
+         k = self.keys(temperature=0, strata_tune={"pcie_frac": 0.2, "spec_min_p": 0.7})
+         self.assertIn("pcie_frac=0.2", k)
+         self.assertIn("spec_min_p=0.7", k)
+-        bad = self.keys(strata_tune={"pcie_frac": 3, "spec_min_p": True, "pool_workers": 2})
+-        self.assertFalse([x for x in bad if x.split("=")[0] in ("pcie_frac", "spec_min_p", "pool_workers")])
++        with self.assertRaises(ValueError):
++            self.keys(strata_tune={"pcie_frac": 3, "spec_min_p": True, "pool_workers": 2})
++
+ 
+     def test_penalty_window(self):
+         self.assertIn("penalty_last_n=64", self.keys(presence_penalty=1.5))
+@@ -1098,10 +1098,10 @@ class RequestFinalization(unittest.TestCase):
+                         self.lock = threading.Lock()
+                         self.once = True
+ 
+-                    def __enter__(self):
+-                        self.lock.acquire()
++                    def acquire(self, timeout=None):
++                        return self.lock.acquire(timeout=timeout)
+ 
+-                    def __exit__(self, *args):
++                    def release(self):
+                         self.lock.release()
+                         if self.once:
+                             self.once = False
+@@ -1144,11 +1144,12 @@ class RequestFinalization(unittest.TestCase):
+         svc = Service(engine, tok, ChatTemplate(ROOT / "serve/chat_template.jinja"))
+ 
+         class QueueLock:
+-            def __enter__(self):
++            def acquire(self, timeout=None):
+                 # The previous request finishes while this request waits to acquire FIFO.
+                 engine.last = {"generated": 8, "decode_ms": 80}
++                return True
+ 
+-            def __exit__(self, *args):
++            def release(self):
+                 pass
+ 
+         svc.fifo = QueueLock()
+diff --git a/src/core/expert_source.cpp b/src/core/expert_source.cpp
+index bb55012..6fb464e 100644
+--- a/src/core/expert_source.cpp
++++ b/src/core/expert_source.cpp
+@@ -1,3 +1,4 @@
++#include "strata/platform/helper_affinity.hpp"
+ // src/core/expert_source.cpp - the adapter.  See the header for the three clauses of the contract.
+ #include "strata/core/expert_source.hpp"
+ #include "strata/core/remote_experts.hpp"
+@@ -500,7 +501,7 @@ const uint8_t* FileExpertSource::mapped_blob(int64_t layer, int64_t expert) cons
+ bool FileExpertSource::pin_cache_complement(
+     const ExpertCache& cache, std::string& err, bool pin,
+     const std::vector<std::pair<int32_t, int32_t>>& additional_gpu_pairs, int64_t lend_from_slot,
+-    uint64_t headroom_bytes) {
++    uint64_t headroom_bytes, bool require_lent) {
+     err.clear();
+     if (base_ == nullptr) { err = "FileExpertSource: open the mapped experts before pinning a complement"; return false; }
+     if (complement_ready_) { err = "FileExpertSource: the cache complement is already pinned"; return false; }
+@@ -527,6 +528,7 @@ bool FileExpertSource::pin_cache_complement(
+         for (int64_t expert = 0; expert < n_expert_; ++expert) {
+             const int32_t slot = cache.slot_of(layer, expert);
+             if (slot == kNotResident) continue;
++            if (require_lent && lend_from_slot >= 0 && slot >= lend_from_slot) continue;
+             primary_gpu_pairs.emplace_back((int32_t) layer, (int32_t) expert);
+             pair_slot.push_back(slot);
+             if (slot >= 0 && slot < n_slots) slot_bytes[(size_t) slot] = layer_blob_bytes_[(size_t) layer];
+@@ -537,7 +539,7 @@ bool FileExpertSource::pin_cache_complement(
+     if (!detail::make_cache_complement_plan(n_layers_, n_expert_, layer_blob_bytes_, primary_gpu_pairs,
+                                             additional_gpu_pairs, offsets, bytes, err)) return false;
+ 
+-    const bool lend = lend_from_slot >= 0 && lend_from_slot < n_slots && additional_gpu_pairs.empty();
++    const bool lend = !require_lent && lend_from_slot >= 0 && lend_from_slot < n_slots && additional_gpu_pairs.empty();
+     uint64_t budget = std::numeric_limits<uint64_t>::max();
+     if (bytes > 0 || lend) {
+         uint64_t physical = 0;
+@@ -696,7 +698,7 @@ bool FileExpertSource::pin_cache_complement(
+     {
+         const int threads = (int) std::max<int64_t>(1, std::min<int64_t>(6, n_layers_));
+         std::vector<std::thread> pool;
+-        for (int i = 1; i < threads; ++i) pool.emplace_back(worker);
++        for (int i = 1; i < threads; ++i) pool.emplace_back([&] { strata::platform::apply_helper_affinity(); worker(); });
+         worker();
+         for (auto& t : pool) t.join();
+     }
+@@ -719,7 +721,7 @@ bool FileExpertSource::pin_cache_complement(
+     complement_offsets_ = std::move(offsets);
+     complement_pinned_ = pinned_ok && bytes > 0;
+     complement_locked_ = locked;
+-    complement_lent_slots_ = lend ? n_slots - keep_from : 0;
++    complement_lent_slots_ = require_lent && lend_from_slot >= 0 ? n_slots - lend_from_slot : lend ? n_slots - keep_from : 0;
+     complement_ready_ = true;
+     std::fprintf(stderr, "FileExpertSource: %s cache complement ready: resident %.2f GiB, pinned %.2f GiB%s%s\n",
+                  complement_pinned_ ? "mapped pinned" : pin ? "locked resident" : "pageable resident",
+diff --git a/src/core/native_dense.cpp b/src/core/native_dense.cpp
+index ba30998..fa4919b 100644
+--- a/src/core/native_dense.cpp
++++ b/src/core/native_dense.cpp
+@@ -1,3 +1,4 @@
++#include "strata/core/stage_weights.hpp"
+ #include "strata/core/native_dense.hpp"
+ #include "strata/core/weights.hpp"
+ #include "strata/artifact/gguf_reader.hpp"
+@@ -58,7 +59,7 @@ NativeDense::~NativeDense() {
+ }
+ 
+ bool NativeDense::load(const std::vector<std::string>& shards, WeightTable& table, std::string& err,
+-                       bool include_ple_key) {
++                       bool include_ple_key, int64_t layer_begin, int64_t layer_end) {
+     if (scratch_ || !weights_.empty()) { err = "native dense: already loaded"; return false; }
+     if (shards.empty()) { err = "native dense: at least one GGUF shard is required"; return false; }
+     try {
+@@ -127,7 +128,7 @@ bool NativeDense::load(const std::vector<std::string>& shards, WeightTable& tabl
+                 }
+             }
+             for (const auto& tensor : gguf.tensors()) {
+-                if (!eligible(tensor, include_ple_key)) continue;
++                if (!eligible(tensor, include_ple_key) || !stage_weight_needed(tensor.name, layer_begin, layer_end)) continue;
+                 if (!seen.insert(tensor.name).second) {
+                     err = "native dense: duplicate tensor " + tensor.name; return false;
+                 }
+diff --git a/src/core/session.cpp b/src/core/session.cpp
+index 2211e9b..b5502c1 100644
+--- a/src/core/session.cpp
++++ b/src/core/session.cpp
+@@ -1,3 +1,4 @@
++#include "strata/platform/helper_affinity.hpp"
+ // src/core/session.cpp - one token through all 48 layers.  See the header for why the graphs are per-layer.
+ #include "strata/core/session.hpp"
+ #include "strata/core/progress.hpp"
+@@ -537,6 +538,7 @@ bool SessionLoopScratch::init(size_t parts_bytes_in, std::string& err) {
+     // for a property that wants to hold for the whole session.
+     const std::vector<int> cores = strata::kernels::cpu::physical_cores(false);
+     if (!cores.empty()) {
++        strata::platform::capture_helper_affinity(cores[0]);
+         pinned_core = strata::kernels::cpu::pin_current_thread(cores[0]);
+         pinned = true;
+     }
+diff --git a/src/prefill/prefill.cpp b/src/prefill/prefill.cpp
+index a331ca6..b656ee0 100644
+--- a/src/prefill/prefill.cpp
++++ b/src/prefill/prefill.cpp
+@@ -1,3 +1,4 @@
++#include "strata/platform/helper_affinity.hpp"
+ // src/prefill/prefill.cpp - see include/strata/prefill/prefill.hpp.
+ #include "strata/prefill/prefill.hpp"
+ #include "strata/core/on_device.hpp"
+@@ -26,8 +27,12 @@
+ #include "strata/prefill/gemm.hpp"
+ #include "strata/prefill/moe_mmq.hpp"
+ #include "strata/prefill/kernels.hpp"
++#include "strata/platform/thermal_gate.hpp"
+ 
+ #include <cuda_runtime.h>
++#if defined(__linux__) && !defined(STRATA_USE_HIP)
++#include <dlfcn.h>
++#endif
+ 
+ #include <algorithm>
+ #include <chrono>
+@@ -104,6 +109,51 @@ inline bool gr_unfused() {
+ 
+ double ms_since(Clock::time_point t) { return std::chrono::duration<double, std::milli>(Clock::now() - t).count(); }
+ 
++// The GPU core temperature of a CUDA device in C through NVML, loaded on first use; -1 when it cannot tell.
++int gpu_temperature_c(int device) {
++#if defined(__linux__) && !defined(STRATA_USE_HIP)
++    struct Nvml {
++        int (*by_bus)(const char*, void**) = nullptr;
++        int (*temperature)(void*, int, unsigned*) = nullptr;
++        bool ok = false;
++    };
++    static const Nvml nvml = [] {
++        Nvml n;
++        void* lib = dlopen("libnvidia-ml.so.1", RTLD_NOW | RTLD_LOCAL);
++        if (lib == nullptr) return n;
++        auto init = reinterpret_cast<int (*)()>(dlsym(lib, "nvmlInit_v2"));
++        n.by_bus = reinterpret_cast<int (*)(const char*, void**)>(dlsym(lib, "nvmlDeviceGetHandleByPciBusId_v2"));
++        n.temperature = reinterpret_cast<int (*)(void*, int, unsigned*)>(dlsym(lib, "nvmlDeviceGetTemperature"));
++        n.ok = init != nullptr && n.by_bus != nullptr && n.temperature != nullptr && init() == 0;
++        return n;
++    }();
++    char bus[32] = {};
++    void* handle = nullptr;
++    unsigned t = 0;
++    if (!nvml.ok || cudaDeviceGetPCIBusId(bus, sizeof bus, device) != cudaSuccess ||
++        nvml.by_bus(bus, &handle) != 0 || nvml.temperature(handle, 0 /* NVML_TEMPERATURE_GPU */, &t) != 0)
++        return -1;
++    return (int) t;
++#else
++    (void) device;
++    return -1;
++#endif
++}
++
++// STRATA_PREFILL_TEMP_PAUSE_C (strata/platform/thermal_gate.hpp): wait before the next chunk while this stage's
++// GPU is hot, logging each wait.
++void prompt_thermal_gate(int device, const std::function<bool()>& should_stop) {
++    const auto& gate = strata::platform::thermal_gate();
++    if (gate.pause_c <= 0) return;
++    const auto t0 = Clock::now();
++    const auto w = strata::platform::thermal_wait(gate, [&] { return gpu_temperature_c(device); },
++        [&] { return should_stop && should_stop(); },
++        [](int ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); });
++    if (w.steps > 0)
++        std::fprintf(stderr, "strata prefill: thermal gate CUDA%d %d C -> %d C, waited %.0f ms%s\n", device, w.peak_c,
++                     w.last_c, ms_since(t0), w.capped ? " (cap reached)" : w.stopped ? " (cancelled)" : "");
++}
++
+ // Either cudaMalloc (owned, freed with the object) or a bump allocation from a borrowed region; with no base and
+ // no region it only counts, which is how `bytes_needed` sizes the region.
+ struct Alloc {
+@@ -185,7 +235,7 @@ struct Stager {
+             if (failure != cudaSuccess) return false;
+         }
+         cudaGetDevice(&device);
+-        for (int t = 0; t < nthreads; ++t) threads.emplace_back([this] { work(); });
++        for (int t = 0; t < nthreads; ++t) threads.emplace_back([this] { strata::platform::apply_helper_affinity(); work(); });
+         return true;
+     }
+     ~Stager() {
+@@ -1034,6 +1084,8 @@ bool Prefill::run(const int64_t* tokens, int64_t n, int64_t pos0, std::string& e
+     int ple_buf = 0;
+ 
+     for (int64_t c0 = 0; c0 < n; c0 += m.T) {
++        if (should_stop && should_stop()) { err = "cancelled"; return false; }
++        prompt_thermal_gate(m.device, should_stop);
+         if (should_stop && should_stop()) { err = "cancelled"; return false; }
+         if (std::getenv("STRATA_TRACE")) { std::fprintf(stderr, "strata trace: prompt chunk %lld of %lld\n", (long long) c0, (long long) n); std::fflush(stderr); }
+         const int64_t T = std::min(m.T, n - c0), p0 = pos0 + c0;
+@@ -1199,6 +1251,7 @@ bool Prefill::run(const int64_t* tokens, int64_t n, int64_t pos0, std::string& e
+         const bool threaded_issue = stream_all && issuer_on;
+         if (threaded_issue) {
+             issuer = std::thread([&] {
++                strata::platform::apply_helper_affinity();
+                 const core::OnDevice od(m.device);
+                 for (size_t idx = 0; idx < seq.size(); ++idx) {
+                     while (idx >= a_consumed.load(std::memory_order_acquire) + (size_t) m.ring) {
+diff --git a/src/program/generate.cpp b/src/program/generate.cpp
+index ab78b35..a39c20d 100644
+--- a/src/program/generate.cpp
++++ b/src/program/generate.cpp
+@@ -1,3 +1,6 @@
++#include "strata/core/request_number.hpp"
++#include "strata/core/stage_weights.hpp"
++#include "strata/platform/helper_affinity.hpp"
+ // src/program/generate.cpp - P2.S6: `strata generate`.
+ //
+ // THE DRIVER, and the first program in this project that answers a question.  Everything below it is a
+@@ -122,7 +125,7 @@ bool resident_stage_swaps(strata::core::FileExpertSource& src, strata::core::Exp
+     kept.reserve(swaps.size());
+     for (const Swap& s : swaps) {
+         if (!src.has_resident(s.layer, s.in) || src.has_resident(s.layer, s.out)) { kept.push_back(s); continue; }
+-        const int64_t q = (int64_t) staged.size();
++        const int64_t q = src.staged_exchanges() + (int64_t) staged.size();
+         if (q >= src.exchange_capacity()) continue;
+         const int32_t slot = host_res[(size_t) s.layer * (size_t) n_expert + (size_t) s.out];
+         if (slot < 0) continue;
+@@ -284,6 +287,7 @@ struct Options {
+     bool gpu_stages = false;
+     bool stats = false;
+     bool shared_late = false;          ///< plan v0.3 P3 A/B: shared expert inside post[l] (old order)
++    bool stage_dense = false;         ///< opt-in stage-filtered dense arenas; explicit split required
+     bool keep_canonical = false;       ///< plan v0.3 P1 A/B: load canonical copies of natively served tensors
+     bool no_token_graph = false;       ///< plan v0.3 P3 A/B: two graphs per layer instead of one per token
+     bool no_fused_gr = false;          ///< plan v0.3 P3 A/B: the six-kernel native gr_read + separate gr_write
+@@ -451,6 +455,7 @@ void usage() {
+                  "  --dump-routing PATH  write the routed expert ids and weights per layer per position (P0.S8)\n"
+                  "  --no-capture         run the layers directly instead of replaying graphs\n"
+                  "  --shared-late        A/B: shared expert after the CPU pool (default: overlapped with it)\n"
++                 "  --stage-dense        Experimental: filter dense tensors by explicit --layer-split\n"
+                  "  --keep-canonical     A/B: also load canonical copies of natively served tensors (more VRAM)\n"
+                  "  --vision             --serve takes images too (GENI requests; embeddings from strata-vision)\n"
+                  "  --prompt-cache N     --serve: keep N conversation checkpoints between requests (default 6, ~118 MB\n"
+@@ -1171,6 +1176,7 @@ int main(int argc, char** argv) {
+         }
+         else if (a == "--stats") o.stats = true;
+         else if (a == "--shared-late") o.shared_late = true;
++        else if (a == "--stage-dense") o.stage_dense = true;
+         else if (a == "--keep-canonical") o.keep_canonical = true;
+         else if (a == "--no-token-graph") o.no_token_graph = true;
+         else if (a == "--no-fused-gr") o.no_fused_gr = true;
+@@ -1270,9 +1276,13 @@ int main(int argc, char** argv) {
+         return 2;
+     }
+     if (o.resident_cpu_experts &&
+-        (!o.layer_split.empty() || o.expert_cache_remote[0] > 0 || o.expert_cache_remote[1] > 0 ||
++        (o.expert_cache_remote[0] > 0 || o.expert_cache_remote[1] > 0 ||
+          o.expert_cache_remote[2] > 0)) {
+-        std::fprintf(stderr, "strata generate: --resident-cpu-experts does not support layer splits or remote expert caches\n");
++        std::fprintf(stderr, "strata generate: --resident-cpu-experts does not support remote expert caches\n");
++        return 2;
++    }
++    if (o.resident_cpu_experts && multi_gpu && !o.serve) {
++        std::fprintf(stderr, "strata: dual resident mode requires --serve for coordinated prompt loans\n");
+         return 2;
+     }
+     // the helper-GPU expert caches (--expert-cache-remote, docs/SECOND_GPU.md): CUDA1..3 on one GPU; with a layer
+@@ -1707,6 +1717,23 @@ int main(int argc, char** argv) {
+         if (!native_pack) skip.erase("blk.1.ple_key.weight");
+         if (native_pack) skip.insert("token_embd.weight");
+     }
++    if (o.stage_dense && (!multi_gpu || split_auto)) {
++        std::fprintf(stderr, "strata: --stage-dense requires an explicit multi-GPU layer split\n");
++        return 2;
++    }
++    const auto common_skip = skip;
++    auto stage_skip = [&](int64_t begin, int64_t end) {
++        auto result = common_skip;
++        std::ifstream index(o.pack + "/index.txt");
++        std::string line;
++        while (std::getline(index, line)) {
++            std::istringstream row(line);
++            std::string name;
++            if (row >> name && !strata::core::stage_weight_needed(name, begin, end)) result.insert(name);
++        }
++        return result;
++    };
++    if (o.stage_dense) skip = stage_skip(0, split_at[0]);
+     uint64_t pool_bytes = 0;
+     if (!strata::core::WeightTable::pool_bytes(o.pack, pool_bytes, err, skip.empty() ? nullptr : &skip)) {
+         std::fprintf(stderr, "strata generate: %s\n", err.c_str());
+@@ -1729,7 +1756,7 @@ int main(int argc, char** argv) {
+ 
+     strata::core::NativeDense native_dense;
+     if (!o.native_dense_gguf.empty()) {
+-        if (!native_dense.load(o.native_dense_gguf, wt, err, o.native_ple_key)) {
++        if (!native_dense.load(o.native_dense_gguf, wt, err, o.native_ple_key, 0, o.stage_dense ? split_at[0] : -1)) {
+             std::fprintf(stderr, "strata generate: native dense projections: %s\n", err.c_str());
+             return 1;
+         }
+@@ -1938,14 +1965,19 @@ int main(int argc, char** argv) {
+             return 1;
+         }
+         const strata::core::OnDevice on(st.dev);
++        const int64_t dense_begin = o.stage_dense ? split_at[i] : 0;
++        const int64_t dense_end = o.stage_dense ? (i + 1 < split_at.size() ? split_at[i + 1] : g.n_layers) : -1;
++        const auto local_skip = o.stage_dense ? stage_skip(dense_begin, dense_end) : common_skip;
++        uint64_t stage_pool_bytes = 0;
++        if (!strata::core::WeightTable::pool_bytes(o.pack, stage_pool_bytes, err, &local_skip)) return 1;
+         void* arena_s = nullptr;
+-        if (cudaMalloc(&arena_s, pool_bytes) != cudaSuccess ||
+-            !st.wt.load(o.pack, arena_s, pool_bytes, err, skip.empty() ? nullptr : &skip)) {
++        if (cudaMalloc(&arena_s, stage_pool_bytes) != cudaSuccess ||
++            !st.wt.load(o.pack, arena_s, stage_pool_bytes, err, &local_skip)) {
+             std::fprintf(stderr, "strata generate: layer split, CUDA%d weights: %s\n", st.dev,
+                          err.empty() ? "the weight arena does not fit" : err.c_str());
+             return 1;
+         }
+-        if (!o.native_dense_gguf.empty() && !st.dense.load(o.native_dense_gguf, st.wt, err, o.native_ple_key)) {
++        if (!o.native_dense_gguf.empty() && !st.dense.load(o.native_dense_gguf, st.wt, err, o.native_ple_key, dense_begin, dense_end)) {
+             std::fprintf(stderr, "strata generate: layer split, CUDA%d native dense projections: %s\n", st.dev,
+                          err.c_str());
+             return 1;
+@@ -3421,7 +3453,7 @@ int main(int argc, char** argv) {
+     // streamed during a prompt and copied back after it, so those are kept in RAM too as far as RAM allows.  The
+     // bytes are the file's bytes and the placement is the same, so the answers are the plain mmap mode's; the
+     // share-of-pinned figure above (which sizes the prompt path) is left as the mmap mode's for the same reason.
+-    if (o.resident_cpu_experts) {
++    if (o.resident_cpu_experts && !multi_gpu) {
+         int64_t lend_from = -1;
+         if (o.prefill_chunk > 0 && !o.no_prefill_borrow && d_res != nullptr && xcache.slots() > 0) {
+             int64_t chunk = o.prefill_chunk;
+@@ -3571,6 +3603,36 @@ int main(int argc, char** argv) {
+         } else {
+             std::fprintf(stderr, "strata serve: the prompt path allocates its own buffers (too few cache slots to borrow)\n");
+         }
++        if (o.resident_cpu_experts && multi_gpu) {
++            // The union excludes every stage's maximum loan: all those experts
++            // must remain resident on the host until their owning stage refills.
++            std::vector<std::pair<int32_t, int32_t>> other_core;
++            for (size_t i = 0; i < stages.size(); ++i) {
++                auto& st = *stages[i];
++                const strata::core::OnDevice on(st.dev);
++                if (cudaDeviceSynchronize() != cudaSuccess) return 1;
++                const int32_t first = borrow && i + 1 < pf_parts.size() ? pf_parts[i + 1].first : -1;
++                for (int64_t l = st.lb; l < st.le; ++l)
++                    for (int64_t e = 0; e < g.n_expert; ++e) {
++                        const int32_t slot = st.cache.slot_of(l, e);
++                        if (slot >= 0 && (first < 0 || slot < first))
++                            other_core.emplace_back((int32_t) l, (int32_t) e);
++                    }
++            }
++            const int64_t exchange_n = o.adapt_every > 0 ? std::min<int64_t>(o.adapt_swaps, 96) : 0;
++            // Reserve transaction storage before checking the remaining RAM budget.
++            if (exchange_n > 0 && !src.reserve_exchanges(exchange_n, err)) {
++                std::fprintf(stderr, "strata: dual resident exchange allocation: %s\n", err.c_str());
++                return 1;
++            }
++            if (!src.pin_cache_complement(xcache, err, o.resident_pin, other_core,
++                                           borrow ? lend_first : -1, o.resident_headroom, true)) {
++                std::fprintf(stderr, "strata: dual resident complement (including every loan): %s\n", err.c_str());
++                return 1;
++            }
++            std::fprintf(stderr, "strata: dual resident complement ready; stages=%zu, full loan coverage, RAM=%.3f GiB\n",
++                         stages.size() + 1, (double) src.resident_bytes() / 1073741824.0);
++        }
+         // #253: full Linux arena registration can leave less device memory for prompt buffers.
+         // Initialize all stages at the same chunk and unwind all partial allocations before a retry.
+         for (size_t i = 0; i < stages.size(); ++i) {
+@@ -3970,7 +4032,20 @@ int main(int argc, char** argv) {
+             }
+             std::sort(swaps.begin(), swaps.end(), [](const Swap& a, const Swap& b) { return a.gain > b.gain; });
+             if ((int) swaps.size() > o.adapt_swaps) swaps.resize((size_t) o.adapt_swaps);
+-            if (!resident_stage_swaps(src, xcache, host_res, g.n_expert, swaps, adapt_stream)) return false;
++            if (multi_gpu && src.complement_ready()) {
++                std::vector<Swap> kept;
++                for (size_t owner = 0; owner <= stages.size(); ++owner) {
++                    std::vector<Swap> part;
++                    for (const auto& swap : swaps)
++                        if ((size_t) stage_of(swap.layer) == owner) part.push_back(swap);
++                    auto* gs = owner ? stages[owner - 1].get() : nullptr;
++                    const strata::core::OnDevice on(gs ? gs->dev : -1);
++                    if (!resident_stage_swaps(src, gs ? gs->cache : xcache, host_res, g.n_expert, part,
++                                              gs ? gs->adapt_stream : adapt_stream)) return false;
++                    kept.insert(kept.end(), part.begin(), part.end());
++                }
++                swaps.swap(kept);
++            } else if (!resident_stage_swaps(src, xcache, host_res, g.n_expert, swaps, adapt_stream)) return false;
+             bool main_live = false;
+             for (const Swap& s : swaps) {
+                 const size_t in = (size_t) s.layer * g.n_expert + s.in, out = (size_t) s.layer * g.n_expert + s.out;
+@@ -4098,6 +4173,11 @@ int main(int argc, char** argv) {
+                     slots_all += remote_experts[(size_t) r].resident();
+                     mib_all += (int64_t) (remote_experts[(size_t) r].gib() * 1024.0);
+                 }
++            int pcie_layers = 0;
++            for (int64_t layer = 0; layer < g.n_layers; ++layer) if (srcp->pcie_layer(layer)) ++pcie_layers;
++            std::printf("INFO pcie_eligible_layers=%d pcie_effective_frac=%.4f resident_expert_mib=%llu prefill_chunk=%lld stage_dense=%d\n",
++                        pcie_layers, pcie_layers ? o.pcie_frac : 0.0,
++                        (unsigned long long) (src.resident_bytes() >> 20), (long long) o.prefill_chunk, (int) o.stage_dense);
+             std::printf("INFO context=%lld kv=%s kv_resident=%lld expert_slots=%lld expert_cache_mib=%lld "
+                         "expert_slots_primary=%lld expert_cache_primary_mib=%lld spec=%d "
+                         "mtp_max=%d lookup=%d vram_free_mib=%lld cvec=%s arena_mib=%lld pool_workers=%d pcie_frac=%.2f "
+@@ -4181,6 +4261,8 @@ int main(int argc, char** argv) {
+             float req_temperature = 0.0f, req_top_p = 1.0f;
+             int req_top_k = 20;   // the sampler's own default; the sampled path REQUIRES top_k in 1..64
+             unsigned long long req_seed = 0;
++            bool req_seed_present = false;
++            bool invalid_sampling = false;
+             float req_min_p = 0.0f, req_penalty_repeat = 1.0f, req_penalty_freq = 0.0f, req_penalty_present = 0.0f;
+             int req_penalty_last_n = 0;
+             int req_cvec = 1;   // cvec=0|1: a loaded control vector for this request (on when absent)
+@@ -4198,6 +4280,10 @@ int main(int argc, char** argv) {
+                     const size_t eq = tok.find('=');
+                     if (eq == std::string::npos) { endp = const_cast<char*>(start); break; }
+                     const std::string key = tok.substr(0, eq);
++                    if (!strata::core::request_number_valid(key, tok.substr(eq + 1))) {
++                        invalid_sampling = true;
++                        break;
++                    }
+                     const float fv = std::strtof(tok.c_str() + eq + 1, nullptr);
+                     if (key == "cvec") req_cvec = std::atoi(tok.c_str() + eq + 1);
+                     else if (key == "temperature") req_temperature = fv;
+@@ -4208,12 +4294,13 @@ int main(int argc, char** argv) {
+                     else if (key == "penalty_repeat") req_penalty_repeat = fv;
+                     else if (key == "penalty_freq") req_penalty_freq = fv;
+                     else if (key == "penalty_present") req_penalty_present = fv;
+-                    else if (key == "seed") req_seed = std::strtoull(tok.c_str() + eq + 1, nullptr, 10);
++                    else if (key == "seed") { req_seed = std::strtoull(tok.c_str() + eq + 1, nullptr, 10); req_seed_present = true; }
+                     else if (key == "pcie_frac") req_pcie_frac = std::clamp((double) fv, 0.0, 1.0);
+                     else if (key == "spec_min_p") req_spec_min_p = std::clamp((double) fv, 0.0, 1.0);
+                     // unknown keys are skipped: the ids start at the first token without '='
+                 }
+             }
++            if (invalid_sampling) { std::printf("ERR invalid sampling parameter\n"); continue; }
+             std::string emb_path;
+             if (geni && endp != nullptr) {
+                 while (*endp == ' ') ++endp;
+@@ -4617,7 +4704,7 @@ int main(int argc, char** argv) {
+             req_sp.temperature = req_temperature;
+             req_sp.top_p = req_top_p;
+             req_sp.top_k = req_top_k;
+-            req_sp.seed = req_seed ? req_seed
++            req_sp.seed = req_seed_present ? req_seed
+                                    : (unsigned long long) std::chrono::steady_clock::now().time_since_epoch().count();
+             req_sp.min_p = std::clamp(req_min_p, 0.0f, 1.0f);
+             req_sp.penalty_last_n = std::max(req_penalty_last_n, 0);
+@@ -4795,7 +4882,7 @@ int main(int argc, char** argv) {
+                 std::thread adapt_thr;   // the adaptive tier beside the commit and the draft (as in generate)
+                 bool adapt_ok = true;
+                 if (!drive.d.usage.empty() && ((rounds + 1) % o.adapt_every) == 0)
+-                    adapt_thr = std::thread([&] { adapt_ok = adapt(); });
++                    adapt_thr = std::thread([&] { strata::platform::apply_helper_affinity(); adapt_ok = adapt(); });
+                 if (!ver.commit(a + 1, err)) {
+                     if (adapt_thr.joinable()) adapt_thr.join();
+                     std::printf("ERR %s\n", err.c_str());
+@@ -5598,7 +5685,7 @@ int main(int argc, char** argv) {
+             std::thread adapt_thr;
+             bool adapt_ok = true;
+             if (!drive.d.usage.empty() && ((rounds + 1) % o.adapt_every) == 0)
+-                adapt_thr = std::thread([&] { adapt_ok = adapt(); });
++                adapt_thr = std::thread([&] { strata::platform::apply_helper_affinity(); adapt_ok = adapt(); });
+             if (!ver.commit(a + 1, err)) {
+                 if (adapt_thr.joinable()) adapt_thr.join();
+                 std::fprintf(stderr, "strata generate: %s\n", err.c_str());
+diff --git a/tests/core/file_expert_source_test.cpp b/tests/core/file_expert_source_test.cpp
+index e86acc1..eb50583 100644
+--- a/tests/core/file_expert_source_test.cpp
++++ b/tests/core/file_expert_source_test.cpp
+@@ -1,4 +1,7 @@
+ #include "strata/core/expert_source.hpp"
++#include "strata/core/expert_cache.hpp"
++#include "strata/platform/helper_affinity.hpp"
++#include <cuda_runtime.h>
+ #include "strata/kernels/cpu/expert.hpp"
+ #include "strata/kernels/cpu/expert_layout.hpp"
+ 
+@@ -288,14 +291,96 @@ void test_cgroup_memory_budget() {
+             "missing memory.stat counters did not fail closed");
+ }
+ 
++void test_dual_resident_loans_and_exchanges() {
++    using namespace strata::core;
++    using namespace strata::kernels::cpu;
++    TempDirectory dir;
++    std::string err;
++    require(expert_layout_load(dir.path.string(), 2, 3, err), err);
++    create_pack(dir.path, 6ull * BLOB,
++                {{0, 'a'}, {BLOB, 'b'}, {2ull*BLOB, 'c'}, {3ull*BLOB, 'd'}, {4ull*BLOB, 'e'}, {5ull*BLOB, 'f'}});
++    FileExpertSource source;
++    require(source.open(dir.path.string(), 2, 3, err), err);
++    ExpertCache first, second;
++    for (int device = 0; device < 2; ++device) {
++        require(cudaSetDevice(device) == cudaSuccess, "set device");
++        auto& cache = device ? second : first;
++        require(cache.open(2, 2, 3, BLOB, err), err);
++        for (int e = 0; e < 2; ++e) {
++            const int slot = cache.admit(device, e);
++            require(slot == e, "slot ownership");
++            require(cache.fill_slot_blocking(slot, source.blob(device, e), err), err);
++        }
++    }
++    require(cudaSetDevice(0) == cudaSuccess, "restore device");
++    // The second GPU contributes only its non-lent slot. Both lent experts MUST
++    // remain in the host complement, along with the ordinary misses.
++    require(!source.pin_cache_complement(first, err, false, {{1,0}}, 1,
++                std::numeric_limits<uint64_t>::max(), true), "unsafe budget accepted");
++    require(!source.complement_ready() && source.resident_bytes() == 0, "failed plan retained ownership");
++    require(source.reserve_exchanges(2, err), err);
++    require(source.pin_cache_complement(first, err, false, {{1,0}}, 1, 0, true), err);
++    require(source.resident_bytes() == 4ull*BLOB, "dual union duplicated or omitted loan bytes");
++    for (int layer = 0; layer < 2; ++layer) {
++        require(!source.has_resident(layer, 0), "non-lent GPU expert duplicated");
++        require(source.has_resident(layer, 1) && source.has_resident(layer, 2), "missing loan/miss");
++        require(cudaSetDevice(layer) == cudaSuccess, "set refill owner");
++        auto& cache = layer ? second : first;
++        const auto* lent = source.blob(layer, 1);
++        require(lent[0] == (layer ? 'e' : 'b'), "wrong loan bytes");
++        require(cudaMemset(cache.device_slot(1), 0, BLOB) == cudaSuccess, "borrow slot");
++        require(cache.fill_slot_blocking(1, lent, err) && cache.verify_slot(1, lent, err), err);
++        const auto q = source.staged_exchanges();
++        require(q == layer, "cross-stage exchange index reused");
++        require(cudaMemcpy(source.exchange_buffer(q), cache.device_slot(0), BLOB, cudaMemcpyDeviceToHost) == cudaSuccess,
++                "copy evicted bytes from owning device");
++        require(source.stage_exchange(layer, 2, 0, q), "stage exchange");
++    }
++    require(source.commit_exchanges() == 2, "not all stages committed");
++    require(source.blob(0,0)[0] == 'a' && source.blob(1,0)[0] == 'd', "evicted bytes crossed stages");
++    require(source.file_reads() == 0, "loan/refill/exchange touched file fallback");
++    require(cudaSetDevice(1) == cudaSuccess, "close second device"); second.close();
++    require(cudaSetDevice(0) == cudaSuccess, "close first device"); first.close();
++}
++
++void test_helper_affinity() {
++#if defined(__linux__)
++    cpu_set_t original;
++    require(sched_getaffinity(0, sizeof original, &original) == 0, "read allowed CPUs");
++    int host = 0;
++    while (host < CPU_SETSIZE && !CPU_ISSET(host, &original)) ++host;
++    require(strata::platform::capture_helper_affinity(host), "capture helper affinity");
++    cpu_set_t singleton; CPU_ZERO(&singleton); CPU_SET(host, &singleton);
++    require(sched_setaffinity(0, sizeof singleton, &singleton) == 0, "pin service fixture");
++    strata::platform::apply_helper_affinity();
++    cpu_set_t helpers; const int rc = sched_getaffinity(0, sizeof helpers, &helpers);
++    require(sched_setaffinity(0, sizeof original, &original) == 0, "restore fixture affinity");
++    require(rc == 0 && CPU_COUNT(&helpers) > 0, "helper mask is empty");
++    for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu)
++        require(!CPU_ISSET(cpu, &helpers) || CPU_ISSET(cpu, &original), "helper escaped original allowed set");
++    if (CPU_COUNT(&original) > 2) require(!CPU_ISSET(host, &helpers), "helper inherited service pin");
++#endif
++}
++
+ }  // namespace
+ 
+-int main() {
++int main(int argc, char** argv) {
+     try {
++        if (argc == 2 && std::string(argv[1]) == "--dual-resident") {
++            int devices = 0;
++            if (cudaGetDeviceCount(&devices) != cudaSuccess || devices < 2) {
++                std::cout << "dual resident fixture: SKIP (needs two GPUs)\n";
++                return 77;
++            }
++            test_dual_resident_loans_and_exchanges();
++            std::cout << "dual resident fixture: PASS\n";
++            return 0;
++        }
+         test_complement_plan();
+         test_resident_lend_region();
+         test_resident_exchange();
+         test_cgroup_memory_budget();
++        test_helper_affinity();
+         test_canonical_layout();
+ #if defined(STRATA_NATIVE_EXPERTS)
+         test_native_variable_layout();
+diff --git a/tools/iq_pack.py b/tools/iq_pack.py
+index f0ff890..18f59b4 100644
+--- a/tools/iq_pack.py
++++ b/tools/iq_pack.py
+@@ -30,6 +30,9 @@ from __future__ import annotations
+ 
+ import argparse
+ import json
++import hashlib
++import tempfile
++import fcntl
+ import os
+ import pathlib
+ import shutil
+@@ -63,8 +66,11 @@ def needs_bf16(name: str, type_name: str) -> bool:
+         return True
+     if not name.startswith("blk."):
+         return False
+-    # The existing native PLE key supports Q2_0 only. Other key encodings use the BF16 path.
+-    return name.endswith(BF16_PROJECTIONS) or (name == "blk.1.ple_key.weight" and type_name != "Q2_0")
++    # NativeDense and ple_block serve these key formats directly. Converting them
++    # to BF16 makes --native reject the packed reference as an incompatible matrix.
++    native_ple_key = {"Q2_0", "IQ3_XXS", "IQ4_XS"}
++    return name.endswith(BF16_PROJECTIONS) or (
++        name == "blk.1.ple_key.weight" and type_name not in native_ple_key)
+ 
+ 
+ def bf16_bytes(raw: np.ndarray, type_name: str) -> bytes:
+@@ -267,6 +273,90 @@ def main() -> int:
+     a = ap.parse_args()
+     if a.compat_bf16 and a.base:
+         ap.error("--compat-bf16 cannot reuse --base dense weights")
++    destination = pathlib.Path(a.out).absolute()
++    destination.parent.mkdir(parents=True, exist_ok=True)
++    # Cooperating writers serialize across verification and atomic directory publication.
++    with open(destination.parent / ("." + destination.name + ".pack.lock"), "a") as lock:
++        fcntl.flock(lock, fcntl.LOCK_EX)
++        return transactional_pack(a, destination)
++
++
++def file_identity(path):
++    path = pathlib.Path(path)
++    digest = hashlib.sha256()
++    before = path.stat()
++    with path.open("rb") as stream:
++        for chunk in iter(lambda: stream.read(8 << 20), b""):
++            digest.update(chunk)
++    after = path.stat()
++    if (before.st_size, before.st_mtime_ns, before.st_ino) != (after.st_size, after.st_mtime_ns, after.st_ino):
++        raise ValueError(f"source changed during hashing: {path}")
++    return {"size": after.st_size, "sha256": digest.hexdigest()}
++
++
++def tree_identity(root):
++    return {str(p.relative_to(root)): file_identity(p) for p in sorted(root.rglob("*"))
++            if p.is_file() and p.name != "PACK.json"}
++
++
++def transactional_pack(a, destination):
++    src = pathlib.Path(a.gguf).absolute()
++    model = Model(src)
++    paths = list(model.paths)
++    source_stats = {p: p.stat() for p in paths}
++    identity = {"format": 1, "sources": {str(p): file_identity(p) for p in paths},
++                "converter": {name: file_identity(HERE / name) for name in
++                              ("iq_pack.py", "strata_tokenizer.py", "gguf_reader.py")},
++                "compat_bf16": a.compat_bf16, "experts_bin": a.experts_bin and not a.skip_experts,
++                "base": tree_identity(pathlib.Path(a.base).resolve()) if a.base else None}
++    if destination.exists():
++        manifest = destination / "PACK.json"
++        if not manifest.exists():
++            raise ValueError(f"{destination}: legacy/unverified pack; choose a new --out (existing pack preserved)")
++        previous = json.loads(manifest.read_text())
++        if previous.get("identity") != identity:
++            raise ValueError(f"{destination}: source/options/converter identity mismatch; choose a new --out")
++        if previous.get("artifacts") != tree_identity(destination):
++            raise ValueError(f"{destination}: artifact integrity mismatch; existing pack preserved")
++        print("verified identical pack; no files rewritten")
++        return 0
++    with tempfile.TemporaryDirectory(prefix="." + destination.name + ".", dir=destination.parent) as tmp:
++        stage = pathlib.Path(tmp) / "pack"
++        original = a.out
++        try:
++            a.out = str(stage)
++            rc = build_pack(a)
++        finally:
++            a.out = original
++        if rc:
++            return rc
++        for path, before in source_stats.items():
++            after = path.stat()
++            if (before.st_size, before.st_mtime_ns, before.st_ino) != (after.st_size, after.st_mtime_ns, after.st_ino):
++                raise ValueError(f"source changed during conversion: {path}")
++        manifest = {"identity": identity, "artifacts": tree_identity(stage)}
++        (stage / "PACK.json").write_text(json.dumps(manifest, indent=2) + "\n")
++        for path in stage.rglob("*"):
++            if path.is_file():
++                with path.open("rb") as stream:
++                    os.fsync(stream.fileno())
++        for directory in [p for p in stage.rglob("*") if p.is_dir()] + [stage]:
++            fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
++            try:
++                os.fsync(fd)
++            finally:
++                os.close(fd)
++        # New version only; never partially overwrite a live directory.
++        stage.rename(destination)
++        fd = os.open(destination.parent, os.O_RDONLY | os.O_DIRECTORY)
++        try:
++            os.fsync(fd)
++        finally:
++            os.close(fd)
++    return 0
++
++
++def build_pack(a) -> int:
+     # HF snapshot files are symlinks to hash-named blobs. Keep the shard filename for discovery.
+     src = pathlib.Path(a.gguf).absolute()
+     base = pathlib.Path(a.base).resolve() if a.base else None
+diff --git a/tools/make_profile.py b/tools/make_profile.py
+index 0f02384..d449b04 100644
+--- a/tools/make_profile.py
++++ b/tools/make_profile.py
+@@ -5,13 +5,14 @@ which experts start resident (the adaptive tier then swaps in what a conversatio
+ ranks fewer pairs than a card can hold caps the cache (issue #46: a 32 GB card stopped at 8,000 slots); this tool
+ writes one that ranks all 24,576.
+ 
+-The order: the base profile's ranking (default: the shipped data/expert-profile.bin), then the pairs your routing
+-traces used, most frequent first, then every pair still missing, interleaved across the layers.
++Without traces, preserve the base profile's ranking, then fill missing pairs across layers.
++Training requires --rerank (trace frequency first, base fallback) or --no-base,
++plus --checkpoint and a separate --out. A complete base must never silently mask training traces.
+ 
+     python tools/make_profile.py [TRACE ...] [--base data/expert-profile.bin | --no-base] [--out PATH]
+                                  [--n-expert 256]      (a pruned model: GSQ-RCO Coder keeps 256 of 512)
+ 
+-A routing trace comes from a one-shot engine run with `--dump-routing FILE` (a prompt typical of your use; the
++A routing trace comes from a managed engine with `--dump-routing FILE` (a prompt typical of your use; the
+ routed experts of every layer and position are written).  Point the model config's `--expert-profile` at the result.
+ """
+ import argparse
+@@ -64,11 +65,17 @@ def main():
+     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+     ap.add_argument("traces", nargs="*", help="routing traces from --dump-routing")
+     ap.add_argument("--base", default=str(ROOT / "data" / "expert-profile.bin"), help="ranking to keep first")
++    ap.add_argument("--rerank", action="store_true", help="rank trace frequency first, using base for ties/fallback")
++    ap.add_argument("--checkpoint", help="checkpoint identity recorded beside a trained ranking")
+     ap.add_argument("--no-base", action="store_true", help="rank by the traces only")
+     ap.add_argument("--out", default=str(ROOT / "data" / "expert-profile.bin"))
+     ap.add_argument("--n-expert", type=int, default=N_EXPERT, help="experts per layer (default 512)")
+     a = ap.parse_args()
+ 
++    if a.traces and (not a.checkpoint or Path(a.out).resolve() == (ROOT / "data" / "expert-profile.bin").resolve()):
++        ap.error("training traces require --checkpoint and a checkpoint-specific --out")
++    if a.traces and not (a.rerank or a.no_base):
++        ap.error("traces require --rerank or --no-base; preserving a complete base ignores traces")
+     ranked, seen = [], set()
+ 
+     def take(pairs):
+@@ -79,8 +86,9 @@ def main():
+                 ranked.append(p)
+ 
+     ne = a.n_expert
+-    if not a.no_base:
+-        take(read_profile(a.base, ne))
++    base = read_profile(a.base, ne) if not a.no_base else []
++    if not a.rerank:
++        take(base)
+     n_base = len(ranked)
+     freq = defaultdict(int)
+     for t in a.traces:
+@@ -88,8 +96,15 @@ def main():
+             freq[p] += c
+     take(p for p, _ in sorted(freq.items(), key=lambda kv: (-kv[1], kv[0])))
+     n_trace = len(ranked) - n_base
++    if a.rerank:
++        take(base)
+     take((layer, e) for e in range(ne) for layer in range(N_LAYER))   # the rest, across the layers
+     write_profile(a.out, ranked, ne)
++    if a.checkpoint:
++        import json, hashlib
++        Path(a.out + ".json").write_text(json.dumps({"checkpoint": a.checkpoint,
++            "traces": {str(p): hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in a.traces},
++            "rerank": a.rerank, "pairs": len(ranked)}, indent=2) + "\n")
+     assert read_profile(a.out, ne) == ranked, "the profile did not survive the round trip"
+     print(f"wrote {a.out}: {len(ranked)} ranked pairs ({n_base} from the base, {n_trace} from the traces, "
+           f"{len(ranked) - n_base - n_trace} filled in)")
+diff --git a/tools/strata_tokenizer.py b/tools/strata_tokenizer.py
+index 92a71f8..4269d90 100644
+--- a/tools/strata_tokenizer.py
++++ b/tools/strata_tokenizer.py
+@@ -15,6 +15,7 @@ emoji (4-byte), combining marks, whitespace runs, and C0 control bytes.
+ """
+ from __future__ import annotations
+ 
++from functools import lru_cache
+ import json
+ import pathlib
+ import sys
+@@ -67,6 +68,7 @@ QWEN35_PATTERN = (
+ class Tokenizer:
+     def __init__(self, tokens: list[str], merges: list[str], token_types: list[int] | None = None,
+                  pre: str = "qwen35", special_ids: dict[str, int] | None = None):
++        self._cached_bpe = lru_cache(maxsize=16384)(lambda word: tuple(self._bpe(word)))
+         self.tokens = tokens
+         self.pre = pre
+         self.token_types = token_types
+@@ -159,7 +161,7 @@ class Tokenizer:
+         out: list[int] = []
+         for piece in self._re.findall(text):
+             mapped = "".join(BYTE_TO_UNICODE[b] for b in piece.encode("utf-8"))
+-            for tok in self._bpe(mapped):
++            for tok in (self._cached_bpe(mapped) if len(mapped) <= 256 else self._bpe(mapped)):
+                 i = self.ids.get(tok)
+                 if i is None:
+                     raise KeyError("BPE produced a token outside the vocabulary: %r" % tok)
+diff --git a/tools/test_iq_pack.py b/tools/test_iq_pack.py
+index c7a5e87..ec1d265 100644
+--- a/tools/test_iq_pack.py
++++ b/tools/test_iq_pack.py
+@@ -29,6 +29,34 @@ def write_gguf(path, tensors):
+ 
+ 
+ class CompatibilityTests(unittest.TestCase):
++    def test_native_ple_key_preserves_quantized_payload(self):
++        for kind, block_bytes in [(Q.IQ3_XXS, 98), (Q.IQ4_XS, 136)]:
++            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
++                root = Path(tmp)
++                source = root / "key.gguf"
++                # Valid quantized block storage, with normal fp16 scales. This
++                # is input payload, not a re-quantization or BF16 conversion.
++                raw = np.arange(2 * block_bytes, dtype=np.uint8).reshape(2, block_bytes)
++                raw[:, :2] = np.frombuffer(np.float16(0.01).tobytes(), dtype=np.uint8)
++                writer = GGUFWriter(source, "qwen4exp")
++                writer.add_tensor("blk.1.ple_key.weight", raw, raw_dtype=kind)
++                writer.write_header_to_file()
++                writer.write_kv_data_to_file()
++                writer.write_tensors_to_file()
++                writer.close()
++                original = source.read_bytes()
++                model = iq_pack.Model(source)
++                with contextlib.redirect_stdout(io.StringIO()):
++                    self.assertEqual(iq_pack.index_standalone(source, root, model, True), 0)
++                _, rows = iq_pack.read_index(root / "index.txt")
++                row = rows["blk.1.ple_key.weight"]
++                self.assertEqual(row[2], "0")  # served from native GGUF
++                self.assertEqual(row[7:9], ["256", "2"])
++                self.assertEqual((root / "dense.bin").stat().st_size, 0)
++                self.assertEqual(json.loads((root / "compat-bf16.json").read_text())["tensors"], [])
++                self.assertEqual(model.bytes("blk.1.ple_key.weight").tobytes(), raw.tobytes())
++                self.assertEqual(source.read_bytes(), original)
++
+     def test_bf16_halfway_rounds_to_even(self):
+         values = np.array([0x3F808000, 0x3F818000, 0xBF808000, 0xBF818000], dtype=np.uint32)
+         got = np.frombuffer(iq_pack.bf16_bytes(values.view(np.uint8), "F32"), dtype=np.uint16)
+@@ -132,10 +160,13 @@ class CompatibilityTests(unittest.TestCase):
+                 iq_pack.Model(first)
+             second.symlink_to(root / "blob2")
+             out = root / "pack"
+-            (out / "tokenizer").mkdir(parents=True)
+-            for name in ["vocab.json", "chat_template.jinja"]:
+-                (out / "tokenizer" / name).touch()
+-            with patch.object(sys, "argv", ["iq_pack.py", "--gguf", str(first), "--out", str(out), "--compat-bf16"]):
++            def tokenizer_export(cmd, **kwargs):
++                target = Path(cmd[cmd.index("--out") + 1]) / "tokenizer"
++                target.mkdir(parents=True)
++                for name in ["vocab.json", "chat_template.jinja"]:
++                    (target / name).write_text("fixture")
++            with patch.object(sys, "argv", ["iq_pack.py", "--gguf", str(first), "--out", str(out), "--compat-bf16"]), \
++                    patch.object(iq_pack.subprocess, "run", side_effect=tokenizer_export):
+                 with contextlib.redirect_stdout(io.StringIO()):
+                     self.assertEqual(iq_pack.main(), 0)
+             expert_index = (out / "native_experts.txt").read_text()
+diff --git a/backend-build.sh b/backend-build.sh
+new file mode 100755
+index 0000000..5ef85d1
+--- /dev/null
++++ b/backend-build.sh
+@@ -0,0 +1,4 @@
++#!/usr/bin/env bash
++set -euo pipefail
++backend_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
++exec python3 "$backend_root/tools/build_release.py" "$@"
+diff --git a/include/strata/core/request_number.hpp b/include/strata/core/request_number.hpp
+new file mode 100644
+index 0000000..6ccffdb
+--- /dev/null
++++ b/include/strata/core/request_number.hpp
+@@ -0,0 +1,29 @@
++#pragma once
++#include <cerrno>
++#include <cmath>
++#include <cstdlib>
++#include <string>
++namespace strata::core {
++inline bool request_number_valid(const std::string& key, const std::string& value) {
++    if (value.empty()) return false;
++    if (key == "seed") {
++        if (value.find_first_not_of("0123456789") != std::string::npos) return false;
++        errno = 0;
++        char* end = nullptr;
++        std::strtoull(value.c_str(), &end, 10);
++        return errno != ERANGE && end && *end == '\0';
++    }
++    errno = 0;
++    char* end = nullptr;
++    double n = std::strtod(value.c_str(), &end);
++    if (errno == ERANGE || !end || *end != '\0' || !std::isfinite(n)) return false;
++    if (key == "top_k") return value.find_first_not_of("0123456789") == std::string::npos && n >= 1 && n <= 64;
++    if (key == "penalty_last_n") return value.find_first_not_of("0123456789") == std::string::npos && n >= 0 && n <= 2147483647;
++    if (key == "cvec") return value == "0" || value == "1";
++    if (key == "temperature" || key == "penalty_freq" || key == "penalty_present") return n >= 0 && n <= 2;
++    if (key == "top_p") return n > 0 && n <= 1;
++    if (key == "min_p" || key == "pcie_frac" || key == "spec_min_p") return n >= 0 && n <= 1;
++    if (key == "penalty_repeat") return n > 0 && n <= 1e6;
++    return false;
++}
++}
+diff --git a/include/strata/core/stage_weights.hpp b/include/strata/core/stage_weights.hpp
+new file mode 100644
+index 0000000..15f7f2c
+--- /dev/null
++++ b/include/strata/core/stage_weights.hpp
+@@ -0,0 +1,11 @@
++#pragma once
++#include <string>
++#include <cstdlib>
++namespace strata::core {
++inline bool stage_weight_needed(const std::string& name, int64_t begin, int64_t end) {
++    if (end < 0 || name.rfind("blk.", 0) != 0 || name == "blk.1.ple_key.weight") return true;
++    char* tail = nullptr;
++    const auto layer = std::strtoll(name.c_str() + 4, &tail, 10);
++    return !tail || *tail != '.' || (layer >= begin && layer < end);
++}
++}
+diff --git a/include/strata/platform/helper_affinity.hpp b/include/strata/platform/helper_affinity.hpp
+new file mode 100644
+index 0000000..023b697
+--- /dev/null
++++ b/include/strata/platform/helper_affinity.hpp
+@@ -0,0 +1,44 @@
++#pragma once
++// Capture before the host loop pins itself. Helpers restore the caller's allowed
++// mask, never the inherited single-CPU mask. Worker pools keep their own policy.
++#if !defined(_WIN32)
++#include <sched.h>
++#include <cstdio>
++#endif
++namespace strata::platform {
++#if !defined(_WIN32)
++inline cpu_set_t helper_cpus{};
++inline bool helper_cpus_ready = false;
++inline bool capture_helper_affinity(int host_cpu) {
++    if (helper_cpus_ready) return true;
++    cpu_set_t allowed;
++    if (sched_getaffinity(0, sizeof allowed, &allowed) != 0) return false;
++    auto topology = [](int cpu, const char* item) {
++        char path[128];
++        std::snprintf(path, sizeof path, "/sys/devices/system/cpu/cpu%d/topology/%s", cpu, item);
++        int value = -1;
++        if (auto* f = std::fopen(path, "r")) {
++            if (std::fscanf(f, "%d", &value) != 1) value = -1;
++            std::fclose(f);
++        }
++        return value;
++    };
++    const int core = topology(host_cpu, "core_id"), package = topology(host_cpu, "physical_package_id");
++    auto helpers = allowed;
++    for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu)
++        if (CPU_ISSET(cpu, &helpers) && (cpu == host_cpu || (core >= 0 && package >= 0 &&
++            topology(cpu, "core_id") == core && topology(cpu, "physical_package_id") == package)))
++            CPU_CLR(cpu, &helpers);
++    helper_cpus = CPU_COUNT(&helpers) ? helpers : allowed;
++    helper_cpus_ready = true;
++    return true;
++}
++inline void apply_helper_affinity() {
++    if (helper_cpus_ready && sched_setaffinity(0, sizeof helper_cpus, &helper_cpus) != 0)
++        std::fprintf(stderr, "strata: could not restore helper affinity\n");
++}
++#else
++inline bool capture_helper_affinity(int) { return true; }
++inline void apply_helper_affinity() {}
++#endif
++}
+diff --git a/include/strata/platform/thermal_gate.hpp b/include/strata/platform/thermal_gate.hpp
+new file mode 100644
+index 0000000..e6829c5
+--- /dev/null
++++ b/include/strata/platform/thermal_gate.hpp
+@@ -0,0 +1,81 @@
++#pragma once
++// Opt-in prompt-path thermal gate.  STRATA_PREFILL_TEMP_PAUSE_C=<C> makes a prompt stage wait before its next
++// chunk while its GPU reads C or more, until it reads STRATA_PREFILL_TEMP_RESUME_C (default C - 3) or the cap
++// STRATA_PREFILL_TEMP_MAX_WAIT_S (default 60) per chunk passes.  It only schedules work: power limits, clocks
++// and fans stay untouched, and an unreadable temperature never waits.  Unset (the default): no wait, no NVML.
++#include <cmath>
++#include <cstdio>
++#include <cstdlib>
++#include <string>
++
++namespace strata::platform {
++
++struct ThermalGate {
++    int pause_c = 0;            ///< 0: disabled
++    int resume_c = 0;
++    int step_ms = 200;          ///< sampling interval while waiting
++    int max_steps = 300;        ///< per-chunk cap, from STRATA_PREFILL_TEMP_MAX_WAIT_S
++};
++
++struct ThermalWait {
++    int steps = 0;              ///< sleeps taken
++    int peak_c = -1, last_c = -1;
++    bool capped = false, stopped = false;
++};
++
++/// The gate from `get(name)` (std::getenv by default); malformed or inconsistent settings disable it.
++template <class Get>
++ThermalGate thermal_gate_from(Get get) {
++    auto number = [&](const char* name, double fallback, bool& ok) {
++        const char* v = get(name);
++        if (v == nullptr || *v == '\0') return fallback;
++        char* end = nullptr;
++        const double x = std::strtod(v, &end);
++        if (end == v || *end != '\0' || !std::isfinite(x)) ok = false;
++        return x;
++    };
++    bool ok = true;
++    ThermalGate g;
++    const double pause = number("STRATA_PREFILL_TEMP_PAUSE_C", 0, ok);
++    if (pause == 0 && ok) return g;
++    const double resume = number("STRATA_PREFILL_TEMP_RESUME_C", pause - 3, ok);
++    const double wait_s = number("STRATA_PREFILL_TEMP_MAX_WAIT_S", 60, ok);
++    if (!ok || pause < 30 || pause > 100 || resume >= pause || resume < 20 || wait_s <= 0 || wait_s > 3600 ||
++        pause != std::floor(pause) || resume != std::floor(resume)) {
++        std::fprintf(stderr, "strata: prompt thermal gate disabled: invalid STRATA_PREFILL_TEMP_* settings\n");
++        return g;
++    }
++    g.pause_c = (int) pause;
++    g.resume_c = (int) resume;
++    g.max_steps = (int) std::ceil(wait_s * 1000.0 / g.step_ms);
++    return g;
++}
++
++inline const ThermalGate& thermal_gate() {
++    static const ThermalGate g = thermal_gate_from([](const char* n) { return std::getenv(n); });
++    return g;
++}
++
++/// Before a prompt chunk: `read()` is the GPU temperature in C (negative: unknown), `stop()` the request's
++/// cancellation, `sleep(ms)` the wait.  Waits only from `pause_c`, down to below `resume_c` or the cap.
++template <class Read, class Stop, class Sleep>
++ThermalWait thermal_wait(const ThermalGate& g, Read read, Stop stop, Sleep sleep) {
++    ThermalWait w;
++    if (g.pause_c <= 0) return w;
++    int t = read();
++    w.peak_c = w.last_c = t;
++    if (t < g.pause_c) return w;
++    while (t >= g.resume_c) {
++        if (stop()) { w.stopped = true; break; }
++        if (w.steps >= g.max_steps) { w.capped = true; break; }
++        sleep(g.step_ms);
++        ++w.steps;
++        t = read();
++        if (t < 0) break;
++        w.last_c = t;
++        if (t > w.peak_c) w.peak_c = t;
++    }
++    return w;
++}
++
++}  // namespace strata::platform
+diff --git a/serve/controls.py b/serve/controls.py
+new file mode 100644
+index 0000000..2f6e009
+--- /dev/null
++++ b/serve/controls.py
+@@ -0,0 +1,158 @@
++"""Request guarantees supported by the native server (validated before SSE)."""
++import math
++
++
++class RequestError(ValueError):
++    def __init__(self, param, message):
++        super().__init__(f"{param}: {message}")
++        self.param = param
++
++
++def validate_sampling(req):
++    ranges = {"temperature": (0, 2), "top_p": (0, 1), "min_p": (0, 1),
++              "presence_penalty": (0, 2), "frequency_penalty": (0, 2),
++              "repetition_penalty": (0, 1e6), "top_k": (1, 64),
++              "seed": (0, 2**64 - 1), "penalty_last_n": (0, 2**31 - 1),
++              "max_tokens": (-1, 2**31 - 1), "max_completion_tokens": (-1, 2**31 - 1)}
++    integers = {"top_k", "seed", "penalty_last_n", "max_tokens", "max_completion_tokens"}
++    for key, (low, high) in ranges.items():
++        value = req.get(key)
++        if value is None:
++            continue
++        if isinstance(value, bool) or not isinstance(value, (int, float)) or (isinstance(value, float) and not math.isfinite(value)):
++            raise RequestError(key, "expected a finite number")
++        if key in integers and not isinstance(value, int):
++            raise RequestError(key, "expected an integer")
++        if value < low or (high is not None and value > high) or (key in ("top_p", "repetition_penalty") and value == 0):
++            raise RequestError(key, f"value outside supported range {low}..{high}")
++    tune = req.get("strata_tune")
++    if tune is not None:
++        if not isinstance(tune, dict):
++            raise RequestError("strata_tune", "expected an object")
++        for key, value in tune.items():
++            if key not in ("pcie_frac", "spec_min_p") or isinstance(value, bool) or not isinstance(value, (int, float)) or (isinstance(value, float) and not math.isfinite(value)) or not 0 <= value <= 1:
++                raise RequestError("strata_tune", "only pcie_frac and spec_min_p in 0..1 are supported")
++
++
++def stop_sequences(req):
++    stops = req.get("stop", req.get("stop_sequences"))
++    if stops is None:
++        return []
++    if isinstance(stops, str):
++        stops = [stops]
++    if not isinstance(stops, list) or not 1 <= len(stops) <= 4 or any(not isinstance(s, str) or not s for s in stops):
++        raise RequestError("stop", "expected a nonempty string or one to four nonempty strings")
++    return stops
++
++
++def validate_request(req, api="openai"):
++    if not isinstance(req, dict):
++        raise RequestError("request", "expected an object")
++    validate_sampling(req)
++    stop_sequences(req)
++    for key in ("stream", "parallel_tool_calls"):
++        if key in req and not isinstance(req[key], bool):
++            raise RequestError(key, "expected a boolean")
++    if "n" in req and (type(req["n"]) is not int or req["n"] != 1):
++        raise RequestError("n", "only one completion is supported")
++    fmt = req.get("response_format")
++    if fmt is not None and fmt != {"type": "text"}:
++        raise RequestError("response_format", "only text is supported; constrained JSON decoding is unavailable")
++    tools = req.get("tools") or []
++    if not isinstance(tools, list) or any(not isinstance(t, dict) for t in tools):
++        raise RequestError("tools", "expected an array of tool objects")
++    mcp = req.get("strata_mcp") is True
++    names = set()
++    for tool in tools:
++        fn = tool.get("function", tool)
++        if not isinstance(fn, dict) or not isinstance(fn.get("name"), str):
++            raise RequestError("tools", "each tool requires a function name")
++        if fn.get("strict"):
++            raise RequestError("tools", "strict schema decoding is unavailable")
++        names.add(fn["name"])
++    choice = tool_choice(req, api)
++    if choice == "none" and (tools or mcp):
++        raise RequestError("tool_choice", "none is unsupported when tools are offered; omit the tools instead")
++    if choice not in (None, "none"):
++        if not tools:
++            raise RequestError("tool_choice", "forcing a tool call requires the request's own tools")
++        if mcp:
++            raise RequestError("tool_choice", "forcing a tool call is unsupported with MCP tools")
++        if isinstance(choice, tuple) and choice[1] not in names:
++            raise RequestError("tool_choice", "names a tool the request does not offer")
++    if mcp and single_call(req, api):
++        raise RequestError("parallel_tool_calls", "a single-call limit is unsupported with MCP tools")
++    if req.get("logprobs") or req.get("top_logprobs") or req.get("logit_bias"):
++        raise RequestError("logprobs/logit_bias", "unsupported by this engine")
++    if not isinstance(req.get("messages"), list) or not req["messages"] or any(not isinstance(m, dict) for m in req["messages"]):
++        raise RequestError("messages", "expected a nonempty array of messages")
++
++
++def tool_choice(req, api="openai"):
++    """The request's tool choice -> None (automatic), "none", "required" or ("function", name)."""
++    choice = req.get("tool_choice")
++    if choice in (None, "auto", "none", "required"):
++        return None if choice == "auto" else choice
++    if isinstance(choice, dict):
++        kind = choice.get("type")
++        if api == "anthropic":
++            if kind == "auto":
++                return None
++            if kind in ("any", "none"):
++                return {"any": "required"}.get(kind, kind)
++            if kind == "tool" and isinstance(choice.get("name"), str):
++                return ("function", choice["name"])
++        elif kind == "function" and isinstance((choice.get("function") or {}).get("name"), str):
++            return ("function", choice["function"]["name"])
++    raise RequestError("tool_choice", "expected auto, none, required or a named function")
++
++
++def single_call(req, api="openai"):
++    """True when at most one tool call may be returned (OpenAI parallel_tool_calls, Anthropic disable_parallel_tool_use)."""
++    choice = req.get("tool_choice")
++    return req.get("parallel_tool_calls") is False or (
++        api == "anthropic" and isinstance(choice, dict) and choice.get("disable_parallel_tool_use") is True)
++
++
++CALL_PREFIX = "<tool_call>\n<function="
++
++
++def tool_policy(req, api="openai"):
++    """-> (prefix, max_calls) for a validated request.  prefix: the template text a forced choice starts the answer
++    with (a call to the named function - the only one offered, for "required" - or else a call whose name the model
++    writes, which must then be an offered tool); max_calls: 1 under a single-call
++    limit, else None.  The server returns only complete calls, so the limit is exact; a forced call that does not
++    complete is an error, never plain text."""
++    choice = tool_choice(req, api)
++    names = [t.get("function", t).get("name") for t in req.get("tools") or []]
++    if choice == "required" and len(names) == 1:
++        choice = ("function", names[0])          # one offered tool: requiring a call is calling that tool
++    prefix = ""
++    if choice == "required":
++        prefix = CALL_PREFIX
++    elif isinstance(choice, tuple):
++        prefix = CALL_PREFIX + choice[1] + ">\n"
++    return prefix, (1 if single_call(req, api) else None)
++
++
++class StopFilter:
++    """Hold only a possible delimiter prefix; never emit part of a stop sequence."""
++    def __init__(self, stops):
++        self.stops, self.pending, self.matched = stops, "", None
++
++    def feed(self, text):
++        if self.matched is not None:
++            return ""
++        text = self.pending + text
++        matches = [(text.find(s), s) for s in self.stops if s in text]
++        if matches:
++            pos, self.matched = min(matches, key=lambda pair: pair[0])
++            self.pending = ""
++            return text[:pos]
++        hold = max((n for s in self.stops for n in range(1, min(len(s), len(text) + 1)) if text.endswith(s[:n])), default=0)
++        self.pending = text[-hold:] if hold else ""
++        return text[:-hold] if hold else text
++
++    def finish(self):
++        text, self.pending = self.pending, ""
++        return text
+diff --git a/serve/test_controls.py b/serve/test_controls.py
+new file mode 100644
+index 0000000..235d53d
+--- /dev/null
++++ b/serve/test_controls.py
+@@ -0,0 +1,109 @@
++"""Behavioral regressions for truthful controls and bounded cancellation; no GPU."""
++import json
++from pathlib import Path
++import queue
++import socket
++import sys
++import tempfile
++import threading
++import time
++import unittest
++import urllib.request
++import urllib.error
++from unittest.mock import patch
++
++from serve.controls import StopFilter, validate_request
++from serve.server import ByteTokenizer, ChatTemplate, MockEngine, Service, StrataEngine, serve
++
++ROOT = Path(__file__).resolve().parents[1]
++
++
++class Controls(unittest.TestCase):
++    def test_stop_every_boundary_and_unicode(self):
++        text = 'ação before<END>must not leak'
++        for split in range(len(text)+1):
++            filt = StopFilter(['<END>', 'unused'])
++            actual = filt.feed(text[:split]) + filt.feed(text[split:]) + filt.finish()
++            self.assertEqual(actual, 'ação before')
++        filt = StopFilter(['xyxyz'])
++        self.assertEqual(''.join(filt.feed(t) for t in 'axyxyxyzafter') + filt.finish(), 'axy')
++        filt = StopFilter(['xyz'])
++        self.assertEqual(filt.feed('abxy') + filt.finish(), 'abxy')
++
++    def test_controls_are_explicit(self):
++        base = {'messages': [{'role':'user','content':'hi'}]}
++        for control in [{'tool_choice':'required'}, {'response_format':{'type':'json_object'}},
++                        {'seed':True}, {'seed':-1}, {'seed':2**64}, {'top_k':0}, {'top_k':65},
++                        {'temperature':float('nan')}, {'temperature':'1'}, {'stop':['']},
++                        {'max_tokens':2.5}, {'n':2}, {'seed':10**1000}, {'temperature':10**1000},
++                        {'strata_tune':{'pcie_frac':10**1000}}]:
++            with self.subTest(control=control), self.assertRaises(ValueError):
++                validate_request({**base, **control})
++        validate_request({**base, 'seed':0, 'temperature':0, 'top_k':64, 'stop':['done']})
++        self.assertIn(' seed=0', StrataEngine.sampling_keys({'seed':0}))
++
++    def test_http_validation_precedes_stream(self):
++        tok=ByteTokenizer(); engine=MockEngine(tok,'hello')
++        svc=Service(engine,tok,ChatTemplate(ROOT/'serve/chat_template.jinja'))
++        httpd=serve(svc,port=0)
++        try:
++            url=f'http://127.0.0.1:{httpd.server_address[1]}/v1/chat/completions'
++            for stream in [False,True]:
++                req={'messages':[{'role':'user','content':'hi'}], 'stream':stream,'tool_choice':'required'}
++                with self.assertRaises(urllib.error.HTTPError) as caught:
++                    urllib.request.urlopen(urllib.request.Request(url,data=json.dumps(req).encode()),timeout=3)
++                with caught.exception as response:
++                    self.assertEqual(response.code,400)
++                    self.assertEqual(json.load(response)['error']['param'],'tool_choice')
++            self.assertEqual(svc.totals['requests'],0)
++        finally:
++            httpd.shutdown();httpd.server_close()
++
++    def test_stop_nonstream(self):
++        tok=ByteTokenizer(); svc=Service(MockEngine(tok,'before<END>after'),tok,ChatTemplate(ROOT/'serve/chat_template.jinja'))
++        result=list(svc.run([1],False,None,100,{'stop':'<END>'},threading.Event()))
++        self.assertEqual(''.join(ev.text for kind,ev in result if kind=='event'),'before')
++        self.assertEqual(result[-1][1]['finish'],'stop')
++
++    def test_cancel_while_queued_does_not_start_engine(self):
++        tok=ByteTokenizer(); svc=Service(MockEngine(tok,'hello'),tok,ChatTemplate(ROOT/'serve/chat_template.jinja'))
++        cancel=threading.Event();svc.fifo.acquire()
++        thread=threading.Thread(target=lambda:list(svc.run([1],False,None,100,{},cancel)))
++        thread.start()
++        time.sleep(.05);cancel.set();thread.join(1)
++        try:
++            self.assertFalse(thread.is_alive());self.assertEqual(svc.status['queued'],0)
++            self.assertEqual(svc.totals['requests'],0)
++        finally:svc.fifo.release()
++
++    def test_nonstream_disconnect_cancels(self):
++        tok=ByteTokenizer(); engine=MockEngine(tok,'x'*2000,delay_s=.01)
++        svc=Service(engine,tok,ChatTemplate(ROOT/'serve/chat_template.jinja'))
++        httpd=serve(svc,port=0)
++        try:
++            req=json.dumps({'messages':[{'role':'user','content':'hi'}],'max_tokens':1000}).encode()
++            sock=socket.create_connection(httpd.server_address)
++            sock.sendall(b'POST /v1/chat/completions HTTP/1.0\r\nContent-Length: '+str(len(req)).encode()+b'\r\n\r\n'+req)
++            deadline=time.monotonic()+2
++            while not svc.status['busy'] and time.monotonic()<deadline:time.sleep(.01)
++            sock.close()
++            deadline=time.monotonic()+2
++            while svc.status['busy'] and time.monotonic()<deadline:time.sleep(.01)
++            self.assertFalse(svc.status['busy']);self.assertLess(svc.totals['output_tokens'],100)
++        finally:httpd.shutdown();httpd.server_close()
++
++    def test_silent_child_is_reaped_before_restart(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            child=Path(tmp)/'child.py'
++            child.write_text('import sys,time\nprint("READY 4096 stop",flush=True)\nfor line in sys.stdin:\n if line.startswith("GEN"): print("T 97",flush=True)\n')
++            # Python -c makes --serve an argv item, matching the native protocol.
++            wrapper=Path(tmp)/'child';wrapper.write_text('#!/bin/sh\nexec '+sys.executable+' '+str(child)+'\n');wrapper.chmod(0o755)
++            engine=StrataEngine(str(wrapper),[])
++            try:
++                gen=engine.generate([1],10,{},threading.Event());self.assertEqual(next(gen),97)
++                clock=time.monotonic
++                with patch('serve.server.time.monotonic',side_effect=[clock(),clock()+11]):
++                    gen.close()
++                self.assertFalse(engine.alive());self.assertIsNotNone(engine.proc.returncode)
++                engine.restart();self.assertTrue(engine.alive())
++            finally:engine._terminate()
+diff --git a/serve/test_managed_config.py b/serve/test_managed_config.py
+new file mode 100644
+index 0000000..99ce552
+--- /dev/null
++++ b/serve/test_managed_config.py
+@@ -0,0 +1,39 @@
++"""Managed launcher configuration, independent of GPU/model assets."""
++import unittest
++from pathlib import Path
++
++from serve.server import engine_args, managed_config
++
++
++class ManagedConfig(unittest.TestCase):
++    def test_context_override_preserves_pack_split_and_original(self):
++        cfg = {"cwd": "/models", "gpu": [0, 1], "layer_split": "24",
++               "args": ["--pack", "pack", "--native", "target.gguf",
++                        "--max-context", "4096", "--max-context", "8192"]}
++        result = managed_config(cfg, "/models/target.gguf", 32768)
++        args = engine_args(result)
++        self.assertEqual(args.count("--max-context"), 1)
++        self.assertEqual(args[args.index("--max-context") + 1], "32768")
++        self.assertEqual(args[-2:], ["--layer-split", "24"])
++        self.assertEqual(cfg["args"][-1], "8192")
++        self.assertEqual(result["args"][:4], cfg["args"][:4])
++
++    def test_model_mismatch_is_rejected(self):
++        with self.assertRaisesRegex(ValueError, "does not match"):
++            managed_config({"args": ["--native", "one.gguf"]}, "two.gguf", None)
++
++    def test_missing_or_duplicate_model_is_rejected(self):
++        for args in ([], ["--native"], ["--native", "a", "--native", "a"]):
++            with self.subTest(args=args), self.assertRaises(ValueError):
++                managed_config({"args": args}, "a", None)
++
++    def test_context_validation(self):
++        for context in (0, -1):
++            with self.subTest(context=context), self.assertRaises(ValueError):
++                managed_config({"args": []}, None, context)
++        with self.assertRaisesRegex(ValueError, "missing its value"):
++            managed_config({"args": ["--max-context", "--kv", "int8"]}, None, 4096)
++
++    def test_omitted_context_uses_config(self):
++        args = ["--native", str(Path("model.gguf").resolve()), "--max-context", "4096"]
++        self.assertEqual(managed_config({"args": args}, "model.gguf", None)["args"], args)
+diff --git a/serve/test_tool_policy.py b/serve/test_tool_policy.py
+new file mode 100644
+index 0000000..bce72f3
+--- /dev/null
++++ b/serve/test_tool_policy.py
+@@ -0,0 +1,170 @@
++"""Forced tool choice and the single-call limit: honored exactly or refused, never silently ignored; no GPU."""
++import json
++from pathlib import Path
++import unittest
++import urllib.error
++import urllib.request
++
++from serve.controls import CALL_PREFIX, tool_policy, validate_request
++from serve.server import ByteTokenizer, ChatTemplate, MockEngine, Service, serve
++
++ROOT = Path(__file__).resolve().parents[1]
++TOOL = {'type': 'function', 'function': {'name': 'execute', 'description': 'Run a command',
++        'parameters': {'type': 'object', 'properties': {'command': {'type': 'string'}}, 'required': ['command']}}}
++OTHER = {'type': 'function', 'function': {'name': 'read', 'parameters': {'type': 'object', 'properties': {}}}}
++BODY = '<parameter=command>\nls -la\n</parameter>\n</function>\n</tool_call>'
++TWO_CALLS = ('<tool_call>\n<function=execute>\n' + BODY + '\n<tool_call>\n<function=execute>\n'
++             '<parameter=command>\nrm -rf x\n</parameter>\n</function>\n</tool_call>\ntrailing text')
++
++
++def request(**extra):
++    return {'messages': [{'role': 'user', 'content': 'list files'}], 'reasoning_effort': 'none', **extra}
++
++
++class Policy(unittest.TestCase):
++    def test_validation_accepts_only_honored_choices(self):
++        ok = [request(tools=[TOOL], tool_choice='required'),
++              request(tools=[TOOL], tool_choice={'type': 'function', 'function': {'name': 'execute'}}),
++              request(tools=[TOOL], parallel_tool_calls=False),
++              request(tool_choice='none')]
++        for req in ok:
++            with self.subTest(req=req):
++                validate_request(req)
++        anthropic_ok = [request(tools=[TOOL['function']], tool_choice={'type': 'any'}),
++                        request(tools=[TOOL['function']], tool_choice={'type': 'tool', 'name': 'execute'}),
++                        request(tools=[TOOL['function']], tool_choice={'type': 'auto', 'disable_parallel_tool_use': True})]
++        for req in anthropic_ok:
++            with self.subTest(req=req):
++                validate_request(req, 'anthropic')
++        bad = [request(tool_choice='required'),
++               request(tools=[TOOL], tool_choice={'type': 'function', 'function': {'name': 'missing'}}),
++               request(tools=[TOOL], tool_choice='none'),
++               request(tools=[TOOL], tool_choice={'type': 'allowed_tools'}),
++               request(tools=[TOOL], tool_choice='required', strata_mcp=True),
++               request(tools=[TOOL], parallel_tool_calls=False, strata_mcp=True)]
++        for req in bad:
++            with self.subTest(req=req), self.assertRaises(ValueError):
++                validate_request(req)
++        with self.assertRaises(ValueError):
++            validate_request(request(tools=[TOOL['function']], tool_choice={'type': 'none'}), 'anthropic')
++
++    def test_policy(self):
++        self.assertEqual(tool_policy(request(tools=[TOOL])), ('', None))
++        self.assertEqual(tool_policy(request(tools=[TOOL], tool_choice='required')), (CALL_PREFIX + 'execute>\n', None))
++        self.assertEqual(tool_policy(request(tools=[TOOL, OTHER], tool_choice='required')), (CALL_PREFIX, None))
++        self.assertEqual(tool_policy(request(tools=[TOOL['function']], tool_choice={'type': 'any'}), 'anthropic'),
++                         (CALL_PREFIX + 'execute>\n', None))
++        named = {'type': 'function', 'function': {'name': 'execute'}}
++        self.assertEqual(tool_policy(request(tools=[TOOL], tool_choice=named, parallel_tool_calls=False)),
++                         (CALL_PREFIX + 'execute>\n', 1))
++        self.assertEqual(tool_policy(request(tool_choice={'type': 'tool', 'name': 'execute',
++                                                          'disable_parallel_tool_use': True}), 'anthropic'),
++                         (CALL_PREFIX + 'execute>\n', 1))
++
++
++class Http(unittest.TestCase):
++    def start(self, script):
++        tok = ByteTokenizer()
++        self.engine = MockEngine(tok, script)
++        self.svc = Service(self.engine, tok, ChatTemplate(ROOT / 'serve/chat_template.jinja'))
++        self.httpd = serve(self.svc, port=0)
++        self.addCleanup(self.httpd.server_close)
++        self.addCleanup(self.httpd.shutdown)
++        return tok
++
++    def post(self, path, req):
++        url = f'http://127.0.0.1:{self.httpd.server_address[1]}{path}'
++        with urllib.request.urlopen(urllib.request.Request(url, data=json.dumps(req).encode()), timeout=5) as r:
++            return json.load(r)
++
++    def stream(self, req):
++        url = f'http://127.0.0.1:{self.httpd.server_address[1]}/v1/chat/completions'
++        chunks = []
++        with urllib.request.urlopen(urllib.request.Request(url, data=json.dumps({**req, 'stream': True}).encode()),
++                                    timeout=5) as r:
++            for line in r:
++                if line.startswith(b'data: {'):
++                    chunks.append(json.loads(line[6:]))
++        return chunks
++
++    def assert_refused(self, path, req, param=None):
++        with self.assertRaises(urllib.error.HTTPError) as caught:
++            self.post(path, req)
++        with caught.exception as response:
++            self.assertEqual(response.code, 400)
++            if param:
++                self.assertEqual(json.load(response)['error']['param'], param)
++
++    def test_named_choice_forces_the_call(self):
++        tok = self.start(BODY)
++        named = {'type': 'function', 'function': {'name': 'execute'}}
++        out = self.post('/v1/chat/completions', request(tools=[TOOL], tool_choice=named))
++        self.assertTrue(tok.decode(self.engine.last_prompt).endswith('</think>\n\n' + CALL_PREFIX + 'execute>\n'))
++        choice = out['choices'][0]
++        self.assertEqual(choice['finish_reason'], 'tool_calls')
++        self.assertEqual([c['function']['name'] for c in choice['message']['tool_calls']], ['execute'])
++        self.assertEqual(json.loads(choice['message']['tool_calls'][0]['function']['arguments']), {'command': 'ls -la'})
++        self.assertIsNone(choice['message']['content'])
++
++    def test_required_choice_with_one_tool_names_it(self):
++        tok = self.start(BODY)
++        out = self.post('/v1/chat/completions', request(tools=[TOOL], tool_choice='required'))
++        self.assertTrue(tok.decode(self.engine.last_prompt).endswith(CALL_PREFIX + 'execute>\n'))
++        self.assertEqual(out['choices'][0]['message']['tool_calls'][0]['function']['name'], 'execute')
++
++    def test_required_choice_lets_the_model_name_an_offered_tool(self):
++        self.start('execute>\n' + BODY)
++        out = self.post('/v1/chat/completions', request(tools=[TOOL, OTHER], tool_choice='required'))
++        self.assertEqual(out['choices'][0]['message']['tool_calls'][0]['function']['name'], 'execute')
++
++    def test_forced_choice_refuses_unknown_name_and_incomplete_call(self):
++        self.start('shutdown>\n' + BODY)
++        self.assert_refused('/v1/chat/completions', request(tools=[TOOL, OTHER], tool_choice='required'))
++        self.start('no call here')
++        self.assert_refused('/v1/chat/completions',
++                            request(tools=[TOOL], tool_choice={'type': 'function', 'function': {'name': 'execute'}}))
++
++    def test_forced_choice_needs_thinking_off(self):
++        self.start(BODY)
++        req = request(tools=[TOOL], tool_choice='required')
++        del req['reasoning_effort']
++        self.assert_refused('/v1/chat/completions', req, 'tool_choice')
++        self.assertEqual(self.svc.totals['requests'], 0)
++
++    def test_single_call_limit_returns_only_the_first_complete_call(self):
++        self.start(TWO_CALLS)
++        req = request(tools=[TOOL], parallel_tool_calls=False)
++        out = self.post('/v1/chat/completions', req)
++        msg = out['choices'][0]['message']
++        self.assertEqual(out['choices'][0]['finish_reason'], 'tool_calls')
++        self.assertEqual(len(msg['tool_calls']), 1)
++        self.assertEqual(json.loads(msg['tool_calls'][0]['function']['arguments']), {'command': 'ls -la'})
++        self.assertIsNone(msg['content'])
++        self.assertLess(out['usage']['completion_tokens'], len(TWO_CALLS.encode()))
++        chunks = self.stream(req)
++        streamed = [c for ch in chunks for c in ch['choices'][0]['delta'].get('tool_calls', [])]
++        self.assertEqual(len(streamed), 1)
++        self.assertEqual(chunks[-1]['choices'][0]['finish_reason'], 'tool_calls')
++        self.assertFalse(any('rm -rf' in json.dumps(ch) or 'trailing' in json.dumps(ch) for ch in chunks))
++
++    def test_without_limit_both_calls_are_returned(self):
++        self.start(TWO_CALLS)
++        out = self.post('/v1/chat/completions', request(tools=[TOOL]))
++        self.assertEqual(len(out['choices'][0]['message']['tool_calls']), 2)
++
++    def test_anthropic_forced_tool_and_single_call(self):
++        self.start(BODY + '\n<tool_call>\n<function=execute>\n' + BODY)
++        req = {'model': 'm', 'max_tokens': 200, 'messages': [{'role': 'user', 'content': 'list files'}],
++               'thinking': {'type': 'disabled'}, 'tools': [{**TOOL['function'], 'input_schema': TOOL['function']['parameters']}],
++               'tool_choice': {'type': 'tool', 'name': 'execute', 'disable_parallel_tool_use': True}}
++        out = self.post('/v1/messages', req)
++        uses = [b for b in out['content'] if b['type'] == 'tool_use']
++        self.assertEqual(len(uses), 1)
++        self.assertEqual(uses[0]['input'], {'command': 'ls -la'})
++        self.assertEqual(out['stop_reason'], 'tool_use')
++        req['thinking'] = {'type': 'enabled', 'budget_tokens': 4096}
++        self.assert_refused('/v1/messages', req, 'tool_choice')
++
++
++if __name__ == '__main__':
++    unittest.main()
+diff --git a/src/core/request_number_test.cpp b/src/core/request_number_test.cpp
+new file mode 100644
+index 0000000..cd48403
+--- /dev/null
++++ b/src/core/request_number_test.cpp
+@@ -0,0 +1,19 @@
++#include "strata/core/request_number.hpp"
++#include "strata/core/stage_weights.hpp"
++#include <cstdio>
++int main() {
++ using strata::core::request_number_valid;
++ int bad = 0;
++ for (auto pair : {std::pair{"seed", "-1"}, {"seed", "18446744073709551616"}, {"top_k", "0"},
++                   {"top_k", "65"}, {"top_k", "1.2"}, {"temperature", "nan"}, {"top_p", "inf"}, {"min_p", "1x"}})
++     bad += request_number_valid(pair.first, pair.second);
++ for (auto pair : {std::pair{"seed", "0"}, {"seed", "18446744073709551615"}, {"top_k", "64"}, {"temperature", "0"}})
++     bad += !request_number_valid(pair.first, pair.second);
++ using strata::core::stage_weight_needed;
++ bad += stage_weight_needed("blk.24.attn_q.weight", 0, 24);
++ bad += !stage_weight_needed("blk.24.attn_q.weight", 24, 48);
++ bad += !stage_weight_needed("blk.1.ple_key.weight", 24, 48);
++ bad += !stage_weight_needed("output.weight", 24, 48);
++ std::printf("request/stage predicates: %d failures\n", bad);
++ return bad ? 1 : 0;
++}
+diff --git a/src/platform/thermal_gate_test.cpp b/src/platform/thermal_gate_test.cpp
+new file mode 100644
+index 0000000..324354c
+--- /dev/null
++++ b/src/platform/thermal_gate_test.cpp
+@@ -0,0 +1,54 @@
++#include "strata/platform/thermal_gate.hpp"
++#include <cstdio>
++#include <map>
++#include <string>
++#include <vector>
++
++namespace {
++using strata::platform::ThermalGate;
++using strata::platform::thermal_gate_from;
++using strata::platform::thermal_wait;
++
++ThermalGate gate(std::map<std::string, std::string> env) {
++    return thermal_gate_from([&](const char* n) { auto it = env.find(n); return it == env.end() ? nullptr : it->second.c_str(); });
++}
++
++struct Run { int steps; int peak; int last; bool capped; bool stopped; };
++
++Run run(const ThermalGate& g, std::vector<int> temps, int stop_after = -1) {
++    size_t i = 0;
++    int reads = 0;
++    auto w = thermal_wait(g, [&] { ++reads; return i < temps.size() ? temps[i++] : temps.back(); },
++                          [&] { return stop_after >= 0 && reads > stop_after; }, [](int) {});
++    return {w.steps, w.peak_c, w.last_c, w.capped, w.stopped};
++}
++}  // namespace
++
++int main() {
++    int bad = 0;
++    auto expect = [&](bool ok, const char* what) { if (!ok) { std::printf("FAIL %s\n", what); ++bad; } };
++    expect(gate({}).pause_c == 0, "unset is disabled");
++    expect(run(gate({}), {99}).steps == 0, "disabled never waits");
++    const ThermalGate g = gate({{"STRATA_PREFILL_TEMP_PAUSE_C", "80"}});
++    expect(g.pause_c == 80 && g.resume_c == 77 && g.max_steps == 300, "defaults");
++    expect(run(g, {79}).steps == 0, "below the pause threshold");
++    expect(run(g, {-1}).steps == 0, "unknown temperature");
++    Run r = run(g, {82, 83, 79, 77, 76});
++    expect(r.steps == 4 && r.peak == 83 && r.last == 76 && !r.capped, "waits below resume");
++    r = run(g, {81, -1});
++    expect(r.steps == 1 && !r.capped, "lost telemetry ends the wait");
++    r = run(gate({{"STRATA_PREFILL_TEMP_PAUSE_C", "80"}, {"STRATA_PREFILL_TEMP_MAX_WAIT_S", "1"}}), {90});
++    expect(r.capped && r.steps == 5, "per-chunk cap");
++    r = run(g, {85}, 1);
++    expect(r.stopped && r.steps == 1, "cancellation ends the wait");
++    for (auto env : std::vector<std::map<std::string, std::string>>{
++             {{"STRATA_PREFILL_TEMP_PAUSE_C", "80x"}},
++             {{"STRATA_PREFILL_TEMP_PAUSE_C", "80.5"}},
++             {{"STRATA_PREFILL_TEMP_PAUSE_C", "120"}},
++             {{"STRATA_PREFILL_TEMP_PAUSE_C", "80"}, {"STRATA_PREFILL_TEMP_RESUME_C", "80"}},
++             {{"STRATA_PREFILL_TEMP_PAUSE_C", "80"}, {"STRATA_PREFILL_TEMP_MAX_WAIT_S", "0"}},
++             {{"STRATA_PREFILL_TEMP_PAUSE_C", "nan"}}})
++        expect(gate(env).pause_c == 0, "invalid settings disable the gate");
++    std::printf("thermal gate: %d failures\n", bad);
++    return bad ? 1 : 0;
++}
+diff --git a/tools/build_release.py b/tools/build_release.py
+new file mode 100644
+index 0000000..ccbfe81
+--- /dev/null
++++ b/tools/build_release.py
+@@ -0,0 +1,68 @@
++"""Clean SM86 release build. Publishes an immutable candidate, never replaces active binaries."""
++import hashlib
++import json
++import os
++from pathlib import Path
++import shutil
++import subprocess
++import tempfile
++import time
++
++ROOT = Path(__file__).resolve().parents[1]
++
++
++def command(*args):
++    return subprocess.check_output(args, cwd=ROOT, text=True).strip()
++
++
++def source_identity():
++    paths = []
++    for folder in ('src', 'include', 'cmake', 'serve', 'tools', 'tests', 'third_party/ggml'):
++        paths.extend(p for p in (ROOT / folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts)
++    paths.extend([ROOT / 'CMakeLists.txt', ROOT / 'backend-build.sh'])
++    return {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
++
++
++def main():
++    sources = source_identity()
++    release_id = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime()) + '-' + hashlib.sha256(json.dumps(sources, sort_keys=True).encode()).hexdigest()[:12]
++    releases = ROOT / 'releases'
++    releases.mkdir(exist_ok=True)
++    build_root = ROOT / 'build-releases'
++    build_root.mkdir(exist_ok=True)
++    build = Path(tempfile.mkdtemp(prefix=release_id + '-', dir=build_root))
++    configure = ['cmake', '-S', str(ROOT), '-B', str(build), '-DCMAKE_BUILD_TYPE=Release',
++                 '-DSTRATA_ENABLE_CUDA=ON', '-DCMAKE_CUDA_ARCHITECTURES=86', '-DSTRATA_NATIVE_EXPERTS=ON',
++                 '-DSTRATA_BUILD_CONVERSATION_TESTS=ON', '-DSTRATA_BUILD_STARTUP_TESTS=ON']
++    if os.environ.get('STRATA_GGML_DIR'):
++        configure += ['-DSTRATA_GGML_DIR=' + os.environ['STRATA_GGML_DIR']]
++    subprocess.run(configure, check=True)
++    subprocess.run(['cmake', '--build', str(build), '-j', os.environ.get('STRATA_BUILD_JOBS', '8')], check=True)
++    tests = ['ctest', '--test-dir', str(build), '--output-on-failure']
++    if os.environ.get('STRATA_FULL_TESTS') != '1':
++        tests += ['-LE', 'external_fixture']
++    subprocess.run(tests, check=True)
++    if source_identity() != sources:
++        raise SystemExit('Source changed during build; candidate not published. Rerun after edits finish.')
++    with tempfile.TemporaryDirectory(prefix='.stage-', dir=releases) as tmp:
++        stage = Path(tmp) / release_id
++        stage.mkdir()
++        for folder in ('serve', 'tools'):
++            shutil.copytree(ROOT / folder, stage / folder, ignore=shutil.ignore_patterns('__pycache__'))
++        shutil.copy2(build / 'strata', stage / 'strata')
++        manifest = {'release': release_id, 'revision': command('git', 'rev-parse', 'HEAD'),
++                    'dirty': command('git', 'status', '--porcelain'), 'sources': sources,
++                    'tracked_diff': command('git', 'diff', 'HEAD', '--binary'),
++                    'configure': configure, 'test_command': tests, 'external_fixtures_required_for_full_parity': True, 'cmake': command('cmake', '--version'),
++                    'cxx': command(os.environ.get('CXX', 'c++'), '--version'),
++                    'ggml_revision': command('git', '-C', os.environ['STRATA_GGML_DIR'], 'rev-parse', 'HEAD') if os.environ.get('STRATA_GGML_DIR') else (ROOT/'third_party/ggml/VERSION.txt').read_text(),
++                    'cuda': command(os.environ.get('CUDACXX', '/opt/cuda/bin/nvcc'), '--version'),
++                    'binary_sha256': hashlib.sha256((stage / 'strata').read_bytes()).hexdigest(),
++                    'cmake_cache': (build / 'CMakeCache.txt').read_text()}
++        (stage / 'BUILD.json').write_text(json.dumps(manifest, indent=2) + '\n')
++        stage.rename(releases / release_id)
++    print(json.dumps({'release': str(releases / release_id), 'build': str(build)}))
++
++
++if __name__ == '__main__':
++    main()
+diff --git a/tools/test_bpe_cache.py b/tools/test_bpe_cache.py
+new file mode 100644
+index 0000000..0df88f0
+--- /dev/null
++++ b/tools/test_bpe_cache.py
+@@ -0,0 +1,34 @@
++import unittest
++from concurrent.futures import ThreadPoolExecutor
++import random
++from strata_tokenizer import Tokenizer, BYTE_TO_UNICODE
++
++
++class BPECache(unittest.TestCase):
++    def test_exactness_bounded_and_tokenizer_isolation(self):
++        vocab=list(BYTE_TO_UNICODE.values())+['ab','abc']
++        a=Tokenizer(vocab,['a b','ab c']);b=Tokenizer(vocab,[])
++        for text in ['abc '*500,'ação 日本語 🙂\n'*50, 'a'*300, '<|not_special|>\t']:
++            expected=[]
++            for piece in a._re.findall(text):
++                mapped=''.join(BYTE_TO_UNICODE[n] for n in piece.encode())
++                expected.extend(a.ids[t] for t in a._bpe(mapped))
++            self.assertEqual(a.encode(text),expected)
++            self.assertEqual(a.encode(text),expected)
++        self.assertNotEqual(a.encode('abc'),b.encode('abc'))
++        self.assertIsInstance(a._cached_bpe('abc'),tuple)
++        for i in range(17000):a._cached_bpe(str(i))
++        self.assertEqual(a._cached_bpe.cache_info().currsize,16384)
++
++    def test_parallel_encoding_matches_uncached_high_entropy(self):
++        vocab=list(BYTE_TO_UNICODE.values())+['ab','abc','<|im_end|>']
++        cached=Tokenizer(vocab,['a b','ab c'])
++        oracle=Tokenizer(vocab,['a b','ab c'])
++        oracle._cached_bpe=lambda word:tuple(oracle._bpe(word))
++        rng=random.Random(0)
++        corpus=[''.join(rng.choices('abcXYZ0123456789!? ação🙂日本語',k=200)) for _ in range(100)]
++        corpus+=['abc<|im_end|>ação','a'*300]
++        expected=[oracle.encode(text,parse_special=True) for text in corpus]
++        with ThreadPoolExecutor(max_workers=4) as pool:
++            actual=list(pool.map(lambda text:cached.encode(text,parse_special=True),corpus))
++        self.assertEqual(actual,expected)
+diff --git a/tools/test_make_profile.py b/tools/test_make_profile.py
+new file mode 100644
+index 0000000..17130cb
+--- /dev/null
++++ b/tools/test_make_profile.py
+@@ -0,0 +1,26 @@
++import contextlib
++import io
++import json
++from pathlib import Path
++import struct
++import sys
++import tempfile
++import unittest
++from unittest.mock import patch
++import make_profile as m
++
++
++class Ranking(unittest.TestCase):
++    def test_trace_reranks_complete_base_and_is_checkpoint_scoped(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            root=Path(tmp);base=root/'base';out=root/'trained';trace=root/'trace'
++            ranked=[(l,e) for e in range(2) for l in range(48)]
++            m.write_profile(base,ranked,2)
++            trace.write_bytes(struct.pack('<iii f',47,1,1,1.0)*4)
++            args=['make_profile.py',str(trace),'--base',str(base),'--out',str(out),'--n-expert','2','--checkpoint','synthetic']
++            with patch.object(sys,'argv',args),contextlib.redirect_stderr(io.StringIO()),self.assertRaises(SystemExit):m.main()
++            with patch.object(sys,'argv',args+['--rerank']),contextlib.redirect_stdout(io.StringIO()):m.main()
++            self.assertEqual(m.read_profile(out,2)[0],(47,1))
++            self.assertEqual(len(set(m.read_profile(out,2))),96)
++            self.assertEqual(m.read_profile(base,2),ranked)
++            self.assertEqual(json.loads(Path(str(out)+'.json').read_text())['checkpoint'],'synthetic')
+diff --git a/tools/test_pack_transaction.py b/tools/test_pack_transaction.py
+new file mode 100644
+index 0000000..b60f961
+--- /dev/null
++++ b/tools/test_pack_transaction.py
+@@ -0,0 +1,46 @@
++import argparse
++import json
++from pathlib import Path
++import tempfile
++import types
++import unittest
++from unittest.mock import patch
++import iq_pack
++
++
++class PackTransaction(unittest.TestCase):
++    def test_identity_interruption_and_idempotence(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            root=Path(tmp);src=root/'model.gguf';src.write_bytes(b'AAAA')
++            dst=root/'pack'
++            a=argparse.Namespace(gguf=str(src),base=None,out=str(dst),compat_bf16=False,experts_bin=True,skip_experts=False)
++            def build(args):
++                stage=Path(args.out);stage.mkdir()
++                (stage/'dense.bin').write_bytes(src.read_bytes())
++                (stage/'experts.bin').write_bytes(src.read_bytes())
++                return 0
++            with patch.object(iq_pack,'Model',return_value=types.SimpleNamespace(paths=[src])),patch.object(iq_pack,'build_pack',side_effect=build) as builder:
++                self.assertEqual(iq_pack.transactional_pack(a,dst),0)
++                original={p.name:p.read_bytes() for p in dst.iterdir()}
++                self.assertEqual(iq_pack.transactional_pack(a,dst),0)
++                self.assertEqual(builder.call_count,1)
++                src.write_bytes(b'BBBB')
++                with self.assertRaisesRegex(ValueError,'identity mismatch'):iq_pack.transactional_pack(a,dst)
++                self.assertEqual(original,{p.name:p.read_bytes() for p in dst.iterdir()})
++                src.write_bytes(b'AAAA');(dst/'experts.bin').write_bytes(b'CCCC')
++                with self.assertRaisesRegex(ValueError,'integrity mismatch'):iq_pack.transactional_pack(a,dst)
++            def broken(args):
++                Path(args.out).mkdir();(Path(args.out)/'dense.bin').write_bytes(b'partial')
++                raise RuntimeError('interrupted')
++            with patch.object(iq_pack,'Model',return_value=types.SimpleNamespace(paths=[src])),patch.object(iq_pack,'build_pack',side_effect=broken):
++                with self.assertRaisesRegex(RuntimeError,'interrupted'):iq_pack.transactional_pack(a,root/'new')
++                self.assertFalse((root/'new').exists())
++                self.assertEqual((dst/'dense.bin').read_bytes(),b'AAAA')
++
++    def test_legacy_pack_is_preserved(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            root=Path(tmp);src=root/'source';src.write_bytes(b'x');dst=root/'old';dst.mkdir();(dst/'experts.bin').write_bytes(b'old')
++            a=argparse.Namespace(gguf=str(src),base=None,out=str(dst),compat_bf16=False,experts_bin=True,skip_experts=False)
++            with patch.object(iq_pack,'Model',return_value=types.SimpleNamespace(paths=[src])):
++                with self.assertRaisesRegex(ValueError,'legacy'):iq_pack.transactional_pack(a,dst)
++            self.assertEqual((dst/'experts.bin').read_bytes(),b'old')

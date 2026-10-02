@@ -1,0 +1,6 @@
+{
+  "stage-dense-iq2": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-32k",
+  "resident-iq3": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-32k",
+  "stage-dense-iq3": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-stage-dense-32k",
+  "resident-stage-dense-iq3": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k"
+}

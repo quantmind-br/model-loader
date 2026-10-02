@@ -1,0 +1,29 @@
+{
+  "run": "baseline-500k-validate-1",
+  "run_status": {
+    "requests_complete": false,
+    "guard_triggered": true
+  },
+  "guard": {
+    "reasons": [
+      "global swap growth above 2 GiB"
+    ],
+    "time": 1790949052.5740247
+  },
+  "code_tps": null,
+  "peak_gpu_mib": {
+    "0": 22584.0,
+    "1": 22494.0
+  },
+  "process_peak_swap_kib": {
+    "808614:server": 0,
+    "809537:native": 0
+  },
+  "retrieval": [],
+  "checks": {},
+  "min_available_gib": 39.56317138671875,
+  "max_swap_growth_gib": 2.1149063110351562,
+  "peak_simultaneous_gpu_mib": 45078.0,
+  "peak_temperature_c": 55.0,
+  "global_pswpout_pages": 537414
+}

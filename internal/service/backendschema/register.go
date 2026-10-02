@@ -20,4 +20,5 @@ func RegisterDefaults(m *Manager, schemaStore backendcatalog.SchemaStore) {
 	m.Register(domain.BackendKindTabby, NewTabbyGenerator(schemaStore))
 	m.Register(domain.BackendKindLMStudio, NewLMStudioGenerator(schemaStore))
 	m.Register(domain.BackendKindFreeToken, NewFreeTokenGenerator(schemaStore))
+	m.Register(domain.BackendKindStrata, NewStrataGenerator(schemaStore))
 }

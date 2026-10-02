@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "kind": "cli-flags.v1",
+  "backendKind": "strata",
+  "backendId": "strata-fork",
+  "source": {
+    "generatedFrom": "/usr/bin/python /home/diogo/dev/Strata/serve/server.py",
+    "generatedAt": "0001-01-01T00:00:00Z",
+    "editable": false
+  },
+  "flags": {
+    "config": {
+      "Long": "config",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Prepared Strata engine JSON (exe, args, cwd, tokenizer, model_name). Its --native model must match the profile model. Keep the adjacent .shared-settings.json for sampling/reasoning defaults",
+      "Group": "model",
+      "required": true
+    },
+    "fit-max-tokens": {
+      "Long": "fit-max-tokens",
+      "Short": "",
+      "Aliases": null,
+      "Type": 0,
+      "EnumValues": null,
+      "Default": false,
+      "HelpText": "Clamp requested generation to remaining context instead of rejecting an oversized request. The config may also enable this",
+      "Group": "server"
+    },
+    "gpu": {
+      "Long": "gpu",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Physical GPU index or comma-separated indices (for example 0,1). Overrides the config's gpu selection; layer_split remains in the config",
+      "Group": "model"
+    },
+    "host": {
+      "Long": "host",
+      "Short": "",
+      "Aliases": null,
+      "Type": 3,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "HTTP bind address; omit to inherit config host, falling back to 127.0.0.1",
+      "Group": "server"
+    },
+    "max-context": {
+      "Long": "max-context",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": null,
+      "HelpText": "Engine context in tokens. Overrides --max-context in the config; omit to inherit it. Set explicitly so the proxy and benchmark know the context window",
+      "Group": "model",
+      "min": 1
+    },
+    "port": {
+      "Long": "port",
+      "Short": "",
+      "Aliases": null,
+      "Type": 1,
+      "EnumValues": null,
+      "Default": 8095,
+      "HelpText": "HTTP port assigned by the process manager",
+      "Group": "server",
+      "min": 1,
+      "max": 65535,
+      "isPort": true
+    }
+  },
+  "presentation": {
+    "groups": [
+      {
+        "name": "Essentials",
+        "highlighted": true,
+        "flags": null
+      },
+      {
+        "name": "model",
+        "flags": [
+          "config",
+          "gpu",
+          "max-context"
+        ]
+      },
+      {
+        "name": "server",
+        "flags": [
+          "fit-max-tokens",
+          "host",
+          "port"
+        ]
+      }
+    ]
+  }
+}

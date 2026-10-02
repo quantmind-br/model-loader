@@ -1,0 +1,60 @@
+{
+  "artifacts": [
+    {
+      "source": "/tmp/strata-consolidated-review-20261001/check_citations.py",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-consolidation-2026-10-01/independent-review-evidence/check_citations.py",
+      "sha256": "a0461bcddb76fe6fc0d6de6888cfe4451504a21f95dea150e88728a0bf68d604",
+      "bytes": 588
+    },
+    {
+      "source": "/tmp/strata-consolidated-review-20261001/help.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-consolidation-2026-10-01/independent-review-evidence/help.txt",
+      "sha256": "f12192d0e60545166396125ff47163f89bcfe4ed0a976771e7fb9bbf7e1ca486",
+      "bytes": 22114
+    },
+    {
+      "source": "/tmp/strata-consolidated-review-20261001/iq2-swap-by-request.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-consolidation-2026-10-01/independent-review-evidence/iq2-swap-by-request.txt",
+      "sha256": "0d702f63c52a10f7461ba5f60c7501905f35c3bc40f6700c58abcaeeb7b3359d",
+      "bytes": 1389
+    },
+    {
+      "source": "/tmp/strata-consolidated-review-20261001/iq4-swap-by-request.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-consolidation-2026-10-01/independent-review-evidence/iq4-swap-by-request.txt",
+      "sha256": "c4deb2b1874b213b80ef6763bf8b9ce8142512672f6c42fd2afbb87b432ba790",
+      "bytes": 1984
+    },
+    {
+      "source": "/tmp/strata-consolidated-review-20261001/nonresident-during-prompt.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-consolidation-2026-10-01/independent-review-evidence/nonresident-during-prompt.txt",
+      "sha256": "560a2e2751fc2aeb740800d86f044b50161013907475335da3f82822d9e45b0f",
+      "bytes": 749
+    },
+    {
+      "source": "/tmp/strata-consolidated-review-20261001/report-submitted.md",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-consolidation-2026-10-01/independent-review-evidence/report-submitted.md",
+      "sha256": "0241f527530e3ab96aa6398dce732834ec15aafb346788fb0bdafa60ba7c2221",
+      "bytes": 52954
+    },
+    {
+      "source": "/tmp/strata-consolidated-review-20261001/stderr.log",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-consolidation-2026-10-01/independent-review-evidence/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "/tmp/strata-consolidated-review-20261001/task.md",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-consolidation-2026-10-01/independent-review-evidence/task.md",
+      "sha256": "a0212862325f56173e99a2958a8e7f67bdee5b595aa0068cb4ea9ee91ab75c8c",
+      "bytes": 3064
+    },
+    {
+      "source": "/tmp/strata-consolidated-review-20261001/version.txt",
+      "archive": "/home/diogo/dev/model-loader/docs/reports/strata-consolidation-2026-10-01/independent-review-evidence/version.txt",
+      "sha256": "3a5495706ad266f8675071284ae47afcf75aec014b4d93ad164de16cf4d01c42",
+      "bytes": 22
+    }
+  ],
+  "report_reviewed_sha256": "0241f527530e3ab96aa6398dce732834ec15aafb346788fb0bdafa60ba7c2221",
+  "review_report_sha256": "4b4d50aa0d40886f13aa50562a643215e0b10e90dfdaa5797b8290d82579d6c1"
+}

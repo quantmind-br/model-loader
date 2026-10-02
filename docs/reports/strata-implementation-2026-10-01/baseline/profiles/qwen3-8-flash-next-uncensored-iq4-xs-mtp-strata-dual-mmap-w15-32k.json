@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 3,
+  "id": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k",
+  "name": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k",
+  "description": "EXPERIMENTAL: uncensored mradermacher i1-IQ4_XS, native IQ4_XS gate/up + IQ4_NL down; Strata copied fork sm86, dual3090 layers24/24, mmap,15 workers,int8 KV,270W/card. 2026-10-01 warm short code median76.3tok/s (3 samples), TTFT.503s, Portuguese40.4tok/s; peak22.43/22.55GiB including failed long prefill. Auto prefill8192 baseline; 2048 trial75.9tok/s did not resolve swap-growth guard failure near30k. Configured32768 context is NOT validated near-full; no256k claim. Shared base Q2_0 MTP spec4/minp.7, warm acceptance764/837 (91.3%), not matched uncensored draft. Official Qwen non-thinking template SHA c3cf9e34, temp.7/top_p.8/k20/min_p0/presence1.5/repetition1. Packer preserves native PLE key; inference binary unchanged. Tool integrity4/4 with SSE and one clean continuation (prefill2048); auto10/10 positives,0/10 spurious controls, statistical verdict inconclusive (prefill2048); not agent-qualified. Long-context calibration incomplete. Report docs/reports/strata-iq4-xs-uncensored-2026-10-01.md.",
+  "model": "/home/diogo/models/huggingface/mradermacher/Qwen3.8-Flash-Next-Uncensored-i1-GGUF/Qwen3.8-Flash-Next-Uncensored.i1-IQ4_XS.gguf",
+  "args": {
+    "config": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k.json",
+    "host": "127.0.0.1",
+    "max-context": 32768
+  },
+  "launch": {
+    "defaultBackground": true,
+    "backendId": "strata-fork",
+    "restart_policy": "none",
+    "max_restarts": 0,
+    "backoff_seconds": 0
+  },
+  "meta": {
+    "createdAt": "2026-10-01T11:28:25.531537261Z",
+    "updatedAt": "2026-10-01T12:53:49.145943154Z",
+    "lastUsedAt": "2026-10-01T12:53:49.145542391Z"
+  },
+  "pinned": false
+}

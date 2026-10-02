@@ -1,0 +1,8 @@
+request keys ['label', 'prompt_n', 'cache_n', 'predicted_n', 'tps', 'ttft_s', 'prompt_ms', 'draft_n', 'accepted', 'finish', 'accept', 'engine']
+warmup | A: tps 57.4 hit 69.7 cpu 7.44 ms/win 53.11 ms/slot None | B: tps 63.7 hit 89.7 cpu 2.65 ms/win 36.29 ms/slot None
+code-0 | A: tps 68.2 hit 84.8 cpu 4.48 ms/win 43.67 ms/slot None | B: tps 74.2 hit 87.7 cpu 3.85 ms/win 43.11 ms/slot None
+code-1 | A: tps 87.7 hit 92.1 cpu 2.73 ms/win 39.08 ms/slot None | B: tps 88.6 hit 92.4 cpu 2.55 ms/win 38.39 ms/slot None
+code-2 | A: tps 89.6 hit 92.4 cpu 2.59 ms/win 38.62 ms/slot None | B: tps 86.4 hit 91.8 cpu 2.71 ms/win 38.99 ms/slot None
+portuguese | A: tps 50.4 hit 82.4 cpu 3.57 ms/win 36.32 ms/slot None | B: tps 51.3 hit 82.8 cpu 3.28 ms/win 35.29 ms/slot None
+exact-copy | A: tps 57.4 hit 38.5 cpu 10.02 ms/win 52.29 ms/slot None | B: tps 57.1 hit 42.6 cpu 8.98 ms/win 52.25 ms/slot None
+json-text | A: tps 47.9 hit 48.7 cpu 9.86 ms/win 52.14 ms/slot None | B: tps 48.4 hit 50.5 cpu 9.17 ms/win 51.7 ms/slot None

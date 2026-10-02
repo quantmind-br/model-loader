@@ -1,0 +1,535 @@
+{
+  "verified_at": "2026-10-01T17:34:20.468537+00:00",
+  "report": "/home/diogo/dev/model-loader/IDEATION_PERFORMANCE.md",
+  "sha256": "0241f527530e3ab96aa6398dce732834ec15aafb346788fb0bdafa60ba7c2221",
+  "lines": 830,
+  "findings": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S05",
+    "S06",
+    "S07",
+    "S08",
+    "S09",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20"
+  ],
+  "traceability": {
+    "STR-01": true,
+    "STR-02": true,
+    "STR-03": true,
+    "STR-04": true,
+    "STR-05": true,
+    "STR-06": true,
+    "STR-07": true,
+    "STR-08": true,
+    "STR-09": true,
+    "STR-10": true,
+    "STR-11": true,
+    "STR-12": true,
+    "STR-13": true,
+    "STR-14": true,
+    "STR-15": true,
+    "STR-16": true,
+    "C1": true,
+    "C2": true,
+    "C3": true,
+    "C4": true,
+    "C5": true,
+    "C6": true,
+    "C7": true,
+    "C8": true,
+    "D1": true,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": true,
+    "D6": true,
+    "D7": true,
+    "D8": true,
+    "D9": true,
+    "D10": true,
+    "D11": true,
+    "D12": true,
+    "O1": true,
+    "O2": true,
+    "O3": true,
+    "O4": true,
+    "O5": true,
+    "O6": true,
+    "O7": true,
+    "O8": true,
+    "O9": true
+  },
+  "local_links_checked": 37,
+  "missing_links": [],
+  "source_citations": [
+    {
+      "path": "backends/strata-fork/CMakeLists.txt",
+      "line": 35,
+      "source_line": "option(STRATA_ENABLE_CUDA \"Build the CUDA targets (Phase 2+)\" OFF)",
+      "source_sha256": "8812d1579fcb4cce7cd1cb4040657d879a800c49f9032986c8ff862b3e10ede6"
+    },
+    {
+      "path": "backends/strata-fork/CMakeLists.txt",
+      "line": 380,
+      "source_line": "  add_executable(strata src/program/generate.cpp)",
+      "source_sha256": "8812d1579fcb4cce7cd1cb4040657d879a800c49f9032986c8ff862b3e10ede6"
+    },
+    {
+      "path": "backends/strata-fork/backend-build.sh",
+      "line": 4,
+      "source_line": "cmake -S \"$backend_root\" -B \"$backend_root/build-local-sm86\" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=86",
+      "source_sha256": "ed1d205640cadad030e565be888d04f7df100902fbaef0cd352c458bf5ccc0a1"
+    },
+    {
+      "path": "backends/strata-fork/include/strata/core/conversation_cache.hpp",
+      "line": 23,
+      "source_line": "struct ConversationCheckpoint {",
+      "source_sha256": "55af8faf2bf3ebdbcfae153a069aad027e1ba15049991de0522f784f845706b1"
+    },
+    {
+      "path": "backends/strata-fork/serve/frontend.py",
+      "line": 141,
+      "source_line": "def openai_to_messages(req: dict) -> tuple[list[dict], list[dict] | None, dict]:",
+      "source_sha256": "882304227981f235736a74eff000dced0e62d38973de7e0689a52e05780df024"
+    },
+    {
+      "path": "backends/strata-fork/serve/frontend.py",
+      "line": 300,
+      "source_line": "def parse_tool_call(body: str, schema: dict | None = None) -> ToolCall:",
+      "source_sha256": "882304227981f235736a74eff000dced0e62d38973de7e0689a52e05780df024"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 1008,
+      "source_line": "    def run(self, ids, thinking, tools, max_new, sampling, cancel) -> Iterator[tuple[str, object]]:",
+      "source_sha256": "c3d97162dd0668bcd90bd2a29d072c5d4f651d95bbad4b020c4ee1f683ff537d"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 1022,
+      "source_line": "        with self.fifo:",
+      "source_sha256": "c3d97162dd0668bcd90bd2a29d072c5d4f651d95bbad4b020c4ee1f683ff537d"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 1127,
+      "source_line": "def request_timings(prompt_tokens: int, generated: int, last: dict) -> dict | None:",
+      "source_sha256": "c3d97162dd0668bcd90bd2a29d072c5d4f651d95bbad4b020c4ee1f683ff537d"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 1513,
+      "source_line": "            elif path == \"/health\":",
+      "source_sha256": "c3d97162dd0668bcd90bd2a29d072c5d4f651d95bbad4b020c4ee1f683ff537d"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 1670,
+      "source_line": "            if not req.get(\"stream\"):",
+      "source_sha256": "c3d97162dd0668bcd90bd2a29d072c5d4f651d95bbad4b020c4ee1f683ff537d"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 1734,
+      "source_line": "def warn_tight_ram(arena_mib) -> None:",
+      "source_sha256": "c3d97162dd0668bcd90bd2a29d072c5d4f651d95bbad4b020c4ee1f683ff537d"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 289,
+      "source_line": "    def sampling_keys(sampling: dict) -> str:",
+      "source_sha256": "c3d97162dd0668bcd90bd2a29d072c5d4f651d95bbad4b020c4ee1f683ff537d"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 323,
+      "source_line": "        seed = sampling.get(\"seed\")",
+      "source_sha256": "c3d97162dd0668bcd90bd2a29d072c5d4f651d95bbad4b020c4ee1f683ff537d"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 397,
+      "source_line": "                    line = self.lines.get()",
+      "source_sha256": "c3d97162dd0668bcd90bd2a29d072c5d4f651d95bbad4b020c4ee1f683ff537d"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 697,
+      "source_line": "    def ensure_loaded(self):",
+      "source_sha256": "c3d97162dd0668bcd90bd2a29d072c5d4f651d95bbad4b020c4ee1f683ff537d"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 797,
+      "source_line": "        effort = s.get(\"reasoning_effort\")",
+      "source_sha256": "c3d97162dd0668bcd90bd2a29d072c5d4f651d95bbad4b020c4ee1f683ff537d"
+    },
+    {
+      "path": "backends/strata-fork/serve/server.py",
+      "line": 919,
+      "source_line": "    def prepare(self, messages, tools, kwargs, max_new=None):",
+      "source_sha256": "c3d97162dd0668bcd90bd2a29d072c5d4f651d95bbad4b020c4ee1f683ff537d"
+    },
+    {
+      "path": "backends/strata-fork/src/core/conversation_memory.cpp",
+      "line": 36,
+      "source_line": "std::optional<uint64_t> conversation_available_memory() {",
+      "source_sha256": "2654582ed22f147a3e83073664d74ff67f3f8a550d58c30654a417e8aa5b2b2a"
+    },
+    {
+      "path": "backends/strata-fork/src/core/expert_cache.cpp",
+      "line": 13,
+      "source_line": "                         std::vector<std::pair<int32_t, int32_t>>& ranked, int64_t& slots, std::string& err) {",
+      "source_sha256": "3c226f4d889ddfb3b8e3c5ad23da7de3f4eaf84c48854ea81ee212a3e05b422b"
+    },
+    {
+      "path": "backends/strata-fork/src/core/expert_source.cpp",
+      "line": 1028,
+      "source_line": "        const bool pcie_ok = d.pcie_num > 0 && d.src->pcie_layer(d.layers);",
+      "source_sha256": "376fe83b38174247dce10a0f29eff652de992f0b6e576522e932338ea5fe08ba"
+    },
+    {
+      "path": "backends/strata-fork/src/core/expert_source.cpp",
+      "line": 407,
+      "source_line": "    const int fd = ::open(path.c_str(), O_RDONLY);",
+      "source_sha256": "376fe83b38174247dce10a0f29eff652de992f0b6e576522e932338ea5fe08ba"
+    },
+    {
+      "path": "backends/strata-fork/src/core/expert_source.cpp",
+      "line": 500,
+      "source_line": "bool FileExpertSource::pin_cache_complement(",
+      "source_sha256": "376fe83b38174247dce10a0f29eff652de992f0b6e576522e932338ea5fe08ba"
+    },
+    {
+      "path": "backends/strata-fork/src/core/expert_source.cpp",
+      "line": 681,
+      "source_line": "                madvise((void*) (base_ + (size_t) advice_start), (size_t) (advice_end - advice_start), MADV_DONTNEED) != 0) {",
+      "source_sha256": "376fe83b38174247dce10a0f29eff652de992f0b6e576522e932338ea5fe08ba"
+    },
+    {
+      "path": "backends/strata-fork/src/core/expert_source.cpp",
+      "line": 827,
+      "source_line": "bool FileExpertSource::pinned(int64_t layer, int64_t expert) const {",
+      "source_sha256": "376fe83b38174247dce10a0f29eff652de992f0b6e576522e932338ea5fe08ba"
+    },
+    {
+      "path": "backends/strata-fork/src/core/mtp.cpp",
+      "line": 679,
+      "source_line": "bool MtpDrafter::prefill(const float* R_rows, const int32_t* next_tokens, int64_t n, int64_t cell0, std::string& err) {",
+      "source_sha256": "c6318e779a056ba99966762c548175fde4eb4877a1cd0c24604d8564af31d318"
+    },
+    {
+      "path": "backends/strata-fork/src/core/native_dense.cpp",
+      "line": 60,
+      "source_line": "bool NativeDense::load(const std::vector<std::string>& shards, WeightTable& table, std::string& err,",
+      "source_sha256": "8a475ac556eaf59baae7fe5ab462212e10362c632785058c703ef83c8370222a"
+    },
+    {
+      "path": "backends/strata-fork/src/core/session.cpp",
+      "line": 532,
+      "source_line": "    // **PIN THE HOST ONCE, NOT ONCE PER TOKEN.**  `ExpertPool` builds its workers from `physical_cores(true)`,",
+      "source_sha256": "4edb5e60a1972afd7c9d59afe15b860bc28a8b888eabc3d24f4cbe67e7237c9a"
+    },
+    {
+      "path": "backends/strata-fork/src/core/verify.cpp",
+      "line": 1053,
+      "source_line": "    cudaStreamSynchronize(copy_);   // no host function of this window may raise flag B in the next one",
+      "source_sha256": "28bee95897fa2c6493eaf97cf83278cd020043cbc492fe1183e1cd7863f095d7"
+    },
+    {
+      "path": "backends/strata-fork/src/core/verify.cpp",
+      "line": 688,
+      "source_line": "                native_expert_grouped(L, gp, gs, gn, p_dst, p_tok, cap, cap,",
+      "source_sha256": "28bee95897fa2c6493eaf97cf83278cd020043cbc492fe1183e1cd7863f095d7"
+    },
+    {
+      "path": "backends/strata-fork/src/core/weights.cpp",
+      "line": 121,
+      "source_line": "bool WeightTable::load(const std::string& pack_dir, void* arena_base, uint64_t arena_bytes, std::string& err,",
+      "source_sha256": "50c5d4b7081d51132d176051c9f6cb4748534a8e00611a2259f0acf8de69e2a7"
+    },
+    {
+      "path": "backends/strata-fork/src/kernels/cpu/native_expert.cpp",
+      "line": 85,
+      "source_line": "    static const bool avx512 = cpu_avx512_ok() && std::getenv(\"STRATA_NO_IQ512\") == nullptr;",
+      "source_sha256": "7ad8d0e1946b91e912500a17a59d75d991e71bf420f460e89ddff71f8f8e141b"
+    },
+    {
+      "path": "backends/strata-fork/src/kernels/cpu/native_expert.cpp",
+      "line": 92,
+      "source_line": "    if (nt >= mt_min && iq512_supported(f.gu_type)) {",
+      "source_sha256": "7ad8d0e1946b91e912500a17a59d75d991e71bf420f460e89ddff71f8f8e141b"
+    },
+    {
+      "path": "backends/strata-fork/src/kernels/cpu/pool.cpp",
+      "line": 59,
+      "source_line": "    // load/store bandwidth, so a worker on each would put two workers on one core, as the Windows branch above",
+      "source_sha256": "8c8f55a9a30341fdba6b948adaf20476321205628cd8dec262cbefc8ec69a3af"
+    },
+    {
+      "path": "backends/strata-fork/src/kernels/cuda/iq_kernels.cu",
+      "line": 711,
+      "source_line": "void native_expert_grouped(const NativeExpertLayout& L, const unsigned long long* grp_ptr, const int32_t* grp_start,",
+      "source_sha256": "52af5b8adc63ddbc5e31c2489e9a1cfc6e833cb8bd6129984bf4becb6face2ee"
+    },
+    {
+      "path": "backends/strata-fork/src/kernels/cuda/iq_kernels.cu",
+      "line": 736,
+      "source_line": "    swiglu_entries_kernel<<<(unsigned) ((nh + 255) / 256), 256, 0, s>>>(gate, up, h, nh);",
+      "source_sha256": "52af5b8adc63ddbc5e31c2489e9a1cfc6e833cb8bd6129984bf4becb6face2ee"
+    },
+    {
+      "path": "backends/strata-fork/src/ngram/ple_reader.cpp",
+      "line": 34,
+      "source_line": "struct RowCache {",
+      "source_sha256": "0a9af88848ff4806d6cfbf5643cfd803a2226b2e58a919b99fa70148490a755f"
+    },
+    {
+      "path": "backends/strata-fork/src/platform/direct_file.cpp",
+      "line": 263,
+      "source_line": "// perf-review F-2: a pool of threads, each doing blocking O_DIRECT preads, so reads run in parallel (the thread",
+      "source_sha256": "be3fa0296a934b797744e365b9848fcfa6d3a48f8304defbcb30298c7140465b"
+    },
+    {
+      "path": "backends/strata-fork/src/platform/direct_file.cpp",
+      "line": 313,
+      "source_line": "    const int n = io_threads(16);",
+      "source_sha256": "be3fa0296a934b797744e365b9848fcfa6d3a48f8304defbcb30298c7140465b"
+    },
+    {
+      "path": "backends/strata-fork/src/prefill/prefill.cpp",
+      "line": 1134,
+      "source_line": "        if (stream_all) {",
+      "source_sha256": "e29a6e5be0a17ebff74a3815145a7be27962267751b38585287ae7f8b4c1e152"
+    },
+    {
+      "path": "backends/strata-fork/src/prefill/prefill.cpp",
+      "line": 1653,
+      "source_line": "                        } else {",
+      "source_sha256": "e29a6e5be0a17ebff74a3815145a7be27962267751b38585287ae7f8b4c1e152"
+    },
+    {
+      "path": "backends/strata-fork/src/prefill/prefill.cpp",
+      "line": 188,
+      "source_line": "        for (int t = 0; t < nthreads; ++t) threads.emplace_back([this] { work(); });",
+      "source_sha256": "e29a6e5be0a17ebff74a3815145a7be27962267751b38585287ae7f8b4c1e152"
+    },
+    {
+      "path": "backends/strata-fork/src/prefill/prefill.cpp",
+      "line": 70,
+      "source_line": "// plan v0.3 P6: staging holds the largest blob of the pack (a native pack's blobs differ per layer)",
+      "source_sha256": "e29a6e5be0a17ebff74a3815145a7be27962267751b38585287ae7f8b4c1e152"
+    },
+    {
+      "path": "backends/strata-fork/src/prefill/prefill.cpp",
+      "line": 81,
+      "source_line": "inline int64_t stream_all_min() {",
+      "source_sha256": "e29a6e5be0a17ebff74a3815145a7be27962267751b38585287ae7f8b4c1e152"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 1194,
+      "source_line": "        std::fprintf(stderr, \"strata serve: conversation parking does not yet support --layer-split; disable parking with --conversation-cache-mib 0\\n\");",
+      "source_sha256": "03b6fe59b1382a76cc191a87f9ac10afd5f061af38af1ede1c1c821a4bff3b7e"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 1272,
+      "source_line": "    if (o.resident_cpu_experts &&",
+      "source_sha256": "03b6fe59b1382a76cc191a87f9ac10afd5f061af38af1ede1c1c821a4bff3b7e"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 1395,
+      "source_line": "        if (o.native_dense_gguf.empty()) {",
+      "source_sha256": "03b6fe59b1382a76cc191a87f9ac10afd5f061af38af1ede1c1c821a4bff3b7e"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 1941,
+      "source_line": "        void* arena_s = nullptr;",
+      "source_sha256": "03b6fe59b1382a76cc191a87f9ac10afd5f061af38af1ede1c1c821a4bff3b7e"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 1983,
+      "source_line": "            std::fprintf(stderr, \"strata generate: layer split: CUDA%d PCIe probe %.1f GB/s -> pcie_frac %.2f\\n\", st.dev,",
+      "source_sha256": "03b6fe59b1382a76cc191a87f9ac10afd5f061af38af1ede1c1c821a4bff3b7e"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 3244,
+      "source_line": "    strata::core::SessionLoopScratch loop_scratch;",
+      "source_sha256": "03b6fe59b1382a76cc191a87f9ac10afd5f061af38af1ede1c1c821a4bff3b7e"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 3387,
+      "source_line": "    // The prompt path's chunk and the slots it borrows for its buffers: the requested chunk halved until it fits,",
+      "source_sha256": "03b6fe59b1382a76cc191a87f9ac10afd5f061af38af1ede1c1c821a4bff3b7e"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 3637,
+      "source_line": "        // Layer split: `ver` runs layers [0, K1) and hands its residual to the next stage's verifier, and so on; the",
+      "source_sha256": "03b6fe59b1382a76cc191a87f9ac10afd5f061af38af1ede1c1c821a4bff3b7e"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 3856,
+      "source_line": "            const bool batched = !multi_gpu && sp.draft_kv(mtp, R_rows, nxt.data(), T, p0, e);",
+      "source_sha256": "03b6fe59b1382a76cc191a87f9ac10afd5f061af38af1ede1c1c821a4bff3b7e"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 4614,
+      "source_line": "            // per-request sampling for the verify window's head (greedy when temperature is absent)",
+      "source_sha256": "03b6fe59b1382a76cc191a87f9ac10afd5f061af38af1ede1c1c821a4bff3b7e"
+    },
+    {
+      "path": "backends/strata-fork/src/program/generate.cpp",
+      "line": 4795,
+      "source_line": "                std::thread adapt_thr;   // the adaptive tier beside the commit and the draft (as in generate)",
+      "source_sha256": "03b6fe59b1382a76cc191a87f9ac10afd5f061af38af1ede1c1c821a4bff3b7e"
+    },
+    {
+      "path": "backends/strata-fork/src/spec/draft_policy.cpp",
+      "line": 55,
+      "source_line": "DraftPolicy::Pick DraftPolicy::choose(int t_mtp, int lookup_k, int match) const {",
+      "source_sha256": "1668fb1ac1a3e57cb9e7b350a25a86c59ab2b2a4f2517ef213629e82863c03ea"
+    },
+    {
+      "path": "backends/strata-fork/tools/iq_pack.py",
+      "line": 291,
+      "source_line": "        rc = index_standalone(src, out, model, a.compat_bf16)",
+      "source_sha256": "a4cace6993ab3d425bbde3aa9300874cdb80b338d85dfa92fa8adf2dec4cc451"
+    },
+    {
+      "path": "backends/strata-fork/tools/iq_pack.py",
+      "line": 331,
+      "source_line": "    tmp.replace(out / \"native_experts.txt\")",
+      "source_sha256": "a4cace6993ab3d425bbde3aa9300874cdb80b338d85dfa92fa8adf2dec4cc451"
+    },
+    {
+      "path": "backends/strata-fork/tools/iq_pack.py",
+      "line": 337,
+      "source_line": "    if path.exists() and path.stat().st_size == offset:",
+      "source_sha256": "a4cace6993ab3d425bbde3aa9300874cdb80b338d85dfa92fa8adf2dec4cc451"
+    },
+    {
+      "path": "backends/strata-fork/tools/make_profile.py",
+      "line": 82,
+      "source_line": "    if not a.no_base:",
+      "source_sha256": "ea0d5ebc31e8ac41227e6c02bba5d382024ee12afe604040831b54a7fcff865f"
+    },
+    {
+      "path": "backends/strata-fork/tools/strata_tokenizer.py",
+      "line": 140,
+      "source_line": "    def _bpe(self, word: str) -> list[str]:",
+      "source_sha256": "c5cfc40173e6a776360b99c6aec7202d995eb84f0bdd1e62b6503679e40a5f4d"
+    },
+    {
+      "path": "backends/strata-fork/tools/strata_tokenizer.py",
+      "line": 158,
+      "source_line": "    def _encode_plain(self, text: str) -> list[int]:",
+      "source_sha256": "c5cfc40173e6a776360b99c6aec7202d995eb84f0bdd1e62b6503679e40a5f4d"
+    },
+    {
+      "path": "internal/service/benchmark/client.go",
+      "line": 279,
+      "source_line": "type chunkTimings struct {",
+      "source_sha256": "e099f0fa1f5b42e8b4690861faa353fb66f969392ee04e73d82dfec4b02f443b"
+    },
+    {
+      "path": "internal/service/benchmark/gpu_sampler.go",
+      "line": 73,
+      "source_line": "\t\t\t\tg.peak = stats.VRAMUsedMB",
+      "source_sha256": "6c0de974bdd9aca654588de3227490e170639f65e8d80cd198d71ba1ddde332a"
+    },
+    {
+      "path": "internal/service/internal/procutil/procutil.go",
+      "line": 113,
+      "source_line": "func TerminateTree(pid int, grace time.Duration) error {",
+      "source_sha256": "846ba6b37738cdc0211c5b698293f45b8400c1e059a3db249524fa8d6c5341d6"
+    },
+    {
+      "path": "internal/service/monitor/gpu.go",
+      "line": 71,
+      "source_line": "\tr := csv.NewReader(strings.NewReader(strings.TrimSpace(string(stdout))))",
+      "source_sha256": "857206e2a338cc291269679d458ae35344b781fef9ade7e3acf816974d9e77b4"
+    },
+    {
+      "path": "internal/service/monitor/slots.go",
+      "line": 64,
+      "source_line": "\t} else if resp.StatusCode == 200 {",
+      "source_sha256": "d6059ae6eeb7f4283d0efe2800bb357d3a2302ea8e2215c712248a9afc374e25"
+    }
+  ],
+  "originals_preserved": {
+    "original_codex": true,
+    "independent_claude": true
+  },
+  "source_files_checked": 803,
+  "source_drift": [],
+  "profiles": [
+    {
+      "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k",
+      "profile_unchanged": true,
+      "config_unchanged": true,
+      "binary_unchanged": true
+    },
+    {
+      "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-32k",
+      "profile_unchanged": true,
+      "config_unchanged": true,
+      "binary_unchanged": true
+    },
+    {
+      "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-976k",
+      "profile_unchanged": true,
+      "config_unchanged": true,
+      "binary_unchanged": true
+    },
+    {
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k",
+      "profile_unchanged": true,
+      "config_unchanged": true,
+      "binary_unchanged": true
+    },
+    {
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-32k",
+      "profile_unchanged": true,
+      "config_unchanged": true,
+      "binary_unchanged": true
+    },
+    {
+      "id": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k",
+      "profile_unchanged": true,
+      "config_unchanged": true,
+      "binary_unchanged": true
+    }
+  ],
+  "git_diff_check": {
+    "exit_code": 0,
+    "output": ""
+  },
+  "new_inference_runs": 0,
+  "new_production_changes": false,
+  "independent_review": {
+    "status": "pending per user request; consolidation ready for review"
+  },
+  "self_verification_passed": true
+}

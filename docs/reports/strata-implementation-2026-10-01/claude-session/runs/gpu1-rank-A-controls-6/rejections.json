@@ -1,0 +1,79 @@
+[
+  {
+    "control": {
+      "tool_choice": "required",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "execute",
+            "description": "Execute the exact supplied shell command.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "status": 200,
+    "body": "{\"id\": \"chatcmpl-9197b2d44307430bb80deda6\", \"object\": \"chat.completion\", \"created\": 1790956907, \"model\": \"qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_4cdc0544483e4608b671a64c\", \"type\": \"function\", \"function\": {\"name\": \"execute\", \"arguments\": \"{\\\"command\\\": \\\"echo \\\\\\\"Shell ready.\\\\\\\"\\\"}\"}}]}, \"finish_reason\": \"tool_calls\"}], \"usage\": {\"prompt_tokens\": 269, \"completion_tokens\": 22, \"total_tokens\": 291, \"prompt_tokens_details\": {\"cached_tokens\": 0}}, \"timings\": {\"cache_n\": 0, \"prompt_n\": 269, \"prompt_ms\": 1724.8, \"prompt_per_token_ms\": 6.412, \"prompt_per_second\": 156.0, \"predicted_n\": 22, \"predicted_ms\": 331.9, \"predicted_per_token_ms\": 15.086, \"predicted_per_second\": 66.3, \"draft_n\": 14, \"draft_n_accepted\": 14, \"effective_settings\": {\"seed\": 42, \"temperature\": 1.0, \"top_k\": 20, \"top_p\": 0.95, \"min_p\": 0.0, \"reasoning_effort\": \"none\"}, \"engine_info\": {\"version\": \"0.1.30\", \"pcie_eligible_layers\": 48, \"pcie_effective_frac\": \"0.2824\", \"resident_expert_mib\": 33939, \"prefill_chunk\": 512, \"stage_dense\": 0, \"context\": 32768, \"kv\": \"int8\", \"kv_resident\": 0, \"expert_slots\": 8407, \"expert_cache_mib\": 17446, \"expert_slots_primary\": 8407, \"expert_cache_primary_mib\": 17446, \"spec\": 6, \"mtp_max\": 4, \"lookup\": 3, \"vram_free_mib\": 1208, \"cvec\": 0, \"arena_mib\": 33939, \"pool_workers\": 15, \"pcie_frac\": \"0.28\", \"spec_min_p\": \"0.50\", \"conversation_cache_mib\": 0, \"conversation_cache_slots\": 4, \"conversation_cache_min_free_mib\": 2560, \"engine\": \"0.1.30\"}}}"
+  },
+  {
+    "control": {
+      "parallel_tool_calls": false,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "execute",
+            "description": "Execute the exact supplied shell command.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "status": 200,
+    "body": "{\"id\": \"chatcmpl-fdb867338ee348469486c898\", \"object\": \"chat.completion\", \"created\": 1790956909, \"model\": \"qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"Hi! How can I help you today?\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 261, \"completion_tokens\": 10, \"total_tokens\": 271, \"prompt_tokens_details\": {\"cached_tokens\": 254}}, \"timings\": {\"cache_n\": 254, \"prompt_n\": 7, \"prompt_ms\": 49.0, \"prompt_per_token_ms\": 7.0, \"prompt_per_second\": 142.9, \"predicted_n\": 10, \"predicted_ms\": 147.9, \"predicted_per_token_ms\": 14.79, \"predicted_per_second\": 67.6, \"draft_n\": 7, \"draft_n_accepted\": 7, \"effective_settings\": {\"seed\": 42, \"temperature\": 1.0, \"top_k\": 20, \"top_p\": 0.95, \"min_p\": 0.0, \"reasoning_effort\": \"none\"}, \"engine_info\": {\"version\": \"0.1.30\", \"pcie_eligible_layers\": 48, \"pcie_effective_frac\": \"0.2824\", \"resident_expert_mib\": 33939, \"prefill_chunk\": 512, \"stage_dense\": 0, \"context\": 32768, \"kv\": \"int8\", \"kv_resident\": 0, \"expert_slots\": 8407, \"expert_cache_mib\": 17446, \"expert_slots_primary\": 8407, \"expert_cache_primary_mib\": 17446, \"spec\": 6, \"mtp_max\": 4, \"lookup\": 3, \"vram_free_mib\": 1208, \"cvec\": 0, \"arena_mib\": 33939, \"pool_workers\": 15, \"pcie_frac\": \"0.28\", \"spec_min_p\": \"0.50\", \"conversation_cache_mib\": 0, \"conversation_cache_slots\": 4, \"conversation_cache_min_free_mib\": 2560, \"engine\": \"0.1.30\"}}}"
+  },
+  {
+    "control": {
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "status": 400,
+    "body": "{\"error\": {\"type\": \"invalid_request_error\", \"message\": \"response_format: only text is supported; constrained JSON decoding is unavailable\", \"param\": \"response_format\"}}"
+  },
+  {
+    "control": {
+      "seed": true
+    },
+    "status": 400,
+    "body": "{\"error\": {\"type\": \"invalid_request_error\", \"message\": \"seed: expected a finite number\", \"param\": \"seed\"}}"
+  },
+  {
+    "control": {
+      "top_k": 0
+    },
+    "status": 400,
+    "body": "{\"error\": {\"type\": \"invalid_request_error\", \"message\": \"top_k: value outside supported range 1..64\", \"param\": \"top_k\"}}"
+  }
+]

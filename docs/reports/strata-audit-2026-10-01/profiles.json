@@ -1,0 +1,504 @@
+[
+  {
+    "path": "/home/diogo/.config/model-loader/profiles/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k.json",
+    "profile": {
+      "schemaVersion": 3,
+      "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k",
+      "name": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k",
+      "description": "IQ2_XS; native ctx262144 without YaRN; int8 KV; dual3090 layers24/24, mmap experts,15 workers,270W/card. 2026-10-01: warm code135.7tok/s TTFT0.320s; llama-bench5/25/50/90% cached135.6/137.5/134.8/125.5tok/s (3reps). Fresh259641tokens:87.27s TTFT,91.7tok/s,3/3records exactJSON; peak22.41/22.46GiB. MTP spec4 minp0.7, warm180/194drafts accepted; minp0.5 did not improve. Official Qwen non-thinking temp0.7/top_p0.8/top_k20/presence1.5, template de4b8e4. Tool integrity4/4, long50/90%canary+continuation passed; short success continuation repeats tool,auto10/10 positives,1/10spurious controls,inconclusive: not agent-qualified. Backend copy model-loader/backends/strata-fork.",
+      "model": "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+      "args": {
+        "config": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k.json",
+        "host": "127.0.0.1",
+        "max-context": 262144
+      },
+      "launch": {
+        "defaultBackground": true,
+        "backendId": "strata-fork",
+        "restart_policy": "none",
+        "max_restarts": 0,
+        "backoff_seconds": 0
+      },
+      "meta": {
+        "createdAt": "2026-10-01T10:11:15.194737091Z",
+        "updatedAt": "2026-10-01T10:18:39.051025181Z",
+        "lastUsedAt": "2026-10-01T10:18:39.050957725Z"
+      },
+      "pinned": false
+    },
+    "config_path": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k.json",
+    "config": {
+      "exe": "/home/diogo/dev/model-loader/backends/strata-fork/build-fork-sm86/strata",
+      "args": [
+        "--pack",
+        "/home/diogo/models/strata/packs/iq2-xs",
+        "--native",
+        "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+        "--ple-gguf",
+        "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf",
+        "--expert-profile",
+        "/home/diogo/dev/model-loader/backends/strata-fork/data/expert-profile.bin",
+        "--expert-cache",
+        "auto",
+        "--prefill",
+        "auto",
+        "--spec",
+        "4",
+        "--spec-min-p",
+        "0.7",
+        "--mtp",
+        "/home/diogo/models/strata/mtp/rt",
+        "--max-context",
+        "262144",
+        "--kv",
+        "int8",
+        "--pool-workers",
+        "15",
+        "--vram-reserve-mib",
+        "1536",
+        "--mmap-experts"
+      ],
+      "cwd": "/home/diogo/dev/model-loader/backends/strata-fork",
+      "tokenizer": "/home/diogo/models/strata/tokenizers/iq2-xs",
+      "model_name": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k",
+      "log": "/home/diogo/.local/state/model-loader/logs/strata/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k-engine.log",
+      "gpu": [
+        0,
+        1
+      ],
+      "layer_split": "24",
+      "sampling": {
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "min_p": 0,
+        "presence_penalty": 1.5,
+        "repetition_penalty": 1,
+        "seed": 42,
+        "experimental_speed_projection": false
+      }
+    },
+    "validation_rc": 0,
+    "validation": "{\n  \"id\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k\",\n  \"valid\": true\n}\n",
+    "exe_sha256": "545cfc5f04f581c29ebcf2c1969807efb3dd1bb1ae07fa3f14f396458aba6999"
+  },
+  {
+    "path": "/home/diogo/.config/model-loader/profiles/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-32k.json",
+    "profile": {
+      "schemaVersion": 3,
+      "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-32k",
+      "name": "qwen3.8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-32k",
+      "description": "IQ2_XS; MTP spec-min-p 0.7; measured coding 135.5 tok/s, TTFT 0.326 s, peak GPU 21.15/22.04 GiB. Tool integrity 4/4 but repeated call after success and 1/10 spurious no-tool controls; not agent-qualified. Strata fork 97cb786 sm86; 32k, int8 KV, MTP Q2_0 spec4, 15 workers, 270 W/card. Official Qwen template de4b8e4d; non-thinking sampling temp .7/top_p .8/top_k 20/min_p 0/presence 1.5/repetition 1. Measured 2026-09-30; needle 9/9 up to 28577 tokens. Config promoted unchanged from benchmark except durable asset/log paths.",
+      "model": "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+      "args": {
+        "config": "/home/diogo/.config/model-loader/strata/qwen3.8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-32k.json",
+        "host": "127.0.0.1",
+        "max-context": 32768
+      },
+      "launch": {
+        "defaultBackground": true,
+        "backendId": "strata-fork",
+        "restart_policy": "none",
+        "max_restarts": 0,
+        "backoff_seconds": 0
+      },
+      "meta": {
+        "createdAt": "2026-10-01T08:57:16.034323152Z",
+        "updatedAt": "2026-10-01T11:08:51.102045117Z",
+        "lastUsedAt": "2026-10-01T11:08:51.10174275Z"
+      },
+      "pinned": false
+    },
+    "config_path": "/home/diogo/.config/model-loader/strata/qwen3.8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-32k.json",
+    "config": {
+      "exe": "/home/diogo/dev/model-loader/backends/strata-fork/build-fork-sm86/strata",
+      "args": [
+        "--pack",
+        "/home/diogo/models/strata/packs/iq2-xs",
+        "--native",
+        "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+        "--ple-gguf",
+        "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf",
+        "--expert-profile",
+        "/home/diogo/dev/model-loader/backends/strata-fork/data/expert-profile.bin",
+        "--expert-cache",
+        "auto",
+        "--prefill",
+        "auto",
+        "--spec",
+        "4",
+        "--spec-min-p",
+        "0.7",
+        "--mtp",
+        "/home/diogo/models/strata/mtp/rt",
+        "--max-context",
+        "32768",
+        "--kv",
+        "int8",
+        "--pool-workers",
+        "15",
+        "--vram-reserve-mib",
+        "1536",
+        "--mmap-experts"
+      ],
+      "cwd": "/home/diogo/dev/model-loader/backends/strata-fork",
+      "tokenizer": "/home/diogo/models/strata/tokenizers/iq2-xs",
+      "model_name": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-32k",
+      "log": "/home/diogo/.local/state/model-loader/logs/strata/qwen3.8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-32k-engine.log",
+      "gpu": [
+        0,
+        1
+      ],
+      "layer_split": "24",
+      "sampling": {
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "min_p": 0,
+        "presence_penalty": 1.5,
+        "repetition_penalty": 1,
+        "seed": 42,
+        "experimental_speed_projection": false
+      }
+    },
+    "validation_rc": 0,
+    "validation": "{\n  \"id\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-32k\",\n  \"valid\": true\n}\n",
+    "exe_sha256": "545cfc5f04f581c29ebcf2c1969807efb3dd1bb1ae07fa3f14f396458aba6999"
+  },
+  {
+    "path": "/home/diogo/.config/model-loader/profiles/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-976k.json",
+    "profile": {
+      "schemaVersion": 3,
+      "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-976k",
+      "name": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-976k",
+      "description": "IQ2_XS max-context profile, validated 2026-10-01: 1000000 tokens (976k label), YaRN factor4/original262144; Strata 0.1.30 fork97cb786 sm86 plus managed HTTP support; dual RTX3090 270W/card, layers24/24, mmap experts, KV int8, 15 workers, auto expert cache15506/24576 and prefill8192, MTP Q2_0 spec4/minp0.7. Near-full989136 input tokens: retrieval3/3, TTFT744.86s, decode57.0tok/s, peakGPU22.58/22.48GiB; no OOM/Xid. Native Model Loader benchmark 5% fill47572 tokens: cached decode131.6+/-1.8tok/s (3 reps), cached TTFT142ms. Warm short code126.5tok/s, TTFT.334s. MTP acceptance179/193 warm code,53/71 near-full. Official Qwen template de4b8e4d; non-thinking temp.7/top_p.8/k20/min_p0/presence1.5/repetition1. Tool integrity4/4 and one clean continuation, auto10/10 positives but1/10 spurious controls; prior32k repeat-after-success issue remains a caveat. Not agent-qualified; long-context quality beyond this retrieval smoke is unmeasured. Baseline32k preserved.",
+      "model": "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+      "args": {
+        "config": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-976k.json",
+        "host": "127.0.0.1",
+        "max-context": 1000000
+      },
+      "launch": {
+        "defaultBackground": true,
+        "backendId": "strata-fork",
+        "restart_policy": "none",
+        "max_restarts": 0,
+        "backoff_seconds": 0
+      },
+      "meta": {
+        "createdAt": "2026-10-01T08:59:21.469861866Z",
+        "updatedAt": "2026-10-01T09:17:23.010981953Z",
+        "lastUsedAt": "2026-10-01T08:59:46.593838477Z"
+      },
+      "pinned": true
+    },
+    "config_path": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-976k.json",
+    "config": {
+      "exe": "/home/diogo/dev/model-loader/backends/strata-fork/build-fork-sm86/strata",
+      "args": [
+        "--pack",
+        "/home/diogo/models/strata/packs/iq2-xs",
+        "--native",
+        "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+        "--ple-gguf",
+        "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf",
+        "--expert-profile",
+        "/home/diogo/dev/model-loader/backends/strata-fork/data/expert-profile.bin",
+        "--expert-cache",
+        "auto",
+        "--prefill",
+        "auto",
+        "--spec",
+        "4",
+        "--spec-min-p",
+        "0.7",
+        "--mtp",
+        "/home/diogo/models/strata/mtp/rt",
+        "--max-context",
+        "1000000",
+        "--kv",
+        "int8",
+        "--pool-workers",
+        "15",
+        "--vram-reserve-mib",
+        "1536",
+        "--mmap-experts",
+        "--rope-scaling",
+        "yarn",
+        "--rope-scale",
+        "4",
+        "--yarn-orig-ctx",
+        "262144"
+      ],
+      "cwd": "/home/diogo/dev/model-loader/backends/strata-fork",
+      "tokenizer": "/home/diogo/models/strata/tokenizers/iq2-xs",
+      "model_name": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-976k",
+      "log": "/home/diogo/.local/state/model-loader/logs/strata/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-976k-engine.log",
+      "gpu": [
+        0,
+        1
+      ],
+      "layer_split": "24",
+      "sampling": {
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "min_p": 0,
+        "presence_penalty": 1.5,
+        "repetition_penalty": 1,
+        "seed": 42,
+        "experimental_speed_projection": false
+      }
+    },
+    "validation_rc": 0,
+    "validation": "{\n  \"id\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-976k\",\n  \"valid\": true\n}\n",
+    "exe_sha256": "545cfc5f04f581c29ebcf2c1969807efb3dd1bb1ae07fa3f14f396458aba6999"
+  },
+  {
+    "path": "/home/diogo/.config/model-loader/profiles/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k.json",
+    "profile": {
+      "schemaVersion": 3,
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k",
+      "name": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k",
+      "description": "Published OrcaRouter uncensored IQ3_XXS@0434906a, gate/up IQ3_XXS and down IQ4_NL; independent compat-bf16 pack converts459 small projections, not expert requantization. Strata-fork copied backend in model-loader/backends;int8KV,32768,prefill512,15workers,270W/card,reserve1536MiB. Source/embedded Qwen template identical(c3cf9e34); model-card sampling temp1/top_p.95/top_k20/min_p0/presence0/repetition1;non-thinking. Shared base Q2_0 MTP spec4/minp.5, not fine-tune-matched. EXPERIMENTAL dual24/24 mmap simple:17408GPU-resident experts(8823/8585). Initial launch stopped by2GiB swapgrowth guard(2.588GiB);retrylaunch passed but PTgeneration again exceeded guard(2.279GiB). Partial warm code median98.2tok/s/TTFT.384s;not a stability-qualified throughput. Peakobserved22907/23005MiB(22.37/22.47GiB),no VRAMcap breach. Near-full context and tool calibration incomplete. Prefer GPU1 resident sibling that completed context validation. NOT agent-qualified. Report: /home/diogo/dev/model-loader/docs/reports/strata-orca-iq3-xxs-calibration-2026-10-01.md; artifacts: /home/diogo/models/strata/orca-iq3-xxs-20261001/.",
+      "model": "/home/diogo/models/huggingface/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+      "args": {
+        "config": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k.json",
+        "host": "127.0.0.1",
+        "max-context": 32768
+      },
+      "launch": {
+        "defaultBackground": true,
+        "backendId": "strata-fork",
+        "restart_policy": "none",
+        "max_restarts": 0,
+        "backoff_seconds": 0
+      },
+      "meta": {
+        "createdAt": "2026-10-01T14:31:09.047273337Z",
+        "updatedAt": "2026-10-01T15:02:40.945365Z",
+        "lastUsedAt": "2026-10-01T14:35:18.12121856Z"
+      },
+      "pinned": false
+    },
+    "config_path": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k.json",
+    "config": {
+      "exe": "/home/diogo/dev/model-loader/backends/strata-fork/build-fork-sm86/strata",
+      "args": [
+        "--pack",
+        "/home/diogo/models/strata/packs/orca-iq3-xxs",
+        "--native",
+        "/home/diogo/models/huggingface/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+        "--ple-gguf",
+        "/home/diogo/models/huggingface/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+        "--expert-profile",
+        "/home/diogo/dev/model-loader/backends/strata-fork/data/expert-profile.bin",
+        "--expert-cache",
+        "auto",
+        "--prefill",
+        "512",
+        "--spec",
+        "4",
+        "--spec-min-p",
+        "0.5",
+        "--mtp",
+        "/home/diogo/models/strata/mtp/rt",
+        "--max-context",
+        "32768",
+        "--kv",
+        "int8",
+        "--pool-workers",
+        "15",
+        "--vram-reserve-mib",
+        "1536",
+        "--mmap-experts"
+      ],
+      "cwd": "/home/diogo/dev/model-loader/backends/strata-fork",
+      "tokenizer": "/home/diogo/models/strata/packs/orca-iq3-xxs/tokenizer",
+      "model_name": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k",
+      "log": "/home/diogo/.local/state/model-loader/logs/strata/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k-engine.log",
+      "gpu": [
+        0,
+        1
+      ],
+      "layer_split": "24",
+      "sampling": {
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0,
+        "presence_penalty": 0,
+        "repetition_penalty": 1,
+        "seed": 42,
+        "experimental_speed_projection": false
+      }
+    },
+    "validation_rc": 0,
+    "validation": "{\n  \"id\": \"qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k\",\n  \"valid\": true\n}\n",
+    "exe_sha256": "545cfc5f04f581c29ebcf2c1969807efb3dd1bb1ae07fa3f14f396458aba6999"
+  },
+  {
+    "path": "/home/diogo/.config/model-loader/profiles/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-32k.json",
+    "profile": {
+      "schemaVersion": 3,
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-32k",
+      "name": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-32k",
+      "description": "Published OrcaRouter uncensored IQ3_XXS@0434906a, gate/up IQ3_XXS and down IQ4_NL; independent compat-bf16 pack converts459 small projections, not expert requantization. Strata-fork copied backend in model-loader/backends;int8KV,32768,prefill512,15workers,270W/card,reserve1536MiB. Source/embedded Qwen template identical(c3cf9e34); model-card sampling temp1/top_p.95/top_k20/min_p0/presence0/repetition1;non-thinking. Shared base Q2_0 MTP spec4/minp.5, not fine-tune-matched. GPU1 only, --resident-experts:8407GPU cache +33.14GiB page-locked/mapped complement, no fileblob reads in measured requests. Warm code median81.3tok/s,TTFT.534s,MTP795/937(84.8%);PT50.1tok/s,clean stop. Fresh29831input:TTFT107.959s,decode46.6tok/s,3/3exactrecords;fencedJSON fails strict JSON-only. PeakGPU0/1 875/23087MiB(.85/22.55GiB),benchmarkminRAM8.61GiB,swapgrowth0. Fill5/25/50/90 mean72.1/69.9/88.5/84.5tok/s,cachedTTFT82/91/98/121ms. CuratedHumanEval10/10,small sample. Tool integrity4/4 inclSSE,auto25/30correct,3malformed,2missing;1/30spurious controls;short continuation reissues tool. Backend ignores tool_choice/parallel_tool_calls;NOT agent-qualified. Long-tool 50%/16144input:missing call;90%/29251input:exactcommand and clean continuation passed. Report: /home/diogo/dev/model-loader/docs/reports/strata-orca-iq3-xxs-calibration-2026-10-01.md; artifacts: /home/diogo/models/strata/orca-iq3-xxs-20261001/.",
+      "model": "/home/diogo/models/huggingface/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+      "args": {
+        "config": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-32k.json",
+        "host": "127.0.0.1",
+        "max-context": 32768
+      },
+      "launch": {
+        "defaultBackground": true,
+        "backendId": "strata-fork",
+        "restart_policy": "none",
+        "max_restarts": 0,
+        "backoff_seconds": 0
+      },
+      "meta": {
+        "createdAt": "2026-10-01T14:45:11.156520375Z",
+        "updatedAt": "2026-10-01T15:02:40.944088Z",
+        "lastUsedAt": "2026-10-01T14:46:06.798358877Z"
+      },
+      "pinned": false
+    },
+    "config_path": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-32k.json",
+    "config": {
+      "exe": "/home/diogo/dev/model-loader/backends/strata-fork/build-fork-sm86/strata",
+      "args": [
+        "--pack",
+        "/home/diogo/models/strata/packs/orca-iq3-xxs",
+        "--native",
+        "/home/diogo/models/huggingface/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+        "--ple-gguf",
+        "/home/diogo/models/huggingface/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf",
+        "--expert-profile",
+        "/home/diogo/dev/model-loader/backends/strata-fork/data/expert-profile.bin",
+        "--expert-cache",
+        "auto",
+        "--prefill",
+        "512",
+        "--spec",
+        "4",
+        "--spec-min-p",
+        "0.5",
+        "--mtp",
+        "/home/diogo/models/strata/mtp/rt",
+        "--max-context",
+        "32768",
+        "--kv",
+        "int8",
+        "--pool-workers",
+        "15",
+        "--vram-reserve-mib",
+        "1536",
+        "--resident-experts"
+      ],
+      "cwd": "/home/diogo/dev/model-loader/backends/strata-fork",
+      "tokenizer": "/home/diogo/models/strata/packs/orca-iq3-xxs/tokenizer",
+      "model_name": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-32k",
+      "log": "/home/diogo/.local/state/model-loader/logs/strata/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-32k-engine.log",
+      "gpu": [
+        1
+      ],
+      "sampling": {
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0,
+        "presence_penalty": 0,
+        "repetition_penalty": 1,
+        "seed": 42,
+        "experimental_speed_projection": false
+      }
+    },
+    "validation_rc": 0,
+    "validation": "{\n  \"id\": \"qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-32k\",\n  \"valid\": true\n}\n",
+    "exe_sha256": "545cfc5f04f581c29ebcf2c1969807efb3dd1bb1ae07fa3f14f396458aba6999"
+  },
+  {
+    "path": "/home/diogo/.config/model-loader/profiles/qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k.json",
+    "profile": {
+      "schemaVersion": 3,
+      "id": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k",
+      "name": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k",
+      "description": "EXPERIMENTAL: uncensored mradermacher i1-IQ4_XS, native IQ4_XS gate/up + IQ4_NL down; Strata copied fork sm86, dual3090 layers24/24, mmap,15 workers,int8 KV,270W/card. 2026-10-01 warm short code median76.3tok/s (3 samples), TTFT.503s, Portuguese40.4tok/s; peak22.43/22.55GiB including failed long prefill. Auto prefill8192 baseline; 2048 trial75.9tok/s did not resolve swap-growth guard failure near30k. Configured32768 context is NOT validated near-full; no256k claim. Shared base Q2_0 MTP spec4/minp.7, warm acceptance764/837 (91.3%), not matched uncensored draft. Official Qwen non-thinking template SHA c3cf9e34, temp.7/top_p.8/k20/min_p0/presence1.5/repetition1. Packer preserves native PLE key; inference binary unchanged. Tool integrity4/4 with SSE and one clean continuation (prefill2048); auto10/10 positives,0/10 spurious controls, statistical verdict inconclusive (prefill2048); not agent-qualified. Long-context calibration incomplete. Report docs/reports/strata-iq4-xs-uncensored-2026-10-01.md.",
+      "model": "/home/diogo/models/huggingface/mradermacher/Qwen3.8-Flash-Next-Uncensored-i1-GGUF/Qwen3.8-Flash-Next-Uncensored.i1-IQ4_XS.gguf",
+      "args": {
+        "config": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k.json",
+        "host": "127.0.0.1",
+        "max-context": 32768
+      },
+      "launch": {
+        "defaultBackground": true,
+        "backendId": "strata-fork",
+        "restart_policy": "none",
+        "max_restarts": 0,
+        "backoff_seconds": 0
+      },
+      "meta": {
+        "createdAt": "2026-10-01T11:28:25.531537261Z",
+        "updatedAt": "2026-10-01T12:53:49.145943154Z",
+        "lastUsedAt": "2026-10-01T12:53:49.145542391Z"
+      },
+      "pinned": false
+    },
+    "config_path": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k.json",
+    "config": {
+      "exe": "/home/diogo/dev/model-loader/backends/strata-fork/build-fork-sm86/strata",
+      "args": [
+        "--pack",
+        "/home/diogo/models/strata/packs/uncensored-iq4-xs",
+        "--native",
+        "/home/diogo/models/huggingface/mradermacher/Qwen3.8-Flash-Next-Uncensored-i1-GGUF/Qwen3.8-Flash-Next-Uncensored.i1-IQ4_XS.gguf",
+        "--ple-gguf",
+        "/home/diogo/models/huggingface/mradermacher/Qwen3.8-Flash-Next-Uncensored-i1-GGUF/Qwen3.8-Flash-Next-Uncensored.i1-IQ4_XS.gguf",
+        "--expert-profile",
+        "/home/diogo/dev/model-loader/backends/strata-fork/data/expert-profile.bin",
+        "--expert-cache",
+        "auto",
+        "--prefill",
+        "auto",
+        "--spec",
+        "4",
+        "--spec-min-p",
+        "0.7",
+        "--mtp",
+        "/home/diogo/models/strata/mtp/rt",
+        "--max-context",
+        "32768",
+        "--kv",
+        "int8",
+        "--pool-workers",
+        "15",
+        "--vram-reserve-mib",
+        "1536",
+        "--mmap-experts"
+      ],
+      "cwd": "/home/diogo/dev/model-loader/backends/strata-fork",
+      "tokenizer": "/home/diogo/models/strata/tokenizers/uncensored-iq4-xs",
+      "model_name": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k",
+      "log": "/home/diogo/.local/state/model-loader/logs/strata/qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k-engine.log",
+      "gpu": [
+        0,
+        1
+      ],
+      "layer_split": "24",
+      "sampling": {
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "min_p": 0,
+        "presence_penalty": 1.5,
+        "repetition_penalty": 1,
+        "seed": 42,
+        "experimental_speed_projection": false
+      }
+    },
+    "validation_rc": 0,
+    "validation": "{\n  \"id\": \"qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-32k\",\n  \"valid\": true\n}\n",
+    "exe_sha256": "545cfc5f04f581c29ebcf2c1969807efb3dd1bb1ae07fa3f14f396458aba6999"
+  }
+]

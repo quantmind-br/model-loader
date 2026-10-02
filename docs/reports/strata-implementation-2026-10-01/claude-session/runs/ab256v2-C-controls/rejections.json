@@ -1,0 +1,79 @@
+[
+  {
+    "control": {
+      "tool_choice": "required",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "execute",
+            "description": "Execute the exact supplied shell command.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "status": 200,
+    "body": "{\"id\": \"chatcmpl-029ef9263ae642fa86c29a0f\", \"object\": \"chat.completion\", \"created\": 1790900751, \"model\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"Hi there! How can I help you today?\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 261, \"completion_tokens\": 11, \"total_tokens\": 272, \"prompt_tokens_details\": {\"cached_tokens\": 0}}, \"timings\": {\"cache_n\": 0, \"prompt_n\": 261, \"prompt_ms\": 554.3, \"prompt_per_token_ms\": 2.124, \"prompt_per_second\": 470.9, \"predicted_n\": 11, \"predicted_ms\": 114.9, \"predicted_per_token_ms\": 10.445, \"predicted_per_second\": 95.7, \"draft_n\": 9, \"draft_n_accepted\": 7}}"
+  },
+  {
+    "control": {
+      "parallel_tool_calls": false,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "execute",
+            "description": "Execute the exact supplied shell command.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "status": 200,
+    "body": "{\"id\": \"chatcmpl-5a21ab416bad465b991e71e4\", \"object\": \"chat.completion\", \"created\": 1790900752, \"model\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"Hi there! How can I help you today?\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 261, \"completion_tokens\": 11, \"total_tokens\": 272, \"prompt_tokens_details\": {\"cached_tokens\": 254}}, \"timings\": {\"cache_n\": 254, \"prompt_n\": 7, \"prompt_ms\": 41.4, \"prompt_per_token_ms\": 5.914, \"prompt_per_second\": 169.1, \"predicted_n\": 11, \"predicted_ms\": 108.6, \"predicted_per_token_ms\": 9.873, \"predicted_per_second\": 101.3, \"draft_n\": 9, \"draft_n_accepted\": 7}}"
+  },
+  {
+    "control": {
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "status": 200,
+    "body": "{\"id\": \"chatcmpl-925237791f4f42d790fd6c5d\", \"object\": \"chat.completion\", \"created\": 1790900752, \"model\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"Hello! How can I help you today?\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 13, \"completion_tokens\": 10, \"total_tokens\": 23, \"prompt_tokens_details\": {\"cached_tokens\": 0}}, \"timings\": {\"cache_n\": 0, \"prompt_n\": 13, \"prompt_ms\": 224.0, \"prompt_per_token_ms\": 17.231, \"prompt_per_second\": 58.0, \"predicted_n\": 10, \"predicted_ms\": 92.5, \"predicted_per_token_ms\": 9.25, \"predicted_per_second\": 108.1, \"draft_n\": 9, \"draft_n_accepted\": 8}}"
+  },
+  {
+    "control": {
+      "seed": true
+    },
+    "status": 200,
+    "body": "{\"id\": \"chatcmpl-caf8349b819d4c78ab55ed5c\", \"object\": \"chat.completion\", \"created\": 1790900752, \"model\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"Hi! How can I help you today?\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 13, \"completion_tokens\": 10, \"total_tokens\": 23, \"prompt_tokens_details\": {\"cached_tokens\": 6}}, \"timings\": {\"cache_n\": 6, \"prompt_n\": 7, \"prompt_ms\": 40.3, \"prompt_per_token_ms\": 5.757, \"prompt_per_second\": 173.7, \"predicted_n\": 10, \"predicted_ms\": 83.1, \"predicted_per_token_ms\": 8.31, \"predicted_per_second\": 120.3, \"draft_n\": 7, \"draft_n_accepted\": 7}}"
+  },
+  {
+    "control": {
+      "top_k": 0
+    },
+    "status": 200,
+    "body": "{\"id\": \"chatcmpl-225fd92ac0e04732861e2cfb\", \"object\": \"chat.completion\", \"created\": 1790900753, \"model\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"Hello! How can I help you today?\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 13, \"completion_tokens\": 10, \"total_tokens\": 23, \"prompt_tokens_details\": {\"cached_tokens\": 6}}, \"timings\": {\"cache_n\": 6, \"prompt_n\": 7, \"prompt_ms\": 40.0, \"prompt_per_token_ms\": 5.714, \"prompt_per_second\": 175.0, \"predicted_n\": 10, \"predicted_ms\": 92.2, \"predicted_per_token_ms\": 9.22, \"predicted_per_second\": 108.5, \"draft_n\": 9, \"draft_n_accepted\": 8}}"
+  }
+]

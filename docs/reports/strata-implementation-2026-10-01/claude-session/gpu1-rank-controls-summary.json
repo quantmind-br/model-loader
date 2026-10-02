@@ -1,0 +1,237 @@
+{
+  "A_base": [
+    {
+      "run": "gpu1-rank-A-controls",
+      "load_guard": null,
+      "start_cached_gib": 2.8,
+      "max_swap_growth_gib": 0.23,
+      "integrity_ok": 4,
+      "continuation": "clean_final_answer",
+      "auto_positive": {
+        "correct_call": 8,
+        "malformed_call": 1,
+        "no_call": 1
+      },
+      "auto_controls": {
+        "correct_no_call": 9,
+        "spurious_call": 1
+      },
+      "probe_checks": {
+        "exact_copy": true,
+        "json_text": true,
+        "seed_zero_repeat": false,
+        "stop_unicode": true,
+        "tool_bytes": true,
+        "continuation_no_repeat": false,
+        "no_tool_control": true
+      }
+    },
+    {
+      "run": "gpu1-rank-A-controls-2",
+      "load_guard": null,
+      "start_cached_gib": 3.2,
+      "max_swap_growth_gib": 1.0,
+      "integrity_ok": 4,
+      "continuation": "clean_final_answer",
+      "auto_positive": {
+        "correct_call": 9,
+        "malformed_call": 1
+      },
+      "auto_controls": {
+        "correct_no_call": 10,
+        "spurious_call": 0
+      },
+      "probe_checks": {
+        "exact_copy": true,
+        "json_text": true,
+        "seed_zero_repeat": false,
+        "stop_unicode": true,
+        "tool_bytes": true,
+        "continuation_no_repeat": false,
+        "no_tool_control": true
+      }
+    },
+    {
+      "run": "gpu1-rank-A-controls-3",
+      "load_guard": [
+        "global swap growth above 2 GiB"
+      ],
+      "start_cached_gib": 3.3,
+      "max_swap_growth_gib": 2.74,
+      "probe_checks": {}
+    },
+    {
+      "run": "gpu1-rank-A-controls-4",
+      "load_guard": [
+        "global swap growth above 2 GiB"
+      ],
+      "start_cached_gib": 5.1,
+      "max_swap_growth_gib": 2.95,
+      "probe_checks": {}
+    },
+    {
+      "run": "gpu1-rank-A-controls-5",
+      "load_guard": [
+        "global swap growth above 2 GiB"
+      ],
+      "start_cached_gib": 4.1,
+      "max_swap_growth_gib": 2.26,
+      "probe_checks": {}
+    },
+    {
+      "run": "gpu1-rank-A-controls-6",
+      "load_guard": null,
+      "start_cached_gib": 3.6,
+      "max_swap_growth_gib": 1.37,
+      "integrity_ok": 4,
+      "continuation": "clean_final_answer",
+      "auto_positive": {
+        "correct_call": 7,
+        "malformed_call": 1,
+        "no_call": 2
+      },
+      "auto_controls": {
+        "correct_no_call": 10,
+        "spurious_call": 0
+      },
+      "probe_checks": {
+        "exact_copy": true,
+        "json_text": true,
+        "seed_zero_repeat": false,
+        "stop_unicode": true,
+        "tool_bytes": true,
+        "continuation_no_repeat": true,
+        "no_tool_control": true
+      }
+    }
+  ],
+  "B_rerank": [
+    {
+      "run": "gpu1-rank-B-controls",
+      "load_guard": null,
+      "start_cached_gib": 4.3,
+      "max_swap_growth_gib": 0.13,
+      "integrity_ok": 4,
+      "continuation": "reissued_tool_call",
+      "auto_positive": {
+        "correct_call": 9,
+        "no_call": 1
+      },
+      "auto_controls": {
+        "correct_no_call": 10,
+        "spurious_call": 0
+      },
+      "probe_checks": {
+        "exact_copy": true,
+        "json_text": true,
+        "seed_zero_repeat": false,
+        "stop_unicode": true,
+        "tool_bytes": true,
+        "continuation_no_repeat": false,
+        "no_tool_control": true
+      }
+    },
+    {
+      "run": "gpu1-rank-B-controls-2",
+      "load_guard": null,
+      "start_cached_gib": 5.1,
+      "max_swap_growth_gib": 0.68,
+      "integrity_ok": 4,
+      "continuation": "clean_final_answer",
+      "auto_positive": {
+        "correct_call": 8,
+        "malformed_call": 1,
+        "no_call": 1
+      },
+      "auto_controls": {
+        "correct_no_call": 10,
+        "spurious_call": 0
+      },
+      "probe_checks": {
+        "exact_copy": true,
+        "json_text": true,
+        "seed_zero_repeat": true,
+        "stop_unicode": true,
+        "tool_bytes": true,
+        "continuation_no_repeat": false,
+        "no_tool_control": true
+      }
+    },
+    {
+      "run": "gpu1-rank-B-controls-3",
+      "load_guard": null,
+      "start_cached_gib": 28.8,
+      "max_swap_growth_gib": 0.39,
+      "integrity_ok": 4,
+      "continuation": "reissued_tool_call",
+      "auto_positive": {
+        "correct_call": 8,
+        "malformed_call": 1,
+        "no_call": 1
+      },
+      "auto_controls": {
+        "correct_no_call": 10,
+        "spurious_call": 0
+      },
+      "probe_checks": {
+        "exact_copy": true,
+        "json_text": true,
+        "seed_zero_repeat": false,
+        "stop_unicode": true,
+        "tool_bytes": true,
+        "continuation_no_repeat": false,
+        "no_tool_control": true
+      }
+    },
+    {
+      "run": "gpu1-rank-B-controls-4",
+      "load_guard": null,
+      "start_cached_gib": 15.4,
+      "max_swap_growth_gib": 0.27,
+      "integrity_ok": 4,
+      "continuation": "clean_final_answer",
+      "auto_positive": {
+        "correct_call": 9,
+        "no_call": 1
+      },
+      "auto_controls": {
+        "correct_no_call": 10,
+        "spurious_call": 0
+      },
+      "probe_checks": {
+        "exact_copy": true,
+        "json_text": true,
+        "seed_zero_repeat": false,
+        "stop_unicode": true,
+        "tool_bytes": true,
+        "continuation_no_repeat": false,
+        "no_tool_control": true
+      }
+    },
+    {
+      "run": "gpu1-rank-B-controls-5",
+      "load_guard": null,
+      "start_cached_gib": 11.9,
+      "max_swap_growth_gib": 0.48,
+      "integrity_ok": 4,
+      "continuation": "reissued_tool_call",
+      "auto_positive": {
+        "correct_call": 9,
+        "no_call": 1
+      },
+      "auto_controls": {
+        "correct_no_call": 10,
+        "spurious_call": 0
+      },
+      "probe_checks": {
+        "exact_copy": true,
+        "json_text": true,
+        "seed_zero_repeat": false,
+        "stop_unicode": true,
+        "tool_bytes": true,
+        "continuation_no_repeat": true,
+        "no_tool_control": true
+      }
+    }
+  ]
+}

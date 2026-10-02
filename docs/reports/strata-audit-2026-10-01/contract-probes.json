@@ -1,0 +1,228 @@
+{
+  "required_tool": {
+    "request": {
+      "model": "audit",
+      "messages": [
+        {
+          "role": "user",
+          "content": "test"
+        }
+      ],
+      "reasoning_effort": "none",
+      "max_tokens": 1024,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "probe",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "value"
+              ]
+            }
+          }
+        }
+      ],
+      "tool_choice": "required"
+    },
+    "status": 200,
+    "message": {
+      "role": "assistant",
+      "content": "plain answer"
+    },
+    "finish_reason": "stop"
+  },
+  "no_tool": {
+    "request": {
+      "model": "audit",
+      "messages": [
+        {
+          "role": "user",
+          "content": "test"
+        }
+      ],
+      "reasoning_effort": "none",
+      "max_tokens": 1024,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "probe",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "value"
+              ]
+            }
+          }
+        }
+      ],
+      "tool_choice": "none"
+    },
+    "status": 200,
+    "message": {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "call_24669827bff448d499296224",
+          "type": "function",
+          "function": {
+            "name": "probe",
+            "arguments": "{\"value\":7}"
+          }
+        }
+      ]
+    },
+    "finish_reason": "tool_calls"
+  },
+  "one_tool": {
+    "request": {
+      "model": "audit",
+      "messages": [
+        {
+          "role": "user",
+          "content": "test"
+        }
+      ],
+      "reasoning_effort": "none",
+      "max_tokens": 1024,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "probe",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "value"
+              ]
+            }
+          }
+        }
+      ],
+      "parallel_tool_calls": false
+    },
+    "status": 200,
+    "message": {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "call_393c8cd87f3044eb937560e4",
+          "type": "function",
+          "function": {
+            "name": "probe",
+            "arguments": "{\"value\":7}"
+          }
+        },
+        {
+          "id": "call_73ef12022f114353bf5af5be",
+          "type": "function",
+          "function": {
+            "name": "probe",
+            "arguments": "{\"value\":7}"
+          }
+        }
+      ]
+    },
+    "finish_reason": "tool_calls"
+  },
+  "json_format": {
+    "request": {
+      "model": "audit",
+      "messages": [
+        {
+          "role": "user",
+          "content": "test"
+        }
+      ],
+      "reasoning_effort": "none",
+      "max_tokens": 1024,
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "status": 200,
+    "message": {
+      "role": "assistant",
+      "content": "plain answer"
+    },
+    "finish_reason": "stop"
+  },
+  "stop": {
+    "request": {
+      "model": "audit",
+      "messages": [
+        {
+          "role": "user",
+          "content": "test"
+        }
+      ],
+      "reasoning_effort": "none",
+      "max_tokens": 1024,
+      "stop": [
+        "END"
+      ]
+    },
+    "status": 200,
+    "message": {
+      "role": "assistant",
+      "content": "BEFORE END AFTER"
+    },
+    "finish_reason": "stop"
+  },
+  "sampling_protocol": {
+    "0": " top_k=64",
+    "1": " top_k=64 seed=1",
+    "42": " top_k=64 seed=42"
+  },
+  "invalid_typed_argument": {
+    "name": "probe",
+    "arguments": {
+      "value": "not_an_integer"
+    },
+    "id": "call_1609b776afcb47cc8e8cf1d6"
+  },
+  "packer": {
+    "runs": [
+      {
+        "source": "a",
+        "rc": 0,
+        "experts": "08f46753296b40512f918614f5b0be6f15e4a95fb0aeeff6c9026be0a396c4a7",
+        "dense": "e72710531b01d91ee76a2457cdc9c6c89a197db47da8ebd4ae672e13ddd668cd",
+        "layout": "# strata native experts v3: layer gu_type d_type offset blob_bytes gate_off up_off down_off [shard] (n_expert 2, total 24576; absolute offsets in a.gguf, or in the named shard beside it)\n0 0 0 0 12288 512 8704 16896\n"
+      },
+      {
+        "source": "b",
+        "rc": 0,
+        "experts": "08f46753296b40512f918614f5b0be6f15e4a95fb0aeeff6c9026be0a396c4a7",
+        "dense": "5e739529c4983320f93ba54de6c1870f1721551aa8e885bf3f4af2f8352dc456",
+        "layout": "# strata native experts v3: layer gu_type d_type offset blob_bytes gate_off up_off down_off [shard] (n_expert 2, total 24576; absolute offsets in b.gguf, or in the named shard beside it)\n0 0 0 0 12288 512 8704 16896\n"
+      }
+    ],
+    "stale_experts_with_new_dense": true
+  },
+  "drain": {
+    "blocked_without_DONE_or_EOF_after_200ms": true,
+    "protocol_written": "GEN 10 1\nSTOP\n",
+    "released_on_EOF": true,
+    "limitation": "200ms observation; no-timeout conclusion is also based on queue.get() source"
+  }
+}

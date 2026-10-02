@@ -1,0 +1,18 @@
+dual-ple8 {'median': 107.5, 'min': 106.3, 'max': 108.0} {'0': 22933.0, '1': 23031.0} 0.0  {'exact_copy': True, 'json_text': True}
+dual-pool12 {'median': 119.2, 'min': 108.4, 'max': 121.1} {'0': 22935.0, '1': 23031.0} 0.0  {'exact_copy': True, 'json_text': True}
+dual-pool8 {'median': 120.1, 'min': 107.6, 'max': 122.7} {'0': 22935.0, '1': 23031.0} 0.733  {'exact_copy': True, 'json_text': True}
+dual-prefill1024 {'median': 118.2, 'min': 109.5, 'max': 120.2} {'0': 22981.0, '1': 23079.0} 0.0  {'exact_copy': True, 'json_text': True}
+dual-prefill2048 {'median': 120.1, 'min': 107.0, 'max': 121.4} {'0': 22989.0, '1': 23081.0} 1.514  {'exact_copy': True, 'json_text': True}
+dual-prefill512 {'median': 108.3, 'min': 107.7, 'max': 108.5} {'0': 22987.0, '1': 23083.0} 0.0  {'exact_copy': True, 'json_text': True, 'seed_zero_repeat': True, 'stop_unicode': True, 'tool_bytes': True, 'continuation_no_repeat': False, 'no_tool_control': True}
+gpu1-prefill1024 None {'0': 897.0, '1': 22403.0} 3.918 GUARD {}
+gpu1-prefill512 {'median': 86.5, 'min': 66.0, 'max': 88.6} {'0': 897.0, '1': 23085.0} 0.928  {'exact_copy': True, 'json_text': True}
+iq2-baseline-32k {'median': 132.0, 'min': 124.0, 'max': 132.4} {'0': 21477.0, '1': 22581.0} 1.052  {'exact_copy': True, 'json_text': True}
+iq2-candidate-32k {'median': 98.9, 'min': 96.3, 'max': 99.2} {'0': 21456.0, '1': 22555.0} 1.401  {'exact_copy': False, 'json_text': True}
+iq2-candidate-32k-v2 {'median': 131.9, 'min': 128.9, 'max': 132.2} {'0': 21484.0, '1': 22583.0} 0.0  {'exact_copy': True, 'json_text': True}
+iq2-final-256k {'median': 126.3, 'min': 110.1, 'max': 126.6} {'0': 22984.0, '1': 23087.0} 0.0  {'exact_copy': True, 'json_text': True}
+iq2-final-256k-fresh {'median': 126.6, 'min': 123.2, 'max': 127.0} {'0': 22939.0, '1': 22995.0} 2.08 GUARD {'exact_copy': True, 'json_text': True}
+iq2-final-32k {'median': 131.4, 'min': 125.5, 'max': 131.5} {'0': 21481.0, '1': 22583.0} 0.0  {'exact_copy': True, 'json_text': True, 'seed_zero_repeat': True, 'stop_unicode': True, 'tool_bytes': True, 'continuation_no_repeat': True, 'no_tool_control': True}
+iq2-final-976k {'median': 127.0, 'min': 117.0, 'max': 127.8} {'0': 22951.0, '1': 23011.0} 0.0 GUARD {'exact_copy': True, 'json_text': True}
+iq2-stage-dense {'median': 131.6, 'min': 123.8, 'max': 131.9} {'0': 19995.0, '1': 21099.0} 0.0  {'exact_copy': True, 'json_text': True}
+iq3-dual-resident None {'0': 22585.0, '1': 22491.0} 2.055 GUARD {}
+iq3-resident-stage-dense {'median': 108.2, 'min': 107.4, 'max': 108.6} {'0': 23111.0, '1': 23087.0} 0.29  {'exact_copy': True, 'json_text': True}

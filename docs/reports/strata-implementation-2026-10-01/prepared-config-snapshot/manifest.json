@@ -1,0 +1,127 @@
+[
+  {
+    "profile": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-976k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-976k.json",
+    "sha256": "066721daff009c3e8781078b80a3576100bc1f5c9c1ef0f1af7f5a208ea27c1e"
+  },
+  {
+    "profile": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-256k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-256k.json",
+    "sha256": "126bb23addea57173bf6a9233b89a2340049d92baabcc173df64fe6b3733a7ea"
+  },
+  {
+    "profile": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-32k.json",
+    "sha256": "775fb5b60ac3c5dc607132a8e81e126f1485242e04d02e9213e81f423b2decdf"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-32k.json",
+    "sha256": "095f64e8c7a86293e54bef4e5ef6721c0a9ec088bd536ed6ad951dd2691d72a5"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-32k.json",
+    "sha256": "1841788ab1b5966e08171313edbc6a9c1bfe768011d13b2d9373a7c526de655c"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k.json",
+    "sha256": "e60cbeb8854bbd1331be4df4f2b8adfb238c9a79ccf50c29dc3b530ac9d557d7"
+  },
+  {
+    "profile": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-32k.json",
+    "sha256": "7f6bea62f56f3ffa4f879b8eb5ccb9cc185f59e65750da78ea7a229f0dd9f85f"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-32k.json",
+    "sha256": "f3e423a3de194c2c50018ffc18674577656ea16f2b997ea15e017ab6fa03d743"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-stage-dense-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-stage-dense-32k.json",
+    "sha256": "cb93b9a1f2e836ca842e447d699bdcbf39c5afb55510e99a19960b38833bda0b"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k.json",
+    "sha256": "c8127160347f511f80de8a0b2b8406a02e117eb6a6826f7db6629fe6da9f3425"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-prefill1024-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-prefill1024-32k.json",
+    "sha256": "cbf141998c633066dcbf102c2adb55fed21b5026894513e2cf78884c1e2baff3"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-prefill2048-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-prefill2048-32k.json",
+    "sha256": "88799ca4fdff586ba0dba71bbe3e89869a931c5fcb975bb6de2d84edbac3b2f4"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-prefill1024-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-prefill1024-32k.json",
+    "sha256": "4935fd6fd5b182d8baf6f452e0d4a492941e69badaab53eec6a979ae1c16fb54"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-prefill2048-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-prefill2048-32k.json",
+    "sha256": "1fa0935dfdc08d928f2167f96f23c0df4bb7cfa753ddd091852bb2c7b5af8086"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-pool8-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-pool8-32k.json",
+    "sha256": "16834bcf6098c5bc7c37dcf9691c6db66bbabfa2d3541635260c5a854e6d008a"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-pool12-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-pool12-32k.json",
+    "sha256": "ea6ba3b77ea29ed33eb63a43c9a1f325315d8b4a7ee9f282f836e11ec5d766e7"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-ple8-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-ple8-32k.json",
+    "sha256": "bfd8f7c28c964b3aa79a64a99085ec7e857c024f9d60f2661f09aa2c2f3c7a3e"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-ple32-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-ple32-32k.json",
+    "sha256": "cf1faff1fb133f53ff9ca054549bfd7c6abce85e0a7ff14a357c763d86a74a5e"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-spec2-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-spec2-32k.json",
+    "sha256": "529a37fd0d2f4e7bcaa82423df44e3e51ea2f3422c70e016d5e332783e269607"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-spec6-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-spec6-32k.json",
+    "sha256": "b7ff2c3177e2d01ed24378d1f6eb3ae7648f2eb9b9bddd383e6aee74b254e75d"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k.json",
+    "sha256": "3545b7174b18b5f3beeacd2b1bd8c065a7bb2cd9968ebdfcfc54a23525b214b6"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-training-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-training-32k.json",
+    "sha256": "d3ae41221019fa5c51afb8eb343fbcd473d29552bb67dde575bc0bb34e1ddd8e"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-cpu-parity-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-cpu-parity-32k.json",
+    "sha256": "3545de3932c07407a3d82070ed06f72c7f88106543d72e85520097e0159417e2"
+  },
+  {
+    "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-nsys-32k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-nsys-32k.json",
+    "sha256": "0a777f97d1f9cda739852e36cfb2d214999cc8d488626fdfbec90a00e923e3d6"
+  },
+  {
+    "profile": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-256k",
+    "config": "/home/diogo/.config/model-loader/strata/perf-20261001/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-256k.json",
+    "sha256": "6e91d317f775a55eadd876a71fc132bd2aba41b92a319b86a4d997cca2dc555f"
+  }
+]

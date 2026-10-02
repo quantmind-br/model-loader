@@ -1,0 +1,3 @@
+# functional controls for the 256k promotion decision (probe v2): B = stage-dense v4, C = canonical as installed
+qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-256k ab256v2-B-controls --probe --controls
+qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k ab256v2-C-controls --readonly --probe --controls

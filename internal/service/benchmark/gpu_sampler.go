@@ -12,6 +12,8 @@ import (
 // in the background for the duration of a benchmark run.
 type gpuSampler struct {
 	mu      sync.Mutex
+	peaks   map[string]uint64
+	version int
 	peak    uint64
 	utilSum float64
 	utilN   int
@@ -69,6 +71,21 @@ func (r *Runner) startGPUSampler(pid int, base, logPath string) *gpuSampler {
 				continue
 			}
 			g.mu.Lock()
+			if stats.MetricVersion > g.version {
+				g.version = stats.MetricVersion
+			}
+			if g.peaks == nil {
+				g.peaks = map[string]uint64{}
+			}
+			for _, d := range stats.Devices {
+				key := d.UUID
+				if key == "" {
+					key = "index:" + strconv.Itoa(d.Index)
+				}
+				if d.VRAMUsedMB > g.peaks[key] {
+					g.peaks[key] = d.VRAMUsedMB
+				}
+			}
 			if stats.VRAMUsedMB > g.peak {
 				g.peak = stats.VRAMUsedMB
 			}
@@ -93,4 +110,16 @@ func portFromBase(base string) int {
 		return 0
 	}
 	return port
+}
+
+func (g *gpuSampler) annotate(a *Aggregate) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	a.GPUMetricVersion = g.version
+	if len(g.peaks) > 0 {
+		a.GPUPeakVRAMMB = make(map[string]uint64, len(g.peaks))
+		for id, value := range g.peaks {
+			a.GPUPeakVRAMMB[id] = value
+		}
+	}
 }

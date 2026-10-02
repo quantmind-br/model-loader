@@ -1,0 +1,26 @@
+{
+  "run": "gpu1-prefill1024",
+  "run_status": null,
+  "guard": {
+    "reasons": [
+      "global swap growth above 2 GiB"
+    ],
+    "time": 1790887212.370304
+  },
+  "code_tps": null,
+  "peak_gpu_mib": {
+    "0": 897.0,
+    "1": 22403.0
+  },
+  "process_peak_swap_kib": {
+    "352633:server": 168568,
+    "352675:native": 183560
+  },
+  "retrieval": [],
+  "checks": {},
+  "min_available_gib": 15.88116455078125,
+  "max_swap_growth_gib": 3.9177513122558594,
+  "peak_simultaneous_gpu_mib": 23300.0,
+  "peak_temperature_c": 64.0,
+  "global_pswpout_pages": 1033576
+}

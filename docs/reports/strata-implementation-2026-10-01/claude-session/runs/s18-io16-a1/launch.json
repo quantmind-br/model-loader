@@ -1,0 +1,12 @@
+{
+  "running": true,
+  "addr": "127.0.0.1:4321",
+  "loaded_profile_id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-256k",
+  "loaded_pid": 1147016,
+  "loaded_port": 40645,
+  "loaded_log_path": "/home/diogo/.local/state/model-loader/logs/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-stage-dense-256k-40645.log",
+  "last_swap_at": "2026-10-02T11:26:47.784316283-03:00",
+  "last_swap_dur": 17516290744,
+  "last_error_at": "0001-01-01T00:00:00Z",
+  "inflight_requests": 0
+}

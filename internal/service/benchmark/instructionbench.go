@@ -179,9 +179,9 @@ func (r *Runner) runInstructionBench(pc probeCtx, sim similarityGrader, g grader
 	reqCtx, cancel := context.WithTimeout(pc.ctx, r.inferTimeout())
 	defer cancel()
 	comp, err := Complete(reqCtx, nil, pc.base, "", ChatRequest{
-		Model:       pc.model,
-		MaxTokens:   r.cfg.MaxTokens,
-		OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
+		Model:     pc.model,
+		MaxTokens: r.cfg.MaxTokens,
+		OnDelta:   r.streamHeartbeat(res.ProblemID, res.ProblemName),
 		Messages: []ChatMessage{
 			{Role: "user", Content: p.Prompt},
 		},
@@ -197,6 +197,7 @@ func (r *Runner) runInstructionBench(pc probeCtx, sim similarityGrader, g grader
 	res.TokensPerSecond = comp.TokensPerSecond
 	res.DecodeTPS = comp.TokensPerSecond
 	res.PromptProcessingTPS = comp.PromptProcessingTPS
+	res.ServerTimings = comp.ServerTimings
 	res.PromptTokens = comp.PromptTokens
 	res.CompletionTokens = comp.CompletionTokens
 	tr.ModelResponse = comp.Content
@@ -251,9 +252,9 @@ func (r *Runner) runInstConsistency(pc probeCtx, sim similarityGrader, p Instruc
 	for i := range instConsistencySamples {
 		reqCtx, cancel := context.WithTimeout(pc.ctx, r.inferTimeout())
 		comp, err := Complete(reqCtx, nil, pc.base, "", ChatRequest{
-			Model:       pc.model,
-			MaxTokens:   r.cfg.MaxTokens,
-			OnDelta:     r.streamHeartbeat(res.ProblemID, res.ProblemName),
+			Model:     pc.model,
+			MaxTokens: r.cfg.MaxTokens,
+			OnDelta:   r.streamHeartbeat(res.ProblemID, res.ProblemName),
 			Messages: []ChatMessage{
 				{Role: "user", Content: p.Prompt},
 			},
@@ -271,6 +272,7 @@ func (r *Runner) runInstConsistency(pc probeCtx, sim similarityGrader, p Instruc
 			res.TokensPerSecond = comp.TokensPerSecond
 			res.DecodeTPS = comp.TokensPerSecond
 			res.PromptProcessingTPS = comp.PromptProcessingTPS
+			res.ServerTimings = comp.ServerTimings
 			res.PromptTokens = comp.PromptTokens
 			res.CompletionTokens = comp.CompletionTokens
 		}

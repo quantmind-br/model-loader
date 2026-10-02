@@ -197,6 +197,9 @@ func (p *ServerPage) renderMetrics(st *subState) string {
 	fmt.Fprintf(&b, "req/s   : %s\n", theme.Warn.Render(components.Sparkline(st.mets.RequestsPerSec, sparkW)))
 	if st.gpu.VRAMTotalMB > 0 {
 		fmt.Fprintf(&b, "VRAM    : %d/%d MB  util %.0f%%\n", st.gpu.VRAMUsedMB, st.gpu.VRAMTotalMB, st.gpu.Utilization)
+		for _, gpu := range st.gpu.Devices {
+			fmt.Fprintf(&b, "GPU %d   : %d/%d MB  util %.0f%% (device total)\n", gpu.Index, gpu.VRAMUsedMB, gpu.VRAMTotalMB, gpu.Utilization)
+		}
 	}
 	return b.String()
 }

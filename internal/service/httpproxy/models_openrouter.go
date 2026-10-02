@@ -108,6 +108,7 @@ var contextLengthFlags = []string{
 	"max-seq-len",    // tabby / exllama
 	"context-length", // sglang
 	"max-ctx",        // dflash (lucebox native server) — context window / KV size
+	"max-context",    // Strata managed HTTP server
 	"n-ctx",          // alternate spelling
 }
 

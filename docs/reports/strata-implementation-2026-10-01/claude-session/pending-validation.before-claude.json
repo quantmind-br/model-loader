@@ -1,0 +1,80 @@
+{
+  "environment_block": "No NVIDIA devices, TCP sockets forbidden, live profiles outside writable roots.",
+  "jobs": [
+    {
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-ple8-32k",
+      "label": "dual-ple8",
+      "fills": false,
+      "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+      "knob": "STRATA_IO_THREADS",
+      "value": "8",
+      "reason": "hardware access unavailable; keep existing evidence, use new output directory"
+    },
+    {
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-ple32-32k",
+      "label": "dual-ple32",
+      "fills": false,
+      "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+      "knob": "STRATA_IO_THREADS",
+      "value": "32",
+      "reason": "hardware access unavailable; keep existing evidence, use new output directory"
+    },
+    {
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-spec2-32k",
+      "label": "dual-spec2",
+      "fills": false,
+      "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+      "knob": "--spec",
+      "value": "2",
+      "reason": "hardware access unavailable; keep existing evidence, use new output directory"
+    },
+    {
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-spec6-32k",
+      "label": "dual-spec6",
+      "fills": false,
+      "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+      "knob": "--spec",
+      "value": "6",
+      "reason": "hardware access unavailable; keep existing evidence, use new output directory"
+    },
+    {
+      "id": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+      "label": "iq4-resident-stage-dense",
+      "fills": true,
+      "source": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-32k",
+      "knob": "append",
+      "value": [
+        "--resident-experts",
+        "--stage-dense",
+        "--prefill",
+        "512"
+      ],
+      "reason": "hardware access unavailable; keep existing evidence, use new output directory"
+    },
+    {
+      "label": "training",
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-training-32k",
+      "reason": "experiment prepared but not executed"
+    },
+    {
+      "label": "cpu-parity",
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-cpu-parity-32k",
+      "reason": "experiment prepared but not executed"
+    },
+    {
+      "label": "nsys",
+      "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-nsys-32k",
+      "reason": "experiment prepared but not executed"
+    }
+  ],
+  "additional_gates": [
+    "dual resident synthetic GPU fixture",
+    "IQ2 stage-dense 256k with fresh prefixes",
+    "976k near-full thermal guard",
+    "three alternating warm starts per candidate/control",
+    "checkpoint-specific ranking training and holdout",
+    "profiling before CUDA fusion / P2P / MTP batched last stage",
+    "full Go/Python integration in socket-enabled environment",
+    "promotion and task-candidate cleanup only after applicable gates"
+  ]
+}

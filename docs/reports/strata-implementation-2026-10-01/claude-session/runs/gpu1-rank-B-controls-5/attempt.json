@@ -1,0 +1,14 @@
+{
+  "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-rerank-32k",
+  "release": "20261002T100952Z-2eed88f1f51d",
+  "backend": "strata-perf-v6-20261002",
+  "exe": "/home/diogo/dev/model-loader/backends/strata-fork/releases/20261002T100952Z-2eed88f1f51d/strata",
+  "probe_flags": [
+    "--controls"
+  ],
+  "set_arg": [],
+  "env": [],
+  "started": 1790956401.5378704,
+  "returncode": 0,
+  "finished": 1790956685.7339826
+}

@@ -1,0 +1,20 @@
+{
+  "source": "/tmp/strata-claude-independent-20261001/stream.jsonl",
+  "source_sha256": "bb771dc139645b7678eabbb2b3b5c0b3d56952ef345c7c1739f5afc696406b16",
+  "results": [
+    {
+      "tool_input": {
+        "command": "cd /tmp/strata-claude-independent-20261001 && M=/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS; python3 dense_per_stage.py /home/diogo/models/strata/packs/iq2-xs 24 $M/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf $M/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf; O=/home/diogo/models/huggingface/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF; python3 dense_per_stage.py /home/diogo/models/strata/packs/orca-iq3-xxs 24 $O/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00001-of-00002.gguf $O/Qwen3.8-Flash-Next-Uncensored-IQ3_XXS-00002-of-00002.gguf; I=/home/diogo/models/huggingface/mradermacher/Qwen3.8-Flash-Next-Uncensored-i1-GGUF/Qwen3.8-Flash-Next-Uncensored.i1-IQ4_XS.gguf; python3 dense_per_stage.py /home/diogo/models/strata/packs/uncensored-iq4-xs 24 $I",
+        "description": "Compute duplicated dense VRAM per stage for each pack"
+      },
+      "result": "pack=/home/diogo/models/strata/packs/iq2-xs split K=24\n  native dense (all 48 layers): 1.440 GiB  [layers <K: 0.715, >=K: 0.725]\n  pack arena blk.* (compacted):  1.420 GiB  [layers <K: 0.741, >=K: 0.679]\n  pack arena non-layer tensors:  0.012 GiB (embedding/head excluded)\n  CUDA0 holds for layers it never runs (>=K):  1.405 GiB\n  CUDA1 holds for layers it never runs (<K):   1.456 GiB\npack=/home/diogo/models/strata/packs/orca-iq3-xxs split K=24\n  native dense (all 48 layers): 1.206 GiB  [layers <K: 0.608, >=K: 0.598]\n  pack arena blk.* (compacted):  1.371 GiB  [layers <K: 0.692, >=K: 0.679]\n  pack arena non-layer tensors:  0.012 GiB (embedding/head excluded)\n  CUDA0 holds for layers it never runs (>=K):  1.278 GiB\n  CUDA1 holds for layers it never runs (<K):   1.299 GiB\npack=/home/diogo/models/strata/packs/uncensored-iq4-xs split K=24\n  native dense (all 48 layers): 1.595 GiB  [layers <K: 0.804, >=K: 0.791]\n  pack arena blk.* (compacted):  1.371 GiB  [layers <K: 0.692, >=K: 0.679]\n  pack arena non-layer tensors:  0.012 GiB (embedding/head excluded)\n  CUDA0 holds for layers it never runs (>=K):  1.470 GiB\n  CUDA1 holds for layers it never runs (<K):   1.496 GiB\nShell cwd was reset to /home/diogo/dev/model-loader"
+    },
+    {
+      "tool_input": {
+        "command": "for d in nvme0n1 nvme1n1 nvme2n1; do echo \"$d: $(cat /sys/block/$d/device/model 2>/dev/null | xargs) addr=$(basename $(readlink -f /sys/block/$d/device/device 2>/dev/null)) ra=$(cat /sys/block/$d/queue/read_ahead_kb) sched=$(cat /sys/block/$d/queue/scheduler)\"; done; swapon --show; df -h /home/diogo/models | tail -1",
+        "description": "Identify NVMe hosting the models and swap setup"
+      },
+      "result": "nvme0n1: PCH-RVR-1TB addr=0000:06:00.0 ra=128 sched=[none] mq-deadline kyber bfq \nnvme1n1: XPG GAMMIX S11 Pro addr=0000:0d:00.0 ra=128 sched=[none] mq-deadline kyber bfq \nnvme2n1: KINGSTON SKC3000S1024G addr=0000:02:00.0 ra=128 sched=[none] mq-deadline kyber bfq \nNAME       TYPE      SIZE USED PRIO\n/dev/zram0 partition  16G 5.7G  100\n/dev/nvme0n1p1  916G  803G   67G  93% /home/diogo/models"
+    }
+  ]
+}

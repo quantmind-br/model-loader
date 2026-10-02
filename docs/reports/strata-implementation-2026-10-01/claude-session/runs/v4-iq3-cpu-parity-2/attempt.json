@@ -1,0 +1,12 @@
+{
+  "profile": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-cpu-parity-32k",
+  "release": "20261001T223017Z-f85ddc896414",
+  "backend": "strata-perf-v4-20261001",
+  "exe": "/home/diogo/dev/model-loader/backends/strata-fork/releases/20261001T223017Z-f85ddc896414/strata",
+  "probe_flags": [],
+  "set_arg": [],
+  "env": [],
+  "started": 1790894701.2125065,
+  "returncode": 0,
+  "finished": 1790894789.8348494
+}

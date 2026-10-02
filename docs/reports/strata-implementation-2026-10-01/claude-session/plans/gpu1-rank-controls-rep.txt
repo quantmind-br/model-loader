@@ -1,0 +1,5 @@
+# repeat controls B,A,A,B (single continuation sample per arm was not conclusive): A = base, B = rerank
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-rerank-32k gpu1-rank-B-controls-2 --probe --controls
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k gpu1-rank-A-controls-2 --probe --controls
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k gpu1-rank-A-controls-3 --probe --controls
+qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-rerank-32k gpu1-rank-B-controls-3 --probe --controls

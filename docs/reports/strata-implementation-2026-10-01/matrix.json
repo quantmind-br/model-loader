@@ -1,0 +1,95 @@
+[
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-prefill1024-32k",
+    "label": "gpu1-prefill1024",
+    "fills": true,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k",
+    "knob": "--prefill",
+    "value": "1024"
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-prefill2048-32k",
+    "label": "gpu1-prefill2048",
+    "fills": true,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-gpu1-resident-w15-candidate-32k",
+    "knob": "--prefill",
+    "value": "2048"
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-prefill1024-32k",
+    "label": "dual-prefill1024",
+    "fills": true,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "knob": "--prefill",
+    "value": "1024"
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-prefill2048-32k",
+    "label": "dual-prefill2048",
+    "fills": true,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "knob": "--prefill",
+    "value": "2048"
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-pool8-32k",
+    "label": "dual-pool8",
+    "fills": false,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "knob": "--pool-workers",
+    "value": "8"
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-pool12-32k",
+    "label": "dual-pool12",
+    "fills": false,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "knob": "--pool-workers",
+    "value": "12"
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-ple8-32k",
+    "label": "dual-ple8",
+    "fills": false,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "knob": "STRATA_IO_THREADS",
+    "value": "8"
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-ple32-32k",
+    "label": "dual-ple32",
+    "fills": false,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "knob": "STRATA_IO_THREADS",
+    "value": "32"
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-spec2-32k",
+    "label": "dual-spec2",
+    "fills": false,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "knob": "--spec",
+    "value": "2"
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-spec6-32k",
+    "label": "dual-spec6",
+    "fills": false,
+    "source": "qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "knob": "--spec",
+    "value": "6"
+  },
+  {
+    "id": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-resident-stage-dense-32k",
+    "label": "iq4-resident-stage-dense",
+    "fills": true,
+    "source": "qwen3-8-flash-next-uncensored-iq4-xs-mtp-strata-dual-mmap-w15-candidate-32k",
+    "knob": "append",
+    "value": [
+      "--resident-experts",
+      "--stage-dense",
+      "--prefill",
+      "512"
+    ]
+  }
+]

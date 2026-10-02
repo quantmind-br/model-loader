@@ -98,6 +98,32 @@ func TestSlotsPoller_ServerErrorEmitsHealthDown(t *testing.T) {
 	}
 }
 
+func TestSlotsPollerEngineStatesAndLegacyHealth(t *testing.T) {
+	for _, tc := range []struct {
+		body, status string
+		ok           bool
+	}{
+		{`{"status":"ready","loaded":true}`, "ready", true},
+		{`{"status":"unloaded","loaded":false}`, "unloaded", true},
+		{`{"status":"failed","loaded":false}`, "failed", false},
+		{`{"status":"restarting","loaded":false}`, "restarting", false},
+		{`{"status":"loading"}`, "loading", false},
+		{``, "ok", true},
+	} {
+		t.Run(tc.status, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(tc.body)) }))
+			defer srv.Close()
+			out := make(chan MonitorEvent, 1)
+			p := newSlotsPoller(srv.URL, srv.Client(), time.Second, out)
+			p.fetchHealth(context.Background())
+			got := (<-out).Data.(HealthStatus)
+			if got.OK != tc.ok || got.Status != tc.status {
+				t.Fatalf("health = %+v", got)
+			}
+		})
+	}
+}
+
 // TestSlotsPoller_DefaultClientTimesOut guards audit N-P3: the default poller
 // client must carry a timeout so a backend that accepts the connection but
 // never answers cannot wedge the poller for the subscription's lifetime.

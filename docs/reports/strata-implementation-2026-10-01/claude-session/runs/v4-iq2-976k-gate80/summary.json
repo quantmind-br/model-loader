@@ -1,0 +1,79 @@
+{
+  "run": "v4-iq2-976k-gate80",
+  "run_status": {
+    "requests_complete": false,
+    "guard_triggered": true
+  },
+  "guard": {
+    "reasons": [
+      "global swap growth above 2 GiB"
+    ],
+    "time": 1790900548.5008578
+  },
+  "code_tps": {
+    "median": 119.8,
+    "min": 112.8,
+    "max": 124.7
+  },
+  "peak_gpu_mib": {
+    "0": 22952.0,
+    "1": 23011.0
+  },
+  "process_peak_swap_kib": {
+    "1590872:server": 157912,
+    "1590916:native": 1654828
+  },
+  "retrieval": [
+    {
+      "label": "fresh-0.05",
+      "prompt_n": 49552,
+      "cache_n": 0,
+      "ttft_s": 16.902247222998994,
+      "exact": true
+    },
+    {
+      "label": "cached-0.05",
+      "prompt_n": 7,
+      "cache_n": 49545,
+      "ttft_s": 0.09878082399518462,
+      "exact": true
+    }
+  ],
+  "checks": {
+    "exact_copy": true,
+    "json_text": true
+  },
+  "min_available_gib": 34.53525161743164,
+  "max_swap_growth_gib": 2.101654052734375,
+  "peak_simultaneous_gpu_mib": 45963.0,
+  "peak_temperature_c": 82.0,
+  "global_pswpout_pages": 499691,
+  "engine_info": {
+    "version": "0.1.30",
+    "pcie_eligible_layers": 0,
+    "pcie_effective_frac": "0.0000",
+    "resident_expert_mib": 0,
+    "prefill_chunk": 8192,
+    "stage_dense": 0,
+    "context": 1000000,
+    "kv": "int8",
+    "kv_resident": 0,
+    "expert_slots": 15329,
+    "expert_cache_mib": 21027,
+    "expert_slots_primary": 8346,
+    "expert_cache_primary_mib": 11251,
+    "spec": 6,
+    "mtp_max": 4,
+    "lookup": 3,
+    "vram_free_mib": 1278,
+    "cvec": 0,
+    "arena_mib": 0,
+    "pool_workers": 15,
+    "pcie_frac": "0.28",
+    "spec_min_p": "0.70",
+    "conversation_cache_mib": 0,
+    "conversation_cache_slots": 4,
+    "conversation_cache_min_free_mib": 2560,
+    "engine": "0.1.30"
+  }
+}

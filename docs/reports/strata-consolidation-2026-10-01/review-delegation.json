@@ -1,0 +1,51 @@
+{
+  "status": "completed",
+  "model": "claude-opus-5-5",
+  "effort": "xhigh",
+  "invocation": [
+    "claude",
+    "--print",
+    "--model",
+    "claude-opus-5-5",
+    "--effort",
+    "xhigh",
+    "--allow-dangerously-skip-permissions",
+    "--permission-mode",
+    "acceptEdits",
+    "--allowedTools",
+    "Read,Glob,Grep,Bash,Write,Edit",
+    "--tools",
+    "Read,Glob,Grep,Bash,Write,Edit",
+    "--safe-mode",
+    "--no-session-persistence",
+    "--output-format",
+    "stream-json",
+    "--verbose"
+  ],
+  "prompt": "/tmp/strata-consolidated-review-20261001/task.md",
+  "submitted_report_sha256": "0241f527530e3ab96aa6398dce732834ec15aafb346788fb0bdafa60ba7c2221",
+  "submitted_snapshot": "/home/diogo/dev/model-loader/docs/reports/strata-consolidation-2026-10-01/independent-review-evidence/report-submitted.md",
+  "output": "/home/diogo/dev/model-loader/docs/reports/strata-consolidated-independent-review-2026-10-01.md",
+  "process_session_id": 73566,
+  "observed_runtime": {
+    "model": "claude-opus-5-5",
+    "session_id": "ed0a52f7-c0cc-49da-b9cb-2c02233792d0",
+    "permissionMode": "acceptEdits",
+    "claude_code_version": "2.1.284"
+  },
+  "exit_code": 0,
+  "review_report_sha256": "4b4d50aa0d40886f13aa50562a643215e0b10e90dfdaa5797b8290d82579d6c1",
+  "verdict": "approved with reservations; no blockers",
+  "terminal_result": {
+    "subtype": "success",
+    "terminal_reason": "completed",
+    "is_error": false,
+    "duration_ms": 978695,
+    "session_id": "ed0a52f7-c0cc-49da-b9cb-2c02233792d0",
+    "permission_denials": []
+  },
+  "canonical_model": "claude-opus-5-5",
+  "evidence_archive": "/home/diogo/dev/model-loader/docs/reports/strata-consolidation-2026-10-01/independent-review-evidence",
+  "transcript_sha256": "80aa6f28793b093083037a38932f93243acbf19629f8ff3238be48e752975e51",
+  "post_review_corrections": "R1-R7 and test-count editorial note incorporated by primary auditor; original review preserved; final amendments have not received a second independent review"
+}
