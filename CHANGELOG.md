@@ -23,6 +23,17 @@ All notable user-facing changes are documented here. This project follows
 
 ### Changed
 
+- Local `syv-qwen38` backend re-synced to upstream HyperQwen `da8a8e9` (new
+  `spec-attn-smem-fit` patch applied, `verify.sh --install` clean), and the
+  eleven linked dual-RTX-3090 profiles re-tuned at 270 W/card: custom
+  all-reduce is now on with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:False`
+  (+4-15% decode across Qwen3.8-27B, MiMo, Ornith and Nex). The earlier
+  "custom all-reduce crashes on SM86" failure was the expandable-segments
+  allocator, which cannot export the CUDA-graph buffer over IPC; the backend
+  wrapper now defaults the allocator off at TP>1 like the upstream launcher.
+  The dead `VLLM_V2_CUDAGRAPH_MEM_MIB` was removed, MiMo gained probabilistic
+  draft sampling with `QMAX 8`, and Nex gained a float16 GDN state. Report:
+  `docs/reports/hyperqwen-parity-dual-rtx3090-2026-09-27.md`.
 - Local dual-RTX-3090 Syv Qwen3.8-27B provisioning audited against upstream
   `0e951951`: vLLM 0.28.0 with verified patches and optional KVarN support.
   Six workstation profiles use BF16 KV, split-KV verification and seven-token
