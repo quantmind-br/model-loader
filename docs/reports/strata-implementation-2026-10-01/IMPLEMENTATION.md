@@ -349,3 +349,45 @@ As seções acima continuam valendo como registro da fase anterior.
   - A continuação do harness reemitiu a tool em 3/5 starts contra 0/3 do
     base.
   - **Canônico GPU1 não alterado** (`CLAUDE_COMPLETION.md` §15).
+
+## Continuação 2026-10-04: A/B final do Strata v7 e decisão de promoção
+
+- **Release avaliada:** `strata-perf-v7-20261004`, release
+  `20261004T050705Z-868e757a424d`, engine upstream `0.1.38` com o port local.
+  Os seis braços principais (`A1/B1/B2/A2/A3/B3`) por tamanho concluíram todos
+  os requests, sem guard, sem invalidação de ciclo de vida e com recuperação
+  exata (`LARANJA-7391`).
+- **256k:** V6 mediana de `131,2 tok/s`; V7 `141,4 tok/s` (`1,0777x`). A
+  aceitação MTP foi `0,895` nos dois braços. As razões de TTFT fresco V7/V6
+  foram `0,9705`, `0,9766`, `0,9758` e `0,9873` nos fills de 5%, 25%, 50% e
+  90%. Picos V7: `21.921/22.956 MiB` (GPU0/GPU1); recuperação exata.
+- **500k:** V6 mediana de `127,8 tok/s`; V7 `137,5 tok/s` (`1,0759x`). A
+  aceitação MTP foi `0,868` no V6 e `0,861` no V7. As razões de TTFT fresco
+  V7/V6 foram `0,9803`, `0,9791`, `0,9935` e `0,9849`. Picos V7:
+  `22.985/23.014 MiB`; recuperação exata.
+- **Gate de ferramentas:** 256k V7 passou o auto-harness nos três starts
+  (`0,0,0`), mas falhou o integrity-harness nos três (`1,1,1`): os quatro
+  checks HTTP/streaming passaram, porém a continuação detectou
+  `reissued_tool_call`. 500k V7 passou integrity em dois starts e falhou em um
+  (`0,0,1`), e falhou auto nos três (`3,3,3`). A falha de qualidade não foi
+  convertida em mediana válida nem ignorada.
+- **Decisão:** nenhum tamanho foi promovido. O critério de promoção exige
+  todos os gates de ferramenta com retorno zero; os perfis canônicos permanecem
+  no V6. Nenhuma chamada pública foi feita para um perfil V7.
+- **Idle-unload:** gate funcional passou no candidato 256k com
+  `idle_unload_s=120` temporário: `/health` reportou `loaded=false`, VRAM caiu
+  de `21.729/22.890` para `1.111/18 MiB`, o PID `3717551` permaneceu estável e
+  a recarga respondeu `ok` com TTFT `10,17 s`. O primeiro smoke falhou apenas
+  por consultar exatamente aos 150 s, antes da thread de unload executar; o
+  gate foi corrigido para esperar a transição observável por condição. A opção
+  não foi deixada habilitada em nenhum perfil.
+- **Limpeza e rollback:** os dois perfis candidatos, quatro sidecars e dois
+  locks foram removidos; não restaram referências candidatas em
+  `~/.config/model-loader`. As entradas de catálogo
+  `strata-perf-v6-20261002` e `strata-perf-v7-20261004`, os releases V6/V7 e as
+  evidências em `claude-session/runs/` foram preservados.
+- **Estado final:** o perfil canônico
+  `qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k` foi restaurado no
+  V6, PID `3929652`, e respondeu `ok` pelo proxy `127.0.0.1:4321`. O binário
+  ativo foi confirmado como
+  `releases/20261002T100952Z-2eed88f1f51d/serve/server.py`.

@@ -59,6 +59,8 @@ def summarize(run):
     out = {'run': run.name, 'attempt': json.loads((run / 'attempt.json').read_text()) if (run / 'attempt.json').exists() else None,
            'run_status': json.loads((run / 'run-status.json').read_text()) if (run / 'run-status.json').exists() else None,
            'guard': json.loads((run / 'guard.json').read_text()) if (run / 'guard.json').exists() else None,
+           'lifecycle_invalid': json.loads((run / 'lifecycle-invalid.json').read_text()) if (run / 'lifecycle-invalid.json').exists() else None,
+           'harness_done': json.loads((run / 'harness-done.json').read_text()) if (run / 'harness-done.json').exists() else None,
            'windows_matched': len(windows) == len(decoded), 'requests': rows}
     if code:
         out['code_tps'] = statistics.median(x['tps'] for x in code)

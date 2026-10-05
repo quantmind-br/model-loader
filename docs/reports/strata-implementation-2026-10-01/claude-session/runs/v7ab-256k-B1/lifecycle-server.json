@@ -1,0 +1,22 @@
+{
+  "pid": 2768545,
+  "start_ticks": 3123073,
+  "pgid": 2768545,
+  "sid": 2768545,
+  "argv": [
+    "/usr/bin/python",
+    "/home/diogo/dev/model-loader/backends/strata-fork/releases/20261004T050705Z-868e757a424d/serve/server.py",
+    "--engine",
+    "strata",
+    "--model",
+    "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+    "--config",
+    "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-256k.json",
+    "--host",
+    "127.0.0.1",
+    "--max-context",
+    "262144",
+    "--port",
+    "40581"
+  ]
+}

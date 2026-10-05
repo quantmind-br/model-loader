@@ -1,5 +1,9 @@
 # OrcaRouter IQ3_XXS: procedimento para criar o perfil
 
+> Historical installation record. The checkpoint, prepared pack, profiles and
+> mutable `strata-fork` catalog entry were retired; these commands are not a
+> current setup recipe. See [the maintained guide](../strata-backend.md).
+
 O Strata documenta suporte explícito a
 [`orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF`](https://huggingface.co/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF),
 quantização **IQ3_XXS**. O
@@ -58,9 +62,9 @@ uncensored, há aproximadamente **197 GiB livres** neste filesystem.
 
 ## Configuração inicial para o nosso hardware
 
-Os exemplos [profile.json](../examples/strata-orca-iq3-xxs/profile.json),
-[engine.json](../examples/strata-orca-iq3-xxs/engine.json) e
-[shared-settings.json](../examples/strata-orca-iq3-xxs/shared-settings.json)
+Os exemplos [profile.json](strata-orca-iq3-xxs-examples-2026-10-01/profile.json),
+[engine.json](strata-orca-iq3-xxs-examples-2026-10-01/engine.json) e
+[shared-settings.json](strata-orca-iq3-xxs-examples-2026-10-01/shared-settings.json)
 usam caminhos absolutos deste workstation e o backend já registrado:
 
 - Backend `strata-fork`, executável e cwd em `model-loader/backends/strata-fork`.
@@ -127,13 +131,13 @@ tokenizer/template, instalar a configuração e registrar o perfil:
 ```sh
 cd /home/diogo/dev/model-loader
 mkdir -p /home/diogo/.config/model-loader/strata
-cp docs/examples/strata-orca-iq3-xxs/engine.json \
+cp docs/reports/strata-orca-iq3-xxs-examples-2026-10-01/engine.json \
   /home/diogo/.config/model-loader/strata/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k.json
-cp docs/examples/strata-orca-iq3-xxs/shared-settings.json \
+cp docs/reports/strata-orca-iq3-xxs-examples-2026-10-01/shared-settings.json \
   /home/diogo/.config/model-loader/strata/qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k.shared-settings.json
 model-loader profile create \
   --id qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k \
-  --backend strata-fork --file docs/examples/strata-orca-iq3-xxs/profile.json
+  --backend strata-fork --file docs/reports/strata-orca-iq3-xxs-examples-2026-10-01/profile.json
 model-loader profile validate \
   qwen3-8-flash-next-uncensored-iq3-xxs-mtp-strata-dual-mmap-w15-32k
 model-loader instance start \

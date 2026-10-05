@@ -1,0 +1,254 @@
+{
+ "V6": {
+  "starts": 3,
+  "complete": 3,
+  "guards": [],
+  "lifecycle_invalid": [],
+  "harness_failures": [
+   [
+    "v7ab-500k-A1",
+    {
+     "returncode": 3,
+     "success": false,
+     "error": "auto harness failed with returncode 3",
+     "finished": 1791096929.2357407
+    }
+   ],
+   [
+    "v7ab-500k-A2",
+    {
+     "returncode": 3,
+     "success": false,
+     "error": "auto harness failed with returncode 3",
+     "finished": 1791100606.4171054
+    }
+   ],
+   [
+    "v7ab-500k-A3",
+    {
+     "returncode": 3,
+     "success": false,
+     "error": "auto harness failed with returncode 3",
+     "finished": 1791102886.2424648
+    }
+   ]
+  ],
+  "code_tps": [
+   127.8,
+   126.5,
+   127.8
+  ],
+  "code_ms_per_window": null,
+  "code_accept": [
+   0.868,
+   0.848,
+   0.869
+  ],
+  "portuguese_tps": [
+   92.4,
+   91.5,
+   95.5
+  ],
+  "fresh_ttft_s": {
+   "fresh-0.05": [
+    9.078,
+    9.067,
+    9.202
+   ],
+   "fresh-0.25": [
+    35.419,
+    35.389,
+    35.557
+   ],
+   "fresh-0.5": [
+    80.596,
+    80.297,
+    81.592
+   ],
+   "fresh-0.9": [
+    235.027,
+    234.419,
+    235.933
+   ]
+  },
+  "fresh_prompt_n": {
+   "fresh-0.05": [
+    25147,
+    25147,
+    25147
+   ],
+   "fresh-0.25": [
+    127552,
+    127552,
+    127552
+   ],
+   "fresh-0.5": [
+    255546,
+    255546,
+    255546
+   ],
+   "fresh-0.9": [
+    460341,
+    460341,
+    460341
+   ]
+  },
+  "retrieval_exact": true,
+  "max_swap_growth_gib": [
+   0.0,
+   0.0,
+   0.002
+  ],
+  "peak_gpu0_mib": [
+   22959.0,
+   22957.0,
+   22983.0
+  ],
+  "peak_gpu1_mib": [
+   23018.0,
+   23018.0,
+   23018.0
+  ],
+  "peak_temp_gpu0": [
+   82.0,
+   81.0,
+   82.0
+  ],
+  "min_available_gib": [
+   38.65,
+   38.44,
+   40.68
+  ],
+  "expert_slots": [
+   22619,
+   22611,
+   22631
+  ]
+ },
+ "V7": {
+  "starts": 3,
+  "complete": 3,
+  "guards": [],
+  "lifecycle_invalid": [],
+  "harness_failures": [
+   [
+    "v7ab-500k-B1",
+    {
+     "returncode": 3,
+     "success": false,
+     "error": "auto harness failed with returncode 3",
+     "finished": 1791097988.156168
+    }
+   ],
+   [
+    "v7ab-500k-B2",
+    {
+     "returncode": 3,
+     "success": false,
+     "error": "auto harness failed with returncode 3",
+     "finished": 1791099525.2592633
+    }
+   ],
+   [
+    "v7ab-500k-B3",
+    {
+     "returncode": 3,
+     "success": false,
+     "error": "auto harness failed with returncode 3",
+     "finished": 1791104571.4030037
+    }
+   ]
+  ],
+  "code_tps": [
+   137.5,
+   137.4,
+   138.2
+  ],
+  "code_ms_per_window": null,
+  "code_accept": [
+   0.861,
+   0.845,
+   0.87
+  ],
+  "portuguese_tps": [
+   100.8,
+   96.3,
+   106.1
+  ],
+  "fresh_ttft_s": {
+   "fresh-0.05": [
+    8.899,
+    8.859,
+    8.902
+   ],
+   "fresh-0.25": [
+    34.68,
+    34.128,
+    34.967
+   ],
+   "fresh-0.5": [
+    80.075,
+    79.691,
+    80.375
+   ],
+   "fresh-0.9": [
+    231.482,
+    227.874,
+    233.846
+   ]
+  },
+  "fresh_prompt_n": {
+   "fresh-0.05": [
+    25147,
+    25147,
+    25147
+   ],
+   "fresh-0.25": [
+    127552,
+    127552,
+    127552
+   ],
+   "fresh-0.5": [
+    255546,
+    255546,
+    255546
+   ],
+   "fresh-0.9": [
+    460341,
+    460341,
+    460341
+   ]
+  },
+  "retrieval_exact": true,
+  "max_swap_growth_gib": [
+   0.344,
+   0.0,
+   1.181
+  ],
+  "peak_gpu0_mib": [
+   22981.0,
+   22955.0,
+   22985.0
+  ],
+  "peak_gpu1_mib": [
+   23012.0,
+   23012.0,
+   23014.0
+  ],
+  "peak_temp_gpu0": [
+   82.0,
+   81.0,
+   82.0
+  ],
+  "min_available_gib": [
+   38.47,
+   36.6,
+   40.28
+  ],
+  "expert_slots": [
+   22631,
+   22612,
+   22637
+  ]
+ }
+}

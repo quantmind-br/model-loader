@@ -9,7 +9,7 @@ them whenever a supported backend changes its command-line interface.
 |---|---|
 | `llama-server`, `beellama-cpp`, `buun-llama-cpp` | Live `--help` parsing plus the matching curated overlay in `internal/service/backendschema/` |
 | `vllm`, `sglang`, `ik-llama-cpp` | Curated Go schema in `internal/service/backendschema/` |
-| `dflash`, `unsloth`, `tabby`, `lmstudio`, `freetoken` | Embedded rows in the matching `internal/service/*help/` package |
+| `dflash`, `unsloth`, `tabby`, `lmstudio`, `freetoken`, `strata` | Embedded rows in the matching `internal/service/*help/` package (`dflashhelp`, `unslothhelp`, `tabbyhelp`, `lmstudiohelp`, `freetokenhelp`, `stratahelp`) |
 
 For live-help backends, compare the current binary and source declarations with
 the parsed schema. For curated backends, the runtime's argument declarations are

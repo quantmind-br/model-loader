@@ -24,7 +24,8 @@ REPO = Path(__file__).resolve().parents[5]
 SESSION = Path(__file__).resolve().parents[1]
 PROFILES = Path.home() / '.config/model-loader/profiles'
 RELEASES = REPO / 'backends/strata-fork/releases'
-BACKENDS = {'20261002T100952Z-2eed88f1f51d': 'strata-perf-v6-20261002',
+BACKENDS = {'20261004T050705Z-868e757a424d': 'strata-perf-v7-20261004',
+            '20261002T100952Z-2eed88f1f51d': 'strata-perf-v6-20261002',
             '20261002T095307Z-13018fd9fe4e': 'strata-perf-v5-20261002',
             '20261001T223017Z-f85ddc896414': 'strata-perf-v4-20261001',
             '20261001T222137Z-3430cc1a87e0': 'strata-perf-v3-20261001',
@@ -155,12 +156,13 @@ def main():
     ap.add_argument('--set-arg', action='append', default=[], metavar='FLAG=VALUE',
                     help='replace the value after an existing native flag')
     ap.add_argument('--env', action='append', default=[], metavar='KEY=VALUE', help='config env for the engine')
+    ap.add_argument('--baseline', choices=['v7'], help='isolate prepared candidate snapshots from historical backups')
     ap.add_argument('--readonly', action='store_true',
                     help='run an installed canonical profile unchanged; copy the engine log segment it appends')
     ap.add_argument('--probe', nargs=argparse.REMAINDER, default=[], help='flags passed to the probe')
     a = ap.parse_args()
-    if a.readonly and (a.exe or a.set_arg or a.env):
-        raise SystemExit('--readonly takes no --exe/--set-arg/--env')
+    if a.readonly and (a.exe or a.set_arg or a.env or a.baseline):
+        raise SystemExit('--readonly takes no --exe/--set-arg/--env/--baseline')
 
     out = SESSION / 'runs' / a.label
     if out.exists():
@@ -174,7 +176,9 @@ def main():
     if '-candidate' not in profile['id']:
         raise SystemExit('refusing to modify a non-candidate profile')
     backups = SESSION / 'config-backups'
-    backups.mkdir(exist_ok=True)
+    if a.baseline:
+        backups = backups / a.baseline
+    backups.mkdir(parents=True, exist_ok=True)
     for src in (profile_path, config_path):
         dst = backups / (src.name + ('.profile' if src == profile_path else '.config') + '.orig.json')
         if not dst.exists():
@@ -198,7 +202,7 @@ def main():
     shutil.copy2(config_path, out / 'config.json')
     shutil.copy2(profile_path, out / 'profile.json')
     meta = {'profile': a.profile, 'release': a.release, 'backend': backend, 'exe': cfg['exe'],
-            'probe_flags': a.probe, 'set_arg': a.set_arg, 'env': a.env, 'started': time.time()}
+            'baseline': a.baseline, 'probe_flags': a.probe, 'set_arg': a.set_arg, 'env': a.env, 'started': time.time()}
     write_json(out / 'attempt.json', meta)
     sys.exit(run_probe(a, out, config_path, meta))
 

@@ -93,8 +93,12 @@ add them to `launch.env` or every boot mis-behaves:**
   already fits 262144 without it), plus `NCCL_P2P_DISABLE=1` +
   `disable-custom-all-reduce` + `distributed-executor-backend mp` (no NVLink).
 
-The six profiles created 2026-07-03 (all `launch.backendId: sndr-vllm`,
-`served-model-name` == id):
+Historical evaluation set (2026-07-03): the six profiles below qualified the
+backend on this rig. They are no longer in the active profile store — only
+`.history/*.previous.json` records remain — so re-create a profile from its
+row's ModelDef YAML to reproduce a run. The backend itself (`sndr-vllm`,
+pinned `dev424` venv, catalog entry) is still installed. All six used
+`launch.backendId: sndr-vllm` with `served-model-name` == id:
 
 | Profile id | Model | ctx | KV / spec |
 |---|---|---:|---|
@@ -105,11 +109,12 @@ The six profiles created 2026-07-03 (all `launch.backendId: sndr-vllm`,
 | `gemma-4-31b-awq-mtp-sndr-tp2-64k` | cyankiwi/gemma-4-31B-it-AWQ-4bit + google/gemma-4-31B-it-assistant draft | 65536 | FP16 KV + MTP K=8 (external draft) |
 | `gemma-4-31b-awq-kvauto-sndr-tp2-32k` | cyankiwi/gemma-4-31B-it-AWQ-4bit | 32768 | FP16 KV, no spec (chat) |
 
-## Validated on the reference rig (2× RTX 3090, 2026-07-03)
+## Historical qualification on the reference rig (2× RTX 3090, 2026-07-03)
 
-All six profiles boot via the proxy with Genesis `failed=0` and coherent PT-BR
-generation. Model weights live in the HF cache (`~/.cache/huggingface`, big disk)
-symlinked under the `models.search_paths` root.
+All six profiles booted via the proxy with Genesis `failed=0` and coherent PT-BR
+generation. At qualification time the model weights lived in the HF cache,
+symlinked under the `models.search_paths` root — re-check that a row's weights
+are still present before re-creating its profile.
 
 - **`qwen3.6-27b-int4-autoround-tq-mtp-sndr-tp2-256k`** (Lorbus flagship) — full
   **262144** ctx, **GPU KV 646,993 tokens → 2.47× concurrency** (vs 1.94× for the

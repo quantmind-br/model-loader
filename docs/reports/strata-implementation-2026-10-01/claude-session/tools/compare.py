@@ -27,11 +27,16 @@ def main():
     for arm in a.arms:
         name, labels = arm.split('=', 1)
         runs = [load(l) for l in labels.split(',')]
-        complete = [r for r in runs if (r['run_status'] or {}).get('requests_complete')]
+        valid = [r for r in runs if r.get('lifecycle_invalid') is None]
+        complete = [r for r in valid if (r['run_status'] or {}).get('requests_complete') and not r['guard']]
         fills = sorted({k for r in complete for k in r['req'] if k.startswith('fresh-')}, key=lambda k: float(k[6:]))
         out[name] = {
             'starts': len(runs), 'complete': len(complete),
             'guards': [(r['run'], (r['guard'] or {}).get('reasons')) for r in runs if r['guard']],
+            'lifecycle_invalid': [(r['run'], r['lifecycle_invalid']) for r in runs if r.get('lifecycle_invalid') is not None],
+            'harness_failures': [(r['run'], r.get('harness_done')) for r in runs
+                                 if '--wait-harness' in (r.get('attempt') or {}).get('probe_flags', [])
+                                 and (r.get('harness_done') or {}).get('returncode') != 0],
             'code_tps': med([r.get('code_tps') for r in complete]),
             'code_ms_per_window': med([r.get('code_ms_per_window') for r in complete]),
             'code_accept': med([r.get('code_accept') for r in complete]),
@@ -41,11 +46,11 @@ def main():
             'retrieval_exact': all(all(json.loads((RUNS / r['run'] / 'results.json').read_text())[i]['content'].strip()
                                        == 'LARANJA-7391' for i, x in enumerate(r['requests']) if x['label'].startswith(('fresh-', 'cached-')))
                                    for r in complete),
-            'max_swap_growth_gib': med([r.get('max_swap_growth_gib') for r in runs]),
-            'peak_gpu0_mib': med([r.get('peak_gpu_mib', {}).get('0') for r in runs]),
-            'peak_gpu1_mib': med([r.get('peak_gpu_mib', {}).get('1') for r in runs]),
-            'peak_temp_gpu0': med([r.get('peak_temperature_c', {}).get('0') for r in runs]),
-            'min_available_gib': med([r.get('min_available_gib') for r in runs]),
+            'max_swap_growth_gib': med([r.get('max_swap_growth_gib') for r in valid]),
+            'peak_gpu0_mib': med([r.get('peak_gpu_mib', {}).get('0') for r in valid]),
+            'peak_gpu1_mib': med([r.get('peak_gpu_mib', {}).get('1') for r in valid]),
+            'peak_temp_gpu0': med([r.get('peak_temperature_c', {}).get('0') for r in valid]),
+            'min_available_gib': med([r.get('min_available_gib') for r in valid]),
             'expert_slots': med([(r.get('engine_info') or {}).get('expert_slots') for r in complete]),
         }
     print(json.dumps(out, indent=1))

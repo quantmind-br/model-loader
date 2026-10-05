@@ -139,9 +139,13 @@ Useful endpoints include:
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/v1/chat/completions` | OpenAI-compatible chat inference |
+| `POST` | `/v1/messages/count_tokens` | Local Anthropic-shaped token estimate; no backend load |
 | `POST` | `/v1/messages` | Anthropic Messages translation |
 | `POST` | `/v1/responses` | OpenAI Responses translation |
 | `POST` | `/v1beta/models/{model}:generateContent` | Gemini translation |
+| `POST` | `/v1beta/models/{model}:streamGenerateContent` | Streaming Gemini translation |
+| `POST` | `/v1beta/models/{model}:countTokens` | Local Gemini-shaped token estimate; no backend load |
+| `GET` | `/v1beta/models` | List profiles in Gemini format |
 | `GET` | `/v1/models` | List profiles as models |
 | `GET` | `/_status` | Proxy and loaded-backend status |
 | `POST` | `/_admin/load` | Explicitly load a profile |
@@ -183,6 +187,8 @@ rules, and [troubleshooting](docs/troubleshooting.md) for common failures.
 
 ## Documentation
 
+- [Maintained documentation](docs/README.md): usage, configuration, benchmark and backend guides
+- [Historical reports and evidence](docs/reports/README.md): dated audits, experiments and archived plans
 - [OpenWiki quickstart](openwiki/quickstart.md): documentation map and feature overview
 - [Architecture](openwiki/architecture.md): boundaries, data flow, and state ownership
 - [Process manager](openwiki/process-manager.md): lifecycle and recovery guarantees

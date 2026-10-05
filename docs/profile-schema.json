@@ -34,7 +34,7 @@
     "model": {
       "type": "string",
       "minLength": 1,
-      "description": "Absolute or relative path to the model file (typically a .gguf file for llama-server backends). Validated at runtime: file must exist on disk."
+      "description": "Model selector for the profile's backend. For local-file backends (for example llama-server) an absolute or relative path to the model file (typically a .gguf file); existence is checked at profile create/edit time, not only at launch. The lmstudio backend accepts a daemon-side model key instead of a path (no existence check). The vllm, sglang, unsloth, and freetoken backends also accept a Hugging Face repo ID (for example meta-llama/Llama-3-8B)."
     },
     "args": {
       "type": "object",

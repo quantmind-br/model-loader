@@ -7,6 +7,12 @@ All notable user-facing changes are documented here. This project follows
 
 ### Added
 
+- Strata calibration lifecycle and inference-accounting guards: immutable
+  proxy/server/native identities, per-generation native metrics accounting,
+  terminal harness retention, isolated v7 candidate baselines, and explicit
+  exclusion of contaminated measurements. Tool-quality failures remain separate
+  from performance completion and profile-promotion eligibility.
+
 - Reproducible Cloudflare Tunnel deployment for an externally authenticated,
   loopback-origin model-loader API. The Tunnel and Caddy gateway follow the
   local proxy listener on `127.0.0.1:4321` instead of remaining up at login.
@@ -22,6 +28,18 @@ All notable user-facing changes are documented here. This project follows
   fallback when no unit is installed).
 
 ### Changed
+
+- Maintained documentation indexed separately from historical reports. Updated
+  configuration, benchmark and backend guides against the current CLI and
+  contracts; relocated root audits and plans with evidence provenance preserved.
+- The launch-argument diagnostic now requires an explicit profile ID instead of
+  selecting a retired workstation profile.
+
+- Local Strata v7 port published on `sync/upstream-0.1.38`, based on upstream
+  engine 0.1.38, preserving managed request controls, stage-dense loading,
+  helper affinity, thermal-gate cancellation and immutable release tooling.
+  The v6 installation is retained; profile promotion requires the independent
+  per-size performance, memory, retrieval and tool gates.
 
 - Local `syv-qwen38` backend re-synced to upstream HyperQwen `da8a8e9` (new
   `spec-attn-smem-fit` patch applied, `verify.sh --install` clean), and the
@@ -42,7 +60,7 @@ All notable user-facing changes are documented here. This project follows
   INT8 heads. Original weights and the previous installation are retained.
   These profiles/backends are local, gitignored installation state, not bundled
   release defaults. Conclusions, measurements and limitations are written up in
-  `QWEN38_27B_AUDIT_REPORT.md`, with the raw arms under
+  `docs/reports/QWEN38_27B_AUDIT_REPORT.md`, with the raw arms under
   `~/.local/state/model-loader/benchmark/qwen38-audit-20260906/`.
 - Local dual-RTX-3090 Ornith-1.5 35B-A3B AutoRound W4A16 provisioning calibrated
   under single-sequence workload with 262,144 (256k) context: DFlash2 speculative
@@ -51,6 +69,16 @@ All notable user-facing changes are documented here. This project follows
   real context prefill/decode.
 
 ### Removed
+
+- Unused generated `.reversa` host cache, temporary root binary/log, five retired
+  Qwen3.6 benchmark helpers and superseded Cloudflare polling templates. Originals
+  were backed up; the installer still retires previously installed watcher units.
+
+- Seven unused local Flash-Next tuning backend installations: the six
+  `llama.cpp-qwen4exp-*` variants and `ik_llama.cpp-tuning`, including their
+  catalog entries and schemas. Source trees, Git history and local changes were
+  archived and restoration-verified; model weights, tuning evidence and active
+  backends remain unchanged. This retires local installations, not backend kinds.
 
 - TokenSpeed backend kind. It was added and removed before this release: its
   upstream runtime requires Hopper-or-newer CUDA and does not compile for this

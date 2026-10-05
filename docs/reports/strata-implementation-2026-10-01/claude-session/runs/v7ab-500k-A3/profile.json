@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 3,
+  "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-500k",
+  "name": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-500k",
+  "description": "IQ2_XS long-context baseline (replaced the 976k profile 2026-10-02 by operator decision): 512000 tokens (500k label), YaRN factor 2/original 262144 per the official Qwen3.8-Flash-Next card (factor 2.0 for ~524288-token use; static YaRN, short-text cost). Strata release v6 20261002T100952Z-2eed88f1f51d (catalog strata-perf-v6-20261002), dual RTX3090 270W/card, layers 24/24, mmap experts + --stage-dense (expert cache 11810+10868 of 24576), KV int8, 15 workers, reserve 1536MiB, prompt thermal gate STRATA_PREFILL_TEMP_PAUSE_C=80. Measured 2026-10-02 (passive cooling \u003c65C before each fresh fill): code 128.4 tok/s, MTP spec4 minp0.7 accept 0.856; fresh 25147/127552/255546/460341 tokens TTFT 9.2/34.8/81.8/243.4 s, exact retrieval, cached repeats exact; GPU0 max 83C (55 gate pauses); peak 22970/23018 MiB (22.43/22.48 GiB). Official Qwen non-thinking temp0.7/top_p0.8/top_k20/presence1.5, template de4b8e4. Tools: harness integrity 4/4 (forced call, stream incl.), clean continuation; auto 30/30 correct but 4/30 spurious no-tool controls (inconclusive): not agent-qualified. API (v6): forced tool_choice needs thinking off; parallel_tool_calls=false returns the first complete call; response_format json/strict/logprobs/tool_choice none with tools: HTTP 400. Global swap guard is sensitive to concurrent heavy jobs and a cold pack (load after warm-up). Report: docs/reports/strata-implementation-2026-10-01/CLAUDE_COMPLETION.md section 12.",
+  "model": "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+  "args": {
+    "config": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-500k.json",
+    "host": "127.0.0.1",
+    "max-context": 512000
+  },
+  "launch": {
+    "defaultBackground": true,
+    "backendId": "strata-perf-v6-20261002",
+    "restart_policy": "none",
+    "max_restarts": 0,
+    "backoff_seconds": 0
+  },
+  "meta": {
+    "createdAt": "2026-10-02T13:48:23.073504781Z",
+    "updatedAt": "2026-10-04T07:46:57.945226749Z",
+    "lastUsedAt": "2026-10-04T07:46:57.945168129Z"
+  },
+  "pinned": true
+}

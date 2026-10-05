@@ -6,7 +6,7 @@ at the model-loader proxy) writes a diff, and the external harness applies it in
 that instance's prebuilt Docker image and runs its `fail_to_pass` + `pass_to_pass`
 tests. Each instance scores pass/fail; the run's accuracy is `resolved / total`.
 
-Like [terminal-bench](#), this is **not** a single-turn-over-the-proxy mode: it is
+Like [terminal-bench](BENCHMARK.md#benchmark-modes), this is **not** a single-turn-over-the-proxy mode: it is
 an agentic, Docker-sandboxed pipeline owned by Python scripts. model-loader only
 serves the model (the proxy) and records the score — it never installs the
 harness, Docker, or the agent.

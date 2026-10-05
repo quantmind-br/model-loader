@@ -1,0 +1,14 @@
+{
+  "totals": {
+    "since": 1791098935.9248025,
+    "requests": 119,
+    "prompt_tokens": 1830324,
+    "reused": 872238,
+    "output_tokens": 6093,
+    "prompt_ms": 448337.39999999997,
+    "decode_ms": 46056.699999999975,
+    "drafts_offered": 4730,
+    "drafts_accepted": 4191
+  },
+  "active": null
+}

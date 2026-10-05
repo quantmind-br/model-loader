@@ -1,0 +1,45 @@
+ 1 Profiles  │  2 Server  │  3 Models  │  4 Backends  │  5 Benchmark
+● RUNNING   127.0.0.1:4321
+profile=kat-coder-v2-5-dev-35b-a3b-ud-q5-k-xl-mtp-tensor-256k
+swap 4h ago (15510ms)
+Running instances
+     PID       Port    Profile             Uptime      VRAM          Tokens/s
+ >   257754    44733   kat-coder-v2-5-de…  4h26m       18939/24576…  --
+ Logs  │  Slots  │  Metrics  │  History
+(no metrics yet — first sample arrives within a few seconds)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1-5] tabs  [tab] next  [q] quit  [?] help | [s] start  [x] stop  [v] cycle view  [Space] pause  [K] kill  [R] restart  [h] history

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 3,
+  "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-256k",
+  "name": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k (copy)",
+  "description": "CANDIDATE: Strata v7 20261004T050705Z-868e757a424d (upstream v0.1.38 + fork port) A/B vs v6; delete after promotion.",
+  "model": "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+  "args": {
+    "config": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-256k.json",
+    "host": "127.0.0.1",
+    "max-context": 262144
+  },
+  "launch": {
+    "defaultBackground": true,
+    "backendId": "strata-perf-v7-20261004",
+    "restart_policy": "none",
+    "max_restarts": 0,
+    "backoff_seconds": 0
+  },
+  "meta": {
+    "createdAt": "2026-10-04T04:51:34.322489801Z",
+    "updatedAt": "2026-10-04T09:10:03.460141143Z",
+    "lastUsedAt": "2026-10-04T09:10:03.460069499Z"
+  },
+  "pinned": false
+}

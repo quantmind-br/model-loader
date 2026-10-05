@@ -1,0 +1,499 @@
+{
+  "date": "2026-10-04",
+  "policy": "Frozen evidence is preserved byte-for-byte. Navigation-only changes are recorded; original bytes remain in verified backup. Pending plans are not marked complete.",
+  "backup_directory": "/home/diogo/.local/state/model-loader/cleanup-backups/repository-organization-20261004T114519Z",
+  "repository_archive_sha256": "73b0c43b8bccd7a28752f79e3784d7cf80fd11eabb036d33f298c98ccf34afc5",
+  "uiux_archive_sha256": "2ebbda564a5e18ef16e259cdeb04ffbeb0e867725976c13edf40eea3bd29ba4c",
+  "relocations": [
+    {
+      "old": ".ideation/uiux-captures/backends-default-200x50.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/backends-default-200x50.txt",
+      "original_sha256": "0d27de283e0a8b72fd9e03a08cf0039ff4be65a30b498226e7ab722c639a9ddb",
+      "current_sha256": "0d27de283e0a8b72fd9e03a08cf0039ff4be65a30b498226e7ab722c639a9ddb",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/backends-default-80x24.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/backends-default-80x24.txt",
+      "original_sha256": "44f6a64cd6f97d6130a555c47ba5f24a33c95c92f8ae7b1afd81656c6d67cf14",
+      "current_sha256": "44f6a64cd6f97d6130a555c47ba5f24a33c95c92f8ae7b1afd81656c6d67cf14",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/backends-filter-noresults-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/backends-filter-noresults-160x45.txt",
+      "original_sha256": "43e0aa86ae780062216319d365bc1c03c7562e90cc9484a1cd83eb4c2aed2f87",
+      "current_sha256": "43e0aa86ae780062216319d365bc1c03c7562e90cc9484a1cd83eb4c2aed2f87",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/benchmark-default-200x50.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/benchmark-default-200x50.txt",
+      "original_sha256": "c2943b15d9db3fc8b191492138efcd7a7657663b59b79fb1ca5e57daeb3b4f0b",
+      "current_sha256": "c2943b15d9db3fc8b191492138efcd7a7657663b59b79fb1ca5e57daeb3b4f0b",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/benchmark-default-80x24.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/benchmark-default-80x24.txt",
+      "original_sha256": "d81c9ba15d62abb08838bdf8073e9d6f66729e4a5ffb25a302764392ba8c4d93",
+      "current_sha256": "d81c9ba15d62abb08838bdf8073e9d6f66729e4a5ffb25a302764392ba8c4d93",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/benchmark-detail-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/benchmark-detail-160x45.txt",
+      "original_sha256": "967ffe19a73b7b74e2071626b25362b699707d2ac065541aaec142cf2ce88743",
+      "current_sha256": "967ffe19a73b7b74e2071626b25362b699707d2ac065541aaec142cf2ce88743",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/benchmark-mode2-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/benchmark-mode2-160x45.txt",
+      "original_sha256": "b6b9be6106c9673af2faabc9d658ef2a561f702994062434638200cafd4a15b2",
+      "current_sha256": "b6b9be6106c9673af2faabc9d658ef2a561f702994062434638200cafd4a15b2",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/benchmark-nocolor-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/benchmark-nocolor-160x45.txt",
+      "original_sha256": "65ef2bc0a8e3c71ee83e818eb2c968c4ff85f4bcdad9cc6fbde21deb99ad6015",
+      "current_sha256": "65ef2bc0a8e3c71ee83e818eb2c968c4ff85f4bcdad9cc6fbde21deb99ad6015",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/help-overlay-200x50.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/help-overlay-200x50.txt",
+      "original_sha256": "5eabc559cb6c9dd57968969ab54f799215e4c1befdb32b9a8d51b1d6e30adba4",
+      "current_sha256": "5eabc559cb6c9dd57968969ab54f799215e4c1befdb32b9a8d51b1d6e30adba4",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/models-default-200x50.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/models-default-200x50.txt",
+      "original_sha256": "48d4fe40e84df7d600e7662da70168f46302cd22bae7d32e9001d6367c3bbed9",
+      "current_sha256": "48d4fe40e84df7d600e7662da70168f46302cd22bae7d32e9001d6367c3bbed9",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/models-default-80x24.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/models-default-80x24.txt",
+      "original_sha256": "2d27f91255fd08083323a16aa193b019d3266e0306e1d719691cf28e2cab6ffc",
+      "current_sha256": "2d27f91255fd08083323a16aa193b019d3266e0306e1d719691cf28e2cab6ffc",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/models-discover-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/models-discover-160x45.txt",
+      "original_sha256": "aac201a89d1ef1cc35c26e5535eabdb0786fbe0a890c5286d275f5190763fff4",
+      "current_sha256": "aac201a89d1ef1cc35c26e5535eabdb0786fbe0a890c5286d275f5190763fff4",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/models-downloads-empty-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/models-downloads-empty-160x45.txt",
+      "original_sha256": "b1598eb11677eea61130f0dcbdd3376a26d5c4395de072803095b7b9299e44c1",
+      "current_sha256": "b1598eb11677eea61130f0dcbdd3376a26d5c4395de072803095b7b9299e44c1",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/models-filter-noresults-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/models-filter-noresults-160x45.txt",
+      "original_sha256": "00273ce95f0250cebf62e6e6122e8a15b97a7b4774d7b13ada1c7b2ac98bfefb",
+      "current_sha256": "00273ce95f0250cebf62e6e6122e8a15b97a7b4774d7b13ada1c7b2ac98bfefb",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/models-nocolor-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/models-nocolor-160x45.txt",
+      "original_sha256": "8c2a1248038773e214163e0329d89f211b35e8d5260894d1579ee52749ad95dd",
+      "current_sha256": "8c2a1248038773e214163e0329d89f211b35e8d5260894d1579ee52749ad95dd",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/profiles-confirm-delete-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/profiles-confirm-delete-160x45.txt",
+      "original_sha256": "7ca20bb36087a8f07d73b84cd5a6bafc0c6f9c569592c73e81c3505d428a1032",
+      "current_sha256": "7ca20bb36087a8f07d73b84cd5a6bafc0c6f9c569592c73e81c3505d428a1032",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/profiles-default-200x50.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/profiles-default-200x50.txt",
+      "original_sha256": "90a8d899559ba43ffcb61acd1a586c1c7081bef13cbbc1bd4bad216cedcbc704",
+      "current_sha256": "90a8d899559ba43ffcb61acd1a586c1c7081bef13cbbc1bd4bad216cedcbc704",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/profiles-default-80x24.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/profiles-default-80x24.txt",
+      "original_sha256": "e999200e41388534a795e0ae4d97b214ce99b664528a985210faa9078a46762f",
+      "current_sha256": "e999200e41388534a795e0ae4d97b214ce99b664528a985210faa9078a46762f",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/profiles-filter-empty-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/profiles-filter-empty-160x45.txt",
+      "original_sha256": "42b6a460e1e0c6d7e1caa4e8defbaeb1f2d4efe8716133d584f9bd9e6f9500ee",
+      "current_sha256": "42b6a460e1e0c6d7e1caa4e8defbaeb1f2d4efe8716133d584f9bd9e6f9500ee",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/profiles-filter-noresults-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/profiles-filter-noresults-160x45.txt",
+      "original_sha256": "908abc23609231a1fe3e43329aaac8af4b214fd46a1e2df363135d51e2d6a73d",
+      "current_sha256": "908abc23609231a1fe3e43329aaac8af4b214fd46a1e2df363135d51e2d6a73d",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/profiles-nocolor-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/profiles-nocolor-160x45.txt",
+      "original_sha256": "516d2c39d717160a164fd5314944c3a0b1e07e31d872c76ed614f1e5bf5afc9d",
+      "current_sha256": "516d2c39d717160a164fd5314944c3a0b1e07e31d872c76ed614f1e5bf5afc9d",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/server-default-200x50.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/server-default-200x50.txt",
+      "original_sha256": "ea2fbc25ff6d7fb96ad22e4e8f4af76da0b2bbf1106ef03e39a3a0be6c220545",
+      "current_sha256": "ea2fbc25ff6d7fb96ad22e4e8f4af76da0b2bbf1106ef03e39a3a0be6c220545",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/server-default-80x24.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/server-default-80x24.txt",
+      "original_sha256": "8690898cd5b4b5f6c40d24dad501afbcc16c7a327222548075283c143aeeb596",
+      "current_sha256": "8690898cd5b4b5f6c40d24dad501afbcc16c7a327222548075283c143aeeb596",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/server-metrics-after25s-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/server-metrics-after25s-160x45.txt",
+      "original_sha256": "44f16b80aa8502c37cc53a15c58c7ffbb2e47f9ef1ba462fb9e0564860deabd6",
+      "current_sha256": "44f16b80aa8502c37cc53a15c58c7ffbb2e47f9ef1ba462fb9e0564860deabd6",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/server-nocolor-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/server-nocolor-160x45.txt",
+      "original_sha256": "af8122742cf1a782f91e21f711a701736c6c40fe4e929fec69ef23c91951ea83",
+      "current_sha256": "af8122742cf1a782f91e21f711a701736c6c40fe4e929fec69ef23c91951ea83",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/server-slots-nocolor-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/server-slots-nocolor-160x45.txt",
+      "original_sha256": "bf6fe6cdca1bbe0942bbfaa6769cc8b29500b2158947c209354563c5723f0c9d",
+      "current_sha256": "bf6fe6cdca1bbe0942bbfaa6769cc8b29500b2158947c209354563c5723f0c9d",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/server-subview1-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/server-subview1-160x45.txt",
+      "original_sha256": "4805ca0ffbca008738050d2fb2d5b841d2645476ee5d9d98f702bab3c40b20e7",
+      "current_sha256": "4805ca0ffbca008738050d2fb2d5b841d2645476ee5d9d98f702bab3c40b20e7",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/server-subview2-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/server-subview2-160x45.txt",
+      "original_sha256": "41fbfafa12a75d6cad5a0d3d29e3d28a31fe67716d9765757ceffe3d482955b8",
+      "current_sha256": "41fbfafa12a75d6cad5a0d3d29e3d28a31fe67716d9765757ceffe3d482955b8",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-captures/server-subview3-160x45.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-captures/server-subview3-160x45.txt",
+      "original_sha256": "bc2a1af82e3019149677f67a192c6e7411bd9487f5ba56185cc7e23b72d7cbba",
+      "current_sha256": "bc2a1af82e3019149677f67a192c6e7411bd9487f5ba56185cc7e23b72d7cbba",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-screenshots/benchview-compare-500x729.jpg",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-screenshots/benchview-compare-500x729.jpg",
+      "original_sha256": "08598fcf7eea2db951615b13304acc89d32ca9085b97d2da915f5be4baa0c359",
+      "current_sha256": "08598fcf7eea2db951615b13304acc89d32ca9085b97d2da915f5be4baa0c359",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-screenshots/benchview-live-empty-500x729.jpg",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-screenshots/benchview-live-empty-500x729.jpg",
+      "original_sha256": "bb4cae66e1164d015e82e72c21eab496cf5acb264f67899bc04f70d4af21f8b3",
+      "current_sha256": "bb4cae66e1164d015e82e72c21eab496cf5acb264f67899bc04f70d4af21f8b3",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-screenshots/benchview-runs-1440x900-scaled.jpg",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-screenshots/benchview-runs-1440x900-scaled.jpg",
+      "original_sha256": "d25b73f304e7118de546f9fbe67edd24c4d5bcf414526d132b73182d5d101796",
+      "current_sha256": "d25b73f304e7118de546f9fbe67edd24c4d5bcf414526d132b73182d5d101796",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-screenshots/benchview-runs-overflow-390x844.jpg",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-screenshots/benchview-runs-overflow-390x844.jpg",
+      "original_sha256": "e192d1aac60fc994053170cf523bea8119234d885c917da8fb5bee345fceb13f",
+      "current_sha256": "e192d1aac60fc994053170cf523bea8119234d885c917da8fb5bee345fceb13f",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-screenshots/profile-editor-default-1440x900.jpg",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-screenshots/profile-editor-default-1440x900.jpg",
+      "original_sha256": "1a5fbdadd7a3f46710d6de55ec5ad61ccf9e9fbf6f7663a1602ef290b79948b2",
+      "current_sha256": "1a5fbdadd7a3f46710d6de55ec5ad61ccf9e9fbf6f7663a1602ef290b79948b2",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-screenshots/profile-editor-error-hidden-group-1440x900.jpg",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-screenshots/profile-editor-error-hidden-group-1440x900.jpg",
+      "original_sha256": "23d70fa3135aeac181e832739603bb97427eae49fe8cff33ce3e4adae15ec619",
+      "current_sha256": "23d70fa3135aeac181e832739603bb97427eae49fe8cff33ce3e4adae15ec619",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-screenshots/profile-editor-mobile-390x844.jpg",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-screenshots/profile-editor-mobile-390x844.jpg",
+      "original_sha256": "0609e0996a68fd5de488a5cf4bfb39e273c989758d873f7e2176ace4d2a22560",
+      "current_sha256": "0609e0996a68fd5de488a5cf4bfb39e273c989758d873f7e2176ace4d2a22560",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-screenshots/profile-editor-search-duplicate-fields-1440x900.jpg",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-screenshots/profile-editor-search-duplicate-fields-1440x900.jpg",
+      "original_sha256": "d5284306dc9f38938fd58cea9d45a7bab2cdadf3adcffaf58d2686b3b380664f",
+      "current_sha256": "d5284306dc9f38938fd58cea9d45a7bab2cdadf3adcffaf58d2686b3b380664f",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-screenshots/profile-editor-validation-error-1440x900.jpg",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-screenshots/profile-editor-validation-error-1440x900.jpg",
+      "original_sha256": "730a30dae2c383f4b1f49aa9a7253770c09cc9adc0e39966a489556beca66a69",
+      "current_sha256": "730a30dae2c383f4b1f49aa9a7253770c09cc9adc0e39966a489556beca66a69",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-snapshots/benchview-reflow-and-structure.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-snapshots/benchview-reflow-and-structure.txt",
+      "original_sha256": "738f4ab4d18cb589cc78c82b4dce84ca089ab822a879e0bfe435b52888942bb0",
+      "current_sha256": "738f4ab4d18cb589cc78c82b4dce84ca089ab822a879e0bfe435b52888942bb0",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": ".ideation/uiux-snapshots/profile-editor-a11y-1440x900.txt",
+      "new": "docs/reports/uiux-audit-2026-07-30/artifacts/uiux-snapshots/profile-editor-a11y-1440x900.txt",
+      "original_sha256": "4585d7405e2fdc00534ef4a4b6fcc1e92ae366a55d2ebc4897b3b5d97efb4598",
+      "current_sha256": "4585d7405e2fdc00534ef4a4b6fcc1e92ae366a55d2ebc4897b3b5d97efb4598",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": "CLAUDE_TASK.md",
+      "new": "docs/reports/strata-implementation-2026-10-01/CLAUDE_TASK-session-2.md",
+      "original_sha256": "a687ea2c003e3851427ea1f2a627e27f426e33265a16c7484e3810f9257e5078",
+      "current_sha256": "a687ea2c003e3851427ea1f2a627e27f426e33265a16c7484e3810f9257e5078",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": "IDEATION_PERFORMANCE.md",
+      "new": "docs/reports/strata-audit-2026-10-01/IDEATION_PERFORMANCE.md",
+      "original_sha256": "e23e63ac38f4c298be1a173a0fe3540d654cd4059ce28df9399159b42412d636",
+      "current_sha256": "e23e63ac38f4c298be1a173a0fe3540d654cd4059ce28df9399159b42412d636",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": "IDEATION_PERFORMANCE.original-2026-10-01.md",
+      "new": "docs/reports/strata-audit-2026-10-01/IDEATION_PERFORMANCE.original-2026-10-01.md",
+      "original_sha256": "a86e20165d21db1bab6472b6e1e8cf000ec7e9a34269a55f3018c11b9a3ce72d",
+      "current_sha256": "a86e20165d21db1bab6472b6e1e8cf000ec7e9a34269a55f3018c11b9a3ce72d",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": "IDEATION_UI_UX.md",
+      "new": "docs/reports/uiux-audit-2026-07-30/IDEATION_UI_UX.md",
+      "original_sha256": "7838c8de0f0bf2126118cc9bb5f4003fec2d38c9698981e4f26f2bb06bbf3bd5",
+      "current_sha256": "7838c8de0f0bf2126118cc9bb5f4003fec2d38c9698981e4f26f2bb06bbf3bd5",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": "PLANO-MIMO-9B-HYPERQWEN.md",
+      "new": "docs/reports/plans/PLANO-MIMO-9B-HYPERQWEN.md",
+      "original_sha256": "4d4d2fdb19cee00b77cc3a420975daf40af814c2cc04483377a8bcf368c4b64e",
+      "current_sha256": "4d4d2fdb19cee00b77cc3a420975daf40af814c2cc04483377a8bcf368c4b64e",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": "PROMPT-EXECUTAR-TUNING-QWEN3.8-FLASH-NEXT.md",
+      "new": "docs/reports/qwen-flash-tuning-artifacts/PROMPT-EXECUTAR-TUNING-QWEN3.8-FLASH-NEXT.md",
+      "original_sha256": "d76182147626da437b4ba5d3c5d086f0a7b9c0d763eb8d5393d4dd9a5b289ccd",
+      "current_sha256": "d76182147626da437b4ba5d3c5d086f0a7b9c0d763eb8d5393d4dd9a5b289ccd",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": "QWEN3.8-FLASH-NEXT-OTIMIZACAO-DUAL-RTX3090.md",
+      "new": "docs/reports/QWEN3.8-FLASH-NEXT-OTIMIZACAO-DUAL-RTX3090.md",
+      "original_sha256": "e42439cace647f21d6cb5affaca7904a8cbdf6974f0f22464490e04deeb5140a",
+      "current_sha256": "8bb30107e6577cac3d5b4ba56842228a66c3e15e9281c235eae9921abf60941d",
+      "byte_identical": false,
+      "changes": "historical label and/or relative navigation only"
+    },
+    {
+      "old": "QWEN38_27B_AUDIT_REPORT.md",
+      "new": "docs/reports/QWEN38_27B_AUDIT_REPORT.md",
+      "original_sha256": "d3b4a8b3061a54b53c885d9e0f5bc5717a435d583cb497af92b3fb1f25f3a1ba",
+      "current_sha256": "d3b4a8b3061a54b53c885d9e0f5bc5717a435d583cb497af92b3fb1f25f3a1ba",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": "docs/BENCHMARK.md",
+      "new": "docs/reports/qwen36-benchmark-workflow-2026-06.md",
+      "original_sha256": "11d5624f5d50a6b4b5925294fc57bcc3f79018f61a5643dd98ff950d80a8c08f",
+      "current_sha256": "62f27b3d93ab2769d00983203266930cd12ee436dafd1cb6ac44d212dd6d86d2",
+      "byte_identical": false,
+      "changes": "historical label and/or relative navigation only"
+    },
+    {
+      "old": "docs/examples/strata-orca-iq3-xxs/engine-resident.json",
+      "new": "docs/reports/strata-orca-iq3-xxs-examples-2026-10-01/engine-resident.json",
+      "original_sha256": "3d5d3cff6e184653777d3fa614bfacc31348036dce72959e83976ab95cf96864",
+      "current_sha256": "3d5d3cff6e184653777d3fa614bfacc31348036dce72959e83976ab95cf96864",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": "docs/examples/strata-orca-iq3-xxs/engine.json",
+      "new": "docs/reports/strata-orca-iq3-xxs-examples-2026-10-01/engine.json",
+      "original_sha256": "410602f97bf6a74c8df0829ed18fcb57fdfa6c788fe238bbaf6e4d385ea11874",
+      "current_sha256": "410602f97bf6a74c8df0829ed18fcb57fdfa6c788fe238bbaf6e4d385ea11874",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": "docs/examples/strata-orca-iq3-xxs/profile-resident.json",
+      "new": "docs/reports/strata-orca-iq3-xxs-examples-2026-10-01/profile-resident.json",
+      "original_sha256": "b9975ba6e475e3c8cc209020dd4c6d29ab439cbf69964dc0611fcd4834618b3b",
+      "current_sha256": "b9975ba6e475e3c8cc209020dd4c6d29ab439cbf69964dc0611fcd4834618b3b",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": "docs/examples/strata-orca-iq3-xxs/profile.json",
+      "new": "docs/reports/strata-orca-iq3-xxs-examples-2026-10-01/profile.json",
+      "original_sha256": "e7cfff81e20d2e8710d322cf85e67597a4622f1e00b2b18a7a9f60b5733d71c9",
+      "current_sha256": "e7cfff81e20d2e8710d322cf85e67597a4622f1e00b2b18a7a9f60b5733d71c9",
+      "byte_identical": true,
+      "changes": "none"
+    },
+    {
+      "old": "docs/examples/strata-orca-iq3-xxs/shared-settings.json",
+      "new": "docs/reports/strata-orca-iq3-xxs-examples-2026-10-01/shared-settings.json",
+      "original_sha256": "e6daff853a2e7043356b6842fe577f560a057b4b587e823f51240f949116613e",
+      "current_sha256": "e6daff853a2e7043356b6842fe577f560a057b4b587e823f51240f949116613e",
+      "byte_identical": true,
+      "changes": "none"
+    }
+  ],
+  "retired_active_assets": [
+    ".reversa/",
+    "renameprofile",
+    "llama.log",
+    "scripts/benchmark-qwen-profiles.py",
+    "scripts/benchmark-fast.py",
+    "scripts/quick-benchmark.py",
+    "scripts/simple-test.py",
+    "scripts/monitor-benchmark.sh",
+    "deploy/cloudflare-model-loader/watch-proxy.sh",
+    "deploy/cloudflare-model-loader/model-loader-api-gateway-watch.service.tmpl",
+    "deploy/cloudflare-model-loader/model-loader-api-gateway-watch.timer.tmpl"
+  ],
+  "generated_cache_removals": [
+    "scripts/__pycache__/",
+    "docs/reports/strata-implementation-2026-10-01/claude-session/tools/__pycache__/"
+  ],
+  "verification": {
+    "scope": {
+      "markdown_files": 29,
+      "local_links": 228,
+      "frozen_link_resolution": "original repository-root path plus relocation manifest",
+      "live_profile_count": 14,
+      "catalog_entries": 26
+    },
+    "preservation": {
+      "relocated_files": 54,
+      "byte_identical_relocations": 52,
+      "unchanged_documentary_evidence_files": 2838,
+      "unchanged_source_tool_deploy_files": 613,
+      "profiles_unchanged": true,
+      "catalog_unchanged": true,
+      "runtime_unchanged": {
+        "profile_id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k",
+        "pid": 3929652,
+        "port": 43375,
+        "start_ticks": 4603687
+      },
+      "disposable_original_bytes": 34880786
+    },
+    "gates": {
+      "go": "go build ./... && go test ./... && go vet ./...: exit 0; 41 packages OK, 19 without tests (cached test results reported by Go)",
+      "python": "1 lifecycle test + 2 rollout tests OK; 13 files compiled in memory without bytecode",
+      "shell": "bash -n and shellcheck: exit 0 for deploy install/verify and v7-ab.sh",
+      "links": "zero local path/anchor errors",
+      "json": "profile schema and relocation manifest parse; profile schema constraints unchanged",
+      "cli": "7 command-help routes; V6/V7/SNDR show; benchmark list; real llama.cpp-stable probe in isolated catalog; print_args explicit profile success and missing arg usage exit 2",
+      "profile_validation": "14/14 valid",
+      "live_http": "/_status, /v1/models, /v1beta/models, Anthropic/Gemini count tokens HTTP 200; no model swap",
+      "review": "two independent bounded reviews; all three reported documentation findings corrected and scoped re-review approved; archived report ignore exception also reviewed"
+    },
+    "limits": [
+      "Full installed-catalog backend probe exceeded the 60-second smoke deadline; not rerun. A real-native-backend probe passed in an isolated catalog.",
+      "markdownlint-cli2 is not installed; it was not run.",
+      "Generated OpenWiki pages were not hand-edited or regenerated.",
+      "No inference retuning, new benchmark run, model swap, commit or push."
+    ]
+  }
+}

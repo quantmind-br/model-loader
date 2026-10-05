@@ -1,0 +1,6 @@
+{
+  "returncode": 1,
+  "success": false,
+  "error": "the attempt ended or timed out before launch and controls finished; harness not run",
+  "finished": 1791091250.549508
+}

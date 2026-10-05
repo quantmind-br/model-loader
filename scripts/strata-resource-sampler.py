@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import time
+from strata_probe_integrity import validate_identity
 
 
 def read(path):
@@ -60,7 +61,7 @@ def snapshot():
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--out',required=True);parser.add_argument('--stop-file',required=True)
-    parser.add_argument('--guard-file',required=True);a=parser.parse_args()
+    parser.add_argument('--guard-file',required=True);parser.add_argument('--integrity-out',type=Path);a=parser.parse_args()
     baseline=None;strikes=0
     with open(a.out,'w',buffering=1) as log:
         while not Path(a.stop_file).exists():
@@ -68,6 +69,10 @@ def main():
             if baseline is None:baseline=swap
             s['swap_growth_kib']=swap-baseline
             reasons=[]
+            contaminated=False
+            if a.integrity_out and (a.integrity_out/'lifecycle-expected.json').exists():
+                contaminated=not validate_identity(a.integrity_out)
+                if contaminated:reasons.append('lifecycle or inference accounting contamination')
             if not s['gpus']:reasons.append('GPU telemetry unavailable')
             if mem['MemAvailable']<2*1024**2:reasons.append('MemAvailable below 2 GiB')
             if swap-baseline>2*1024**2:reasons.append('global swap growth above 2 GiB')
@@ -77,7 +82,7 @@ def main():
             strikes=strikes+1 if reasons else 0
             s['guard_reasons']=reasons;s['guard_strikes']=strikes
             log.write(json.dumps(s)+'\n')
-            if strikes>=3:
+            if contaminated or strikes>=3:
                 Path(a.guard_file).write_text(json.dumps({'reasons':reasons,'time':s['time']}));return
             time.sleep(1)
 

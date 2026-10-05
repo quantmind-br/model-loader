@@ -13,13 +13,14 @@ import (
 )
 
 func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintln(os.Stderr, "usage: go run ./cmd/scripts/print_args.go <profile-id>")
+		os.Exit(2)
+	}
 	cfg, _ := config.Load()
 	store, _ := profilestore.NewFSStore(cfg.Paths.ProfilesDir)
 
-	id := "qwen3.6-27b"
-	if len(os.Args) > 1 {
-		id = os.Args[1]
-	}
+	id := os.Args[1]
 	p, err := store.Get(id)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

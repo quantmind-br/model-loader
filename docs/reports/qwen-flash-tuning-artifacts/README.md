@@ -4,7 +4,10 @@ Os patches são experimentais, não releases upstream. Consulte ../qwen-flash-tu
 
 ## Cache96 llama.cpp
 
-Base: revisão em llama-base-revision.txt (fork MTP PR28243). Obtenha essa revisão do checkout original/fork; não assuma disponibilidade no mainline.
+Base revision: see `llama-base-revision.txt` (MTP fork PR #28243). The original
+checkouts were removed on 2026-10-04. Recover the source and Git history from the
+verified archive documented in [the tuning report](../qwen-flash-tuning-results.md#local-cleanup--2026-10-04);
+do not assume this revision is available in mainline. Rebuild before re-registering.
 
 ```sh
 git checkout --detach "$(cat /caminho/llama-base-revision.txt)"

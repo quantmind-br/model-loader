@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 3,
+  "id": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k",
+  "name": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k",
+  "description": "IQ2_XS; native ctx262144 without YaRN; int8 KV; dual3090 layers24/24, mmap experts + --stage-dense (24576/24576 experts resident outside prefill), 15 workers, 270W/card. Strata release v6 20261002T100952Z-2eed88f1f51d (catalog strata-perf-v6-20261002), promoted 2026-10-02 after A/B (3 starts/arm, fresh fills with passive cooling \u003c65C before each fill): code 127.7-128.3 tok/s, MTP spec4 minp0.7 accept 0.895; fresh TTFT 65077/130611/235476 tokens 18.6/36.2/72.3 s (baseline 20.2/39.5/77.2), exact retrieval; peak 21596/22957 MiB (21.09/22.42 GiB). Official Qwen non-thinking temp0.7/top_p0.8/top_k20/presence1.5, template de4b8e4. Tools: bundled harness integrity 4/4 (forced call, stream incl.), auto 30+30 = 30 correct/0 spurious (same as baseline); harness-style success continuation reissues the tool (same as baseline): not agent-qualified. API: forced tool_choice honored by a forced call opening (thinking must be off); parallel_tool_calls=false returns only the first complete call; response_format json, strict schemas, logprobs, tool_choice none with tools: HTTP 400. Rollback: docs/reports/strata-implementation-2026-10-01/claude-session/promotion/iq2-256k-20261002T072035 (exe build-fork-sm86/strata, no --stage-dense, backend strata-fork). Report: docs/reports/strata-implementation-2026-10-01/CLAUDE_COMPLETION.md.",
+  "model": "/home/diogo/models/huggingface/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/IQ2_XS/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+  "args": {
+    "config": "/home/diogo/.config/model-loader/strata/qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-256k.json",
+    "host": "127.0.0.1",
+    "max-context": 262144
+  },
+  "launch": {
+    "defaultBackground": true,
+    "backendId": "strata-perf-v6-20261002",
+    "restart_policy": "none",
+    "max_restarts": 0,
+    "backoff_seconds": 0
+  },
+  "meta": {
+    "createdAt": "2026-10-01T10:11:15.194737091Z",
+    "updatedAt": "2026-10-04T05:28:54.686742809Z",
+    "lastUsedAt": "2026-10-04T05:28:54.686686764Z"
+  },
+  "pinned": false
+}

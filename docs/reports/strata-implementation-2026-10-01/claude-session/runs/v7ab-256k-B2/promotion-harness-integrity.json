@@ -1,0 +1,8 @@
+{
+  "returncode": 1,
+  "started": 1791093525.4264064,
+  "finished": 1791093528.529216,
+  "lifecycle_valid": true,
+  "stdout": "{\n  \"continuation\": {\n    \"category\": \"reissued_tool_call\",\n    \"claim\": \"assistant tool_call_id survives a tool-result turn without immediate loop/EOS\",\n    \"detail\": \"assistant emitted 1 tool call(s) immediately after success\",\n    \"mode\": \"continuation\",\n    \"ok\": false\n  },\n  \"endpoint\": \"http://127.0.0.1:4321/v1/chat/completions\",\n  \"integrity\": {\n    \"claim\": \"forced tool-call transport/parser/serialization integrity\",\n    \"mode\": \"integrity\",\n    \"ok\": true,\n    \"repetitions_are\": \"reproducibility smoke, not an autonomous-selection rate\",\n    \"results\": [\n      {\n        \"index\": 0,\n        \"ok\": true,\n        \"stream\": false,\n        \"warnings\": []\n      },\n      {\n        \"index\": 1,\n        \"ok\": true,\n        \"stream\": false,\n        \"warnings\": []\n      },\n      {\n        \"index\": 2,\n        \"ok\": true,\n        \"stream\": false,\n        \"warnings\": []\n      },\n      {\n        \"index\": 3,\n        \"ok\": true,\n        \"stream\": true,\n        \"warnings\": []\n      }\n    ]\n  },\n  \"model\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-256k\"\n}\n",
+  "stderr": ""
+}

@@ -1,0 +1,79 @@
+[
+  {
+    "control": {
+      "tool_choice": "required",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "execute",
+            "description": "Execute the exact supplied shell command.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "status": 200,
+    "body": "{\"id\": \"chatcmpl-484fde96e0a647b696dff9b6\", \"object\": \"chat.completion\", \"created\": 1791104037, \"model\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-500k\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_a036aa779d9147dda2fdeaa7\", \"type\": \"function\", \"function\": {\"name\": \"execute\", \"arguments\": \"{\\\"command\\\":\\\"ls -la\\\"}\"}}]}, \"finish_reason\": \"tool_calls\"}], \"usage\": {\"prompt_tokens\": 269, \"completion_tokens\": 20, \"total_tokens\": 289, \"prompt_tokens_details\": {\"cached_tokens\": 0}}, \"timings\": {\"cache_n\": 0, \"prompt_n\": 269, \"prompt_ms\": 592.4, \"prompt_per_token_ms\": 2.202, \"prompt_per_second\": 454.1, \"predicted_n\": 20, \"predicted_ms\": 149.1, \"predicted_per_token_ms\": 7.455, \"predicted_per_second\": 134.1, \"draft_n\": 16, \"draft_n_accepted\": 16, \"effective_settings\": {\"seed\": 42, \"temperature\": 0.7, \"top_k\": 20, \"top_p\": 0.8, \"min_p\": 0.0, \"reasoning_effort\": \"none\"}, \"engine_info\": {\"version\": \"0.1.38\", \"pcie_eligible_layers\": 0, \"pcie_effective_frac\": \"0.0000\", \"resident_expert_mib\": 0, \"prefill_chunk\": 8192, \"stage_dense\": 1, \"context\": 512000, \"kv\": \"int8\", \"kv_resident\": 0, \"expert_slots\": 22631, \"expert_cache_mib\": 31110, \"expert_slots_primary\": 11763, \"expert_cache_primary_mib\": 15868, \"spec\": 6, \"mtp_max\": 4, \"lookup\": 3, \"vram_free_mib\": 1256, \"cvec\": 0, \"arena_mib\": 0, \"pool_workers\": 15, \"pcie_frac\": \"0.37\", \"spec_min_p\": \"0.70\", \"conversation_cache_mib\": 0, \"conversation_cache_slots\": 4, \"conversation_cache_min_free_mib\": 2560, \"engine\": \"0.1.38\"}}}"
+  },
+  {
+    "control": {
+      "parallel_tool_calls": false,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "execute",
+            "description": "Execute the exact supplied shell command.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "status": 200,
+    "body": "{\"id\": \"chatcmpl-179f0aefee4e4f7d84c27e8c\", \"object\": \"chat.completion\", \"created\": 1791104038, \"model\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-500k\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_ddd3f7e8216e44a1b6c9e9c7\", \"type\": \"function\", \"function\": {\"name\": \"execute\", \"arguments\": \"{\\\"command\\\":\\\"ls -la\\\"}\"}}]}, \"finish_reason\": \"tool_calls\"}], \"usage\": {\"prompt_tokens\": 261, \"completion_tokens\": 27, \"total_tokens\": 288, \"prompt_tokens_details\": {\"cached_tokens\": 254}}, \"timings\": {\"cache_n\": 254, \"prompt_n\": 7, \"prompt_ms\": 37.2, \"prompt_per_token_ms\": 5.314, \"prompt_per_second\": 188.2, \"predicted_n\": 27, \"predicted_ms\": 181.0, \"predicted_per_token_ms\": 6.704, \"predicted_per_second\": 149.2, \"draft_n\": 21, \"draft_n_accepted\": 19, \"effective_settings\": {\"seed\": 42, \"temperature\": 0.7, \"top_k\": 20, \"top_p\": 0.8, \"min_p\": 0.0, \"reasoning_effort\": \"none\"}, \"engine_info\": {\"version\": \"0.1.38\", \"pcie_eligible_layers\": 0, \"pcie_effective_frac\": \"0.0000\", \"resident_expert_mib\": 0, \"prefill_chunk\": 8192, \"stage_dense\": 1, \"context\": 512000, \"kv\": \"int8\", \"kv_resident\": 0, \"expert_slots\": 22631, \"expert_cache_mib\": 31110, \"expert_slots_primary\": 11763, \"expert_cache_primary_mib\": 15868, \"spec\": 6, \"mtp_max\": 4, \"lookup\": 3, \"vram_free_mib\": 1256, \"cvec\": 0, \"arena_mib\": 0, \"pool_workers\": 15, \"pcie_frac\": \"0.37\", \"spec_min_p\": \"0.70\", \"conversation_cache_mib\": 0, \"conversation_cache_slots\": 4, \"conversation_cache_min_free_mib\": 2560, \"engine\": \"0.1.38\"}}}"
+  },
+  {
+    "control": {
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "status": 200,
+    "body": "{\"id\": \"chatcmpl-0869634ebd4842ca9b998bf1\", \"object\": \"chat.completion\", \"created\": 1791104038, \"model\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-500k\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"{\\\"response\\\":\\\"Hello! How can I help you today?\\\"}\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 84, \"completion_tokens\": 15, \"total_tokens\": 99, \"prompt_tokens_details\": {\"cached_tokens\": 0}}, \"timings\": {\"cache_n\": 0, \"prompt_n\": 84, \"prompt_ms\": 348.4, \"prompt_per_token_ms\": 4.148, \"prompt_per_second\": 241.1, \"predicted_n\": 15, \"predicted_ms\": 123.4, \"predicted_per_token_ms\": 8.227, \"predicted_per_second\": 121.6, \"draft_n\": 12, \"draft_n_accepted\": 10, \"effective_settings\": {\"seed\": 42, \"temperature\": 0.7, \"top_k\": 20, \"top_p\": 0.8, \"min_p\": 0.0, \"reasoning_effort\": \"none\"}, \"engine_info\": {\"version\": \"0.1.38\", \"pcie_eligible_layers\": 0, \"pcie_effective_frac\": \"0.0000\", \"resident_expert_mib\": 0, \"prefill_chunk\": 8192, \"stage_dense\": 1, \"context\": 512000, \"kv\": \"int8\", \"kv_resident\": 0, \"expert_slots\": 22631, \"expert_cache_mib\": 31110, \"expert_slots_primary\": 11763, \"expert_cache_primary_mib\": 15868, \"spec\": 6, \"mtp_max\": 4, \"lookup\": 3, \"vram_free_mib\": 1256, \"cvec\": 0, \"arena_mib\": 0, \"pool_workers\": 15, \"pcie_frac\": \"0.37\", \"spec_min_p\": \"0.70\", \"conversation_cache_mib\": 0, \"conversation_cache_slots\": 4, \"conversation_cache_min_free_mib\": 2560, \"engine\": \"0.1.38\"}}}"
+  },
+  {
+    "control": {
+      "seed": true
+    },
+    "status": 400,
+    "body": "{\"error\": {\"type\": \"invalid_request_error\", \"message\": \"seed: expected a finite number\", \"param\": \"seed\"}}"
+  },
+  {
+    "control": {
+      "top_k": 0
+    },
+    "status": 400,
+    "body": "{\"error\": {\"type\": \"invalid_request_error\", \"message\": \"top_k: value outside supported range 1..64\", \"param\": \"top_k\"}}"
+  }
+]

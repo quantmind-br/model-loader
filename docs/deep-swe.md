@@ -10,7 +10,7 @@ model-loader proxy) works inside the task's container and commits a patch;
 in a pristine container and runs the held-out tests, scoring each task pass/fail.
 The run's accuracy is `resolved / total`.
 
-Like [terminal-bench](#) and [swe-bench-pro](swe-bench-pro.md), this is **not** a
+Like [terminal-bench](BENCHMARK.md#benchmark-modes) and [swe-bench-pro](swe-bench-pro.md), this is **not** a
 single-turn-over-the-proxy mode: it is an agentic, Docker-sandboxed loop owned by
 a Python CLI (`pier`). model-loader only serves the model (the proxy) and records
 the score — it never installs Pier, Docker, or the task corpus.

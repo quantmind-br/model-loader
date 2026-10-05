@@ -1,0 +1,79 @@
+[
+  {
+    "control": {
+      "tool_choice": "required",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "execute",
+            "description": "Execute the exact supplied shell command.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "status": 200,
+    "body": "{\"id\": \"chatcmpl-a716a36194304b1387469679\", \"object\": \"chat.completion\", \"created\": 1791097457, \"model\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-500k\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_f9e4225cb6d741f2a8b1b7b6\", \"type\": \"function\", \"function\": {\"name\": \"execute\", \"arguments\": \"{\\\"command\\\":\\\"which bash; ls -la ~/ 2>/dev/null | head -30\\\"}\"}}]}, \"finish_reason\": \"tool_calls\"}], \"usage\": {\"prompt_tokens\": 269, \"completion_tokens\": 34, \"total_tokens\": 303, \"prompt_tokens_details\": {\"cached_tokens\": 0}}, \"timings\": {\"cache_n\": 0, \"prompt_n\": 269, \"prompt_ms\": 810.7, \"prompt_per_token_ms\": 3.014, \"prompt_per_second\": 331.8, \"predicted_n\": 34, \"predicted_ms\": 282.1, \"predicted_per_token_ms\": 8.297, \"predicted_per_second\": 120.5, \"draft_n\": 18, \"draft_n_accepted\": 18, \"effective_settings\": {\"seed\": 42, \"temperature\": 0.7, \"top_k\": 20, \"top_p\": 0.8, \"min_p\": 0.0, \"reasoning_effort\": \"none\"}, \"engine_info\": {\"version\": \"0.1.38\", \"pcie_eligible_layers\": 0, \"pcie_effective_frac\": \"0.0000\", \"resident_expert_mib\": 0, \"prefill_chunk\": 8192, \"stage_dense\": 1, \"context\": 512000, \"kv\": \"int8\", \"kv_resident\": 0, \"expert_slots\": 22637, \"expert_cache_mib\": 31119, \"expert_slots_primary\": 11769, \"expert_cache_primary_mib\": 15877, \"spec\": 6, \"mtp_max\": 4, \"lookup\": 3, \"vram_free_mib\": 1256, \"cvec\": 0, \"arena_mib\": 0, \"pool_workers\": 15, \"pcie_frac\": \"0.37\", \"spec_min_p\": \"0.70\", \"conversation_cache_mib\": 0, \"conversation_cache_slots\": 4, \"conversation_cache_min_free_mib\": 2560, \"engine\": \"0.1.38\"}}}"
+  },
+  {
+    "control": {
+      "parallel_tool_calls": false,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "execute",
+            "description": "Execute the exact supplied shell command.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "status": 200,
+    "body": "{\"id\": \"chatcmpl-e166f9bd2dd54d9ea36ad4bc\", \"object\": \"chat.completion\", \"created\": 1791097458, \"model\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-500k\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"Hello! How can I help you today?\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 261, \"completion_tokens\": 10, \"total_tokens\": 271, \"prompt_tokens_details\": {\"cached_tokens\": 254}}, \"timings\": {\"cache_n\": 254, \"prompt_n\": 7, \"prompt_ms\": 37.2, \"prompt_per_token_ms\": 5.314, \"prompt_per_second\": 188.2, \"predicted_n\": 10, \"predicted_ms\": 86.9, \"predicted_per_token_ms\": 8.69, \"predicted_per_second\": 115.1, \"draft_n\": 9, \"draft_n_accepted\": 7, \"effective_settings\": {\"seed\": 42, \"temperature\": 0.7, \"top_k\": 20, \"top_p\": 0.8, \"min_p\": 0.0, \"reasoning_effort\": \"none\"}, \"engine_info\": {\"version\": \"0.1.38\", \"pcie_eligible_layers\": 0, \"pcie_effective_frac\": \"0.0000\", \"resident_expert_mib\": 0, \"prefill_chunk\": 8192, \"stage_dense\": 1, \"context\": 512000, \"kv\": \"int8\", \"kv_resident\": 0, \"expert_slots\": 22637, \"expert_cache_mib\": 31119, \"expert_slots_primary\": 11769, \"expert_cache_primary_mib\": 15877, \"spec\": 6, \"mtp_max\": 4, \"lookup\": 3, \"vram_free_mib\": 1256, \"cvec\": 0, \"arena_mib\": 0, \"pool_workers\": 15, \"pcie_frac\": \"0.37\", \"spec_min_p\": \"0.70\", \"conversation_cache_mib\": 0, \"conversation_cache_slots\": 4, \"conversation_cache_min_free_mib\": 2560, \"engine\": \"0.1.38\"}}}"
+  },
+  {
+    "control": {
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "status": 200,
+    "body": "{\"id\": \"chatcmpl-162131644ca544218da663f4\", \"object\": \"chat.completion\", \"created\": 1791097458, \"model\": \"qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-500k\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"{\\\"response\\\":\\\"Hello! How can I help you today?\\\"}\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 84, \"completion_tokens\": 15, \"total_tokens\": 99, \"prompt_tokens_details\": {\"cached_tokens\": 0}}, \"timings\": {\"cache_n\": 0, \"prompt_n\": 84, \"prompt_ms\": 348.5, \"prompt_per_token_ms\": 4.149, \"prompt_per_second\": 241.0, \"predicted_n\": 15, \"predicted_ms\": 126.8, \"predicted_per_token_ms\": 8.453, \"predicted_per_second\": 118.3, \"draft_n\": 13, \"draft_n_accepted\": 11, \"effective_settings\": {\"seed\": 42, \"temperature\": 0.7, \"top_k\": 20, \"top_p\": 0.8, \"min_p\": 0.0, \"reasoning_effort\": \"none\"}, \"engine_info\": {\"version\": \"0.1.38\", \"pcie_eligible_layers\": 0, \"pcie_effective_frac\": \"0.0000\", \"resident_expert_mib\": 0, \"prefill_chunk\": 8192, \"stage_dense\": 1, \"context\": 512000, \"kv\": \"int8\", \"kv_resident\": 0, \"expert_slots\": 22637, \"expert_cache_mib\": 31119, \"expert_slots_primary\": 11769, \"expert_cache_primary_mib\": 15877, \"spec\": 6, \"mtp_max\": 4, \"lookup\": 3, \"vram_free_mib\": 1256, \"cvec\": 0, \"arena_mib\": 0, \"pool_workers\": 15, \"pcie_frac\": \"0.37\", \"spec_min_p\": \"0.70\", \"conversation_cache_mib\": 0, \"conversation_cache_slots\": 4, \"conversation_cache_min_free_mib\": 2560, \"engine\": \"0.1.38\"}}}"
+  },
+  {
+    "control": {
+      "seed": true
+    },
+    "status": 400,
+    "body": "{\"error\": {\"type\": \"invalid_request_error\", \"message\": \"seed: expected a finite number\", \"param\": \"seed\"}}"
+  },
+  {
+    "control": {
+      "top_k": 0
+    },
+    "status": 400,
+    "body": "{\"error\": {\"type\": \"invalid_request_error\", \"message\": \"top_k: value outside supported range 1..64\", \"param\": \"top_k\"}}"
+  }
+]

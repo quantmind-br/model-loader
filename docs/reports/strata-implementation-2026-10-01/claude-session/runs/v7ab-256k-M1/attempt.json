@@ -1,0 +1,15 @@
+{
+  "profile": "qwen3-8-flash-next-iq2-xs-mtp-strata-dual-mmap-w15-candidate-256k",
+  "release": "20261004T050705Z-868e757a424d",
+  "backend": "strata-perf-v7-20261004",
+  "exe": "/home/diogo/dev/model-loader/backends/strata-fork/releases/20261004T050705Z-868e757a424d/strata",
+  "baseline": "v7",
+  "probe_flags": [],
+  "set_arg": [],
+  "env": [
+    "STRATA_GR_DOWN_MAX4=1"
+  ],
+  "started": 1791104992.855888,
+  "returncode": 0,
+  "finished": 1791105029.5437496
+}

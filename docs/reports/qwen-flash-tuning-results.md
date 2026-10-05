@@ -4,6 +4,29 @@
 
 Rodada extensa executada em duas RTX3090, Ryzen9950X3D e64GB RAM. Contexto configurado262144; ambos finalistas testados com244116 tokens reais sem truncamento. Não é prova de ótimo global nem avaliação abrangente de qualidade. Resultados e scripts brutos estão em `.pi/qwen-flash-tuning/`. Não houve alteração de power limit, clocks ou firmware.
 
+### Local cleanup — 2026-10-04
+
+The following sections describe the original tuning campaign, not the current
+installation. The six `llama.cpp-qwen4exp-{cache,direct,mtp,pinned,qsa,tuning}`
+checkouts and `ik_llama.cpp-tuning`, their seven catalog entries and their schemas
+were removed after confirming that no current profile or process used them.
+Model weights, historical measurements and the other backends were not removed.
+
+Recovery archive:
+`~/.local/state/model-loader/cleanup-backups/qwen-flash-tuning-20261004T110659Z/sources-with-git.tar.zst`.
+It preserves all seven source trees, complete Git repositories, local changes
+and new files; disposable `build/` directories and Python bytecode are excluded.
+An extraction check confirmed identical revisions, local diffs and untracked
+files; Git object connectivity and archive checksums passed. Catalog and schema
+snapshots, checksums and the cleanup manifest are in the same backup directory.
+The archive uses paths relative to `backends/`; extract into a separate recovery
+directory before rebuilding or registering any historical backend.
+
+The measured allocation under `backends/` decreased by 4.42 GiB; net recovery
+after retaining the 0.71 GiB source backup was 3.72 GiB. All 14 current profiles
+remained unchanged and valid;
+the canonical Strata v6 process retained its PID and answered `ok` through the proxy.
+
 ## Finalistas mantidos no catálogo
 
 - `qwen3.8-flash-next-ud-iq4xs-cache96-physical-nothink-256k`: backend `llama-cpp-qwen4exp-cache`; UD-IQ4_XS, K-only, PLE concorrente, QSA gather, cache96, ubatch512,16 núcleos físicos, sem thinking/MTP. Favorece decode curto/médio.

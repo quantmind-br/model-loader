@@ -18,7 +18,7 @@ Directory paths used by the application. All paths support `~` expansion.
 |-----|---------|-------------|
 | `profiles_dir` | `~/.config/model-loader/profiles` | Directory where profile JSON files are stored |
 | `backends_dir` | `~/.config/model-loader/backends` | Directory for backend catalog (`catalog.json`) and per-backend validation schemas |
-| `log_dir` | `~/.local/state/model-loader/logs` | Directory for captured llama-server stdout/stderr logs |
+| `log_dir` | `~/.local/state/model-loader/logs` | Directory for captured backend stdout/stderr logs |
 | `state_dir` | `~/.local/state/model-loader` | Parent directory for runtime state (instances.json) |
 | `llama_server_binary_path` | `""` | **Legacy.** Fallback `llama-server` binary path, read only during the one-time migration to the backend catalog. Not used at runtime afterwards — register binaries via the backend catalog instead |
 
@@ -101,14 +101,16 @@ Profile evaluation engine settings (Benchmark tab and `model-loader benchmark`).
 
 #### `[benchmark.judge]`
 
-Optional LLM-as-judge endpoint (OpenAI-compatible) used to grade open-ended answers.
+LLM-as-judge endpoint (OpenAI-compatible) for graded modes.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `base_url` | `""` | Base URL of the judge endpoint (empty disables LLM judging) |
+| `base_url` | `""` | Base URL of the judge endpoint. Required with `model` for `--mode judge` (the run fails fast when either is empty) |
 | `api_key` | `""` | API key for the judge endpoint |
-| `model` | `""` | Judge model name |
+| `model` | `""` | Judge model name. Required with `base_url` for `--mode judge` |
 | `samples` | `3` | Number of judge samples per evaluation |
+
+When no external judge is configured, `ragas-bench`, `summary-bench`, and `instruction-bench` refusal grade with the model under test itself (`judgedBy=self`); refusal falls back to a keyword heuristic when the grader is unreachable.
 
 #### `[benchmark.llamabench]`
 
@@ -270,7 +272,7 @@ Registry of all backends. Example:
 | `schemaVersion` | Always `1` |
 | `defaultBackendId` | Backend ID used when a profile has no explicit backend selection |
 | `backends[].id` | Unique slug (used in profiles) |
-| `backends[].kind` | Backend type: `llama-server`, `vllm`, `tabbyapi`, `sglang` |
+| `backends[].kind` | Backend type: `llama-server`, `vllm`, `sglang`, `dflash`, `buun-llama-cpp`, `beellama-cpp`, `ik-llama-cpp`, `unsloth`, `tabby`, `lmstudio`, `freetoken`, `strata` |
 | `backends[].executable` | Absolute or `PATH`-relative binary |
 | `backends[].schemaRef` | Relative path to the schema file under `backends_dir/schemas/` |
 
@@ -324,18 +326,28 @@ Example:
 | `source.customized` | Dirty marker: an operator edited this schema (web Customize mode or `backend schema apply`). Generators skip regenerating it, and `backend schema refresh` carries its `presentation` + `rules` across the rebuild |
 | `flags` | Map of flag name → `FlagSpec` |
 
-**FlagSpec fields:**
+**FlagSpec fields (JSON names as stored in `schemas/*.json`):**
 
-| Field | Type | Description |
+| JSON key | Type | Description |
 |-------|------|-------------|
 | `Long` | string | Canonical long name without `--` |
-| `Short` | string | Short alias without `-` (empty if none) |
-| `Aliases` | []string | Additional long aliases |
+| `Short` | string | First short alias without `-` (empty if none) |
+| `Aliases` | []string | Additional long aliases without `--` |
 | `Type` | int | `0`=bool, `1`=int, `2`=float, `3`=string, `4`=enum |
 | `EnumValues` | []string | Allowed values when `Type` is `4` |
+| `list` | bool | When true, `EnumValues` is a comma-separated list (for example `--spec-type`); the validator splits on `,` and checks each element. A single value or JSON array is also accepted |
+| `keywords` | []string | Non-numeric literals a numeric flag also accepts (for example `--n-gpu-layers` accepts `"auto"` or `"all"`). When the value equals one of these, type and range checks are skipped |
+| `arity` | int | Number of whitespace-separated argv tokens the flag value occupies (for example `2` for `--control-vector-layer-range START END`). `0` and `1` both mean the ordinary single-token form. Flags with `arity` greater than `1` are rejected in `args` and must go through `extraArgs`, which is passed through verbatim |
 | `Default` | any | Default value |
 | `HelpText` | string | Description shown in UI |
-| `Group` | string | Category: `common`, `sampling`, `example-specific`, `embedded` |
+| `Group` | string | Presentation group (for example curated numbered sections such as `Essentials` or `9. Samplers and Sampling`) |
+| `min` | int | Minimum accepted integer (inclusive); checked after `allowedInts` |
+| `max` | int | Maximum accepted integer (inclusive) |
+| `allowedInts` | []int | Explicit integer values accepted even when outside `min`/`max` |
+| `floatMin` | number | Minimum accepted float (inclusive) |
+| `floatMax` | number | Maximum accepted float (inclusive) |
+| `isPort` | bool | When true, the value must be a valid port (`1`-`65535`); marks flags owned by the process manager (for example `port`, which is assigned automatically and stripped from profiles) |
+| `required` | bool | When true, the flag must be present in `args` or `extraArgs` |
 
 ## Notes
 
